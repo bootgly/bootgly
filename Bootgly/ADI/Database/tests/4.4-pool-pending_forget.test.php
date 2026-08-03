@@ -1,6 +1,5 @@
 <?php
 
-use function fopen;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ADI\Database\Connection;

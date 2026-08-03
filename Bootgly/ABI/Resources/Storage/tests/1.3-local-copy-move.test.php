@@ -1,9 +1,5 @@
 <?php
 
-use function is_array;
-use function is_int;
-use function sys_get_temp_dir;
-use function uniqid;
 
 use Bootgly\ABI\Resources\Storage;
 use Bootgly\ACI\Tests\Suite\Test\Specification;

@@ -1,7 +1,5 @@
 <?php
 
-use function strlen;
-use function str_repeat;
 
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;

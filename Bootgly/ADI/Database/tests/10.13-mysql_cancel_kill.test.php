@@ -1,32 +1,5 @@
 <?php
 
-use const STREAM_IPPROTO_IP;
-use const STREAM_PF_UNIX;
-use const STREAM_SOCK_STREAM;
-use function chr;
-use function fclose;
-use function file_exists;
-use function file_get_contents;
-use function file_put_contents;
-use function fread;
-use function function_exists;
-use function fwrite;
-use function pack;
-use function pcntl_fork;
-use function pcntl_waitpid;
-use function str_contains;
-use function str_repeat;
-use function stream_set_blocking;
-use function stream_socket_accept;
-use function stream_socket_get_name;
-use function stream_socket_pair;
-use function stream_socket_server;
-use function strrpos;
-use function substr;
-use function sys_get_temp_dir;
-use function uniqid;
-use function unlink;
-use RuntimeException;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ADI\Database\Connection;

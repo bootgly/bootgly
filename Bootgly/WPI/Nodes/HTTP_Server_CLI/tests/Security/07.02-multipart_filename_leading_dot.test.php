@@ -1,10 +1,5 @@
 <?php
 
-use function json_decode;
-use function str_contains;
-use function str_starts_with;
-use function strlen;
-use function substr;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;

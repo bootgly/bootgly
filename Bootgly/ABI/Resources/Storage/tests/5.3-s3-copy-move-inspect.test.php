@@ -1,7 +1,5 @@
 <?php
 
-use function is_array;
-use function uniqid;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 

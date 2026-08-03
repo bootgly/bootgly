@@ -1,10 +1,5 @@
 <?php
 
-use function gzdecode;
-use function str_contains;
-use function str_repeat;
-use function strpos;
-use function substr;
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Compression;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;

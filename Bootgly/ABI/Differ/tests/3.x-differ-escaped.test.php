@@ -1,9 +1,5 @@
 <?php
 
-use function array_filter;
-use function explode;
-use function str_contains;
-use function str_starts_with;
 
 use Bootgly\ABI\Differ;
 use Bootgly\ABI\Differ\Outputs\Escaped;

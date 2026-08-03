@@ -1,7 +1,5 @@
 <?php
 
-use Generator;
-use RuntimeException;
 
 use Bootgly\ACI\Tests\Assertion\Auxiliaries\Op;
 use Bootgly\ACI\Tests\Assertion;

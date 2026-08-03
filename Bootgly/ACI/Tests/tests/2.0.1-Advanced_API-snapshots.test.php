@@ -1,7 +1,5 @@
 <?php
 
-use Generator;
-use stdClass;
 
 use Bootgly\ACI\Tests\Assertion\Expectations\Delimiters\ClosedInterval;
 use Bootgly\ACI\Tests\Assertion\Snapshots;

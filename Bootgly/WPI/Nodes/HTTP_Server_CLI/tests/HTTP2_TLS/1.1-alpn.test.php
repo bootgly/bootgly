@@ -1,15 +1,6 @@
 <?php
 
 
-use function fread;
-use function fwrite;
-use function shell_exec;
-use function stream_get_meta_data;
-use function stream_set_blocking;
-use function str_contains;
-use function trim;
-use function usleep;
-
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test\Specification;

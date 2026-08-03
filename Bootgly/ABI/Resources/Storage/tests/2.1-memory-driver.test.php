@@ -1,8 +1,5 @@
 <?php
 
-use function is_array;
-use function is_int;
-use function sort;
 
 use Bootgly\ABI\Resources\Storage;
 use Bootgly\ACI\Tests\Suite\Test\Specification;

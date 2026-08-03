@@ -1,6 +1,5 @@
 <?php
 
-use function str_contains;
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\RateLimit;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;

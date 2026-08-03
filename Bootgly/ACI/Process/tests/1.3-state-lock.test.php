@@ -1,8 +1,5 @@
 <?php
 
-use const LOCK_EX;
-use const LOCK_NB;
-use const LOCK_UN;
 
 use Bootgly\ACI\Process\State;
 use Bootgly\ACI\Tests\Suite\Test\Specification;

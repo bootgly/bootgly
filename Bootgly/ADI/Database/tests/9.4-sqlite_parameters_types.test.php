@@ -1,7 +1,5 @@
 <?php
 
-use function extension_loaded;
-use DateTimeImmutable;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ADI\Databases\SQL;

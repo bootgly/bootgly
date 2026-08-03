@@ -1,6 +1,5 @@
 <?php
 
-use function microtime;
 
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;

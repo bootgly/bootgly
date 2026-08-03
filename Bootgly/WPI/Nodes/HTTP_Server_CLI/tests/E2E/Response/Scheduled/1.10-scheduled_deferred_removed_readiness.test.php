@@ -1,15 +1,5 @@
 <?php
 
-use const STREAM_IPPROTO_IP;
-use const STREAM_PF_UNIX;
-use const STREAM_SOCK_STREAM;
-use function fclose;
-use function is_resource;
-use function json_encode;
-use function preg_replace;
-use function stream_set_blocking;
-use function stream_socket_pair;
-use Fiber;
 
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;

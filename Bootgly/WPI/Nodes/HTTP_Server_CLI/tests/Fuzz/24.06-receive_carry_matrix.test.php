@@ -8,23 +8,6 @@
  * --------------------------------------------------------------------------
  */
 
-use function array_unique;
-use function count;
-use function fclose;
-use function feof;
-use function fread;
-use function fwrite;
-use function is_resource;
-use function mt_rand;
-use function preg_match_all;
-use function sort;
-use function stream_get_meta_data;
-use function stream_set_blocking;
-use function stream_set_timeout;
-use function stream_socket_client;
-use function strlen;
-use function substr;
-use function usleep;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;

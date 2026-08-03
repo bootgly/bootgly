@@ -1,8 +1,5 @@
 <?php
 
-use function sys_get_temp_dir;
-use function uniqid;
-use InvalidArgumentException;
 
 use Bootgly\ABI\Resources\Storage;
 use Bootgly\ABI\Resources\Storage\Drivers\Memory;

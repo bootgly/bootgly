@@ -1,10 +1,5 @@
 <?php
 
-use function extension_loaded;
-use function function_exists;
-use function pcntl_fork;
-use function pcntl_waitpid;
-use function random_int;
 
 use Bootgly\ABI\Resources\Cache;
 use Bootgly\ABI\Resources\Cache\Drivers\Shared;

@@ -1,6 +1,5 @@
 <?php
 
-use function in_array;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\API\Projects;
 

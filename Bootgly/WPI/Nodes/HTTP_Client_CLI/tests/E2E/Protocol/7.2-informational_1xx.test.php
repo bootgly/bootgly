@@ -1,6 +1,5 @@
 <?php
 
-use Generator;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Tests\Suite\Test\Specification;

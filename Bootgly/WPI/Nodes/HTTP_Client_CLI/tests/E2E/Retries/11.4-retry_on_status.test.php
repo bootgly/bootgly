@@ -1,6 +1,5 @@
 <?php
 
-use function microtime;
 
 use Bootgly\WPI\Nodes\HTTP_Client_CLI;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response;

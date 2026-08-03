@@ -1,7 +1,5 @@
 <?php
 
-use const BOOTGLY_STORAGE_DIR;
-use const BOOTGLY_VERSION;
 
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ABI\Templates\Template;

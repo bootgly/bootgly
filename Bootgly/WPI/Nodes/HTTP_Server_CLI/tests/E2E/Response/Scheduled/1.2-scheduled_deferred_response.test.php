@@ -1,7 +1,5 @@
 <?php
 
-use function json_encode;
-use function preg_replace;
 
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;

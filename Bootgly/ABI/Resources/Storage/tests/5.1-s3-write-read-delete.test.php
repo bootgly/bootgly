@@ -1,6 +1,5 @@
 <?php
 
-use function uniqid;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 

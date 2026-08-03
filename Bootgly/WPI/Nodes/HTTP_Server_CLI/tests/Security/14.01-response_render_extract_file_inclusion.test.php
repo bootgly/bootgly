@@ -1,14 +1,5 @@
 <?php
 
-use function bin2hex;
-use function file_exists;
-use function file_get_contents;
-use function file_put_contents;
-use function random_bytes;
-use function register_shutdown_function;
-use function str_contains;
-use function sys_get_temp_dir;
-use function unlink;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;

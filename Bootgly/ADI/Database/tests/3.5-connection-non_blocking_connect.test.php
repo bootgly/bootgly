@@ -1,11 +1,5 @@
 <?php
 
-use function fclose;
-use function is_resource;
-use function stream_socket_get_name;
-use function stream_socket_server;
-use function strrpos;
-use function substr;
 
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Events\Scheduler;

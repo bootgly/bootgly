@@ -1,10 +1,5 @@
 <?php
 
-use function fclose;
-use function stream_socket_accept;
-use function stream_socket_client;
-use function stream_socket_get_name;
-use function stream_socket_server;
 
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;

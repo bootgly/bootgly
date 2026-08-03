@@ -1,7 +1,5 @@
 <?php
 
-use function sys_get_temp_dir;
-use function uniqid;
 
 use Bootgly\ABI\Events\Emission;
 use Bootgly\ABI\Events\Emitter;

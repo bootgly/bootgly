@@ -1,8 +1,5 @@
 <?php
 
-use function extension_loaded;
-use function is_resource;
-use function spl_object_id;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ADI\Database\Connection\ConnectionStates;

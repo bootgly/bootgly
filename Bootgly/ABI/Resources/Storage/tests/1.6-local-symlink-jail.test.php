@@ -1,14 +1,5 @@
 <?php
 
-use const DIRECTORY_SEPARATOR;
-use function file_put_contents;
-use function is_file;
-use function mkdir;
-use function rmdir;
-use function symlink;
-use function sys_get_temp_dir;
-use function uniqid;
-use function unlink;
 
 use Bootgly\ABI\Resources\Storage;
 use Bootgly\ACI\Tests\Suite\Test\Specification;

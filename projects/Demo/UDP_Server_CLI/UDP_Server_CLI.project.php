@@ -9,9 +9,6 @@
  */
 
 
-use function getenv;
-use function shell_exec;
-
 use Bootgly\API\Projects\Project;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI;

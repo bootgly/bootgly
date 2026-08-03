@@ -1,10 +1,5 @@
 <?php
 
-use function preg_match;
-use function str_contains;
-use function stripos;
-use function strpos;
-use function substr;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;

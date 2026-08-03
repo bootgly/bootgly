@@ -1,11 +1,5 @@
 <?php
 
-use function extension_loaded;
-use function file_exists;
-use function spl_object_id;
-use function sys_get_temp_dir;
-use function uniqid;
-use function unlink;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ADI\Databases\SQL;

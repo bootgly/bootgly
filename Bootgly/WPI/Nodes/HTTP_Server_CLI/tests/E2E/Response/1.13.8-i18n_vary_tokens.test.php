@@ -1,6 +1,5 @@
 <?php
 
-use function str_contains;
 
 use Bootgly\ABI\Data\Language;
 use Bootgly\ABI\Debugging\Data\Vars;

@@ -1,6 +1,5 @@
 <?php
 
-use function extension_loaded;
 
 use Bootgly\ABI\Resources\Cache;
 use Bootgly\ACI\Tests\Suite\Test\Specification;

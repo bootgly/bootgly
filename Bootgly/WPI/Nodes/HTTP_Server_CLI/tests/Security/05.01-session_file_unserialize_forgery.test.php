@@ -1,6 +1,5 @@
 <?php
 
-use const BOOTGLY_STORAGE_DIR;
 
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;

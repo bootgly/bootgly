@@ -1,7 +1,5 @@
 <?php
 
-use function sys_get_temp_dir;
-use function uniqid;
 
 use Bootgly\ABI\Resources\Cache;
 use Bootgly\ACI\Tests\Doubles\Fake\Clock;

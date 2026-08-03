@@ -1,7 +1,6 @@
 <?php
 
 use Bootgly\ABI\Code\__String\Path;
-use Generator;
 
 use Bootgly\ACI\Tests\Assertion\Expectations\Matchers\VariadicDirPath;
 use Bootgly\ACI\Tests\Assertion;

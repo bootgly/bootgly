@@ -8,11 +8,6 @@
  * --------------------------------------------------------------------------
  */
 
-use function fopen;
-use function fwrite;
-use function getenv;
-use function rewind;
-use function stream_get_contents;
 
 use Bootgly\ABI\Resources\Storage;
 use Bootgly\ABI\Resources\Storage\Driver;

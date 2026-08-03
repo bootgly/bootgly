@@ -1,11 +1,5 @@
 <?php
 
-use function preg_match;
-use function preg_match_all;
-use function str_contains;
-use function str_repeat;
-use function strlen;
-use function substr;
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;

@@ -1,9 +1,6 @@
 <?php
 
 
-use function microtime;
-use function number_format;
-
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test\Specification;

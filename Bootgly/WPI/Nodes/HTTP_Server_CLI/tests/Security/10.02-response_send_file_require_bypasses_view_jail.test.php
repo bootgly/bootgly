@@ -1,12 +1,5 @@
 <?php
 
-use function str_contains;
-use function bin2hex;
-use function rtrim;
-use function file_put_contents;
-use function random_bytes;
-use function register_shutdown_function;
-use function unlink;
 
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;

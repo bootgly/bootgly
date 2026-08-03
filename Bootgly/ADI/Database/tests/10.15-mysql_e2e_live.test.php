@@ -1,10 +1,5 @@
 <?php
 
-use function fclose;
-use function fsockopen;
-use function getenv;
-use function is_resource;
-use function uniqid;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ADI\Databases\SQL;

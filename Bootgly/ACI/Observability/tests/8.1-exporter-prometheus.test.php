@@ -1,9 +1,6 @@
 <?php
 
 
-use function assert;
-use function str_contains;
-
 use Bootgly\ACI\Observability\Data\Snapshot;
 use Bootgly\ACI\Observability\Exporters\Prometheus;
 use Bootgly\ACI\Tests\Suite\Test\Specification;

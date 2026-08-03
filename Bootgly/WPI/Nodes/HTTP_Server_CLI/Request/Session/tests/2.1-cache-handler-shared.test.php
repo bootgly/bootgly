@@ -1,9 +1,5 @@
 <?php
 
-use function bin2hex;
-use function function_exists;
-use function random_bytes;
-use function serialize;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Handlers\Cache;

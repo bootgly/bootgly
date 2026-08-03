@@ -1,9 +1,5 @@
 <?php
 
-use function bin2hex;
-use function random_bytes;
-use function sys_get_temp_dir;
-use function uniqid;
 
 use Bootgly\ABI\Event;
 use Bootgly\ABI\Events\Emission;

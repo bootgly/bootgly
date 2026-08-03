@@ -1,6 +1,5 @@
 <?php
 
-use function str_contains;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\WPI\Nodes\WS_Server_CLI\Handshake;

@@ -1,7 +1,5 @@
 <?php
 
-use function str_contains;
-use function substr;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;

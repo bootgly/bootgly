@@ -1,15 +1,5 @@
 <?php
 
-use function str_contains;
-use function bin2hex;
-use function rtrim;
-use function is_dir;
-use function mkdir;
-use function file_put_contents;
-use function random_bytes;
-use function register_shutdown_function;
-use function unlink;
-use function rmdir;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;

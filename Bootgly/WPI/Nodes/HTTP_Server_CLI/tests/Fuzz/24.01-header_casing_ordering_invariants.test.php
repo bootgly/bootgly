@@ -8,11 +8,6 @@
  * --------------------------------------------------------------------------
  */
 
-use function implode;
-use function json_encode;
-use function mt_rand;
-use function preg_match;
-use function substr;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;

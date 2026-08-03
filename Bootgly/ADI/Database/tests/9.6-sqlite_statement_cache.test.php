@@ -1,8 +1,5 @@
 <?php
 
-use function array_keys;
-use function count;
-use function extension_loaded;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ADI\Databases\SQL;

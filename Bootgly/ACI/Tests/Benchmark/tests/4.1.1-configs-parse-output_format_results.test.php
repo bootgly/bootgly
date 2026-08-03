@@ -1,6 +1,5 @@
 <?php
 
-use Generator;
 
 use Bootgly\ACI\Tests\Assertion\Auxiliaries\Op;
 use Bootgly\ACI\Tests\Assertion;

@@ -9,8 +9,6 @@
  */
 
 
-use function getenv;
-
 use const Bootgly\CLI;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Projects\Project;

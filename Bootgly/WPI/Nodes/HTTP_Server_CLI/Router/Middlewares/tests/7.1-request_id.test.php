@@ -1,10 +1,5 @@
 <?php
 
-use function is_string;
-use function strlen;
-use function preg_match;
-use function str_repeat;
-use Generator;
 
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertion\Auxiliaries\Type;

@@ -1,10 +1,5 @@
 <?php
 
-use function ceil;
-use function md5;
-use function str_repeat;
-use function substr;
-use function uniqid;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 

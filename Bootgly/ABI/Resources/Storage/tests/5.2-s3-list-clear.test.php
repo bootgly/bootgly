@@ -1,7 +1,5 @@
 <?php
 
-use function sort;
-use function uniqid;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 

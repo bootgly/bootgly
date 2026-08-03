@@ -1,7 +1,5 @@
 <?php
 
-use function extension_loaded;
-use function random_int;
 
 use Bootgly\ABI\Resources\Cache;
 use Bootgly\ABI\Resources\Cache\Drivers\Shared;

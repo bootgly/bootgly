@@ -1,7 +1,5 @@
 <?php
 
-use function hash;
-use Generator;
 
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertion\Auxiliaries\Type;

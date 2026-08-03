@@ -8,11 +8,6 @@
  * --------------------------------------------------------------------------
  */
 
-use function count;
-use function in_array;
-use function mt_rand;
-use function preg_match;
-use function strlen;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;

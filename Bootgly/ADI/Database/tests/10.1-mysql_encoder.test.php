@@ -1,10 +1,5 @@
 <?php
 
-use function chr;
-use function pack;
-use function str_repeat;
-use function strlen;
-use function substr;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ADI\Databases\SQL\Config;

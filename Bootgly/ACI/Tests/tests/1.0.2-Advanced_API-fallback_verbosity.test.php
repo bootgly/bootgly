@@ -1,8 +1,5 @@
 <?php
 
-use Generator;
-
-use function str_contains;
 
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertion\Comparators\NotEqual;

@@ -1,8 +1,5 @@
 <?php
 
-use function gzdecode;
-use function str_repeat;
-use Generator;
 
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertion\Auxiliaries\Type;

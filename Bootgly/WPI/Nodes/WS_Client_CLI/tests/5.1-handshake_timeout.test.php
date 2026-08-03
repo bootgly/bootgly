@@ -1,8 +1,5 @@
 <?php
 
-use function fclose;
-use function microtime;
-use function stream_socket_server;
 
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;

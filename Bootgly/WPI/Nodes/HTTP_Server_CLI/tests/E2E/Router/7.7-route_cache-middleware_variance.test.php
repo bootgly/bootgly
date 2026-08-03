@@ -1,10 +1,5 @@
 <?php
 
-use function gzdecode;
-use function str_contains;
-use function str_repeat;
-use function strpos;
-use function substr;
 
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;

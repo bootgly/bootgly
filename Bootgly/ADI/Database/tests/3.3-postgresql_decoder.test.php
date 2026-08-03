@@ -1,9 +1,5 @@
 <?php
 
-use function count;
-use function pack;
-use function strlen;
-use function substr;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Decoder;

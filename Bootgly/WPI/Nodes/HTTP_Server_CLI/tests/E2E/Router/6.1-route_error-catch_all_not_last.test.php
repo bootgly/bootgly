@@ -1,6 +1,5 @@
 <?php
 
-use function str_contains;
 
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;

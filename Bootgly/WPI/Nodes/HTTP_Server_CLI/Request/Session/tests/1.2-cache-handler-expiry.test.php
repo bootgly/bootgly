@@ -1,10 +1,5 @@
 <?php
 
-use function bin2hex;
-use function random_bytes;
-use function serialize;
-use function sys_get_temp_dir;
-use function uniqid;
 
 use Bootgly\ABI\Resources\Cache as CacheResource;
 use Bootgly\ACI\Tests\Suite\Test\Specification;

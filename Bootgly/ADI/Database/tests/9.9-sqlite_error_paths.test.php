@@ -1,7 +1,5 @@
 <?php
 
-use function extension_loaded;
-use function str_contains;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ADI\Databases\SQL;

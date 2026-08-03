@@ -1,19 +1,5 @@
 <?php
 
-use function count;
-use function fclose;
-use function feof;
-use function fread;
-use function fwrite;
-use function implode;
-use function is_resource;
-use function json_encode;
-use function microtime;
-use function str_contains;
-use function stream_set_blocking;
-use function stream_set_timeout;
-use function stream_socket_client;
-use function substr;
 
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;

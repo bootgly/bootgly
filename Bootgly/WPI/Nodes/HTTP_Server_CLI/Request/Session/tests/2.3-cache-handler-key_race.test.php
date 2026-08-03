@@ -1,25 +1,5 @@
 <?php
 
-use function base64_decode;
-use function bin2hex;
-use function extension_loaded;
-use function function_exists;
-use function is_array;
-use function is_file;
-use function is_object;
-use function is_resource;
-use function is_string;
-use function json_decode;
-use function json_encode;
-use function lstat;
-use function pcntl_fork;
-use function pcntl_waitpid;
-use function random_bytes;
-use function random_int;
-use function rmdir;
-use function stream_get_contents;
-use function stream_socket_pair;
-use function unlink;
 
 use Bootgly\ABI\Resources\Cache\Drivers\Shared;
 use Bootgly\ABI\Resources\Cache as CacheResource;

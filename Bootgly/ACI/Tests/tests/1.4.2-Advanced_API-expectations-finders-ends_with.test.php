@@ -1,6 +1,5 @@
 <?php
 
-use Generator;
 
 use Bootgly\ACI\Tests\Assertion\Expectations\Finders\EndsWith;
 use Bootgly\ACI\Tests\Assertion;

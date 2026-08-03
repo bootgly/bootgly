@@ -1,7 +1,5 @@
 <?php
 
-use function pack;
-use function strlen;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Encoder;

@@ -1,6 +1,5 @@
 <?php
 
-use function hash;
 
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\ETag;

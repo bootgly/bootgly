@@ -1,8 +1,5 @@
 <?php
 
-use function gmdate;
-use function microtime;
-use function time;
 
 use Bootgly\WPI\Nodes\HTTP_Client_CLI;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response;

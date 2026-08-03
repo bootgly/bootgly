@@ -5,8 +5,6 @@ use Bootgly\ACI\Logs\Handlers;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 
-use InvalidArgumentException;
-
 
 return new Specification(
    description: 'Logger->log() forces named arguments and validates the single level + context',

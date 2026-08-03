@@ -1,22 +1,5 @@
 <?php
 
-use const STREAM_IPPROTO_IP;
-use const STREAM_PF_UNIX;
-use const STREAM_SOCK_STREAM;
-use function chr;
-use function fclose;
-use function fread;
-use function fwrite;
-use function openssl_pkey_get_details;
-use function openssl_pkey_new;
-use function openssl_private_decrypt;
-use function ord;
-use function pack;
-use function str_repeat;
-use function stream_set_blocking;
-use function stream_socket_pair;
-use function strlen;
-use function substr;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ADI\Database\Connection;

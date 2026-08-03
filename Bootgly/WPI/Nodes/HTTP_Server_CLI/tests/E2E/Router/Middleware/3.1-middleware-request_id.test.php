@@ -1,7 +1,5 @@
 <?php
 
-use function preg_match;
-use function str_contains;
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\RequestId;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;

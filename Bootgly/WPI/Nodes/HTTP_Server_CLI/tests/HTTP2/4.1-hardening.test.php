@@ -1,12 +1,6 @@
 <?php
 
 
-use function pack;
-use function str_repeat;
-use function strlen;
-use function substr;
-use function usleep;
-
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test\Specification;

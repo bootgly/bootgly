@@ -1,26 +1,5 @@
 <?php
 
-use function clearstatcache;
-use function explode;
-use function extension_loaded;
-use function file_put_contents;
-use function is_array;
-use function is_dir;
-use function is_file;
-use function json_decode;
-use function mkdir;
-use function pcntl_fork;
-use function pcntl_waitpid;
-use function pcntl_wifsignaled;
-use function posix_getpid;
-use function posix_kill;
-use function scandir;
-use function str_contains;
-use function str_repeat;
-use function substr;
-use function tempnam;
-use function time;
-use function touch;
 
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;

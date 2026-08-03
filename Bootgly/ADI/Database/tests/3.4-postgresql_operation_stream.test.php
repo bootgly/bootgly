@@ -1,15 +1,5 @@
 <?php
 
-use const STREAM_IPPROTO_IP;
-use const STREAM_PF_UNIX;
-use const STREAM_SOCK_STREAM;
-use function fclose;
-use function fread;
-use function fwrite;
-use function pack;
-use function strlen;
-use function stream_set_blocking;
-use function stream_socket_pair;
 
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Tests\Suite\Test\Specification;

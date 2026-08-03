@@ -1,8 +1,6 @@
 <?php
 
 
-use Generator;
-
 use Bootgly\ABI\Code\__String\Path;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;

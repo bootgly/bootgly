@@ -1,6 +1,5 @@
 <?php
 
-use function json_encode;
 
 use Bootgly\ABI\Differ;
 use Bootgly\ABI\Differ\Outputs\Escaped;

@@ -1,13 +1,5 @@
 <?php
 
-use function fclose;
-use function fread;
-use function fwrite;
-use function microtime;
-use function stream_set_blocking;
-use function stream_set_timeout;
-use function strpos;
-use function substr;
 
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;

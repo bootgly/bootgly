@@ -1,11 +1,5 @@
 <?php
 
-use function json_decode;
-use function json_encode;
-use function str_contains;
-use function str_repeat;
-use function str_starts_with;
-use function substr;
 
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;

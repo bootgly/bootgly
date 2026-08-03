@@ -1,9 +1,5 @@
 <?php
 
-use const STREAM_CLIENT_ASYNC_CONNECT;
-use const STREAM_CLIENT_CONNECT;
-use function microtime;
-use function stream_socket_client;
 
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;

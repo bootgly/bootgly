@@ -7,8 +7,6 @@ use Bootgly\ACI\Tests\Benchmark\Result;
 use Bootgly\ACI\Tests\Benchmark\Summary;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 
-use const BOOTGLY_WORKING_DIR;
-
 
 return new Specification(
    description: 'It should propagate source fingerprints into marks metadata',

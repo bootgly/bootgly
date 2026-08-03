@@ -1,13 +1,5 @@
 <?php
 
-use function extension_loaded;
-use function is_file;
-use function random_int;
-use function sem_get;
-use function sem_remove;
-use function shm_attach;
-use function shm_remove;
-use function str_contains;
 
 use Bootgly\ABI\Resources\Cache;
 use Bootgly\ACI\Tests\Suite\Test\Specification;

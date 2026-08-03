@@ -1,41 +1,5 @@
 <?php
 
-use const BOOTGLY_ROOT_DIR;
-use const FILE_IGNORE_NEW_LINES;
-use const FILE_SKIP_EMPTY_LINES;
-use const PATH_SEPARATOR;
-use function bin2hex;
-use function chmod;
-use function count;
-use function explode;
-use function fclose;
-use function file;
-use function file_put_contents;
-use function function_exists;
-use function getenv;
-use function getmypid;
-use function in_array;
-use function is_array;
-use function is_int;
-use function is_resource;
-use function json_encode;
-use function microtime;
-use function mkdir;
-use function posix_geteuid;
-use function proc_close;
-use function proc_get_status;
-use function proc_open;
-use function proc_terminate;
-use function random_bytes;
-use function rmdir;
-use function sort;
-use function str_contains;
-use function strlen;
-use function stream_get_contents;
-use function stream_set_blocking;
-use function sys_get_temp_dir;
-use function unlink;
-use function usleep;
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;

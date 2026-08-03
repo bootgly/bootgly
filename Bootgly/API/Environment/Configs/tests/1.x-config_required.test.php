@@ -1,6 +1,5 @@
 <?php
 
-use RuntimeException;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\API\Environment\Configs\Config;
