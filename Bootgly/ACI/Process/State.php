@@ -25,6 +25,7 @@ use function fflush;
 use function file_get_contents;
 use function flock;
 use function fopen;
+use function filemtime;
 use function fstat;
 use function fsync;
 use function ftruncate;
@@ -50,13 +51,16 @@ use function random_bytes;
 use function readdir;
 use function rename;
 use function rewind;
+use function rewinddir;
 use function rtrim;
 use function stat;
 use function str_starts_with;
 use function stream_get_contents;
 use function strlen;
+use function str_ends_with;
 use function strrpos;
 use function substr;
+use function time;
 use function umask;
 use function unlink;
 use RuntimeException;
@@ -65,6 +69,12 @@ use RuntimeException;
 class State
 {
    // * Config
+   /**
+    * Age (seconds) past which an unheld state inode is treated as abandoned
+    * by `sweep()`. Must comfortably exceed the window between creating a lock
+    * file and acquiring its lock, so a process still starting is never swept.
+    */
+   public const int ORPHAN_TTL = 300;
    // ...
 
    // * Data
@@ -627,6 +637,141 @@ class State
     *
     * @return bool true when state was cleaned and the lock was released.
     */
+   /**
+    * Reclaim state inodes that no live process still holds.
+    *
+    * `clean()` tombstones the PID/command inodes but never removes the lock:
+    * a demoted runtime UID owns the file yet cannot unlink from the shared
+    * directory. Every distinct instance qualifier therefore leaves one lock
+    * behind forever — one per client PID, one per server port — and nothing
+    * ever reclaimed them. Left unbounded the directory reached 1,879 entries
+    * here, which pushed new listener descriptors past `FD_SETSIZE`; there
+    * `stream_select()` fails, the listener admission probe refuses, and the
+    * server will not start at all.
+    *
+    * Liveness is decided by a non-blocking exclusive `flock`, never by parsing
+    * the qualifier: that qualifier is as often a port as a PID, and the lock
+    * is the only authority on whether an owner is still running. An entry
+    * whose lock is free and whose mtime is older than `$minAge` is gone.
+    *
+    * @param int $minAge Seconds an entry must be untouched before it is swept.
+    *
+    * @return int Number of reclaimed entries.
+    */
+   public function sweep (int $minAge = self::ORPHAN_TTL): int
+   {
+      // ? The same contract `tombstone()` enforces: a real, contained,
+      //   non-symlinked directory this process administers.
+      $pids = rtrim($this->pidsDir, '/');
+      $directory = @lstat($pids);
+      if (
+         is_link($pids)
+         || is_array($directory) === false
+         || ((int) $directory['mode'] & 0170000) !== 0040000
+         || (int) $directory['uid'] !== posix_geteuid()
+         || ((int) $directory['mode'] & 0022) !== 0
+      ) {
+         return 0;
+      }
+
+      $handle = @opendir($this->pidsDir);
+      if ($handle === false) {
+         return 0;
+      }
+
+      // !
+      $cutoff = time() - $minAge;
+      $swept = 0;
+
+      // @@
+      while (($entry = readdir($handle)) !== false) {
+         // ? `.`/`..` and any dotfile placeholder
+         if ($entry[0] === '.' || str_ends_with($entry, '.lock') === false) {
+            continue;
+         }
+
+         $lock = $this->pidsDir . $entry;
+
+         // ? Never our own instance, and never a symlink
+         if ($lock === $this->pidLockFile || is_link($lock) || is_file($lock) === false) {
+            continue;
+         }
+         if ((int) @filemtime($lock) > $cutoff) {
+            continue;
+         }
+
+         $probe = @fopen($lock, 'r+b');
+         if ($probe === false) {
+            continue;
+         }
+
+         // ? A live owner still holds it — leave everything alone.
+         $free = @flock($probe, LOCK_EX | LOCK_NB);
+         if ($free) {
+            @flock($probe, LOCK_UN);
+         }
+         @fclose($probe);
+
+         if ($free === false) {
+            continue;
+         }
+
+         // @ One instance owns four inodes: the lock, its PID and command
+         //   files, and the downloads counter keyed to the same identity.
+         $id = substr($entry, 0, -5);
+         @unlink($lock);
+         @unlink("{$this->pidsDir}{$id}.json");
+         @unlink("{$this->pidsDir}{$id}.command");
+         @unlink("{$this->pidsDir}{$id}.lock.downloads");
+         $swept++;
+      }
+
+      rewinddir($handle);
+
+      // @@ A previous sweep (or an administrator) may have removed the lock
+      //    while leaving its siblings behind. Without this they would never be
+      //    reclaimed, because the pass above is keyed on the lock.
+      while (($entry = readdir($handle)) !== false) {
+         if ($entry[0] === '.') {
+            continue;
+         }
+
+         $suffix = strrpos($entry, '.');
+         if ($suffix === false) {
+            continue;
+         }
+
+         $extension = substr($entry, $suffix + 1);
+         if ($extension !== 'json' && $extension !== 'command' && $extension !== 'downloads') {
+            continue;
+         }
+
+         $id = $extension === 'downloads'
+            ? substr($entry, 0, -15)
+            : substr($entry, 0, $suffix);
+         if ($id === '' || is_file("{$this->pidsDir}{$id}.lock")) {
+            continue;
+         }
+
+         $file = $this->pidsDir . $entry;
+         if (
+            is_link($file)
+            || is_file($file) === false
+            || (int) @filemtime($file) > $cutoff
+         ) {
+            continue;
+         }
+
+         @unlink($file);
+         $swept++;
+      }
+
+      closedir($handle);
+
+      // :
+      return $swept;
+   }
+
    public function clean (): bool
    {
       if (

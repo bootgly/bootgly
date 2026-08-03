@@ -803,6 +803,15 @@ class TCP_Server_CLI implements Servers
          exit(1);
       }
 
+      // @ Reclaim the state inodes of instances that are gone. `clean()` can
+      //   only tombstone them — a demoted runtime UID cannot unlink from the
+      //   shared directory — so without this the registry grows by one lock
+      //   per instance forever, and a large enough directory pushes new
+      //   listener descriptors past `FD_SETSIZE`, where the admission probe
+      //   refuses and no server starts. Done here: our own lock is already
+      //   held, and no worker has been forked yet.
+      $State->sweep();
+
       // ? Signals
       // @ Install process signals
       $this->Process->Signals->install([
@@ -1128,6 +1137,12 @@ class TCP_Server_CLI implements Servers
          $this->Socket = $selected;
       }
       else if ($this->open() === false) {
+         // ! `open()` already logged the specific cause, but this abort is
+         //   silent to anyone who lowered the display level — and a server
+         //   that refuses to start must always say so.
+         $this->Logger->log(
+            critical: '@\;Server not started: no listener could be bound.@\;'
+         );
          exit(1);
       }
 

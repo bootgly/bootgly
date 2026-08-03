@@ -20,7 +20,6 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 return new Suite(
    // * Config
    autoBoot: function (Suite|null $Suite = null): true {
-      Display::show(Display::NONE);
 
       if ( !defined('BOOTGLY_PROJECT') ) {
          $projectFile = BOOTGLY_ROOT_DIR . 'projects/Demo/HTTP_Server_CLI/HTTP_Server_CLI.project.php';
@@ -60,6 +59,11 @@ return new Suite(
       );
 
       $HTTP_Server_CLI->start();
+
+      // ! Silence only the test traffic, never the boot. Muting before
+      //   start() hid a listener refusal behind an empty exit(1) — the server
+      //   would not come up and the suite reported nothing at all.
+      Display::show(Display::NONE);
 
       $HTTP_Server_CLI->Commands->command('test');
 
