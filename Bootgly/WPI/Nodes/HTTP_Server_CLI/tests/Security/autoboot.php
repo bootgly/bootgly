@@ -490,5 +490,11 @@ return new Suite(
       // A worker must fail startup before entering its event loop when the
       // inherited listener cannot be represented by the select backend.
       '92.01-tcp_worker_listener_descriptor_admission',
+      // # HTTP/1 file reopen identity (audit 2026-08-02 M1)
+      // A streamed file response must validate every reopen — the first one
+      // included — against the identity captured before its head was built,
+      // so a pathname swapped while the response is parked cannot supply the
+      // body.
+      '93.01-http1_file_reopen_identity',
    ],
 );

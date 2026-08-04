@@ -17,6 +17,7 @@ use const ZLIB_ENCODING_DEFLATE;
 use const ZLIB_ENCODING_GZIP;
 use const ZLIB_ENCODING_RAW;
 use function array_pop;
+use function clearstatcache;
 use function count;
 use function defined;
 use function explode;
@@ -31,6 +32,7 @@ use function is_array;
 use function is_resource;
 use function is_string;
 use function preg_match;
+use function realpath;
 use function str_pad;
 use function str_replace;
 use function str_starts_with;
@@ -772,11 +774,22 @@ class Response extends Server\Response
    /**
     * Start a file upload from the Server to the Client
     *
+    * Neither protocol keeps the descriptor open while the response is parked,
+    * so the transport reopens this pathname per write quantum and validates
+    * every reopen against the identity captured here. Two consequences the
+    * caller owns:
+    *
+    * - a file modified while it is being streamed aborts the response — there
+    *   is no way to tell an append from a rewrite through `stat` alone, so
+    *   snapshot anything under concurrent modification before serving it;
+    * - the served tree must live on a filesystem with stable `st_dev`/`st_ino`.
+    *   Mounts that regenerate inodes are indistinguishable from a swap.
+    *
     * @param string $file The project-relative file path to upload.
     * @param int $offset The data offset.
     * @param int|null $length The length of the data to upload.
     * @param bool $close Close the connection after sending.
-    * 
+    *
     * @return Response The Response instance, for chaining
     */
    public function upload (string $file, int $offset = 0, null|int $length = null, bool $close = true): self
@@ -788,15 +801,35 @@ class Response extends Server\Response
 
       $File = new File(BOOTGLY_PROJECT->path . Path::normalize($file), base: BOOTGLY_PROJECT->path);
 
+      // ! Reading `readable` forces pathify(), which is what runs guard()'s
+      //   realpath() jail check. Both it and is_file() answer from PHP's stat
+      //   and realpath caches (realpath_cache_ttl defaults to 120s), so a
+      //   long-lived worker would keep approving a name that has since become
+      //   a symlink. Drop the cached answer first.
+      clearstatcache(true, $File->file);
+
       if ($File->readable === false) {
          $this->code( 403);
          return $this;
       }
 
+      // ! guard() computed the resolved path and threw it away — pathify()
+      //   stores the symbolic one. Recover it and use it from here on: a
+      //   resolved path has no symlink component left for a later flip to
+      //   redirect, so the transport reopens the name the jail approved
+      //   rather than a name that merely pointed there once.
+      $path = realpath($File->file);
+      if ($path === false) {
+         $this->code(403);
+         return $this;
+      }
+
       // ! Capture filesystem identity and metadata from one opened handler.
-      //   HTTP/2 will close between flow-control callbacks, so every later
-      //   reopen can reject pathname replacement before continuing.
-      $Handler = @fopen($File->file, 'rb');
+      //   Neither protocol parks the descriptor, so every later reopen —
+      //   `Packages::uploading()` for HTTP/1, `Encoder_HTTP2::queue()` and
+      //   `Decoder_HTTP2::open()` for HTTP/2 — rejects pathname replacement
+      //   by comparing against this stat before reading a byte.
+      $Handler = @fopen($path, 'rb');
       if ($Handler === false) {
          $this->code(403);
          return $this;
@@ -979,7 +1012,7 @@ class Response extends Server\Response
       $this->stream = true;
       // @ Prepare writing
       $this->files[] = [
-         'file' => $File->file, // @ Set file path to open handler
+         'file' => $path, // @ Set resolved file path to open handler
          'identity' => $identity,
 
          'parts' => $parts,

@@ -11,11 +11,12 @@
 namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 
-use const PHP_INT_MAX;
 use const PHP_EOL;
+use const PHP_INT_MAX;
 use const SEEK_SET;
 use function array_key_exists;
 use function array_key_first;
+use function clearstatcache;
 use function dirname;
 use function disk_free_space;
 use function fclose;
@@ -27,11 +28,13 @@ use function fstat;
 use function fwrite;
 use function get_resource_type;
 use function hrtime;
+use function implode;
 use function intdiv;
 use function is_array;
 use function is_int;
 use function is_resource;
 use function is_string;
+use function lstat;
 use function max;
 use function microtime;
 use function min;
@@ -72,6 +75,17 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
    // # Stream
    /** @var array<int, array<string, mixed>> */
    public array $downloading;
+   //   Active file-response queue. Every record MUST carry:
+   //     `file`     — a resolved, non-empty pathname;
+   //     `identity` — six ints (device, inode, mode, size, modified, changed)
+   //                  stat'd from the descriptor BEFORE the response head was
+   //                  built, and never rewritten afterwards;
+   //     `parts`    — offset/length ranges inside that representation;
+   //     `pads`     — optional multipart prepend/append strings;
+   //     `close`    — whether the complete representation ends the connection.
+   //   `uploading()` reopens `file` per write quantum and refuses any record
+   //   whose `identity` is missing or malformed: this array is public, so a
+   //   hand-built record is an input to validate, not a fact to trust.
    /** @var array<int, array<string, mixed>> */
    public array $uploading;
    // # Connection management
@@ -125,7 +139,10 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
    public bool $uploadAwaiting = false;
    //   File descriptors belonging to a later streamed response. They are
    //   claimed by the next writing() call and travel with that response's
-   //   buffered head in `$pendingResponses`.
+   //   buffered head in `$pendingResponses`. Same record contract as
+   //   `$uploading` — these records are re-homed verbatim, never rebuilt, so
+   //   their `identity` still describes the pre-head stat when they are
+   //   finally opened, however many turns later that is.
    /** @var array<int, array<string, mixed>> */
    public array $stagedUploading = [];
    //   Response buffers received while an earlier streamed body still owns
@@ -1110,6 +1127,85 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       return $bytes;
    }
    /**
+    * Normalize a queued file identity into the transport comparison shape.
+    *
+    * The producer names the fields after the HTTP concepts they describe;
+    * `fstat()`/`lstat()` name them after the struct. Translating in one place
+    * keeps a direct `!==` honest — comparing the two shapes as they stand
+    * would never match, and a never-matching check is the same as no check.
+    *
+    * Fails closed on anything malformed, exactly as `Encoder_HTTP2::queue()`
+    * does with the same six fields.
+    *
+    * @return null|array{dev:int,ino:int,mode:int,size:int,mtime:int,ctime:int}
+    */
+   protected static function identify (mixed $identity): null|array
+   {
+      // ?
+      if (! is_array($identity)) {
+         return null;
+      }
+
+      // !
+      $device = $identity['device'] ?? null;
+      $inode = $identity['inode'] ?? null;
+      $mode = $identity['mode'] ?? null;
+      $size = $identity['size'] ?? null;
+      $modified = $identity['modified'] ?? null;
+      $changed = $identity['changed'] ?? null;
+
+      // ?
+      if (
+         ! is_int($device)
+         || ! is_int($inode)
+         || ! is_int($mode)
+         || ! is_int($size)
+         || ! is_int($modified)
+         || ! is_int($changed)
+      ) {
+         return null;
+      }
+
+      // :
+      return [
+         'dev' => $device,
+         'ino' => $inode,
+         'mode' => $mode,
+         'size' => $size,
+         'mtime' => $modified,
+         'ctime' => $changed,
+      ];
+   }
+   /**
+    * Name the identity fields that stopped a file response, for the log line.
+    *
+    * A refused reopen is otherwise indistinguishable from a redeploy, a log
+    * rotation and an attack — every transport failure path here is silent, so
+    * without this an operator sees only an intermittent truncated download.
+    *
+    * @param array<string,int> $expected
+    * @param array<string,int> $found
+    */
+   protected static function diverge (array $expected, array $found): string
+   {
+      $fields = [];
+
+      // @@
+      foreach ($expected as $field => $value) {
+         if (($found[$field] ?? null) !== $value) {
+            $fields[] = $field;
+         }
+      }
+
+      // ?:
+      if ($fields === []) {
+         return 'not a regular file';
+      }
+
+      // :
+      return implode(', ', $fields) . ' changed';
+   }
+   /**
     * Weigh in-memory output strings retained by file-response metadata.
     *
     * Disk-backed ranges are excluded. Multipart prepend/append strings are
@@ -1411,6 +1507,17 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          }
          $queued['pads'] = $padsValue;
 
+         // ? The identity captured before this response's head was built is
+         //   the only authority on what this pathname is allowed to name.
+         //   Resolved once per entry rather than per part, so a pad-only or
+         //   zero-length record — which never reaches the disk phase below —
+         //   is refused too.
+         $identity = self::identify($queued['identity'] ?? null);
+         if ($identity === null) {
+            $this->abort($Socket);
+            return $written;
+         }
+
          $parts = &$queued['parts'];
          $pads = &$queued['pads'];
 
@@ -1462,6 +1569,11 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                || ! is_int($lengthValue)
                || $offsetValue < 0
                || $lengthValue < 0
+               // ? A part that cannot fit inside the representation the head
+               //   was framed from is refused before it touches disk, instead
+               //   of writing a prefix and dying on EOF further down.
+               || $offsetValue > $identity['size']
+               || $lengthValue > $identity['size'] - $offsetValue
             ) {
                $this->abort($Socket);
                return $written;
@@ -1472,6 +1584,29 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
             //   an unsent suffix is already owned by pendingBuffer and must
             //   never be read from disk a second time.
             if ($lengthValue > 0) {
+               // ? Look at the NAME before opening it. fopen() follows a
+               //   symlink and blocks outright on a FIFO — on a single-threaded
+               //   worker that wedges the process before any fstat can object.
+               //   lstat() reports the link's own mode, which is the only way
+               //   to express O_NOFOLLOW here.
+               clearstatcache(true, $file);
+               try {
+                  $link = @lstat($file);
+               }
+               catch (Throwable) {
+                  $link = false;
+               }
+
+               if (
+                  $link === false
+                  || ($link['mode'] & 0170000) !== 0100000
+                  || $link['dev'] !== $identity['dev']
+                  || $link['ino'] !== $identity['ino']
+               ) {
+                  $this->abort($Socket);
+                  return $written;
+               }
+
                try {
                   $Handler = @fopen($file, 'rb');
                }
@@ -1500,18 +1635,35 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                   $Identity = [
                      'dev' => $stat['dev'],
                      'ino' => $stat['ino'],
+                     'mode' => $stat['mode'],
                      'size' => $stat['size'],
                      'mtime' => $stat['mtime'],
                      'ctime' => $stat['ctime'],
                   ];
 
-                  $known = $queued['_identity'] ?? null;
-                  if ($known === null) {
-                     $queued['_identity'] = $Identity;
-                  }
-                  else if (! is_array($known) || $known !== $Identity) {
-                     // The path now names a different or modified file. Close
-                     // rather than mix two representations under one length.
+                  // ? The descriptor itself must still be the representation
+                  //   this response promised. Re-prove S_IFREG rather than
+                  //   only matching the queued mode: the queue is a public
+                  //   array, so the record is an input, not a fact.
+                  //
+                  // !! Do NOT soften this into a warning or a skip. The head —
+                  //   with the Content-Length framed from the old size — is
+                  //   already on the wire or in `pendingBuffer`, and HTTP/1
+                  //   has no RST_STREAM. Closing is the only unambiguous
+                  //   truncation signal (RFC 9112 §6.3). Note the cost is
+                  //   wider than HTTP/2's: abort() also discards every
+                  //   already-encoded response still in `pendingResponses`.
+                  if (
+                     ($stat['mode'] & 0170000) !== 0100000
+                     || $Identity !== $identity
+                  ) {
+                     $diverged = self::diverge($identity, $Identity);
+                     $this->Logger->log(
+                        warning: "Refused a file response: \"{$file}\" no longer matches the"
+                        . " representation captured before its response head ({$diverged})."
+                        . PHP_EOL
+                     );
+
                      $this->abort($Socket);
                      return $written;
                   }
