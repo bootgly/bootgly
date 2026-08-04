@@ -500,5 +500,9 @@ return new Suite(
       // A HEAD must carry the Content-Length a GET would and no body at all;
       // the buffered-body suppression cannot reach disk-backed bytes.
       '94.01-http1_head_file_response_body',
+      // # Server-initiated range semantics (audit 2026-08-02, found while closing M1)
+      // `upload($file, $offset, $length)` must describe the bytes it actually
+      // sends, and refuse a window the file cannot satisfy.
+      '95.01-http1_server_range_semantics',
    ],
 );

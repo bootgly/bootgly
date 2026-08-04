@@ -7,6 +7,13 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
 
+/**
+ * A server-chosen window of two bytes from the start is `bytes 0-1`, not
+ * `bytes 0-2` — `end` is the offset of the last byte sent, not a count. This
+ * case previously expected `0-2` alongside `Content-Length: 2`, which
+ * contradicted itself: `0-2` is three bytes. See
+ * `tests/Security/95.01-http1_server_range_semantics`.
+ */
 return new Specification(
    Separator: new Separator(left: '.2.1 - Requests Range - Dev'),
 
@@ -30,7 +37,7 @@ return new Specification(
       HTTP/1.1 206 Partial Content\r
       Server: Bootgly\r
       Content-Length: 2\r
-      Content-Range: bytes 0-2/62\r
+      Content-Range: bytes 0-1/62\r
       Content-Type: application/octet-stream\r
       Content-Disposition: attachment; filename="alphanumeric.txt"\r
       Last-Modified: $lastModified\r

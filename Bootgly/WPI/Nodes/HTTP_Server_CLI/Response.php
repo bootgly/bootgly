@@ -875,6 +875,11 @@ class Response extends Server\Response
 
       $ranges = [];
       $parts = [];
+      // ! A client that sent a Range field is answered with 206 whatever it
+      //   selected, including every byte. The server-initiated branch below
+      //   decides this for itself, because there `upload($file)` with no
+      //   window at all is the common case and it is a whole representation.
+      $partial = true;
       $Range = WPI->Request->Header->get('Range');
 
       if (is_string($Range) && $Range !== '') {
@@ -924,14 +929,40 @@ class Response extends Server\Response
       }
       else {
          // @ Set User offset / length
+         $bytes = $length ?? $size - $offset;
+
+         // ? A server-chosen window is a programming input, not a client
+         //   request — there is no Range field to answer 416 to. One the
+         //   representation cannot satisfy is refused here, at the source,
+         //   instead of being advertised in a Content-Length the transport
+         //   has to abandon mid-message once the head is already committed.
+         if (
+            $offset < 0
+            || $offset > $size
+            || $bytes < 0
+            || $bytes > $size - $offset
+         ) {
+            $this->code(500);
+            return $this;
+         }
+
+         // ! `end` is an OFFSET here, exactly as on the client-Range path
+         //   above: the last byte sent, not a count. Storing the length in
+         //   this slot is what produced `bytes 10-5/62` for a five-byte
+         //   window at offset 10. An empty window has no last byte.
          $ranges[] = [
             'start' => $offset,
-            'end' => $length
+            'end' => $bytes > 0 ? $offset + $bytes - 1 : null
          ];
          $parts[] = [
             'offset' => $offset,
-            'length' => $length ?? $size - $offset
+            'length' => $bytes
          ];
+
+         // ? Only a window narrower than the representation is partial
+         //   content. A client Range field, by contrast, is always answered
+         //   with 206 — even when it selects every byte.
+         $partial = $offset !== 0 || $bytes !== $size;
       }
 
       // ! Header
@@ -942,7 +973,7 @@ class Response extends Server\Response
       }
       // @ Set HTTP range requests Headers
       $pads = [];
-      if (! empty($ranges) && ($ranges[0]['end'] !== null || $ranges[0]['start'])) {
+      if (! empty($ranges) && $partial) {
          // @ Set Response status
          $this->code(206); // 206 Partial Content
 
