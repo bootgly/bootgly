@@ -29,7 +29,9 @@ return new Specification(
 
          $emit($Response);
 
-         $Response->stash("HTTP/1.1 200 OK\r\n\r\nok");
+         // ! Framed like real encoder output: stash() refuses an entry
+         //   whose head does not account for the bytes behind it.
+         $Response->stash("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
 
          $stored = Cache::$entries !== [];
          Cache::flush();

@@ -32,6 +32,7 @@ use function is_array;
 use function is_resource;
 use function is_string;
 use function preg_match;
+use function preg_match_all;
 use function realpath;
 use function str_pad;
 use function str_replace;
@@ -40,6 +41,7 @@ use function strcasecmp;
 use function strlen;
 use function strncasecmp;
 use function strncmp;
+use function strpos;
 use function strtolower;
 use function substr;
 use function trim;
@@ -1223,6 +1225,46 @@ class Response extends Server\Response
 
             $varyLanguage = true;
          }
+      }
+
+      // ? Last gate, and the only one that inspects the artifact instead of
+      //   the state that produced it: what is stored must be a complete
+      //   message on its own terms. Every reason a body might be missing is
+      //   refused above — streamed, chunked, encoded, HEAD — and each of those
+      //   was a bug before it was a guard. Checking the bytes closes the class
+      //   rather than the instance, because an entry whose advertised length
+      //   disagrees with what follows it desynchronizes every connection that
+      //   replays it, and the next producer-side omission gets caught here
+      //   instead of shipping.
+      //
+      //   Runs before the interim 103 bytes are prepended, so the separator
+      //   found here is this response's own.
+      $separator = strpos($buffer, "\r\n\r\n");
+
+      if ($separator === false) {
+         return;
+      }
+
+      // ? Exactly one Content-Length, and it must equal the bytes behind it.
+      //   Two fields are a smuggling shape that must never become shared wire,
+      //   whatever the values say.
+      //
+      // !! The trailing CRLF is a LOOKAHEAD on purpose. Consuming it would
+      //   swallow the delimiter the next field needs, and adjacent duplicates
+      //   would then report as one — which is exactly how this check first
+      //   shipped, and what the duplicate leg of 96.02 caught.
+      $framing = [];
+      $fields = preg_match_all(
+         '/\r\nContent-Length:[ \t]*([0-9]+)[ \t]*(?=\r\n)/i',
+         substr($buffer, 0, $separator + 2),
+         $framing
+      );
+
+      if (
+         $fields !== 1
+         || (int) $framing[1][0] !== strlen($buffer) - $separator - 4
+      ) {
+         return;
       }
 
       // @

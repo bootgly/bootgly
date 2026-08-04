@@ -158,7 +158,9 @@ return new Specification(
       (new ReflectionProperty(Response::class, 'Request'))->setValue($Response, $Request);
       $Response->cache = 60;
 
-      $Response->stash("HTTP/1.1 200 OK\r\n{$Header->raw}\r\n\r\nok");
+      // ! Content-Length included so the buffer is a complete message —
+      //   stash() refuses one whose head does not account for its body.
+      $Response->stash("HTTP/1.1 200 OK\r\n{$Header->raw}\r\nContent-Length: 2\r\n\r\nok");
 
       $storedCookie = false;
       foreach (Cache::$entries as $entry) {

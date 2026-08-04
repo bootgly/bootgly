@@ -508,5 +508,9 @@ return new Suite(
       // A file response's body never passes through stash(); storing its head
       // alone would answer every warm hit with a Content-Length and no body.
       '96.01-route_cache_streamed_response_storage',
+      // # Route cache entry framing (audit 2026-08-02 M4, class-level)
+      // Whatever produced it, a stored entry must carry exactly the body its
+      // head advertises — otherwise a warm hit desyncs the connection.
+      '96.02-route_cache_entry_framing',
    ],
 );
