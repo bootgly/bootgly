@@ -555,9 +555,15 @@ class Router
       // @ Pre-bind Closure to Route — gives handlers `$this->Params` access
       //   and (empirically) keeps Closure call path on JIT-friendly fast track
       //   per PHP 8.4 benchmarks.
+      // ? A `static function` handler cannot be bound, by language rule, and
+      //   that is a supported shape — every PoC and most E2E routes use it,
+      //   trading `$this->Params` for an explicit parameter. The refusal is
+      //   the expected answer and `?? $handler` is what handles it, so the
+      //   diagnostic is suppressed at the call rather than left to warn on
+      //   every such registration.
       /** @var callable $boundHandler */
       $boundHandler = ($handler instanceof Closure)
-         ? $handler->bindTo($this->Route, $this->Route) ?? $handler
+         ? @$handler->bindTo($this->Route, $this->Route) ?? $handler
          : $handler;
 
       // @ Route response cache opt-in: stamp the TTL on the Response before
