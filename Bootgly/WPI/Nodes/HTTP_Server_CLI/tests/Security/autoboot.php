@@ -496,5 +496,9 @@ return new Suite(
       // so a pathname swapped while the response is parked cannot supply the
       // body.
       '93.01-http1_file_reopen_identity',
+      // # HEAD file responses (audit 2026-08-02, found while closing M1)
+      // A HEAD must carry the Content-Length a GET would and no body at all;
+      // the buffered-body suppression cannot reach disk-backed bytes.
+      '94.01-http1_head_file_response_body',
    ],
 );

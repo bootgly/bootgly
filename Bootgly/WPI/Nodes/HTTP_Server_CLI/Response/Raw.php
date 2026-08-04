@@ -214,23 +214,35 @@ trait Raw
          //   including any buffered Body bytes before the streamed file.
          $length = strlen($wire);
 
-         // ! Bind streamed bytes to their own response head. The first file
-         //   response installs the active queue and marks its returned head as
-         //   the owner. A later file response encoded while output is deferred
-         //   stages its descriptors; writing() queues that head + files as one
-         //   ordered job instead of overwriting the active disk cursor.
-         if (
-            $Package->pendingBuffer === ''
-            && $Package->uploading === []
-            && $Package->pendingResponses === []
-            && $Package->stagedUploading === []
-            && $Package->uploadAwaiting === false
-         ) {
-            $Package->uploading = $this->files;
-            $Package->uploadAwaiting = true;
-         }
-         else {
-            $Package->stagedUploading = $this->files;
+         // ? HEAD keeps the representation metadata a GET would carry — the
+         //   Content-Length above already came from measure() — and emits no
+         //   body at all (RFC 9110 §9.3.2). The suppression on the wire line
+         //   only reaches `$Body->raw`; a file's bytes are not there, they are
+         //   in this queue. So the queue must not be installed: leaving it
+         //   would stream the whole file behind a head that promises a body
+         //   the client will attribute to this response and then read the NEXT
+         //   response as its continuation. `Encoder_HTTP2::frame()` does the
+         //   same thing — it sizes first, then clears body and DATA chunks.
+         if ($Request->method !== 'HEAD') {
+            // ! Bind streamed bytes to their own response head. The first file
+            //   response installs the active queue and marks its returned head
+            //   as the owner. A later file response encoded while output is
+            //   deferred stages its descriptors; writing() queues that head +
+            //   files as one ordered job instead of overwriting the active
+            //   disk cursor.
+            if (
+               $Package->pendingBuffer === ''
+               && $Package->uploading === []
+               && $Package->pendingResponses === []
+               && $Package->stagedUploading === []
+               && $Package->uploadAwaiting === false
+            ) {
+               $Package->uploading = $this->files;
+               $Package->uploadAwaiting = true;
+            }
+            else {
+               $Package->stagedUploading = $this->files;
+            }
          }
 
          $this->files = [];
