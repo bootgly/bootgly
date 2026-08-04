@@ -1081,6 +1081,12 @@ class Response extends Server\Response
       // ?
       $Request = $this->Request;
 
+      // ? `$this->stream` below is NOT what keeps a file response out of the
+      //   cache — it is always false here, because `Raw::encode()` clears it
+      //   before returning and every caller stashes afterwards. A streamed
+      //   response is refused through `cacheable`, which `encode()` clears at
+      //   the point it diverts the body to the transport. The read is kept as
+      //   a cheap backstop for a future caller that stashes mid-encode.
       if (
          $ttl <= 0
          || $this->cacheable === false

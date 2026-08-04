@@ -504,5 +504,9 @@ return new Suite(
       // `upload($file, $offset, $length)` must describe the bytes it actually
       // sends, and refuse a window the file cannot satisfy.
       '95.01-http1_server_range_semantics',
+      // # Route cache vs streamed responses (audit 2026-08-02 M4)
+      // A file response's body never passes through stash(); storing its head
+      // alone would answer every warm hit with a Content-Length and no body.
+      '96.01-route_cache_streamed_response_storage',
    ],
 );

@@ -210,6 +210,20 @@ trait Raw
          . ($Request->method === 'HEAD' ? '' : $Body->raw);
 
       if ($this->stream) {
+         // ? The bytes this method returns are NOT the whole response — the
+         //   file leaves through the transport's upload queue, not through
+         //   this buffer. So this representation can never become shared route
+         //   wire: replaying the head alone would answer every warm hit with a
+         //   Content-Length and no body, and a keep-alive client would read the
+         //   next response as this one's.
+         //
+         // !! This is the refusal. `stash()` names `$this->stream` in its own
+         //   guard list, but that flag is cleared a few lines below and every
+         //   stash() call site runs after encode() returns — it can never fire.
+         //   Do not replace this with `$this->cache = 0` either: a deferred
+         //   clone carries the decision, and only `cacheable` survives it.
+         $this->guard();
+
          // ! The transport length contract covers the entire returned prefix,
          //   including any buffered Body bytes before the streamed file.
          $length = strlen($wire);
