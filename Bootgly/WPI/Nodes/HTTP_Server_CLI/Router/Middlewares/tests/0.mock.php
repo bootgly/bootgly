@@ -38,6 +38,10 @@ return function (
    $ResponseHeader = new class ($responseHeaders) {
       /** @var array<string, string> */
       private array $headers;
+      // Mirrors Response\Raw\Header::$prepared — the store Response::__invoke()
+      // writes into; get() falls through it exactly as the real read side does
+      /** @var array<string, string> */
+      private array $prepared = [];
       /** @param array<string, string> $headers */
       public function __construct (array &$headers)
       {
@@ -46,11 +50,17 @@ return function (
 
       public function get (string $name): string|null
       {
-         return $this->headers[$name] ?? null;
+         return $this->headers[$name] ?? $this->prepared[$name] ?? null;
       }
       public function set (string $name, string $value): void
       {
          $this->headers[$name] = $value;
+      }
+      // Mirrors Response\Raw\Header::prepare() — replaces the prepared set
+      /** @param array<string, string> $fields */
+      public function prepare (array $fields): void
+      {
+         $this->prepared = $fields;
       }
       public function append (string $name, string $value = '', string|null $separator = ', '): void
       {
@@ -118,10 +128,11 @@ return function (
       public function __invoke (int $code = 200, array|null $headers = null, string $body = ''): static
       {
          $this->code = $code;
-         if ($headers !== null) {
-            foreach ($headers as $name => $value) {
-               $this->Header->set($name, $value);
-            }
+         if ($headers !== null && $headers !== []) {
+            // Mirrors the real Response::__invoke(): headers route into
+            // Header::prepare(), never into set() — the write path whose
+            // invisibility to get() was RES-7
+            $this->Header->prepare($headers);
          }
          $this->Body->raw = $body;
          return $this;

@@ -11,11 +11,10 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 
 
-use function array_key_exists;
-use function array_values;
 use function explode;
 use function gmdate;
 use function implode;
+use function ltrim;
 use function preg_match;
 use function preg_replace;
 use function str_replace;
@@ -234,7 +233,9 @@ class Header extends HeaderBase
    }
    public function __isSet (string $name): bool
    {
-      return isSet($this->fields[$name]);
+      // ?: In lockstep with get() — isset() must never contradict it, and
+      //    the `'' == absent` convention is load-bearing at the consumers
+      return $this->get($name) !== '';
    }
 
    public function reset (): void
@@ -455,15 +456,50 @@ class Header extends HeaderBase
 
    public function get (string $name): string
    {
-      if (array_key_exists($name, $this->fields)) {
-         return (string) $this->fields[$name];
-      }
-
+      // ! get() reports the wire: the fallthrough below walks the same
+      //   sources build() serializes, in build()'s exact precedence —
+      //   queued lines, preset minus the per-response mask, fields, then
+      //   prepared — matching case-insensitively like remove()/own() do.
+      //   The read side being blind to prepare()d fields is what re-marked
+      //   a redirecting auth Fallback to 401 with `Location` on the wire.
+      //   Deliberately NOT reported: the default Content-Type fallback —
+      //   it is a build()-time serialization of $type, not a written
+      //   field, and cache adoption relies on '' meaning "never written".
       $lower = strtolower($name);
-      if (array_key_exists($lower, $this->fields)) {
-         return (string) $this->fields[$lower];
+
+      // ? Queued lines serialize first and own their field identity
+      //   (first match wins — Set-Cookie is the one repeatable field)
+      $prefix = "$lower:";
+      $length = strlen($prefix);
+      foreach ($this->queued as $line) {
+         if (strncasecmp($line, $prefix, $length) === 0) {
+            return ltrim(substr($line, $length));
+         }
+      }
+      // ? Worker presets serialize next, minus the per-response mask;
+      //   a `true` value resolves exactly as build() serializes it
+      if (isSet($this->masked[$lower]) === false) {
+         foreach ($this->preset as $presetName => $value) {
+            if (strcasecmp($presetName, $name) === 0) {
+               return $value === true
+                  ? ($presetName === 'Date' ? self::stamp() : '')
+                  : (string) $value;
+            }
+         }
+      }
+      // ? set() fields outrank prepare()d ones, as in build()'s union
+      foreach ($this->fields as $fieldName => $value) {
+         if (strcasecmp($fieldName, $name) === 0) {
+            return (string) $value;
+         }
+      }
+      foreach ($this->prepared as $preparedName => $value) {
+         if (strcasecmp($preparedName, $name) === 0) {
+            return (string) $value;
+         }
       }
 
+      // : Absent from every serialization source
       return '';
    }
 

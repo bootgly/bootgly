@@ -37,6 +37,7 @@ return new Suite(
       // run in the Test environment, which bypasses the memo entirely.
       '1.20-header_scan_memo_production_replay',
       '1.21-select_descriptor_admission',
-      '1.22-pretest_fail_closed'
+      '1.22-pretest_fail_closed',
+      '1.23-header_read_visibility'
    ]
 );
