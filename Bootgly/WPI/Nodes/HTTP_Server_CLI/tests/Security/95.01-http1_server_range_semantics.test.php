@@ -156,6 +156,8 @@ return new Specification(
             'tail'         => $Run(57, null, null),
             'over_length'  => $Run(0, 999999, null),
             'past_offset'  => $Run(999, null, null),
+            'empty_window' => $Run(10, 0, null),
+            'at_end'       => $Run(62, null, null),
             'client_range' => $Run(null, null, 'bytes=0-2'),
             'whole_file'   => $Run(null, null, null),
          ];
@@ -261,8 +263,13 @@ return new Specification(
       //   before a head is built — not left for the transport to abort
       //   mid-message, with the Content-Length already committed.
       foreach ([
-         'over_length' => 'a length past the end of the file',
-         'past_offset' => 'an offset past the end of the file',
+         'over_length'  => 'a length past the end of the file',
+         'past_offset'  => 'an offset past the end of the file',
+         // ? A zero-length window of a non-empty representation has no last
+         //   byte, so no valid Content-Range can describe it in a 206 —
+         //   accepting it emitted the open-ended `bytes 10-/62`.
+         'empty_window' => 'a zero-length window inside the file',
+         'at_end'       => 'a zero-length window at the end of the file',
       ] as $key => $label) {
          $got = $C[$key];
          if ($got['code'] < 400 || $got['queued'] !== 0) {

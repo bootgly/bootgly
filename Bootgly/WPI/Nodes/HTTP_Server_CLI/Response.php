@@ -938,11 +938,15 @@ class Response extends Server\Response
          //   representation cannot satisfy is refused here, at the source,
          //   instead of being advertised in a Content-Length the transport
          //   has to abandon mid-message once the head is already committed.
+         //   A zero-length window of a non-empty representation is refused
+         //   too: it has no last byte, so no Content-Range can describe it
+         //   in a 206. Only the whole empty representation stays a 200.
          if (
             $offset < 0
             || $offset > $size
             || $bytes < 0
             || $bytes > $size - $offset
+            || ($bytes === 0 && $size > 0)
          ) {
             $this->code(500);
             return $this;
@@ -951,10 +955,10 @@ class Response extends Server\Response
          // ! `end` is an OFFSET here, exactly as on the client-Range path
          //   above: the last byte sent, not a count. Storing the length in
          //   this slot is what produced `bytes 10-5/62` for a five-byte
-         //   window at offset 10. An empty window has no last byte.
+         //   window at offset 10.
          $ranges[] = [
             'start' => $offset,
-            'end' => $bytes > 0 ? $offset + $bytes - 1 : null
+            'end' => $offset + $bytes - 1
          ];
          $parts[] = [
             'offset' => $offset,
@@ -994,8 +998,6 @@ class Response extends Server\Response
                $start = $range['start'];
                $end = $range['end'];
 
-               if ($end > $size - 1) $end += 1;
-
                $prepend = <<<HTTP_RAW
                \r\n--$boundary
                Content-Type: application/octet-stream
@@ -1024,8 +1026,6 @@ class Response extends Server\Response
          else { // @ HTTP Single part ranges
             $start = $ranges[0]['start'];
             $end = $ranges[0]['end'];
-
-            if ($end > $size - 1) $end += 1;
 
             $this->Header->set('Content-Range', "bytes {$start}-{$end}/{$size}");
          }
