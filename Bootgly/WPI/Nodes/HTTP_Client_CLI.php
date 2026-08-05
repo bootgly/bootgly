@@ -53,6 +53,7 @@ use BackedEnum;
 use Closure;
 use Generator;
 use InvalidArgumentException;
+use LogicException;
 use Throwable;
 
 use Bootgly\ABI\IO\FS\File;
@@ -2003,17 +2004,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          }
          CAPI::$Tests[self::class][] = $test;
          CAPI::$tests[self::class][] = $case;
-
-         // @ Expand handler queue for multi-request tests
-         if (
-            $test instanceof E2ESpecification
-            && $test->requests !== []
-         ) {
-            $extra = count($test->requests) - 1;
-            for ($i = 0; $i < $extra; $i++) {
-               CAPI::$Tests[self::class][] = $test;
-            }
-         }
       }
 
       $Suite->tests = CAPI::$tests[self::class];
@@ -2205,6 +2195,17 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       $testFiles = CAPI::$tests[self::class] ?? [];
       $specIndex = 0;
+
+      // ? Both harness arrays must be 1:1 (one spec per test file) — the
+      //   parent and the mock-server cursors advance per spec, so any extra
+      //   slot silently shifts the mapping and skips trailing specs
+      $specs = count(CAPI::$Tests[self::class] ?? []);
+      $files = count($testFiles);
+      if ($specs !== $files) {
+         throw new LogicException(
+            "HTTP client E2E harness misaligned: {$specs} spec slot(s) for {$files} test file(s)."
+         );
+      }
 
       // @ Create a single reusable HTTP client instance (lightweight test mode)
       $HTTP_Client_CLI = new self(self::MODE_TEST);
