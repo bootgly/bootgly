@@ -39,6 +39,7 @@ use const WNOHANG;
 use function array_diff;
 use function array_reverse;
 use function array_values;
+use function basename;
 use function clearstatcache;
 use function cli_set_process_title;
 use function count;
@@ -164,6 +165,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification as E2ESpecification;
 
 
 class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
@@ -2421,32 +2423,30 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       $specs ??= BOOTGLY_ROOT_DIR . $classPath . '/tests/' . $testsDir;
 
       foreach ($selected as $index => $case) {
-         $Test_Case_File = new File(
-            "{$specs}/{$case}.test.php"
-         );
+         $file = "{$specs}/{$case}.test.php";
+         $Test_Case_File = new File($file);
+         // ? Fail closed like Suite::autoboot() — a missing or invalid spec
+         //   must abort the run, never silently shrink it (`_` = private spec)
          if ($Test_Case_File->exists === false) {
-            continue;
+            if (basename($case)[0] === '_') {
+               continue;
+            }
+
+            throw new Exception("Test case not found: \n {$file}");
          }
 
-         try {
-            /** @var Specification|null $test */
-            $test = self::load($Test_Case_File);
-         }
-         catch (Throwable) {
-            $test = null;
+         $test = self::load($Test_Case_File);
+         // ?
+         if ($test instanceof E2ESpecification === false) {
+            throw new Exception("Test case must return a Specification instance: \n {$file}");
          }
 
-         if ($test instanceof Specification) {
-            $test->index(case: $index + 1);
-         }
+         $test->index(case: $index + 1);
          SAPI::$Tests[self::class][] = $test;
          SAPI::$tests[self::class][] = $case;
 
          // @ Expand handler queue for multi-request tests
-         if (
-            $test instanceof \Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification
-            && $test->requests !== []
-         ) {
+         if ($test->requests !== []) {
             $extra = count($test->requests) - 1;
             for ($i = 0; $i < $extra; $i++) {
                SAPI::$Tests[self::class][] = $test;
@@ -2592,7 +2592,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                $Suite->case = $test->case ?? ((int) $index + 1);
 
                $Test = $Suite->test($test);
-               if ($Test === null || !($test instanceof \Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification)) {
+               if ($Test === null || !($test instanceof E2ESpecification)) {
                   $Suite->skip();
                   $specIndex++;
                   continue;

@@ -42,5 +42,6 @@ return new Suite(
          '4.1-body-decode_json',
          '4.2-body-decode_default',
       ],
+      '5.1-pretest-fail_closed',
    ]
 );

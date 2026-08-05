@@ -19,6 +19,7 @@ use const STREAM_SERVER_BIND;
 use const STREAM_SERVER_LISTEN;
 use function array_shift;
 use function array_unshift;
+use function basename;
 use function count;
 use function ctype_digit;
 use function fclose;
@@ -51,6 +52,7 @@ use function time;
 use function usleep;
 use BackedEnum;
 use Closure;
+use Exception;
 use Generator;
 use InvalidArgumentException;
 use LogicException;
@@ -1984,24 +1986,25 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $classPath = str_replace('\\', '/', __CLASS__);
 
       foreach ($selected as $index => $case) {
-         $Test_Case_File = new File(
-            BOOTGLY_ROOT_DIR . $classPath . '/tests/' . $testsDir . '/' . $case . '.test.php'
-         );
+         $file = BOOTGLY_ROOT_DIR . $classPath . '/tests/' . $testsDir . '/' . $case . '.test.php';
+         $Test_Case_File = new File($file);
+         // ? Fail closed like Suite::autoboot() — a missing or invalid spec
+         //   must abort the run, never silently shrink it (`_` = private spec)
          if ($Test_Case_File->exists === false) {
-            continue;
+            if (basename($case)[0] === '_') {
+               continue;
+            }
+
+            throw new Exception("Test case not found: \n {$file}");
          }
 
-         try {
-            /** @var Specification|null $test */
-            $test = require $Test_Case_File;
-         }
-         catch (Throwable) {
-            $test = null;
+         $test = require $Test_Case_File;
+         // ?
+         if ($test instanceof E2ESpecification === false) {
+            throw new Exception("Test case must return a Specification instance: \n {$file}");
          }
 
-         if ($test instanceof Specification) {
-            $test->index(case: $index + 1);
-         }
+         $test->index(case: $index + 1);
          CAPI::$Tests[self::class][] = $test;
          CAPI::$tests[self::class][] = $case;
       }
