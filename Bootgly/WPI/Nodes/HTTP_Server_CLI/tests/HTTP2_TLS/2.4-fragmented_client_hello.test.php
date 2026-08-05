@@ -52,11 +52,18 @@ return new Specification(
          $Downstream = is_resource($TLSClient)
             ? @stream_socket_accept($Listener, 2)
             : false;
+         // ! TCP_NODELAY on the upstream leg — without it Nagle coalesces the
+         //   5-byte fragments and the server never observes a partial TLS
+         //   record, silently passing over the very property under test
          $Upstream = @stream_socket_client(
             'tcp://127.0.0.1:8086',
             $errorNumber,
             $errorMessage,
-            2
+            2,
+            STREAM_CLIENT_CONNECT,
+            stream_context_create([
+               'socket' => ['tcp_nodelay' => true]
+            ])
          );
          if (
             ! is_resource($TLSClient)

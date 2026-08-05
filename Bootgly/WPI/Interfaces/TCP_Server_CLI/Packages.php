@@ -320,12 +320,13 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          $buffer = false;
       }
 
-      // @ Check connection close intention by peer?
-      // Close connection if input data is empty to avoid unnecessary loop
-      if ($buffer === '') {
-         #$this->Logger->log(warning: 'Failed to read buffer: input data is empty!' . PHP_EOL);
-         $this->Connection->close();
-         return false;
+      // ? A zero-byte read is peer EOF only when feof() confirms it — on TLS,
+      //   SSL_read() returning WANT_READ (record split across TCP segments)
+      //   also surfaces as fread() === '' with feof() === false. fail()
+      //   closes and counts real closes and leaves live sockets alone; the
+      //   $input conjunct keeps a partial sized read decodable below.
+      if ($buffer === '' && $input === '') {
+         return $this->fail($Socket, 'read');
       }
 
       // @ Check issues
