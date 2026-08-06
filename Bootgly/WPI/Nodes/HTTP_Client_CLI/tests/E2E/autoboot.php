@@ -61,6 +61,8 @@ return new Suite(
          '9.2-redirect_302',
          '9.3-redirect_307_preserve_method',
          '9.4-redirect_max_exceeded',
+         '9.5-cross_origin_credentials_stripped',
+         '9.6-same_origin_credentials_kept',
       ],
       'Timeouts/' => [
          '10.1-response_timeout',

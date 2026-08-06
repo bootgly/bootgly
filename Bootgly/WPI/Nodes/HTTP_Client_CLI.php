@@ -45,6 +45,7 @@ use function stripos;
 use function strlen;
 use function strpos;
 use function strrpos;
+use function strtolower;
 use function strtotime;
 use function strtoupper;
 use function substr;
@@ -56,7 +57,6 @@ use Exception;
 use Generator;
 use InvalidArgumentException;
 use LogicException;
-use Throwable;
 
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Logs\Data\Display;
@@ -90,6 +90,20 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    // | Redirect
    /** Maximum number of redirects to follow (0 = disabled). */
    public int $maxRedirects = 10;
+   /**
+    * Follow a redirect that steps down from `https` to `http`.
+    *
+    * Refused by default: a 307/308 replays the original headers and body, so
+    * the downgraded leg would carry them in the clear.
+    */
+   public bool $allowInsecureRedirect = false;
+   /**
+    * Request headers scoped to the origin that issued them — dropped as soon
+    * as a redirect leaves it.
+    *
+    * @var array<int,string>
+    */
+   private const array CREDENTIAL_HEADERS = ['authorization', 'cookie', 'proxy-authorization'];
    // | Timeout
    /** Connection timeout in seconds (0 = no timeout). */
    public int|float $connectTimeout = 30;
@@ -1635,23 +1649,72 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     */
    private function follow (Request $Request): void
    {
+      // ! The caller's TLS configuration. `configure()` overwrites `$this->secure`
+      //   in place on the first leg, so it is snapshotted here and carried across
+      //   every hop — a redirect must not silently drop `verify_peer`, the CA
+      //   bundle, the client certificate or a pinned fingerprint.
+      $configured = $this->secure;
+
       // @@
       /** @phpstan-ignore identical.alwaysFalse, booleanAnd.alwaysFalse */
       while ($Request->connectionState === 'redirect' && $Request->redirectTarget !== null) {
          $resolved = $Request->redirectTarget;
          $Request->redirectTarget = null;
+
+         // ? A step down from https to http would put the headers and body a
+         //   307/308 replays on the wire in the clear — refuse it by default.
+         //   Tested per hop, so a downgrade mid-chain is caught too.
+         if (
+            $this->secure !== null
+            && $resolved['secure'] === false
+            && $this->allowInsecureRedirect === false
+         ) {
+            $Request->Response->code = 0;
+            $Request->Response->status = 'Insecure Redirect';
+            $Request->connectionState = 'idle';
+            $Request->completed = true;
+
+            return;
+         }
+
+         // ! Credentials belong to the origin that issued them, so they survive
+         //   only a hop that stays on the same host without weakening the
+         //   transport. An http -> https upgrade counts as staying: it is the
+         //   most common redirect there is and it necessarily moves 80 -> 443,
+         //   so the port and scheme comparisons are waived for it alone.
+         //   Compared before `configure()` re-targets the client.
+         $upgrade = $this->secure === null && $resolved['secure'];
+         $sameOrigin = $resolved['host'] === (self::$targetHost ?? '127.0.0.1')
+            && ($upgrade || $resolved['port'] === (self::$targetPort ?? 80))
+            && ($upgrade || $resolved['secure'] === ($this->secure !== null));
+
+         // @ Drop them as curl, Python requests and Go net/http do
+         if ($sameOrigin === false) {
+            // ! `Header::remove()` matches the stored name verbatim, so the
+            //   field set is walked instead of removing three fixed spellings
+            foreach ($Request->Header->fields as $name => $value) {
+               if (in_array(strtolower($name), self::CREDENTIAL_HEADERS, true)) {
+                  $Request->Header->remove($name);
+               }
+            }
+         }
+
          $Request->Response->reset();
          $Request->connectionState = 'waiting';
          $Request->completed = false;
          $Request->bytesReceived = 0;
          $Request->reused = false;
 
+         // ! Only the peer name belongs to the new origin — every other option
+         //   is the caller's and survives the hop
+         $secure = null;
+         if ($resolved['secure']) {
+            $secure = $configured ?? [];
+            $secure['peer_name'] = $resolved['host'];
+         }
+
          // @ Reconfigure for the new target (retires the previous origin's pool)
-         $this->configure(
-            $resolved['host'],
-            $resolved['port'],
-            secure: $resolved['secure'] ? ['peer_name' => $resolved['host']] : null
-         );
+         $this->configure($resolved['host'], $resolved['port'], secure: $secure);
 
          $this->nextRequest = $Request;
          $this->wire();
@@ -1766,6 +1829,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       if (
          $Request->Response->status === 'Response Too Large'
          || $Request->Response->status === 'Request Header Fields Too Large'
+         || $Request->Response->status === 'Insecure Redirect'
       ) {
          return false;
       }

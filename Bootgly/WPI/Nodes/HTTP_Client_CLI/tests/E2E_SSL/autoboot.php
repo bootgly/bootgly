@@ -30,5 +30,8 @@ return new Suite(
       '9.1-basic_get_over_tls',
       '9.2-post_json_over_tls',
       '9.3-chunked_over_tls',
+      '9.4-redirect_keeps_tls_context',
+      '9.5-insecure_redirect_refused',
+      '9.6-insecure_redirect_allowed',
    ]
 );
