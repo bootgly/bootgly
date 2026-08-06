@@ -11,7 +11,10 @@
 namespace Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response\Decoders;
 
 
+use function ctype_xdigit;
 use function hexdec;
+use function ltrim;
+use function rtrim;
 use function strlen;
 use function strpos;
 use function substr;
@@ -22,6 +25,19 @@ use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response\Decoder;
 
 class Decoder_Chunked extends Decoder
 {
+   /**
+    * `BWS` (RFC 9110 §5.6.3) around the chunk-extension `;` — SP and HTAB.
+    */
+   private const string BWS = " \t";
+   /**
+    * Maximum SIGNIFICANT hexadecimal digits accepted in a chunk-size, matching
+    * the server decoder. 15 digits cap a chunk just under 2^60, which keeps
+    * `hexdec()` on the integer side of its float threshold — above it the
+    * conversion collapses to a bogus `0` or a negative (HCLI-19). Any longer
+    * token is orders of magnitude beyond every real response anyway.
+    */
+   private const int CHUNK_SIZE_DIGITS = 15;
+
    /** @var string Accumulated raw body from decoded chunks. */
    protected string $body = '';
    /** @var string Partial leftover buffer between reads. */
@@ -58,7 +74,7 @@ class Decoder_Chunked extends Decoder
    }
 
    /**
-    * @return null|array{complete: true, body: string, bodyLength: int, consumed: int, leftover: string}|array{overflow: true, consumed: int}
+    * @return null|array{complete: true, body: string, bodyLength: int, consumed: int, leftover: string}|array{failed: true, status: string, consumed: int}
     */
    public function decode (string $buffer, int $size, null|string $method = null): null|array
    {
@@ -81,9 +97,50 @@ class Decoder_Chunked extends Decoder
          // @ Strip chunk-extension (RFC 9112 §7.1.1) before parsing size
          $semicolon = strpos($chunkSizeHex, ';');
          if ($semicolon !== false) {
-            $chunkSizeHex = substr($chunkSizeHex, 0, $semicolon);
+            // ! BWS may precede the `;`, which puts it on the size side of the
+            //   split — `1 ;foo=bar` is conformant. Only TRAILING BWS goes, so
+            //   `5 garbage` still fails validation below.
+            $chunkSizeHex = rtrim(substr($chunkSizeHex, 0, $semicolon), self::BWS);
          }
-         $chunkSize = (int) hexdec(trim($chunkSizeHex));
+
+         // ? RFC 9112 §7.1 — chunk-size = 1*HEXDIG (no signs, no whitespace,
+         //   no `0x` prefix). `hexdec()` silently ignores invalid characters,
+         //   so `-1`, `0x10`, `5 garbage` and `0e0` would all convert to a
+         //   plausible size, and `zz` would convert to 0 — read as the
+         //   TERMINAL chunk, completing the response early with a truncated
+         //   body (HCLI-19). One `ctype_xdigit` call rejects every variant.
+         if ($chunkSizeHex === '' || ctype_xdigit($chunkSizeHex) === false) {
+            $this->body     = '';
+            $this->leftover = '';
+
+            return [
+               'failed'   => true,
+               'status'   => 'Invalid Chunked Encoding',
+               'consumed' => $size,
+            ];
+         }
+
+         // ? Leading zeros are legal, so significance — not token length —
+         //   carries the magnitude. `hexdec()` returns a FLOAT from 2^63 up and
+         //   the int cast collapses it to `0` or to `PHP_INT_MIN`, a negative
+         //   size that slips past every guard and makes the slicing arithmetic
+         //   below never advance — an endless loop (HCLI-19). Bound the
+         //   significant digits BEFORE converting, so every accepted token
+         //   converts exactly.
+         $significant = ltrim($chunkSizeHex, '0');
+
+         if (strlen($significant) > self::CHUNK_SIZE_DIGITS) {
+            $this->body     = '';
+            $this->leftover = '';
+
+            return [
+               'failed'   => true,
+               'status'   => 'Response Too Large',
+               'consumed' => $size,
+            ];
+         }
+
+         $chunkSize = $significant === '' ? 0 : (int) hexdec($significant);
 
          // ? Terminal chunk (last-chunk: chunk-size = 0)
          if ($chunkSize === 0) {
@@ -125,7 +182,8 @@ class Decoder_Chunked extends Decoder
             $this->leftover = '';
 
             return [
-               'overflow' => true,
+               'failed'   => true,
+               'status'   => 'Response Too Large',
                'consumed' => $size,
             ];
          }

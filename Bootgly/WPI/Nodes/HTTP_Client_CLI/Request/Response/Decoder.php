@@ -17,7 +17,7 @@ use Bootgly\WPI\Endpoints\Clients\Decoder as DecoderInterface;
 abstract class Decoder implements DecoderInterface
 {
    /**
-    * @return null|array{protocol: string, code: int, status: string, headerRaw: string, bodyRaw: string, bodyLength: int, bodyDownloaded: int, bodyWaiting: bool, chunked: bool, closeConnection: bool, interim: bool, consumed: int}|array{complete: true, body: string, bodyLength: int, consumed: int, leftover: string}|array{overflow: true, consumed: int}
+    * @return null|array{protocol: string, code: int, status: string, headerRaw: string, bodyRaw: string, bodyLength: int, bodyDownloaded: int, bodyWaiting: bool, chunked: bool, closeConnection: bool, interim: bool, consumed: int}|array{complete: true, body: string, bodyLength: int, consumed: int, leftover: string}|array{failed: true, status: string, consumed: int}
     */
    abstract public function decode (string $buffer, int $size, null|string $method = null): null|array;
 }

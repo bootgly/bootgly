@@ -31,9 +31,10 @@ return new Specification(
 
       yield assert(
          assertion: $receipt !== null
-            && ($receipt['overflow'] ?? false) === true
+            && ($receipt['failed'] ?? false) === true
+            && $receipt['status'] === 'Response Too Large'
             && isSet($receipt['complete']) === false,
-         description: 'a declared 131072-byte chunk under a 65536 cap returns an overflow record, not a completion'
+         description: 'a declared 131072-byte chunk under a 65536 cap returns a failure record, not a completion'
       );
 
       // @ Boundary: exactly at the cap decodes in full
@@ -56,7 +57,7 @@ return new Specification(
       $receipt = $Decoder->decode("10001\r\n", 7, 'GET');
 
       yield assert(
-         assertion: $receipt !== null && ($receipt['overflow'] ?? false) === true,
+         assertion: $receipt !== null && ($receipt['failed'] ?? false) === true,
          description: 'a declared cap+1 chunk overflows'
       );
 
@@ -68,7 +69,7 @@ return new Specification(
       $receipt = $Decoder->decode("3c\r\n{$sixty}\r\n3c\r\n", 70, 'GET');
 
       yield assert(
-         assertion: $receipt !== null && ($receipt['overflow'] ?? false) === true,
+         assertion: $receipt !== null && ($receipt['failed'] ?? false) === true,
          description: 'a second 60-byte chunk under a 100-byte cap overflows the accumulated body'
       );
 

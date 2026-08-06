@@ -497,12 +497,14 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             return;
          }
 
-         // ? A chunked overflow is a failure, not a completion — deliver the
-         //   same failed Response the maxResponseBytes wire guard builds and
-         //   drop the poisoned mid-stream connection (HCLI-3/HCLI-11)
-         if (isSet($parsed['overflow'])) {
+         // ? A chunked decode failure is never a completion — deliver the same
+         //   failed Response the maxResponseBytes wire guard builds, carrying
+         //   the decoder's own status (an oversize body and malformed framing
+         //   are different answers), and drop the poisoned mid-stream
+         //   connection (HCLI-3/HCLI-11/HCLI-19)
+         if (isSet($parsed['failed'])) {
             $Request->Response->code = 0;
-            $Request->Response->status = 'Response Too Large';
+            $Request->Response->status = (string) $parsed['status'];
             $Request->completed = true;
             $Request->connectionState = 'idle';
             unset($HTTP_Client_CLI->pendingRequests[$socketId]);
@@ -561,11 +563,12 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                // @ Try immediate decode: all chunk data may already be buffered
                $chunkedResult = $Chunked->decode('', 0, $Request->method);
 
-               // ? A chunk declared past the cap in the same read as the
-               //   headers fails here, before any body byte counts (HCLI-3)
-               if ($chunkedResult !== null && isSet($chunkedResult['overflow'])) {
+               // ? A chunk declared past the cap — or an unparseable size line —
+               //   in the same read as the headers fails here, before any body
+               //   byte counts (HCLI-3/HCLI-19)
+               if ($chunkedResult !== null && isSet($chunkedResult['failed'])) {
                   $Request->Response->code = 0;
-                  $Request->Response->status = 'Response Too Large';
+                  $Request->Response->status = (string) $chunkedResult['status'];
                   $Request->completed = true;
                   $Request->connectionState = 'idle';
                   unset($HTTP_Client_CLI->pendingRequests[$socketId]);
