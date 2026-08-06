@@ -45,6 +45,7 @@ return new Suite(
       '5.1-pretest-fail_closed',
       'Response/Decoders/' => [
          '6.1-decoder-content_length_consumed',
+         '6.2-decoder_chunked-ownership',
       ],
    ]
 );

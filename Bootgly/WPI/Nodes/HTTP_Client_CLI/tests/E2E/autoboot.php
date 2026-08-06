@@ -84,5 +84,12 @@ return new Suite(
          '14.2-content_length_multi_read',
          '14.3-content_length_keepalive_split',
       ],
+      'ChunkedStream/' => [
+         '15.1-chunked_paced_writes',
+         '15.2-chunked_multi_read',
+      ],
+      'SplitHead/' => [
+         '16.1-split_header_block',
+      ],
    ]
 );

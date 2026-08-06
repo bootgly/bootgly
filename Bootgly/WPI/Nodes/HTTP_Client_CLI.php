@@ -461,6 +461,14 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          $parsed = $Request->Decoder->decode($buffer, $size, $Request->method);
 
          if ($parsed === null) {
+            // ? The chunked decoder owns every byte it was fed — clear the
+            //   pending buffer so the next read cannot re-feed bytes already
+            //   absorbed into its leftover (HCLI-1). Decoder_ is stateless
+            //   and re-parses its buffer, so only chunked clears.
+            if ($Request->Decoder instanceof Decoder_Chunked) {
+               $Request->pendingBuffer = '';
+            }
+
             return; // @ Incomplete headers or chunk data, wait for more
          }
 
