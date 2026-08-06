@@ -188,5 +188,8 @@ return new Suites(
       'projects/Demo/UDP_Server_CLI/',
       'projects/Demo/WS_Client_CLI/',
       'projects/Demo/WS_Server_CLI/',
+      // # Dual-stack listener (host '[::]') — IPv4-mapped peer canonicalization
+      //   (appended last to keep every suite index above stable)
+      'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/E2E_DualStack/',
    ]
 );

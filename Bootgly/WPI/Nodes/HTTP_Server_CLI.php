@@ -2473,9 +2473,13 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       //   client destruction.
       $TCP_Client_CLI = new TCP_Client_CLI(mode: TCP_Client_CLI::MODE_TEST);
       $TCP_Client_CLI->configure(
-         host: ($TCP_Server_CLI->host === '0.0.0.0')
-            ? '127.0.0.1'
-            : ($TCP_Server_CLI->host ?? 'localhost'),
+         // ? Wildcard listeners are unconnectable as-is — drive the harness
+         //   through the matching loopback
+         host: match ($TCP_Server_CLI->host) {
+            '0.0.0.0' => '127.0.0.1',
+            '[::]' => '[::1]',
+            default => $TCP_Server_CLI->host ?? 'localhost',
+         },
          port: $TCP_Server_CLI->port ?? 80,
       );
       $TCP_Client_CLI->on(

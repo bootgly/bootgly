@@ -57,12 +57,67 @@ return new Specification(
          ->to->be(['::', 80])
          ->assert();
 
-      // @ IPv6 — IPv4-mapped (RFC 4291 §2.5.5.2)
+      // @ IPv6 — IPv4-mapped (RFC 4291 §2.5.5.2). Dual-stack listeners
+      //   ('ipv6_v6only' => false) present an IPv4 hop as '::ffff:a.b.c.d';
+      //   the parser canonicalizes it to the dotted quad so ONE
+      //   representation of a client IP crosses the layer — TrustedProxy
+      //   lists, blacklist/ACL, RateLimit buckets and forensic logs all
+      //   compare the address the operator actually writes (MW-6).
       yield new Assertion(
-         description: 'IPv6 IPv4-mapped "[::ffff:192.0.2.1]:8080"',
+         description: 'IPv6 IPv4-mapped "[::ffff:192.0.2.1]:8080" → ["192.0.2.1", 8080]',
       )
          ->expect(Peer::parse('[::ffff:192.0.2.1]:8080'))
-         ->to->be(['::ffff:192.0.2.1', 8080])
+         ->to->be(['192.0.2.1', 8080])
+         ->assert();
+
+      yield new Assertion(
+         description: 'Unbracketed IPv4-mapped "::ffff:10.0.0.1:12345" → ["10.0.0.1", 12345]',
+      )
+         ->expect(Peer::parse('::ffff:10.0.0.1:12345'))
+         ->to->be(['10.0.0.1', 12345])
+         ->assert();
+
+      yield new Assertion(
+         description: 'Uppercase mapped prefix "[::FFFF:10.0.0.1]:1" → ["10.0.0.1", 1]',
+      )
+         ->expect(Peer::parse('[::FFFF:10.0.0.1]:1'))
+         ->to->be(['10.0.0.1', 1])
+         ->assert();
+
+      // ? Only the dotted-quad textual form canonicalizes — a hex remainder
+      //   is not the form dual-stack getpeername() produces and passes
+      //   through verbatim
+      yield new Assertion(
+         description: 'Hex remainder "[::ffff:dead:beef]:1" passes through verbatim',
+      )
+         ->expect(Peer::parse('[::ffff:dead:beef]:1'))
+         ->to->be(['::ffff:dead:beef', 1])
+         ->assert();
+
+      // ? Canonicalization must never INVENT a trusted address: an octal-ish
+      //   quad and an out-of-range quad are not valid IPv4, so they keep the
+      //   mapped form and stay outside every dotted-quad trust list
+      yield new Assertion(
+         description: 'Leading-zero quad "[::ffff:010.0.0.1]:80" is not canonicalized',
+      )
+         ->expect(Peer::parse('[::ffff:010.0.0.1]:80'))
+         ->to->be(['::ffff:010.0.0.1', 80])
+         ->assert();
+
+      yield new Assertion(
+         description: 'Out-of-range quad "[::ffff:999.1.1.1]:80" is not canonicalized',
+      )
+         ->expect(Peer::parse('[::ffff:999.1.1.1]:80'))
+         ->to->be(['::ffff:999.1.1.1', 80])
+         ->assert();
+
+      // ? The deprecated IPv4-compatible form (no `ffff`) is a distinct
+      //   address family notation and is left untouched
+      yield new Assertion(
+         description: 'IPv4-compatible "[::10.0.0.1]:80" passes through verbatim',
+      )
+         ->expect(Peer::parse('[::10.0.0.1]:80'))
+         ->to->be(['::10.0.0.1', 80])
          ->assert();
 
       // @ Malformed — no separator at all
