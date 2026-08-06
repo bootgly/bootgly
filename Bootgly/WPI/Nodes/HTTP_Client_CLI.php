@@ -497,6 +497,25 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             return;
          }
 
+         // ? A chunked overflow is a failure, not a completion — deliver the
+         //   same failed Response the maxResponseBytes wire guard builds and
+         //   drop the poisoned mid-stream connection (HCLI-3/HCLI-11)
+         if (isSet($parsed['overflow'])) {
+            $Request->Response->code = 0;
+            $Request->Response->status = 'Response Too Large';
+            $Request->completed = true;
+            $Request->connectionState = 'idle';
+            unset($HTTP_Client_CLI->pendingRequests[$socketId]);
+
+            if ($Request->onComplete !== null) {
+               ($Request->onComplete)($Request);
+            }
+
+            // @ close() fires the disconnect hook: pool drop + promote + halt
+            $Connection->close();
+            return;
+         }
+
          // @ Handle chunked transfer complete
          if (isSet($parsed['complete'])) {
             $Request->Response->Body->raw = (string) $parsed['body'];
@@ -532,7 +551,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                $chunkInit = substr($buffer, $consumed);
                // @ Hand off to chunked decoder; clear pending buffer (decoder owns the bytes now)
                $Request->pendingBuffer = '';
-               $Chunked = new Decoder_Chunked;
+               $Chunked = new Decoder_Chunked($HTTP_Client_CLI->maxResponseBytes);
                $Chunked->init();
                if ($chunkInit !== '') {
                   $Chunked->feed($chunkInit);
@@ -541,6 +560,25 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
                // @ Try immediate decode: all chunk data may already be buffered
                $chunkedResult = $Chunked->decode('', 0, $Request->method);
+
+               // ? A chunk declared past the cap in the same read as the
+               //   headers fails here, before any body byte counts (HCLI-3)
+               if ($chunkedResult !== null && isSet($chunkedResult['overflow'])) {
+                  $Request->Response->code = 0;
+                  $Request->Response->status = 'Response Too Large';
+                  $Request->completed = true;
+                  $Request->connectionState = 'idle';
+                  unset($HTTP_Client_CLI->pendingRequests[$socketId]);
+
+                  if ($Request->onComplete !== null) {
+                     ($Request->onComplete)($Request);
+                  }
+
+                  // @ close() fires the disconnect hook: pool drop + promote + halt
+                  $Connection->close();
+                  return;
+               }
+
                if ($chunkedResult !== null) {
                   $Request->Response->Body->raw = (string) $chunkedResult['body'];
                   $Request->Response->Body->length = (int) $chunkedResult['bodyLength'];

@@ -26,8 +26,13 @@ class Decoder_Chunked extends Decoder
    protected string $body = '';
    /** @var string Partial leftover buffer between reads. */
    protected string $leftover = '';
-   /** @var int Maximum decoded body size (10 MB). */
-   protected int $maxSize = 10 * 1024 * 1024;
+   /** @var int Maximum decoded body size (0 = unbounded); driven by HTTP_Client_CLI::$maxResponseBytes. */
+   protected int $maxSize = 0;
+
+   public function __construct (int $maxSize = 0)
+   {
+      $this->maxSize = $maxSize;
+   }
 
    /**
     * Initialize/reset chunked decoder state.
@@ -53,7 +58,7 @@ class Decoder_Chunked extends Decoder
    }
 
    /**
-    * @return null|array{complete: true, body: string, bodyLength: int, consumed: int, leftover: string}
+    * @return null|array{complete: true, body: string, bodyLength: int, consumed: int, leftover: string}|array{overflow: true, consumed: int}
     */
    public function decode (string $buffer, int $size, null|string $method = null): null|array
    {
@@ -112,17 +117,16 @@ class Decoder_Chunked extends Decoder
             ];
          }
 
-         // @ Guard: maximum body size
-         if (strlen($this->body) + $chunkSize > $this->maxSize) {
+         // ? Guard: the DECLARED chunk would push the decoded body past the
+         //   cap — fail fast with a distinguishable overflow record, never a
+         //   fake completion (HCLI-11); the chunk data need not have arrived
+         if ($this->maxSize > 0 && strlen($this->body) + $chunkSize > $this->maxSize) {
             $this->body     = '';
             $this->leftover = '';
 
             return [
-               'complete'   => true,
-               'body'       => '',
-               'bodyLength' => 0,
-               'consumed'   => $size,
-               'leftover'   => '',
+               'overflow' => true,
+               'consumed' => $size,
             ];
          }
 

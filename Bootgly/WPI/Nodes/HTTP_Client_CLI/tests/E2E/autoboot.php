@@ -91,5 +91,13 @@ return new Suite(
       'SplitHead/' => [
          '16.1-split_header_block',
       ],
+      'Overflow/' => [
+         '17.1-chunked_over_cap_unbounded',
+         '17.2-declared_oversize_with_headers',
+         '17.3-declared_oversize_later_read',
+         '17.4-wire_cap_content_length',
+         '17.5-declared_oversize_keepalive',
+         '17.6-declared_oversize_keepalive_later_read',
+      ],
    ]
 );

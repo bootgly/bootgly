@@ -46,6 +46,7 @@ return new Suite(
       'Response/Decoders/' => [
          '6.1-decoder-content_length_consumed',
          '6.2-decoder_chunked-ownership',
+         '6.3-decoder_chunked-overflow',
       ],
    ]
 );
