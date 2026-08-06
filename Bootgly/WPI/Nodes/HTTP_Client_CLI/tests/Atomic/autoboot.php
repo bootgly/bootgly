@@ -43,5 +43,8 @@ return new Suite(
          '4.2-body-decode_default',
       ],
       '5.1-pretest-fail_closed',
+      'Response/Decoders/' => [
+         '6.1-decoder-content_length_consumed',
+      ],
    ]
 );

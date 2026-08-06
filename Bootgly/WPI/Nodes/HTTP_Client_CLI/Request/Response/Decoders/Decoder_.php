@@ -201,7 +201,6 @@ class Decoder_ extends Decoder
       else if ($contentLength !== null) {
          // --- Rule 4: Content-Length ---
          $bodyLength = $contentLength;
-         $consumed  += $contentLength;
 
          if ($contentLength > 0) {
             $bodyData = substr($buffer, $separator + 4, $contentLength);
@@ -214,6 +213,11 @@ class Decoder_ extends Decoder
                $bodyWaiting = true;
             }
          }
+
+         // ? Charge header+body only once the body is fully buffered — a
+         //   partial body keeps everything in $pendingBuffer for re-parse
+         //   on the next read, like the close-delimited siblings (HCLI-10)
+         $consumed = $bodyWaiting ? 0 : $consumed + $contentLength;
       }
       else {
          // --- Rule 5: close-delimited (HTTP/1.0 style, no framing metadata) ---

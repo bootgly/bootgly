@@ -79,5 +79,10 @@ return new Suite(
          '13.3-pool_stale',
          '13.4-pool_warm',
       ],
+      'LargeBody/' => [
+         '14.1-content_length_split_reads',
+         '14.2-content_length_multi_read',
+         '14.3-content_length_keepalive_split',
+      ],
    ]
 );
