@@ -74,14 +74,13 @@ class Validator implements Middleware
    {
       // @ Validate before the route handler.
       $source = match ($this->Source) {
-         Sources::Cookies => $Request->cookies,
+         Sources::Cookies => $this->flatten($Request->cookies),
          Sources::Fields => $Request->fields,
          Sources::Files => $Request->files,
          Sources::Headers => $this->fold($Request->headers),
          Sources::Queries => $Request->queries,
       };
 
-      /** @var array<string,mixed> $source */
       $Validation = new Validation($source, $this->rules);
 
       // ? Valid request — continue pipeline.
@@ -110,6 +109,34 @@ class Validator implements Middleware
          headers: ['Content-Type' => 'application/json'],
          body: $body
       );
+   }
+
+   /**
+    * Flatten the per-line cookie maps into one name→value source.
+    *
+    * `Cookies::build()` parses each `Cookie` header line into its own
+    * name→value map and appends it, so `$Request->cookies` is
+    * `array<int, array<string,string>>` — a shape `Validation`'s exact
+    * `array_key_exists` can never bind by cookie name. Unioning the lines
+    * first-line-wins mirrors `Cookies::get()`'s scan order, keeps cookie
+    * names case-sensitive (RFC 6265) and never invents an absent name,
+    * so `Required` still fails missing cookies (MW-8).
+    *
+    * @param array<int,array<string,string>> $cookies The per-line cookie maps.
+    *
+    * @return array<string,string> One name→value map, first line wins.
+    */
+   private function flatten (array $cookies): array
+   {
+      // @ Union — the `+` operator keeps existing names, so earlier
+      //   lines win, exactly like Cookies::get()'s list scan
+      $flat = [];
+      foreach ($cookies as $line) {
+         $flat += $line;
+      }
+
+      // :
+      return $flat;
    }
 
    /**

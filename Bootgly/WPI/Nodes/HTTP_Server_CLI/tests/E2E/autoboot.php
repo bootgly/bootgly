@@ -344,6 +344,9 @@ return new Suite(
          '9.1-middleware-validator',
          '9.2-middleware-validator_headers',
          '9.3-middleware-validator_headers_in',
+         '9.4-middleware-validator_cookies',
+         '9.5-middleware-validator_cookies_in',
+         '9.6-middleware-validator_cookies_lines',
          // Authentication
          '10.1-middleware-authentication_bearer_success',
          '10.2-middleware-authentication_bearer_failure',

@@ -261,6 +261,114 @@ return new Specification(
          ->to->be('Validation rules for X-Token must be Condition objects.')
          ->assert();
 
+      // @ Cookies arrive from the parser as per-line maps
+      //   (array<int, array<string,string>>) — rules bind by cookie name
+      //   across the lines (MW-8).
+      $Request = $createRequest([]);
+      $Request->cookies = [['session_id' => 'abc123', 'theme' => 'dark']];
+      [, $Response] = $createMocks();
+      $Validator = new Validator(
+         rules: ['session_id' => [new Required]],
+         Source: Sources::Cookies
+      );
+      $Result = $Validator->process($Request, $Response, $passthrough);
+
+      yield new Assertion(description: 'Cookie rules should bind by cookie name')
+         ->expect($Result->Body->raw)
+         ->to->be('passed')
+         ->assert();
+
+      // @ A non-implicit cookie rule must fail closed on a bad value.
+      $called = false;
+      $Request = $createRequest([]);
+      $Request->cookies = [['theme' => 'DROP TABLE users']];
+      [, $Response] = $createMocks();
+      $Validator = new Validator(
+         rules: ['theme' => [new In(['light', 'dark'])]],
+         Source: Sources::Cookies
+      );
+      $Result = $Validator->process(
+         $Request,
+         $Response,
+         function (object $Request, object $Response) use (&$called): object {
+            $called = true;
+            return $Response;
+         }
+      );
+
+      yield new Assertion(description: 'Cookie rule should fire on an out-of-list value')
+         ->expect($Result->code)
+         ->to->be(422)
+         ->assert();
+
+      yield new Assertion(description: 'Cookie rule failure should not call handler')
+         ->expect($called)
+         ->to->be(false)
+         ->assert();
+
+      // @ An absent cookie still fails Required — flattening never invents keys.
+      $Request = $createRequest([]);
+      $Request->cookies = [];
+      [, $Response] = $createMocks();
+      $Validator = new Validator(
+         rules: ['session_id' => [new Required]],
+         Source: Sources::Cookies
+      );
+      $Result = $Validator->process($Request, $Response, $passthrough);
+
+      yield new Assertion(description: 'Absent cookie should still fail Required')
+         ->expect($Result->code)
+         ->to->be(422)
+         ->assert();
+
+      // @ Duplicate names across Cookie lines: the FIRST line wins,
+      //   mirroring Cookies::get()'s scan order.
+      $Request = $createRequest([]);
+      $Request->cookies = [['dup' => 'first'], ['dup' => 'second']];
+      [, $Response] = $createMocks();
+      $Validator = new Validator(
+         rules: ['dup' => [new In(['first'])]],
+         Source: Sources::Cookies
+      );
+      $Result = $Validator->process($Request, $Response, $passthrough);
+
+      yield new Assertion(description: 'Duplicate cookie names should resolve first-line-wins')
+         ->expect($Result->Body->raw)
+         ->to->be('passed')
+         ->assert();
+
+      // @ Cookie names stay case-sensitive (RFC 6265) — no folding here.
+      $Request = $createRequest([]);
+      $Request->cookies = [['session_id' => 'abc123']];
+      [, $Response] = $createMocks();
+      $Validator = new Validator(
+         rules: ['Session_ID' => [new Required]],
+         Source: Sources::Cookies
+      );
+      $Result = $Validator->process($Request, $Response, $passthrough);
+
+      yield new Assertion(description: 'Cookie names should stay case-sensitive')
+         ->expect($Result->code)
+         ->to->be(422)
+         ->assert();
+
+      // @ A cookie delivered only on a LATER Cookie line still binds, and
+      //   duplicates keep first-line-wins — kills the first-line-only and
+      //   last-line-wins mutants a single-line source cannot see.
+      $Request = $createRequest([]);
+      $Request->cookies = [['dup' => 'first', 'a' => '1'], ['dup' => 'second', 'b' => '2']];
+      [, $Response] = $createMocks();
+      $Validator = new Validator(
+         rules: ['b' => [new Required], 'dup' => [new In(['first'])]],
+         Source: Sources::Cookies
+      );
+      $Result = $Validator->process($Request, $Response, $passthrough);
+
+      yield new Assertion(description: 'Second-line cookies should bind with first-line-wins duplicates')
+         ->expect($Result->Body->raw)
+         ->to->be('passed')
+         ->assert();
+
       // @ Other sources stay case-sensitive — no folding outside Headers.
       $called = false;
       $Request = $createRequest(['x-token' => 'secret']);
