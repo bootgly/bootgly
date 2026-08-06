@@ -11,6 +11,8 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 
 
+use function array_key_last;
+use function count;
 use function explode;
 use function gmdate;
 use function implode;
@@ -467,6 +469,49 @@ class Header extends HeaderBase
       //   field, and cache adoption relies on '' meaning "never written".
       $lower = strtolower($name);
 
+      // ? Vary is a comma-list field whose colliding declarations build()
+      //   JOINS (RFC 9110 §5.2) — the read must report that same union, not
+      //   the first source that happens to hold one. A single declaration
+      //   reads verbatim, exactly as it serializes.
+      if ($lower === 'vary') {
+         $values = [];
+         foreach ($this->queued as $line) {
+            if (strncasecmp($line, 'vary:', 5) === 0) {
+               $values[] = ltrim(substr($line, 5));
+            }
+         }
+         if (isSet($this->masked['vary']) === false) {
+            foreach ($this->preset as $presetName => $presetValue) {
+               if (strcasecmp((string) $presetName, 'Vary') === 0) {
+                  $values[] = $presetValue === true ? '' : (string) $presetValue;
+               }
+            }
+         }
+         foreach ($this->fields as $fieldName => $fieldValue) {
+            if (strcasecmp($fieldName, 'Vary') === 0) {
+               $values[] = (string) $fieldValue;
+            }
+         }
+         foreach ($this->prepared as $preparedName => $preparedValue) {
+            if (strcasecmp($preparedName, 'Vary') === 0) {
+               $values[] = $preparedValue;
+            }
+         }
+
+         $count = count($values);
+         if ($count < 2) {
+            return $values[0] ?? '';
+         }
+
+         $value = $values[0];
+         for ($index = 1; $index < $count; $index++) {
+            $value = self::merge($value, $values[$index]);
+         }
+
+         // :
+         return $value;
+      }
+
       // ? Queued lines serialize first and own their field identity
       //   (first match wins — Set-Cookie is the one repeatable field)
       $prefix = "$lower:";
@@ -751,7 +796,10 @@ class Header extends HeaderBase
     * token (`X-Accept-Language-Experiment`) does not satisfy
     * `Accept-Language`, an already-listed token (any case) is never
     * duplicated and a `*` wildcard already covers every request field.
-    * The canonical entry point for every Vary writer.
+    * The canonical entry point for every Vary writer — and source-aware: a
+    * Vary declared through prepare()/queue()/preset() joins the merge, so
+    * one canonical field reaches the wire instead of two colliding
+    * declarations build() would have to discard one of.
     */
    public function vary (string $field): void
    {
@@ -763,47 +811,120 @@ class Header extends HeaderBase
          return;
       }
 
-      // ? Locate the current Vary field under any case variant — writing a
-      //   second case variant would serialize two Vary lines
+      // ! Collect the effective Vary across EVERY serialization source, in
+      //   build()'s precedence order — queued lines, preset minus the
+      //   per-response mask, fields, prepared. A declaration living outside
+      //   $fields used to be invisible here, so vary() started a second
+      //   independent list and build()'s case-insensitive collision
+      //   handling silently dropped one of the declared cache dimensions.
+      $tokens = [];
+      $listed = [];
+      $wildcard = false;
+      $foreign = false;
+      $collect = static function (string $value) use (&$tokens, &$listed, &$wildcard): void {
+         foreach (explode(',', $value) as $token) {
+            $token = trim($token);
+
+            if ($token === '') {
+               continue;
+            }
+            if ($token === '*') {
+               $wildcard = true;
+               continue;
+            }
+
+            $lower = strtolower($token);
+            if (isSet($listed[$lower])) {
+               continue;
+            }
+
+            $listed[$lower] = true;
+            $tokens[] = $token;
+         }
+      };
+
+      foreach ($this->queued as $line) {
+         if (strncasecmp($line, 'vary:', 5) === 0) {
+            $foreign = true;
+            $collect(substr($line, 5));
+         }
+      }
+      if (isSet($this->masked['vary']) === false) {
+         foreach ($this->preset as $name => $value) {
+            if (strcasecmp((string) $name, 'Vary') === 0) {
+               $foreign = true;
+               $collect($value === true ? '' : (string) $value);
+            }
+         }
+      }
       $key = null;
       foreach ($this->fields as $name => $value) {
          if (strcasecmp((string) $name, 'Vary') === 0) {
-            $key = $name;
-            break;
+            if ($key === null) {
+               $key = $name;
+            }
+            $collect((string) $value);
+         }
+      }
+      foreach ($this->prepared as $name => $value) {
+         if (strcasecmp((string) $name, 'Vary') === 0) {
+            $foreign = true;
+            $collect($value);
          }
       }
 
-      // ? No Vary yet — start the list
-      if ($key === null) {
-         $this->fields['Vary'] = $field;
-         $this->dirty = true;
+      // ? Fields-only — the common case (the encode-time Accept-Language on
+      //   every i18n response lands here): merge in place, exactly as before
+      if ($foreign === false) {
+         // ? No Vary yet — start the list
+         if ($key === null) {
+            $this->fields['Vary'] = $field;
+            $this->dirty = true;
 
-         return;
-      }
-
-      $current = (string) $this->fields[$key];
-
-      // ? Empty value — replace instead of leading with a separator
-      if (trim($current) === '') {
-         $this->fields[$key] = $field;
-         $this->dirty = true;
-
-         return;
-      }
-
-      // @@ Token scan — `*` covers all request fields; an existing token
-      //    (case-insensitive) is kept as-is
-      foreach (explode(',', $current) as $token) {
-         $token = trim($token);
-
-         if ($token === '*' || strcasecmp($token, $field) === 0) {
             return;
          }
+         // ? Empty value — replace instead of leading with a separator
+         if (trim((string) $this->fields[$key]) === '') {
+            $this->fields[$key] = $field;
+            $this->dirty = true;
+
+            return;
+         }
+         // ? `*` covers all request fields; an existing token (any case)
+         //   is kept as-is
+         if ($wildcard || isSet($listed[strtolower($field)])) {
+            return;
+         }
+         // ? `*` as the argument is the wildcard, not a token — collapse
+         //   the list (RFC 9110 §12.5.5: never `*` beside field names)
+         if ($field === '*') {
+            $this->fields[$key] = '*';
+            $this->dirty = true;
+
+            return;
+         }
+
+         $this->fields[$key] = "{$this->fields[$key]}, {$field}";
+         $this->dirty = true;
+
+         return;
+      }
+
+      // @@ A non-fields source declared Vary — consolidate the union into
+      //    one canonical field. own() deletes every case variant from
+      //    prepared and queued and masks the preset for this response;
+      //    classify('Vary') is 0, so no framing state is touched.
+      // ? `*` as the argument is the wildcard, not a token (RFC 9110
+      //   §12.5.5: never `*` beside field names)
+      if ($field === '*') {
+         $wildcard = true;
+      }
+      else if ($wildcard === false && isSet($listed[strtolower($field)]) === false) {
+         $tokens[] = $field;
       }
 
       // :
-      $this->fields[$key] = "{$current}, {$field}";
-      $this->dirty = true;
+      $this->own('Vary', $wildcard ? '*' : implode(', ', $tokens));
    }
 
    public function queue (string $field, string $value = ''): bool
@@ -863,6 +984,43 @@ class Header extends HeaderBase
       return self::$stamp;
    }
 
+   /**
+    * Union two comma-delimited Vary token lists.
+    *
+    * RFC 9110 §5.2: multiple declarations of a list-based field are
+    * equivalent to their comma-join, so a Vary collision across sources
+    * joins instead of discarding one declared cache dimension. Tokens are
+    * deduplicated case-insensitively and any `*` member absorbs the whole
+    * list (§12.5.5).
+    */
+   private static function merge (string $current, string $extra): string
+   {
+      $tokens = [];
+      $listed = [];
+
+      foreach (explode(',', "{$current},{$extra}") as $token) {
+         $token = trim($token);
+
+         if ($token === '') {
+            continue;
+         }
+         // ?: `*` covers every request field — the list collapses
+         if ($token === '*') {
+            return '*';
+         }
+
+         $lower = strtolower($token);
+         if (isSet($listed[$lower])) {
+            continue;
+         }
+
+         $listed[$lower] = true;
+         $tokens[] = $token;
+      }
+
+      // :
+      return implode(', ', $tokens);
+   }
    public function build (): true // @ raw
    {
       // ? Fast return — nothing the block depends on changed since the last build this
@@ -939,7 +1097,8 @@ class Header extends HeaderBase
       //   `Set-Cookie` is the one documented repeatable field and never
       //   participates in the identity set.
       $seen = [];
-      foreach ($queued as $line) {
+      $varyQueued = null;
+      foreach ($queued as $index => $line) {
          $colon = strpos($line, ':');
          if ($colon === false) {
             continue;
@@ -949,6 +1108,11 @@ class Header extends HeaderBase
          if ($key !== 'set-cookie') {
             $seen[$key] = true;
          }
+         // ! Vary is a comma-list field — a later map declaration joins
+         //   this line (see merge()) instead of silently vanishing
+         if ($key === 'vary') {
+            $varyQueued = $index;
+         }
       }
 
       // ?! Hot path: most responses have no user fields/prepared — skip array merge.
@@ -956,9 +1120,21 @@ class Header extends HeaderBase
          // Preset only
          foreach ($preset as $name => $value) {
             // ? Field identity is case-insensitive across EVERY source, so a
-            //   name already queued owns the line and suppresses this one.
+            //   name already queued owns the line and suppresses this one —
+            //   except Vary, a comma-list field whose second declaration
+            //   joins the queued line (RFC 9110 §5.2) instead of vanishing.
             $key = strtolower((string) $name);
             if (isSet($seen[$key])) {
+               if ($key === 'vary' && $varyQueued !== null) {
+                  $line = $queued[$varyQueued];
+                  $colon = (int) strpos($line, ':');
+                  $joined = self::merge(
+                     substr($line, $colon + 1),
+                     $value === true ? '' : (string) $value
+                  );
+                  $prefix = substr($line, 0, $colon);
+                  $queued[$varyQueued] = "{$prefix}: {$joined}";
+               }
                continue;
             }
             $seen[$key] = true;
@@ -969,6 +1145,12 @@ class Header extends HeaderBase
             } : (string) $value;
 
             $queued[] = "$name: $value";
+            // ! A just-emitted preset Vary line must be joinable by a later
+            //   case-variant preset declaration (preset() keys by exact
+            //   casing), exactly like an original queued line
+            if ($key === 'vary') {
+               $varyQueued = array_key_last($queued);
+            }
          }
 
          // @ Default Content-Type — suppressed by a queued or preset one under
@@ -992,14 +1174,40 @@ class Header extends HeaderBase
       //   `+` did — and the winner's own casing is what reaches the wire. `$seen`
       //   already carries the queued names, which serialize ahead of every map.
       $fields = [];
+      $varyName = null;
       foreach ([$preset, $this->fields, $this->prepared] as $map) {
          foreach ($map as $name => $value) {
             $key = strtolower((string) $name);
 
             if (isSet($seen[$key])) {
+               // ? Vary is a comma-list field — a colliding declaration
+               //   joins the earlier holder (RFC 9110 §5.2) instead of
+               //   vanishing: a handler that queues or prepares a Vary
+               //   AFTER the last vary() call (e.g. after the CORS
+               //   middleware declared Origin) keeps every dimension
+               if ($key === 'vary') {
+                  $extra = $value === true ? '' : (string) $value;
+
+                  if ($varyName !== null) {
+                     // ? The holder needs the same `true` guard as the extra
+                     //   side — `(string) true` would fabricate a `1` token
+                     $holder = $fields[$varyName] === true ? '' : (string) $fields[$varyName];
+                     $fields[$varyName] = self::merge($holder, $extra);
+                  }
+                  else if ($varyQueued !== null) {
+                     $line = $queued[$varyQueued];
+                     $colon = (int) strpos($line, ':');
+                     $joined = self::merge(substr($line, $colon + 1), $extra);
+                     $prefix = substr($line, 0, $colon);
+                     $queued[$varyQueued] = "{$prefix}: {$joined}";
+                  }
+               }
                continue;
             }
 
+            if ($key === 'vary') {
+               $varyName = $name;
+            }
             $seen[$key] = true;
             $fields[$name] = $value;
          }

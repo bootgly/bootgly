@@ -72,26 +72,47 @@ return function (
             $this->headers[$name] = $value;
          }
       }
-      // Mirrors Response\Raw\Header::vary() — token-aware Vary merge
+      // Mirrors Response\Raw\Header::vary() — token-aware, source-aware Vary
+      // merge: a Vary declared through prepare() joins the merge (RES-8)
+      // instead of colliding with the canonical store
       public function vary (string $name): void
       {
-         $current = $this->headers['Vary'] ?? '';
-
-         if (\trim($current) === '') {
-            $this->headers['Vary'] = $name;
-
-            return;
+         $pending = [];
+         if (isSet($this->prepared['Vary'])) {
+            foreach (\explode(',', $this->prepared['Vary']) as $token) {
+               $token = \trim($token);
+               if ($token !== '') {
+                  $pending[] = $token;
+               }
+            }
+            unset($this->prepared['Vary']);
          }
+         $pending[] = $name;
 
-         foreach (\explode(',', $current) as $token) {
-            $token = \trim($token);
+         foreach ($pending as $field) {
+            $current = $this->headers['Vary'] ?? '';
 
-            if ($token === '*' || \strcasecmp($token, $name) === 0) {
-               return;
+            if (\trim($current) === '') {
+               $this->headers['Vary'] = $field;
+
+               continue;
+            }
+
+            $covered = false;
+            foreach (\explode(',', $current) as $token) {
+               $token = \trim($token);
+
+               if ($token === '*' || \strcasecmp($token, $field) === 0) {
+                  $covered = true;
+
+                  break;
+               }
+            }
+
+            if ($covered === false) {
+               $this->headers['Vary'] = "{$current}, {$field}";
             }
          }
-
-         $this->headers['Vary'] = "{$current}, {$name}";
       }
    };
 
