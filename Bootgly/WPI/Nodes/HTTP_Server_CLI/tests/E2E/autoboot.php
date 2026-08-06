@@ -342,6 +342,8 @@ return new Suite(
          '8.1-middleware-trusted_proxy',
          // Validator
          '9.1-middleware-validator',
+         '9.2-middleware-validator_headers',
+         '9.3-middleware-validator_headers_in',
          // Authentication
          '10.1-middleware-authentication_bearer_success',
          '10.2-middleware-authentication_bearer_failure',

@@ -12,11 +12,15 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares;
 
 
 use const JSON_UNESCAPED_SLASHES;
+use function array_key_exists;
+use function is_array;
 use function json_encode;
+use function strtolower;
 use Closure;
 
 use Bootgly\ADI\Validation;
 use Bootgly\ADI\Validation\Condition;
+use Bootgly\ADI\Validators\Confirmed;
 use Bootgly\API\Workables\Server\Middleware;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
@@ -73,10 +77,11 @@ class Validator implements Middleware
          Sources::Cookies => $Request->cookies,
          Sources::Fields => $Request->fields,
          Sources::Files => $Request->files,
-         Sources::Headers => $Request->headers,
+         Sources::Headers => $this->fold($Request->headers),
          Sources::Queries => $Request->queries,
       };
 
+      /** @var array<string,mixed> $source */
       $Validation = new Validation($source, $this->rules);
 
       // ? Valid request — continue pipeline.
@@ -105,5 +110,61 @@ class Validator implements Middleware
          headers: ['Content-Type' => 'application/json'],
          body: $body
       );
+   }
+
+   /**
+    * Case-fold canonically-cased rule keys into the header source.
+    *
+    * Header field names are case-insensitive (RFC 9110 §5.1) and the
+    * request parser lowercases them at frame time, while rule keys keep
+    * the user's casing — `Header::get()` folds on read, but `Validation`
+    * resolves fields with an exact `array_key_exists`. Binding the rule
+    * keys (and `Confirmed` companion fields) to their lowercased wire
+    * fields keeps `errors` keyed by the user's original casing without
+    * touching the case-sensitive sources (MW-7).
+    *
+    * @param array<string,mixed> $headers The lowercased wire field map.
+    *
+    * @return array<string,mixed> The map unioned with canonical rule keys.
+    */
+   private function fold (array $headers): array
+   {
+      foreach ($this->rules as $field => $conditions) {
+         $field = (string) $field;
+         /** @var mixed $raw */
+         $raw = $conditions;
+
+         if ($raw instanceof Condition) {
+            $raw = [$raw];
+         }
+
+         // ? Malformed rule shapes are Validation's to diagnose
+         if (is_array($raw) === false) {
+            continue;
+         }
+
+         // ! Keys the rules will resolve in the source
+         $keys = [$field];
+         foreach ($raw as $Condition) {
+            if ($Condition instanceof Confirmed) {
+               $keys[] = $Condition->field ?? "{$field}_confirmation";
+            }
+         }
+
+         // @ Union — each canonical key binds to its lowercased wire
+         //   field; never clobber an existing key, never invent one
+         foreach ($keys as $key) {
+            $lower = strtolower($key);
+            if ($lower === $key || array_key_exists($key, $headers)) {
+               continue;
+            }
+            if (array_key_exists($lower, $headers)) {
+               $headers[$key] = $headers[$lower];
+            }
+         }
+      }
+
+      // :
+      return $headers;
    }
 }
