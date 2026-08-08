@@ -94,8 +94,10 @@ class TCP_Client_CLI
 
    // * Config
    #protected string $resource;
-   protected null|string $host;
-   protected null|int $port;
+   // ! Defaulted, not merely typed: the encode and redirect paths read the
+   //   origin before `configure()` may ever have been called
+   protected null|string $host = null;
+   protected null|int $port = null;
    protected int $workers;
    /** @var array<string,mixed>|null Secure SSL/TLS Stream Context */
    protected null|array $secure = null;

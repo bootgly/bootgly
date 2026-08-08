@@ -63,9 +63,14 @@ return new Suite(
          '9.4-redirect_max_exceeded',
          '9.5-cross_origin_credentials_stripped',
          '9.6-same_origin_credentials_kept',
+         '9.7-cross_origin_restores_client',
+         '9.8-redirect_failed_break',
+         '9.9-retry_stays_on_leg_origin',
       ],
       'Timeouts/' => [
          '10.1-response_timeout',
+         '10.2-keepalive_batch_windows',
+         '10.3-redirect_leg_window',
       ],
       'Retries/' => [
          '11.1-retry_on_failure',
@@ -102,6 +107,12 @@ return new Suite(
          '17.6-declared_oversize_keepalive_later_read',
          '17.7-malformed_chunk_size',
          '17.8-negative_chunk_size',
+      ],
+      // ! Last on purpose: these build a second client, which replaces the
+      //   process-wide reactor. Nothing after them may rely on the previous one.
+      'Isolation/' => [
+         '18.1-second_client_keeps_host',
+         '18.2-second_client_keeps_redirect_base',
       ],
    ]
 );

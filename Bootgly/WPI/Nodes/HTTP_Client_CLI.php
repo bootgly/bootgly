@@ -85,8 +85,6 @@ use Bootgly\WPI\Nodes\HTTP_Client_CLI\Tests\Suite\Test\Specification as E2ESpeci
 class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 {
    // * Config
-   public static null|string $targetHost = null;
-   public static null|int $targetPort = null;
    // | Redirect
    /** Maximum number of redirects to follow (0 = disabled). */
    public int $maxRedirects = 10;
@@ -174,9 +172,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    protected bool $batching = false;
    /** Next Request for the connect callback (set before connect()) */
    protected null|Request $nextRequest = null;
-   // # Encoder cache (event-driven mode)
-   /** @var array<string,string> method+URI => encoded output */
-   protected static array $encoderCache = [];
    /** Cached Request template for event-driven reuse (avoids allocation per cycle) */
    protected null|Request $cachedRequest = null;
 
@@ -242,10 +237,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       }
 
       parent::configure($host, $port, $workers, $secure);
-
-      // @ Store for Encoder/Decoder access
-      self::$targetHost = $host;
-      self::$targetPort = $port;
 
       // ---
       // ! The pool is per-origin by construction: reconfiguring retires every
@@ -361,6 +352,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                      $Template->Response->code = 0;
                      $Template->Response->status = 'Request Header Fields Too Large';
                      $Template->completed = true;
+                     $HTTP_Client_CLI->unwatch($Template);
                      $Template->connectionState = 'idle';
 
                      if ($Template->onComplete !== null) {
@@ -444,6 +436,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                $Request->Response->code = 0;
                $Request->Response->status = 'Response Too Large';
                $Request->completed = true;
+               $HTTP_Client_CLI->unwatch($Request);
                $Request->connectionState = 'idle';
                unset($HTTP_Client_CLI->pendingRequests[$socketId]);
 
@@ -520,6 +513,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             $Request->Response->code = 0;
             $Request->Response->status = (string) $parsed['status'];
             $Request->completed = true;
+            $HTTP_Client_CLI->unwatch($Request);
             $Request->connectionState = 'idle';
             unset($HTTP_Client_CLI->pendingRequests[$socketId]);
 
@@ -584,6 +578,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                   $Request->Response->code = 0;
                   $Request->Response->status = (string) $chunkedResult['status'];
                   $Request->completed = true;
+                  $HTTP_Client_CLI->unwatch($Request);
                   $Request->connectionState = 'idle';
                   unset($HTTP_Client_CLI->pendingRequests[$socketId]);
 
@@ -653,7 +648,10 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                // @ Resolve redirect URL
                $resolved = $HTTP_Client_CLI->resolve($location, $Request->URI);
 
+               // ! The URI changes in place here, bypassing __invoke()/clear(),
+               //   so the memoized encoding must be dropped by hand (HCLI-5)
                $Request->URI = $resolved['path'];
+               $Request->encoded = null;
                $Request->pendingBuffer = '';
                $Request->Decoder = new Decoder_;
                $Request->connectionState = 'redirect';
@@ -662,8 +660,8 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                $Request->redirectTarget = $resolved;
 
                // @ Check if redirect target is same host/port/scheme
-               $sameHost = ($resolved['host'] === (self::$targetHost ?? '127.0.0.1'))
-                  && ($resolved['port'] === (self::$targetPort ?? 80))
+               $sameHost = ($resolved['host'] === ($HTTP_Client_CLI->host ?? '127.0.0.1'))
+                  && ($resolved['port'] === ($HTTP_Client_CLI->port ?? 80))
                   && ($resolved['secure'] === ($HTTP_Client_CLI->secure !== null));
 
                if ($sameHost && !$Response->closeConnection) {
@@ -715,55 +713,57 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                   $Request->connectionState = 'waiting';
                   $Request->completed = false;
                   $Request->bytesReceived = 0;
-                  // @ Skip Response->reset() — cache hit skips repopulation,
+                  // @ Skip Response->reset() — a memo hit skips repopulation,
                   // so Response retains correct data from previous cycle
                   // $Request stays in pendingRequests[$socketId]
-
-                  // @ Reuse last encoded output directly (avoids cacheKey concat + hash lookup)
-                  static $reusedOutput = null;
-                  $Connection->output = $reusedOutput ??= self::$encoderCache[$next->method . ' ' . $next->URI];
                }
                else {
                   $HTTP_Client_CLI->pendingRequests[$socketId] = $next;
+               }
 
-                  // @ Use cached encoded output if available
-                  $cacheKey = $next->method . ' ' . $next->URI;
-                  if (isset(self::$encoderCache[$cacheKey])) {
-                     $Connection->output = self::$encoderCache[$cacheKey];
+               // @ Reuse the memoized encoding — valid only for this very
+               //   Request at the origin its bytes were built for (HCLI-4/5)
+               if (
+                  $next->encoded !== null
+                  && $next->encodedHost === $HTTP_Client_CLI->host
+                  && $next->encodedPort === $HTTP_Client_CLI->port
+               ) {
+                  $Connection->output = $next->encoded;
+               }
+               else {
+                  $headerRaw = $next->Header->build();
+                  $length = null;
+
+                  // @ Detect Expect: 100-continue — send headers only, defer body
+                  if (stripos($headerRaw, 'Expect: 100-continue') !== false
+                     && $next->Body->raw !== ''
+                  ) {
+                     $Connection->output = self::$Encoder::encode(
+                        $next->method,
+                        $next->URI,
+                        $next->protocol,
+                        $headerRaw,
+                        host: $HTTP_Client_CLI->host ?? '127.0.0.1',
+                        port: $HTTP_Client_CLI->port ?? 80,
+                        length: $length
+                     );
+                     $next->connectionState = 'waiting-100-continue';
                   }
                   else {
-                     $headerRaw = $next->Header->build();
-                     $length = null;
+                     $Connection->output = self::$Encoder::encode(
+                        $next->method,
+                        $next->URI,
+                        $next->protocol,
+                        $headerRaw,
+                        $next->Body->raw,
+                        $HTTP_Client_CLI->host ?? '127.0.0.1',
+                        $HTTP_Client_CLI->port ?? 80,
+                        $length
+                     );
 
-                     // @ Detect Expect: 100-continue — send headers only, defer body
-                     if (stripos($headerRaw, 'Expect: 100-continue') !== false
-                        && $next->Body->raw !== ''
-                     ) {
-                        $Connection->output = self::$Encoder::encode(
-                           $next->method,
-                           $next->URI,
-                           $next->protocol,
-                           $headerRaw,
-                           host: self::$targetHost ?? '127.0.0.1',
-                           port: self::$targetPort ?? 80,
-                           length: $length
-                        );
-                        $next->connectionState = 'waiting-100-continue';
-                     }
-                     else {
-                        $Connection->output = self::$Encoder::encode(
-                           $next->method,
-                           $next->URI,
-                           $next->protocol,
-                           $headerRaw,
-                           $next->Body->raw,
-                           self::$targetHost ?? '127.0.0.1',
-                           self::$targetPort ?? 80,
-                           $length
-                        );
-                     }
-
-                     self::$encoderCache[$cacheKey] = $Connection->output;
+                     $next->encoded = $Connection->output;
+                     $next->encodedHost = $HTTP_Client_CLI->host;
+                     $next->encodedPort = $HTTP_Client_CLI->port;
                   }
                }
 
@@ -774,6 +774,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          else {
             // @ Sync/batch: mark complete, release the connection to the pool
             $Request->completed = true;
+            $HTTP_Client_CLI->unwatch($Request);
             $Request->connectionState = 'idle';
             unset($HTTP_Client_CLI->pendingRequests[$socketId]);
 
@@ -836,6 +837,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                $PendingRequest->Response->code = 0;
                $PendingRequest->Response->status = 'Connection Closed';
                $PendingRequest->completed = true;
+               $HTTP_Client_CLI->unwatch($PendingRequest);
                $PendingRequest->connectionState = 'idle';
 
                if ($PendingRequest->onComplete !== null) {
@@ -866,6 +868,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                //   connection close itself.
                $Response->Body->waiting = false;
                $Request->completed = true;
+               $HTTP_Client_CLI->unwatch($Request);
                $Request->connectionState = 'idle';
                unset($HTTP_Client_CLI->pendingRequests[$Connection->id]);
 
@@ -915,7 +918,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                ) {
                   // ? Pool momentarily full — queue for the next promotion
                   $HTTP_Client_CLI->Queue[] = $Request;
-                  $HTTP_Client_CLI->watch($Request);
+                  $HTTP_Client_CLI->watch($Request, queued: true);
                   $redispatched = true;
                }
 
@@ -924,6 +927,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                   $Response->code = 0;
                   $Response->status = 'Connection Closed';
                   $Request->completed = true;
+                  $HTTP_Client_CLI->unwatch($Request);
                   $Request->connectionState = 'idle';
 
                   if ($Request->onComplete !== null) {
@@ -943,6 +947,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                   default => 'Truncated Response'
                };
                $Request->completed = true;
+               $HTTP_Client_CLI->unwatch($Request);
                $Request->connectionState = 'idle';
                unset($HTTP_Client_CLI->pendingRequests[$Connection->id]);
 
@@ -975,8 +980,8 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     */
    private function resolve (string $location, string $currentURI): array
    {
-      $host = self::$targetHost ?? '127.0.0.1';
-      $port = self::$targetPort ?? 80;
+      $host = $this->host ?? '127.0.0.1';
+      $port = $this->port ?? 80;
       $secure = $this->secure !== null;
 
       $parsed = parse_url($location);
@@ -1034,10 +1039,15 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       // @ Track when request was sent for timeout detection
       $Request->sentAt = microtime(true);
 
-      // @ Use cached encoded output if available (event-driven, same method+URI)
-      $cacheKey = "{$Template->method} {$Template->URI}";
-      if (self::$eventDriven && isset(self::$encoderCache[$cacheKey])) {
-         $Connection->output = self::$encoderCache[$cacheKey];
+      // @ Reuse the memoized encoding: the same Request object, re-dispatched
+      //   to the origin its bytes were built for (event-driven hot path)
+      if (
+         self::$eventDriven
+         && $Template->encoded !== null
+         && $Template->encodedHost === $this->host
+         && $Template->encodedPort === $this->port
+      ) {
+         $Connection->output = $Template->encoded;
       }
       else {
          $headerRaw = $Template->Header->build();
@@ -1052,8 +1062,8 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                $Template->URI,
                $Template->protocol,
                $headerRaw,
-               host: self::$targetHost ?? '127.0.0.1',
-               port: self::$targetPort ?? 80,
+               host: $this->host ?? '127.0.0.1',
+               port: $this->port ?? 80,
                length: $length
             );
             $Request->connectionState = 'waiting-100-continue';
@@ -1065,15 +1075,20 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                $Template->protocol,
                $headerRaw,
                $Template->Body->raw,
-               self::$targetHost ?? '127.0.0.1',
-               self::$targetPort ?? 80,
+               $this->host ?? '127.0.0.1',
+               $this->port ?? 80,
                $length
             );
-         }
 
-         // @ Cache encoded output for reuse
-         if (self::$eventDriven) {
-            self::$encoderCache[$cacheKey] = $Connection->output;
+            // ! Memoized on the Request, not on a method+URI key: the bytes
+            //   carry this object's headers, body and origin (HCLI-5). The
+            //   Expect path is deliberately excluded — replaying its
+            //   headers-only encoding would skip the 100-continue state.
+            if (self::$eventDriven) {
+               $Template->encoded = $Connection->output;
+               $Template->encodedHost = $this->host;
+               $Template->encodedPort = $this->port;
+            }
          }
       }
 
@@ -1096,15 +1111,24 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     * h2 stream (sibling streams keep their connection).
     *
     * @param Request $Request The dispatched request.
+    * @param bool $queued Whether the request is parked for a later promotion.
     *
     * @return void
     */
-   private function watch (Request $Request): void
+   private function watch (Request $Request, bool $queued = false): void
    {
+      // ! Withdraw the previous dispatch's window first: a re-armed request
+      //   must have its deadline REPLACED, never doubled — the earliest of a
+      //   stacked pair always wins and would kill an on-time response (HCLI-6)
+      $this->unwatch($Request);
+
       // ! Combine the response timeout with the caller deadlines
       $deadline = $this->deadline;
       $monotonicDeadline = $this->monotonicDeadline;
-      if ($this->timeout > 0) {
+      // ? A queued request is not awaiting a response yet, so it must not spend
+      //   its response window waiting for capacity: only the caller's absolute
+      //   deadlines bound that wait. Its own window opens on dispatch (HCLI-6).
+      if ($queued === false && $this->timeout > 0) {
          $responseDeadline = microtime(true) + $this->timeout;
          $responseMonotonicDeadline = (int) hrtime(true)
             + (int) ($this->timeout * 1_000_000_000);
@@ -1121,15 +1145,10 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          return;
       }
 
-      /** @var array<int,int> $timers */
-      $timers = [];
-      $Timeout = function () use ($Request, &$timers): void {
+      $Timeout = function () use ($Request): void {
          // @ This callback may be registered against both clocks. Cancel
          //   its sibling before mutating transport state.
-         foreach ($timers as $timerID) {
-            self::$Event->cancel($timerID);
-         }
-         $timers = [];
+         $this->unwatch($Request);
 
          // ? Already concluded — a late timer is a no-op
          if ($Request->completed) {
@@ -1192,12 +1211,37 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          $this->halt();
       };
 
+      // ! Held on the Request so that any later stage can withdraw them
       if ($deadline !== null) {
-         $timers[] = self::$Event->defer($deadline, $Timeout);
+         $Request->timers[] = self::$Event->defer($deadline, $Timeout);
       }
       if ($monotonicDeadline !== null) {
-         $timers[] = self::$Event->defer($monotonicDeadline, $Timeout);
+         $Request->timers[] = self::$Event->defer($monotonicDeadline, $Timeout);
       }
+   }
+
+   /**
+    * Withdraw the response deadline armed for a request.
+    *
+    * Safe on already-fired IDs and on a request that was never watched.
+    *
+    * @param Request $Request The re-dispatched or concluding request.
+    *
+    * @return void
+    */
+   private function unwatch (Request $Request): void
+   {
+      // ?
+      if ($Request->timers === []) {
+         return;
+      }
+
+      // @ cancel() is O(1) per ID and IDs are never reused
+      foreach ($Request->timers as $timerID) {
+         self::$Event->cancel($timerID);
+      }
+
+      $Request->timers = [];
    }
 
    /**
@@ -1213,8 +1257,8 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    {
       // !
       $scheme = $this->secure !== null ? 'https' : 'http';
-      $host = self::$targetHost ?? '127.0.0.1';
-      $port = self::$targetPort ?? 80;
+      $host = $this->host ?? '127.0.0.1';
+      $port = $this->port ?? 80;
       $default = $scheme === 'https' ? 443 : 80;
       $authority = $port === $default ? $host : "{$host}:{$port}";
 
@@ -1328,6 +1372,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $Request->Response->code = 0;
       $Request->Response->status = 'Request Header Fields Too Large';
       $Request->completed = true;
+      $this->unwatch($Request);
       $Request->connectionState = 'idle';
 
       if ($Request->onComplete !== null) {
@@ -1452,7 +1497,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             else {
                // ? Pool momentarily full — queue for the next promotion
                $this->Queue[] = $Request;
-               $this->watch($Request);
+               $this->watch($Request, queued: true);
 
                return;
             }
@@ -1461,6 +1506,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          $Response->code = 0;
          $Response->status = "HTTP/2 Stream Error: {$record['error']->name}";
          $Request->completed = true;
+         $this->unwatch($Request);
          $Request->connectionState = 'idle';
 
          if ($Request->onComplete !== null) {
@@ -1507,10 +1553,12 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             }
 
             $resolved = $this->resolve($location, $Request->URI);
+            // ! In-place URI change — drop the memoized encoding (HCLI-5)
             $Request->URI = $resolved['path'];
+            $Request->encoded = null;
 
-            $sameHost = $resolved['host'] === (self::$targetHost ?? '127.0.0.1')
-               && $resolved['port'] === (self::$targetPort ?? 80)
+            $sameHost = $resolved['host'] === ($this->host ?? '127.0.0.1')
+               && $resolved['port'] === ($this->port ?? 80)
                && $resolved['secure'] === ($this->secure !== null);
 
             if ($sameHost) {
@@ -1535,6 +1583,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $this->Pool->release($Connection);
 
       $Request->completed = true;
+      $this->unwatch($Request);
       if ($Request->connectionState !== 'redirect') {
          $Request->connectionState = 'idle';
       }
@@ -1605,6 +1654,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                $Request->Response->code = 0;
                $Request->Response->status = 'Connection Failed';
                $Request->completed = true;
+               $this->unwatch($Request);
 
                if ($Request->onComplete !== null) {
                   ($Request->onComplete)($Request);
@@ -1643,88 +1693,107 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    /**
     * Follow cross-origin redirects (sync mode).
     *
+    * Each hop re-targets the client. Restoring the caller's origin is the
+    * CALLER's job — `request()` does it after its retry loops, because a retry
+    * of a redirected request must re-dispatch against the leg's origin.
+    *
     * @param Request $Request The redirected request.
+    * @param array<string,mixed>|null $configured The caller's TLS options, carried
+    *                                             across every hop.
     *
     * @return void
     */
-   private function follow (Request $Request): void
+   private function follow (Request $Request, null|array $configured): void
    {
-      // ! The caller's TLS configuration. `configure()` overwrites `$this->secure`
-      //   in place on the first leg, so it is snapshotted here and carried across
-      //   every hop — a redirect must not silently drop `verify_peer`, the CA
-      //   bundle, the client certificate or a pinned fingerprint.
-      $configured = $this->secure;
-
-      // @@
+      // ? Nothing to follow — every sync request passes through here
       /** @phpstan-ignore identical.alwaysFalse, booleanAnd.alwaysFalse */
-      while ($Request->connectionState === 'redirect' && $Request->redirectTarget !== null) {
-         $resolved = $Request->redirectTarget;
-         $Request->redirectTarget = null;
+      if ($Request->connectionState !== 'redirect' || $Request->redirectTarget === null) {
+         return;
+      }
 
-         // ? A step down from https to http would put the headers and body a
-         //   307/308 replays on the wire in the clear — refuse it by default.
-         //   Tested per hop, so a downgrade mid-chain is caught too.
-         if (
-            $this->secure !== null
-            && $resolved['secure'] === false
-            && $this->allowInsecureRedirect === false
-         ) {
-            $Request->Response->code = 0;
-            $Request->Response->status = 'Insecure Redirect';
-            $Request->connectionState = 'idle';
-            $Request->completed = true;
+      {
+         // @@ Each leg clears `redirectTarget`; a further hop re-populates it
+         /** @phpstan-ignore notIdentical.alwaysTrue */
+         while ($Request->connectionState === 'redirect' && $Request->redirectTarget !== null) {
+            $resolved = $Request->redirectTarget;
+            $Request->redirectTarget = null;
 
-            return;
-         }
+            // ? A step down from https to http would put the headers and body a
+            //   307/308 replays on the wire in the clear — refuse it by default.
+            //   Tested per hop, so a downgrade mid-chain is caught too.
+            if (
+               $this->secure !== null
+               && $resolved['secure'] === false
+               && $this->allowInsecureRedirect === false
+            ) {
+               $Request->Response->code = 0;
+               $Request->Response->status = 'Insecure Redirect';
+               $Request->connectionState = 'idle';
+               $Request->completed = true;
+               $this->unwatch($Request);
 
-         // ! Credentials belong to the origin that issued them, so they survive
-         //   only a hop that stays on the same host without weakening the
-         //   transport. An http -> https upgrade counts as staying: it is the
-         //   most common redirect there is and it necessarily moves 80 -> 443,
-         //   so the port and scheme comparisons are waived for it alone.
-         //   Compared before `configure()` re-targets the client.
-         $upgrade = $this->secure === null && $resolved['secure'];
-         $sameOrigin = $resolved['host'] === (self::$targetHost ?? '127.0.0.1')
-            && ($upgrade || $resolved['port'] === (self::$targetPort ?? 80))
-            && ($upgrade || $resolved['secure'] === ($this->secure !== null));
+               return;
+            }
 
-         // @ Drop them as curl, Python requests and Go net/http do
-         if ($sameOrigin === false) {
-            // ! `Header::remove()` matches the stored name verbatim, so the
-            //   field set is walked instead of removing three fixed spellings
-            foreach ($Request->Header->fields as $name => $value) {
-               if (in_array(strtolower($name), self::CREDENTIAL_HEADERS, true)) {
-                  $Request->Header->remove($name);
+            // ! Credentials belong to the origin that issued them, so they survive
+            //   only a hop that stays on the same host without weakening the
+            //   transport. An http -> https upgrade counts as staying: it is the
+            //   most common redirect there is and it necessarily moves 80 -> 443,
+            //   so the port and scheme comparisons are waived for it alone.
+            //   Compared before `configure()` re-targets the client.
+            $upgrade = $this->secure === null && $resolved['secure'];
+            $sameOrigin = $resolved['host'] === ($this->host ?? '127.0.0.1')
+               && ($upgrade || $resolved['port'] === ($this->port ?? 80))
+               && ($upgrade || $resolved['secure'] === ($this->secure !== null));
+
+            // @ Drop them as curl, Python requests and Go net/http do
+            if ($sameOrigin === false) {
+               // ! `Header::remove()` matches the stored name verbatim, so the
+               //   field set is walked instead of removing three fixed spellings
+               foreach ($Request->Header->fields as $name => $value) {
+                  if (in_array(strtolower($name), self::CREDENTIAL_HEADERS, true)) {
+                     $Request->Header->remove($name);
+                  }
                }
             }
+
+            $Request->Response->reset();
+            $Request->connectionState = 'waiting';
+            $Request->completed = false;
+            $Request->bytesReceived = 0;
+            $Request->reused = false;
+
+            // ! Only the peer name belongs to the new origin — every other option
+            //   is the caller's and survives the hop
+            $secure = null;
+            if ($resolved['secure']) {
+               $secure = $configured ?? [];
+               $secure['peer_name'] = $resolved['host'];
+            }
+
+            // @ Reconfigure for the new target (retires the previous origin's pool)
+            $this->configure($resolved['host'], $resolved['port'], secure: $secure);
+
+            $this->nextRequest = $Request;
+            $this->wire();
+
+            $Socket = $this->connect();
+            if ($Socket === false) {
+               // ? The leg could not be dialed. Retrying it would only re-dial
+               //   the same unreachable target, so name the failure precisely
+               //   and let retry() veto it.
+               $this->nextRequest = null;
+               $Request->Response->code = 0;
+               $Request->Response->status = 'Redirect Failed';
+               $Request->connectionState = 'idle';
+               $Request->completed = true;
+               $this->unwatch($Request);
+
+               break;
+            }
+
+            $this->drain();
          }
-
-         $Request->Response->reset();
-         $Request->connectionState = 'waiting';
-         $Request->completed = false;
-         $Request->bytesReceived = 0;
-         $Request->reused = false;
-
-         // ! Only the peer name belongs to the new origin — every other option
-         //   is the caller's and survives the hop
-         $secure = null;
-         if ($resolved['secure']) {
-            $secure = $configured ?? [];
-            $secure['peer_name'] = $resolved['host'];
-         }
-
-         // @ Reconfigure for the new target (retires the previous origin's pool)
-         $this->configure($resolved['host'], $resolved['port'], secure: $secure);
-
-         $this->nextRequest = $Request;
-         $this->wire();
-
-         $Socket = $this->connect();
-         if ($Socket === false) {
-            break;
-         }
-
-         $this->drain();
       }
    }
 
@@ -1830,6 +1899,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          $Request->Response->status === 'Response Too Large'
          || $Request->Response->status === 'Request Header Fields Too Large'
          || $Request->Response->status === 'Insecure Redirect'
+         || $Request->Response->status === 'Redirect Failed'
       ) {
          return false;
       }
@@ -1880,13 +1950,14 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          else {
             // ? Pool momentarily full — queue for the next promotion
             $this->Queue[] = $Request;
-            $this->watch($Request);
+            $this->watch($Request, queued: true);
 
             return;
          }
 
          // ? Dial failed — the request stays failed
          $Request->completed = true;
+         $this->unwatch($Request);
          if ($Request->Response->code === 0 && $Request->Response->status === '') {
             $Request->Response->status = 'Connection Failed';
          }
@@ -2018,6 +2089,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             //   through the normal drain/redirect/retry pipeline below
             if ($this->retry($Request) === false) {
                $Request->completed = true;
+               $this->unwatch($Request);
 
                return $Request->Response;
             }
@@ -2027,8 +2099,9 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          // @ Pool exhausted — queue until a connection frees (batch overflow)
          $this->nextRequest = null;
          $this->Queue[] = $Request;
-         // ! Queued requests are not dispatched yet — bound their wait too
-         $this->watch($Request);
+         // ! Queued requests are not dispatched yet: only the caller's absolute
+         //   deadlines bound their wait for capacity
+         $this->watch($Request, queued: true);
       }
 
       // @ Batch mode: return Response reference (filled later by drain())
@@ -2036,26 +2109,54 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          return $Request->Response;
       }
 
-      // @ Sync mode: drain and return completed Response
-      $this->drain();
+      // ! The caller's origin. Every redirect hop re-targets this long-lived,
+      //   pool-owning client and nothing else puts it back, so the redirect
+      //   target would silently become its permanent destination (HCLI-7).
+      //   The restore happens AFTER the retry loops, never between them: the
+      //   Request carries the redirect target's URI from the moment it is
+      //   redirected, so a retry must re-dispatch against the leg's origin —
+      //   restoring earlier would send that URI, and a 307/308 body with it, to
+      //   the origin the caller configured. `$configured` doubles as the TLS
+      //   carry across hops: a redirect must not drop `verify_peer`, the CA
+      //   bundle, the client certificate or a pinned fingerprint.
+      $host = $this->host;
+      $port = $this->port;
+      $workers = $this->workers;
+      $configured = $this->secure;
 
-      // @ Follow cross-origin redirects (sync mode only)
-      $this->follow($Request);
-
-      // @ Retry if failed (timeout or connection reset) — capped by maxRetries
-      while ($Request->Response->code === 0 && $this->retry($Request)) {
+      try {
+         // @ Sync mode: drain and return completed Response
          $this->drain();
-         $this->follow($Request);
+
+         // @ Follow cross-origin redirects (sync mode only)
+         $this->follow($Request, $configured);
+
+         // @ Retry if failed (timeout or connection reset) — capped by maxRetries
+         while ($Request->Response->code === 0 && $this->retry($Request)) {
+            $this->drain();
+            $this->follow($Request, $configured);
+         }
+
+         // @ HTTP-level retry (opt-in via $retryOn, e.g. 429/503) — honors Retry-After
+         while (
+            $this->retryOn !== []
+            && in_array($Request->Response->code, $this->retryOn, true)
+            && $this->retry($Request, http: true)
+         ) {
+            $this->drain();
+            $this->follow($Request, $configured);
+         }
       }
+      finally {
+         // ? Only when a hop actually moved the client: a restore is a full
+         //   re-target, and it would retire the pool of a chain that ended home
+         if ($this->host !== $host || $this->port !== $port || $this->secure !== $configured) {
+            $this->configure($host ?? '127.0.0.1', $port ?? 80, secure: $configured);
+         }
 
-      // @ HTTP-level retry (opt-in via $retryOn, e.g. 429/503) — honors Retry-After
-      while (
-         $this->retryOn !== []
-         && in_array($Request->Response->code, $this->retryOn, true)
-         && $this->retry($Request, http: true)
-      ) {
-         $this->drain();
-         $this->follow($Request);
+         // ! Last, not first: `configure()` takes `$workers` by default and would
+         //   overwrite the restore with 0 — every hop zeroed it on the way here
+         $this->workers = $workers;
       }
 
       return $Request->Response;

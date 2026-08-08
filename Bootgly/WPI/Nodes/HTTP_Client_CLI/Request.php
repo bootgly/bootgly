@@ -58,6 +58,13 @@ class Request
    public bool $completed;
    public int $bytesReceived;
    public null|Closure $onComplete;
+   // | Encoder
+   /** Encoded wire bytes memoized for re-dispatch, or null when stale. */
+   public null|string $encoded;
+   /** Origin host the memoized encoding was built for. */
+   public null|string $encodedHost;
+   /** Origin port the memoized encoding was built for. */
+   public null|int $encodedPort;
    // | Redirect
    public int $redirectCount;
    public string $originalMethod;
@@ -66,6 +73,13 @@ class Request
    public null|array $redirectTarget;
    // | Timeout
    public float $sentAt;
+   /**
+    * Response-deadline timer IDs armed for the current dispatch, one per clock
+    * domain. Withdrawn when the request is re-dispatched or concludes.
+    *
+    * @var array<int,int>
+    */
+   public array $timers;
    // | Pool
    /** Whether this request was dispatched on a reused (pooled) connection. */
    public bool $reused;
@@ -100,6 +114,10 @@ class Request
       $this->completed = false;
       $this->bytesReceived = 0;
       $this->onComplete = null;
+      // | Encoder
+      $this->encoded = null;
+      $this->encodedHost = null;
+      $this->encodedPort = null;
       // | Redirect
       $this->redirectCount = 0;
       $this->originalMethod = '';
@@ -107,6 +125,7 @@ class Request
       $this->redirectTarget = null;
       // | Timeout
       $this->sentAt = 0.0;
+      $this->timers = [];
       // | Pool
       $this->reused = false;
       $this->replayed = false;
@@ -132,6 +151,10 @@ class Request
       mixed $body = null
    ): self
    {
+      // ! Any of method, URI, headers or body may change here, so whatever was
+      //   encoded from this Request before no longer describes it
+      $this->encoded = null;
+
       $this->method = $method;
       $this->URI = $URI;
 
@@ -183,6 +206,10 @@ class Request
       $this->completed = false;
       $this->bytesReceived = 0;
       $this->onComplete = null;
+      // | Encoder
+      $this->encoded = null;
+      $this->encodedHost = null;
+      $this->encodedPort = null;
       // | Redirect
       $this->redirectCount = 0;
       $this->originalMethod = '';
@@ -190,6 +217,7 @@ class Request
       $this->redirectTarget = null;
       // | Timeout
       $this->sentAt = 0.0;
+      $this->timers = [];
       // | Pool
       $this->reused = false;
       $this->replayed = false;
@@ -205,6 +233,8 @@ class Request
     */
    public function clear (): void
    {
+      $this->encoded = null;
+
       $this->Header = new Header;
       $this->Body = new Body;
    }

@@ -22,6 +22,7 @@ return new Suite(
          '1.5-encode-raw_http_string',
          '1.6-reset-state',
          '1.7-configure-ssl_options',
+         '1.8-invoke-invalidates_encoded',
       ],
       'Request/Raw/' => [
          '2.1-header-set_get',
@@ -49,5 +50,14 @@ return new Suite(
          '6.3-decoder_chunked-overflow',
          '6.4-decoder_chunked-size_line',
       ],
+      // ! Client-level cases the E2E harness cannot host: event-driven mode is
+      //   process-wide and its request() returns the client, not a Response.
+      //   Each of these forks its own origin and drives its own reactor.
+      '7.1-event_driven-repeated_pair',
+      '7.2-event_driven-post_bodies',
+      '7.3-event_driven-two_origins',
+      '7.4-follow-redirect_failed_veto',
+      '7.5-event_driven-reconfigure_origin',
+      '7.6-construct-unconfigured_origin',
    ]
 );
