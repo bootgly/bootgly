@@ -86,5 +86,6 @@ return new Specification(
          ->expect($log)
          ->to->be(['A', 'B', 'C', 'handler'])
          ->assert();
+
    })
 );

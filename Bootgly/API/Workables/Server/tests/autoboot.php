@@ -20,6 +20,7 @@ return new Suite(
       '1.4-pipeline_short_circuit',
       '1.5-pipeline_pipe_multiple',
       '1.6-pipeline_prepend_append',
+      '1.7-pipeline_materialized_count',
       '2.1-environments_fetch',
       '2.2-boot_environment_arms',
    ]
