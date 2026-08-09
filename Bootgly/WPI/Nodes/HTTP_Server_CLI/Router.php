@@ -60,8 +60,16 @@ class Router
    /** @var array<Middleware> */
    private array $Middlewares = [];
    // # Cache
-   /** @var array<string,array<string,Closure>> */
+   /** @var array<string,array<string,Closure|string>> */
    private array $staticCache = [];
+   /**
+    * Root routes use one method-keyed lookup instead of the two-dimensional
+    * static table. Values are either an ordinary dispatcher or the immutable
+    * body registered through serve().
+    *
+    * @var array<string,Closure|string>
+    */
+   private array $RootCache = [];
    /**
     * Fast flag — set true iff at least one method-agnostic static route exists.
     * Lets `resolve()` skip the `staticCache[''][$url]` lookup entirely on the
@@ -326,11 +334,23 @@ class Router
 
       // 1. Static route lookup — O(1)
       if ($URI === '/') {
-         $Dispatcher = $this->staticCache[$method][''] ?? null;
+         $Dispatcher = $this->RootCache[$method] ?? null;
          if ($Dispatcher === null) {
-            $Dispatcher = $this->staticCache[''][''] ?? null;
+            $Dispatcher = $this->RootCache[''] ?? null;
          }
          if ($Dispatcher !== null) {
+            // @ serve(): immutable body, copied into this request's Response.
+            // ! A subtype or a status changed by admission middleware must
+            //   retain Response::__invoke() semantics instead of bypassing it.
+            if (is_string($Dispatcher)) {
+               if ($Response::class !== Response::class || $Response->code !== 200) {
+                  return $Response(body: $Dispatcher);
+               }
+
+               $Response->Body->raw = $Dispatcher;
+               return $Response;
+            }
+
             $Result = $Dispatcher($Request, $Response);
             if ($Result === $Response) {
                return $Response;
@@ -342,24 +362,36 @@ class Router
             return $Response;
          }
       }
+      else {
+         $Dispatcher = $this->staticCache[$method][$url] ?? null;
+         if ($Dispatcher === null) {
+            $Dispatcher = $this->staticCache[''][$url] ?? null;
+         }
 
-      $Dispatcher = $this->staticCache[$method][$url] ?? null;
-      if ($Dispatcher === null) {
-         $Dispatcher = $this->staticCache[''][$url] ?? null;
-      }
+         if ($Dispatcher !== null) {
+            // @ serve(): immutable body, copied into this request's Response.
+            // ! See the root path above for the subtype/status guard.
+            if (is_string($Dispatcher)) {
+               if ($Response::class !== Response::class || $Response->code !== 200) {
+                  return $Response(body: $Dispatcher);
+               }
 
-      if ($Dispatcher !== null) {
-         $Result = $Dispatcher($Request, $Response);
-         if ($Result === $Response) {
+               $Response->Body->raw = $Dispatcher;
+               return $Response;
+            }
+
+            $Result = $Dispatcher($Request, $Response);
+            if ($Result === $Response) {
+               return $Response;
+            }
+
+            if ($Result instanceof Response) {
+               $WPI->Response = $Result;
+               return $Result;
+            }
+
             return $Response;
          }
-
-         if ($Result instanceof Response) {
-            $WPI->Response = $Result;
-            return $Result;
-         }
-
-         return $Response;
       }
 
       // 2. Dynamic route lookup — skip entirely when no dynamic routes registered
@@ -511,7 +543,8 @@ class Router
       callable $handler,
       null|string|array $methods,
       array $Middlewares,
-      null|array $cacheConfig = null
+      null|array $cacheConfig = null,
+      null|string $directBody = null
    ): void {
       $normalizedRoute = ($route === '/' ? '' : rtrim($route, '/'));
 
@@ -757,13 +790,22 @@ class Router
          return;
       }
 
-      // @ Static route — cache stores the dispatcher closure directly
+      // @ Static route — cache stores either a dispatcher Closure or the
+      //   immutable body from serve(). Route/group middleware always keeps
+      //   the ordinary dispatcher so policy executes for every request.
       if ($methodAgnostic) {
          $methodsList = [''];
       }
-      $Dispatcher = $this->dispatch($boundHandler, $MergedMiddlewares);
+      $Dispatcher = $directBody !== null && $MergedMiddlewares === []
+         ? $directBody
+         : $this->dispatch($boundHandler, $MergedMiddlewares);
       foreach ($methodsList as $method) {
-         $this->staticCache[$method][$normalizedRoute] = $Dispatcher;
+         if ($normalizedRoute === '') {
+            $this->RootCache[$method] = $Dispatcher;
+         }
+         else {
+            $this->staticCache[$method][$normalizedRoute] = $Dispatcher;
+         }
          if ($method === '') {
             $this->hasAgnosticStatic = true;
          }
@@ -797,6 +839,43 @@ class Router
       // ? Cache already warmed — ignore further registrations on this Router
       if ($this->cached === false) {
          $this->cache($route, $handler, $methods, $middlewares, $cache);
+      }
+      return false;
+   }
+   /**
+    * Register an immutable string response.
+    *
+    * Middleware-bearing, dynamic and catch-all routes keep the ordinary
+    * dispatcher path. A middleware-free static route may copy its body into
+    * the current per-request Response without a handler Closure invocation.
+    *
+    * @param null|string|array<string> $methods
+    * @param array<Middleware> $middlewares
+    */
+   public function serve (
+      string $route,
+      string $body,
+      null|string|array $methods = null,
+      array $middlewares = []
+   ): false
+   {
+      // ? Router paused
+      if ($this->active === false) {
+         return false;
+      }
+      // ? Cache already warmed — ignore further registrations on this Router
+      if ($this->cached === false) {
+         $Handler = static function (Request $Request, Response $Response) use ($body): Response {
+            return $Response(body: $body);
+         };
+
+         $this->cache(
+            $route,
+            $Handler,
+            $methods,
+            $middlewares,
+            directBody: $body,
+         );
       }
       return false;
    }
