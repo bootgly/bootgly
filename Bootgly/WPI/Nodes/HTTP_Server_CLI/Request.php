@@ -1513,7 +1513,12 @@ class Request
 
       // @ Pure parser: returns parsed body as array (or [] for unknown CT).
       //   Stored on the Request to back $fields without populating $_POST.
-      $parsed = $this->input();
+      // ? Never re-parse a streaming body: `Decoder_Downloading` publishes its
+      //   parts through `fields`/`files` and writes no `raw`, so the input
+      //   materialized above is empty by construction and `input()` would
+      //   answer `[]` — not `null` — over the decoder's map. Same invariant the
+      //   `$fields` hook carries; this path simply did not honor it.
+      $parsed = $this->Body->streaming ? null : $this->input();
       if ($parsed !== null) {
          $this->_fields = $parsed;
       }

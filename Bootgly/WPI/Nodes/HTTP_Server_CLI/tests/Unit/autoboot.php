@@ -41,6 +41,7 @@ return new Suite(
       '1.23-header_read_visibility',
       '1.24-vary_source_consolidation',
       '1.25-router_static_serve',
-      '1.26-request_fields_method_agnostic'
+      '1.26-request_fields_method_agnostic',
+      '1.27-request_input_keeps_streaming_fields'
    ]
 );

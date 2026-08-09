@@ -88,6 +88,9 @@ return new Suite(
          '1.18.5-request_as_response-content-put',
          '1.18.6-request_as_response-content-patch',
          '1.18.7-request_as_response-content-delete',
+         // Reading `input` must not clobber the streaming decoder's fields
+         // (REQ-2).
+         '1.18.8-request_as_response-content-post-input',
          '1.19.1-request_as_response-content-post-file',
          '1.19.2-request_as_response-content-post-file',
          '1.19.3-request_as_response-content-post-file',
