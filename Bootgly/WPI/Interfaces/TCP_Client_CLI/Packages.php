@@ -259,17 +259,95 @@ class Packages implements WPI\Connections\Packages
       &$Socket, null|int $length = null, null|int $timeout = null
    ): bool
    {
-      // !
+      // ? Reactor fast lane: an ordinary plain TCP dispatch is unsized and
+      //   untimed. Adopt its one nonblocking read directly; TLS retains the
+      //   generic drain because OpenSSL may hold decrypted bytes outside the
+      //   descriptor readiness visible to stream_select().
+      if (
+         $length === null
+         && $timeout === null
+         && $this->Connection->encrypted === false
+      ) {
+         try {
+            $buffer = @fread($Socket, 65535);
+         }
+         catch (Throwable) {
+            $buffer = false;
+         }
+
+         $input = $buffer === false ? '' : $buffer;
+         $received = $buffer === false ? 0 : strlen($buffer);
+         if ($buffer === '') {
+            $this->expired = true;
+         }
+      }
+      else {
+         [$buffer, $input, $received] = $this->receive(
+            $Socket,
+            $length,
+            $timeout
+         );
+      }
+
+      // @ Check connection close intention by server?
+      // Close connection if input data is empty to avoid unnecessary loop?
+      // TODO remove?
+      if ($buffer === '') {
+         if (@feof($Socket)) {
+            $this->Connection->peerEOF = true;
+            $this->Connection->close();
+         }
+         return false;
+      }
+
+      // @ Check issues
+      if ($buffer === false) {
+         return $this->fail($Socket, 'read', $buffer);
+      }
+
+      // @ Set Input
+      $this->input = $input;
+
+      // @ Set Stats (disable to max performance in benchmarks)
+      if (Connections::$stats) {
+         // Global
+         Connections::$reads++;
+         Connections::$read += $received;
+         // Per client
+         #Connections::$Connections[(int) $Socket]['reads']++;
+      }
+
+      // # Hook
+      if (Client::$onDataRead) {
+         (Client::$onDataRead)($Socket, $this->Connection, $this);
+      }
+
+      return true;
+   }
+   /**
+    * Receive through the sized, timed or encrypted compatibility path.
+    *
+    * @param resource $Socket
+    * @param null|int<1,max> $length
+    * @param null|int<0,max> $timeout
+    *
+    * @return array{false|string,string,int}
+    */
+   private function receive (
+      &$Socket,
+      null|int $length,
+      null|int $timeout
+   ): array
+   {
       $input = '';
-      $received = 0; // Bytes received from server
-      $total = $length ?? 0; // Total length of packet = the expected length of packet or 0
+      $received = 0;
+      $total = $length ?? 0;
 
       $started = 0;
       if ($length > 0 || $timeout > 0) {
          $started = microtime(true);
       }
 
-      // @
       try {
          do {
             // ! Contract: null uses 65535; a sized read re-enters only while
@@ -309,8 +387,6 @@ class Packages implements WPI\Connections\Packages
 
             // @ TLS may buffer additional decrypted data that stream_select() cannot see.
             //   Try one more non-blocking read to drain any remaining SSL-layer bytes.
-            //   Plain TCP has no hidden buffer layer — skip the extra syscall there
-            //   (this was one full wasted fread per read on unencrypted connections).
             if ($this->Connection->encrypted) {
                $extra = @fread($Socket, 65535);
                if ($extra !== false && $extra !== '') {
@@ -327,40 +403,7 @@ class Packages implements WPI\Connections\Packages
          $buffer = false;
       }
 
-      // @ Check connection close intention by server?
-      // Close connection if input data is empty to avoid unnecessary loop?
-      // TODO remove?
-      if ($buffer === '') {
-         if (@feof($Socket)) {
-            $this->Connection->peerEOF = true;
-            $this->Connection->close();
-         }
-         return false;
-      }
-
-      // @ Check issues
-      if ($buffer === false) {
-         return $this->fail($Socket, 'read', $buffer);
-      }
-
-      // @ Set Input
-      $this->input = $input;
-
-      // @ Set Stats (disable to max performance in benchmarks)
-      if (Connections::$stats) {
-         // Global
-         Connections::$reads++;
-         Connections::$read += $received;
-         // Per client
-         #Connections::$Connections[(int) $Socket]['reads']++;
-      }
-
-      // # Hook
-      if (Client::$onDataRead) {
-         (Client::$onDataRead)($Socket, $this->Connection, $this);
-      }
-
-      return true;
+      return [$buffer, $input, $received];
    }
 
    public function write (&$Socket, null|int $length = null): bool

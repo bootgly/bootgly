@@ -54,6 +54,12 @@ class Resources
    //   route that mounts none, so reset() stays free on the hot path.
    /** @var array<int,Resource> */
    private array $Scoped = [];
+   // ! Base reset hot-path gate. True only when reset() has actual ephemeral
+   //   mounts to drop or scoped instances to clean.
+   // ! Default true keeps subtype overrides fail-safe even when a subtype
+   //   constructor deliberately skips parent::__construct(). The exact base
+   //   constructor resolves its idle state once, outside the request loop.
+   public private(set) bool $resettable = true;
 
 
    /**
@@ -66,6 +72,7 @@ class Resources
       // * Config
       $this->Attach = $Attach;
       $this->Context = $Context;
+      $this->resettable = $this::class !== self::class;
 
       if ($Context instanceof ServerResponse) {
          // * Data
@@ -207,6 +214,13 @@ class Resources
     */
    public function reset (): void
    {
+      // ? Exact idle base registry: retain the unconditional virtual call in
+      //   Response::reset() so subtype overrides always dispatch, then leave
+      //   before scanning either lifecycle collection.
+      if ($this->resettable === false) {
+         return;
+      }
+
       // @ A persistent instance may still hold request-scoped data; drop it
       //   without dropping the instance (audit 2026-07-27 M2). The list is
       //   empty unless a scoped resource was actually mounted.
@@ -228,6 +242,7 @@ class Resources
       }
 
       $this->ephemeral = false;
+      $this->resettable = $this::class !== self::class || $this->Scoped !== [];
    }
 
    /**
@@ -248,6 +263,9 @@ class Resources
          if ($Resource->scoped) {
             $this->Scoped[spl_object_id($Resource)] = $Resource;
          }
+         if ($Resource->persistent === false || $Resource->scoped) {
+            $this->resettable = true;
+         }
 
          return $Resource;
       }
@@ -263,6 +281,9 @@ class Resources
       }
       if ($Attached->scoped) {
          $this->Scoped[spl_object_id($Attached)] = $Attached;
+      }
+      if ($Attached->persistent === false || $Attached->scoped) {
+         $this->resettable = true;
       }
 
       /** @var T $Attached */

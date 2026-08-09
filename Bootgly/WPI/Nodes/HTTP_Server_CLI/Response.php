@@ -395,7 +395,13 @@ class Response extends Server\Response
       // singleton's Fibers is never populated, so there is nothing to reset here.
       $this->Header->clean();
       $this->Body->raw = '';
-      $this->Resources->reset();
+      // ? The registry publishes whether it has anything to drop. Reading the
+      //   flag here skips the call frame itself on routes that mount no
+      //   resource; a subtype always reports true, so its override still runs.
+      $Resources = $this->Resources;
+      if ($Resources->resettable) {
+         $Resources->reset();
+      }
 
       if ($this->code !== 200) {
          $this->code(200);

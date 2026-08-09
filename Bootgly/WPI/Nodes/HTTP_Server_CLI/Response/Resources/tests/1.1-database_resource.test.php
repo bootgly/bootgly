@@ -32,6 +32,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource\Scheduling;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources as ResponseResources;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\JSON;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Pre;
@@ -177,6 +178,23 @@ final class SyncResource extends Resource
 {
 }
 
+final class RecordingResources extends ResponseResources
+{
+   public int $resets = 0;
+
+   public function __construct ()
+   {
+      // @ Deliberately skip parent construction: declaration defaults must
+      //   still make subtype reset overrides fail-safe.
+   }
+
+   public function reset (): void
+   {
+      $this->resets++;
+      parent::reset();
+   }
+}
+
 final class RecordingSchedulingResource extends Resource implements Scheduling
 {
    private null|Closure $Wait = null;
@@ -219,13 +237,27 @@ return new Specification(
          $Response->reset($Package, $Request);
       };
 
+      $OriginalResources = $Response->Resources;
+      $RecordingResources = new RecordingResources;
+      $Response->Resources = $RecordingResources;
+      $reset();
+      $Response->Resources = $OriginalResources;
+
+      yield assert(
+         assertion: $RecordingResources->resets === 1,
+         description: 'Response reset preserves Resources subtype overrides even when the base gate is idle'
+      );
+
       $SQL = new RecordingSQL;
       $Resource = new Database($SQL);
       $Mounted = $Response->mount($Resource);
       $MountedOperation = $Mounted->query('WAIT');
 
       yield assert(
-         assertion: $Mounted === $Resource && $Response->Resources->fetch('Database') === $Resource && $MountedOperation->finished,
+         assertion: $Mounted === $Resource
+            && $Response->Resources->fetch('Database') === $Resource
+            && $Response->Resources->resettable
+            && $MountedOperation->finished,
          description: 'Response::mount binds and registers the database resource'
       );
 
@@ -273,7 +305,8 @@ return new Specification(
       yield assert(
          assertion: $jsonSent
             && $JSONAfterReset === $JSON
-            && $JSON->persistent,
+            && $JSON->persistent
+            && $Response->Resources->resettable === false,
          description: 'JSON resource formats content and persists after lazy first use'
       );
 

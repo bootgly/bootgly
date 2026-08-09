@@ -280,44 +280,68 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       // !
       $input = '';
       $received = 0; // Bytes received from client
-      $total = $length ?? 0; // Total length of packet = the expected length of packet or 0
-      // * Metadata
-      $started = 0;
-      if ($length > 0 || $timeout > 0) {
-         $started = microtime(true);
-      }
+      // ? Reactor lane: readiness dispatch always uses the unsized, untimed
+      //   contract. Adopt its one read directly instead of concatenating into
+      //   an empty accumulator or entering the general retry loop. Keep `@`:
+      //   the global warning handler throws, while nonblocking TLS diagnostics
+      //   are normal and must continue through fail()/feof() classification.
+      if ($length === null && $timeout === null) {
+         try {
+            $buffer = @fread($Socket, 65536); // @phpstan-ignore-line
+         }
+         catch (Throwable) {
+            $buffer = false;
+         }
 
-      // @
-      try {
-         do {
-            $buffer = @fread($Socket, $length ?? 65536); // @phpstan-ignore-line
-
-            if ($buffer === false) break;
+         if ($buffer !== false) {
+            $input = $buffer;
+            $received = strlen($buffer);
             if ($buffer === '') {
-               if (! $timeout > 0 || microtime(true) - $started >= $timeout) {
-                  $this->expired = true;
-                  break;
+               $this->expired = true;
+            }
+         }
+      }
+      else {
+         // ! Sized/timed compatibility lane. HTTP server reactor dispatch does
+         //   not select it, but direct transport callers retain the published
+         //   Packages contract and its partial-read/timeout semantics.
+         $total = $length ?? 0;
+         $started = 0;
+         if ($length > 0 || $timeout > 0) {
+            $started = microtime(true);
+         }
+
+         try {
+            do {
+               $buffer = @fread($Socket, $length ?? 65536); // @phpstan-ignore-line
+
+               if ($buffer === false) break;
+               if ($buffer === '') {
+                  if (! $timeout > 0 || microtime(true) - $started >= $timeout) {
+                     $this->expired = true;
+                     break;
+                  }
+
+                  continue; // TODO check EOF?
                }
 
-               continue; // TODO check EOF?
+               $input .= $buffer;
+
+               $bytes = strlen($buffer);
+               $received += $bytes;
+
+               if ($length) {
+                  $length -= $bytes;
+                  continue;
+               }
+
+               break;
             }
-
-            $input .= $buffer;
-
-            $bytes = strlen($buffer);
-            $received += $bytes;
-
-            if ($length) {
-               $length -= $bytes;
-               continue;
-            }
-
-            break;
+            while ($received < $total || $total === 0);
          }
-         while ($received < $total || $total === 0);
-      }
-      catch (Throwable) {
-         $buffer = false;
+         catch (Throwable) {
+            $buffer = false;
+         }
       }
 
       // ? A zero-byte read is peer EOF only when feof() confirms it — on TLS,
@@ -613,8 +637,9 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          $buffer = (SAPI::$Handler)(...$this->callbacks);
       }
 
-      // :
-      return $this->writing($Socket, length: $length, buffer: $buffer);
+      // : Positional — named arguments dispatch zend_handle_named_arg() per
+      //   call, and this is the per-request write boundary.
+      return $this->writing($Socket, $length, $buffer);
    }
    /**
     * Write a response buffer to the client socket in loop
@@ -636,16 +661,6 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          $this->reset($Socket);
 
          return $this->Connection->handshake() !== false;
-      }
-
-      // @ Raw::encode() installs file-response metadata directly on the
-      //   Package immediately before writing(). Admit its in-memory pads here,
-      //   before any socket operation or ownership transfer.
-      if (
-         ($this->uploading !== [] || $this->stagedUploading !== [])
-         && $this->reserve($this->measure()) === false
-      ) {
-         return $this->abort($Socket);
       }
 
       $available = strlen($buffer);
@@ -705,6 +720,39 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
             return true;
          }
          // ? Zero write: the ordered writer gets its single retry below.
+      }
+
+      // :
+      return $this->drain($Socket, $length, $buffer, $available);
+   }
+   /**
+    * Run the ordered writer for backpressure, uploads and response queues.
+    *
+    * The public hot path enters here when its eligibility gate does not finish
+    * the complete-buffer write. Keeping the state machine intact in this cold
+    * frame preserves its single ordering and accounting authority without
+    * widening the ordinary response trace.
+    *
+    * @param resource $Socket
+    * @param int<0,max>|null $length
+    */
+   private function drain (
+      &$Socket,
+      null|int $length,
+      string &$buffer,
+      int $available
+   ): bool
+   {
+
+      // @ Raw::encode() installs file-response metadata directly on the
+      //   Package immediately before writing(). A queued/staged upload makes
+      //   the plain fast lane above ineligible, so admission here still runs
+      //   before any slow-writer socket operation or ownership transfer.
+      if (
+         ($this->uploading !== [] || $this->stagedUploading !== [])
+         && $this->reserve($this->measure()) === false
+      ) {
+         return $this->abort($Socket);
       }
 
       // @ `$length` is a public prefix contract used by direct transport

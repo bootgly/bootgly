@@ -97,8 +97,12 @@ trait Raw
     */
    public function encode (Packages $Package, null|int &$length): string
    {
-      $Header  = &$this->Header;
-      $Body = &$this->Body;
+      // ! Plain handle reads, never rebindings: nothing in this method assigns
+      //   to either local. A `&` binding would convert both hot typed
+      //   properties into permanent references — every later access, here and
+      //   in every other method, would then pay one indirection.
+      $Header = $this->Header;
+      $Body = $this->Body;
 
       $Request = $this->Request ?? Server::$Request;
 

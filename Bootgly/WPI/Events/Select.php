@@ -18,6 +18,7 @@ use function is_int;
 use function is_resource;
 use function max;
 use function microtime;
+use function min;
 use function pcntl_signal_dispatch;
 use function sleep;
 use function spl_object_id;
@@ -28,8 +29,8 @@ use Fiber;
 use RuntimeException;
 use Throwable;
 
-use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Contextualizing;
+use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\WPI\Connections;
@@ -407,9 +408,14 @@ class Select implements Events, Loops, Scheduler, Contextualizing
             $wait = $this->tick();
          }
 
-         $read   = $this->reads;
-         $write  = $this->writes;
-         $except = $this->excepts;
+         // ! `stream_select()` takes each set by reference and rewrites it with
+         //   the ready subset, so every non-null set is separated and rebuilt
+         //   on every wakeup. An HTTP worker registers writes/excepts only
+         //   under backpressure: passing null for an empty set skips its copy
+         //   and its fd_set marshalling entirely (the parameters are `?array`).
+         $read = $this->reads;
+         $write = $this->writes ?: null;
+         $except = $this->excepts ?: null;
 
          if ($read || $write || $except) {
             try {
@@ -459,9 +465,11 @@ class Select implements Events, Loops, Scheduler, Contextualizing
             //   the same `false`, so dispatch the signal and immediately
             //   probe the current persistent sets without blocking.
             pcntl_signal_dispatch();
+            // ! Same null-for-empty shape as the main call above, so both
+            //   paths hand the dispatch below identically-typed sets.
             $read = $this->reads;
-            $write = $this->writes;
-            $except = $this->excepts;
+            $write = $this->writes ?: null;
+            $except = $this->excepts ?: null;
             if ($read || $write || $except) {
                try {
                   $streams = @stream_select($read, $write, $except, 0, 0);
@@ -525,10 +533,17 @@ class Select implements Events, Loops, Scheduler, Contextualizing
                // @ Select action
                if ( isSet($this->connecting[$id]) ) {
                   $Connections->connect();
+
+                  continue;
                }
-               else if ( isSet($this->reading[$id]) ) {
-                  /** @var Connections\Packages $Package */
-                  $Package = &$this->reading[$id];
+
+               // ! One lookup, by value: `??` treats a null payload as absent
+               //   exactly like the isSet() it replaces, and the local is only
+               //   ever a call receiver — a `&` binding would convert the slot
+               //   into a permanent reference for the connection's whole life.
+               /** @var null|Connections\Packages $Package */
+               $Package = $this->reading[$id] ?? null;
+               if ($Package !== null) {
                   $Package->reading($Socket);
                }
             }
@@ -553,9 +568,10 @@ class Select implements Events, Loops, Scheduler, Contextualizing
                   continue;
                }
 
-               if ( isSet($this->writing[$id]) ) {
-                  /** @var Connections\Packages $Package */
-                  $Package = &$this->writing[$id];
+               // ! Same single-lookup, by-value shape as the read dispatch.
+               /** @var null|Connections\Packages $Package */
+               $Package = $this->writing[$id] ?? null;
+               if ($Package !== null) {
                   $Package->writing($Socket);
                }
             }

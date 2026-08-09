@@ -124,15 +124,32 @@ class Decoder_ extends Decoders
          }
       }
 
+      // ? L0 — a non-null per-connection Template can only be installed
+      //   after one exact, complete, bodyless HTTP/1 request passed every
+      //   memo-retention guard below. Adopt an exact consecutive repeat
+      //   before shared-cache and h2c-miss scaffolding; CRLF padding was
+      //   already normalized above and remains part of consumed accounting.
+      if ($Package->Template !== null && $buffer === $Package->known) {
+         /** @var Request $Template */
+         $Template = $Package->Template;
+         /** @var Request $Request */
+         $Request = $Package->decoded ??= new Request;
+         $Request->assume($Template, $Package->Connection);
+         Server::$Request = $Request;
+
+         $Package->consumed = $size + $skipped;
+         return States::Complete;
+      }
+
       // ? h2c prior-knowledge neutral sniffing. A one-byte `P` can be a
       //   segmented POST/PUT/PATCH, so an ambiguous short prefix returns
       //   Incomplete with nothing consumed — the transport carry retains it
       //   and the next event reassembles until the protocol can be
       //   distinguished (`Request::decode()` commits HTTP/2 at >= 14 bytes).
       if (
-         Server::$enableHTTP2
+         $buffer[0] === 'P'
+         && Server::$enableHTTP2
          && $Package->Connection->writes === 0
-         && $buffer[0] === 'P'
       ) {
          $signal = min($size, 14);
          if (strncmp($buffer, HTTP2::PREFACE, $signal) === 0 && $size < 14) {

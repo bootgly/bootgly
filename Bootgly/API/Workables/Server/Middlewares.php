@@ -12,9 +12,9 @@ namespace Bootgly\API\Workables\Server;
 
 
 use function array_reduce;
-use function count;
 use function array_reverse;
 use function array_unshift;
+use function count;
 use Closure;
 
 
@@ -24,8 +24,18 @@ class Middlewares
    // ...
 
    // * Data
-   /** @var array<Middleware> */
-   private array $stack = [];
+   /**
+    * The pipeline itself — the array `process()` folds into the onion.
+    *
+    * Publicly READABLE so a hot-path caller can decide whether this pipeline
+    * has anything to run without paying a call frame and, decisively, without
+    * trusting a derived counter: a counter that disagreed with this array
+    * would skip real middlewares, while this array is the same authority
+    * `process()` consults. Writes stay private — only prepend/append/pipe.
+    *
+    * @var array<Middleware>
+    */
+   public private(set) array $stack = [];
 
    // * Metadata
    /**
@@ -36,8 +46,26 @@ class Middlewares
     * no admitted identity, so a route guarded only by global middleware must
     * not store replayable wire.
     */
-   public int $count {
-      get => count($this->stack);
+   // ! Keep this as a direct-read property: Encoder_ reads it on every HTTP
+   //   request, while every stack mutation happens during application boot.
+   //   The non-zero declaration is deliberate. Reflection construction and
+   //   subclasses that skip this constructor must disable shared route-cache
+   //   reuse until a normal construction or a stack mutation establishes the
+   //   exact count.
+   public private(set) int $count = 1;
+
+
+   public function __construct ()
+   {
+      $this->count = 0;
+   }
+   public function __clone ()
+   {
+      $this->synchronize();
+   }
+   public function __wakeup (): void
+   {
+      $this->synchronize();
    }
 
 
@@ -45,6 +73,7 @@ class Middlewares
    {
       // @
       array_unshift($this->stack, $Middleware);
+      $this->count = count($this->stack);
 
       // :
       return $this;
@@ -54,6 +83,7 @@ class Middlewares
    {
       // @
       $this->stack[] = $Middleware;
+      $this->count = count($this->stack);
 
       // :
       return $this;
@@ -64,6 +94,9 @@ class Middlewares
       // @
       foreach ($middlewares as $Middleware) {
          $this->stack[] = $Middleware;
+      }
+      if ($middlewares !== []) {
+         $this->count = count($this->stack);
       }
 
       // :
@@ -90,5 +123,19 @@ class Middlewares
 
       // :
       return $Pipeline($Request, $Response);
+   }
+
+   /**
+    * Restore the derived count without turning an unconstructed empty object
+    * into a cache-admitting pipeline.
+    */
+   private function synchronize (): void
+   {
+      if ($this->stack === []) {
+         $this->count = $this->count === 0 ? 0 : 1;
+         return;
+      }
+
+      $this->count = count($this->stack);
    }
 }

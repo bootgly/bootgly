@@ -417,7 +417,9 @@ class Encoder_ extends Encoders
          //   by user middlewares or router config. The rare URI prefix is
          //   checked first so ordinary responses never allocate a path list.
          else if (
-            strncmp($Request->URI, Challenge::PREFIX, 28) === 0
+            isSet($Request->URI[1])
+            && $Request->URI[1] === '.'
+            && strncmp($Request->URI, Challenge::PREFIX, 28) === 0
             && Challenges::collect() !== []
             && ($Request->method === 'GET' || $Request->method === 'HEAD')
          ) {
@@ -446,11 +448,19 @@ class Encoder_ extends Encoders
                //   both replay and storage. The Response flag survives
                //   defer()'s private clone and protects its later stash().
                $Middlewares = SAPI::$Middlewares;
+               // ! Whether the onion has anything to run. Read from `stack` —
+               //   the very array `process()` folds — never from the derived
+               //   `count`: this decides CONTROL FLOW, so a counter that ever
+               //   disagreed with the stack would skip real security
+               //   middlewares. A subtype can override process() while its
+               //   inherited stack stays empty, so every subtype pipes.
+               $piped = $Middlewares::class !== Middlewares::class
+                  || $Middlewares->stack !== [];
+               // ! Cache eligibility keeps `count` as an ADDITIONAL term: its
+               //   deliberate non-zero default fails closed for an instance
+               //   that never ran the constructor.
                self::$mediated = $receiving
-                  // ! A subtype can override process() while its inherited
-                  //   private stack (and count) stays empty. Treat every subtype
-                  //   as lifecycle-bearing instead of trusting that divergence.
-                  || $Middlewares::class !== Middlewares::class
+                  || $piped
                   || $Middlewares->count > 0
                   || self::$observed;
                if (self::$mediated) {
@@ -484,7 +494,7 @@ class Encoder_ extends Encoders
                      $Res->guard();
                   }
 
-                  $wire = self::$mediated
+                  $wire = self::$mediated || Cache::$entries === []
                      ? null
                      : self::replay($Request);
                   if ($wire !== null) {
@@ -548,7 +558,12 @@ class Encoder_ extends Encoders
                   return $Res;
                };
 
-               $Result = $Middlewares->process($Request, $Response, $core);
+               // ? An exact-class pipeline with an empty stack has exactly one
+               //   documented behaviour: call the handler. Skipping the frame
+               //   preserves it; every other shape still enters process().
+               $Result = $piped
+                  ? $Middlewares->process($Request, $Response, $core)
+                  : $core($Request, $Response);
 
                if ($Result instanceof Response && $Result !== $Response) {
                   $Response = $Result;
@@ -640,8 +655,7 @@ class Encoder_ extends Encoders
          //   already redundant here — and it would otherwise sit on the
          //   connection until the next request, unreserved. Same rationale
          //   as the post-`Handled` scrub below.
-         $Request->Body->scrub();
-         $Request->fields = [];
+         $Request->scrub();
 
          return '';
       }
@@ -709,8 +723,7 @@ class Encoder_ extends Encoders
       //   worker-global `Server::$Request`, which nothing else ever clears.
       // !! KEEP THIS STRAIGHT-LINE AND UNCONDITIONAL — same tracing-JIT
       //   constraint as `Request::__clone` / `Request::reset`.
-      $Request->Body->scrub();
-      $Request->fields = [];
+      $Request->scrub();
 
       // ?: Replay only when the admitted Response remains the active 200.
       //   A post-middleware/event denial or replacement must serialize its

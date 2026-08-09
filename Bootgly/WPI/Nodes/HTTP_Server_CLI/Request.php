@@ -890,6 +890,21 @@ class Request
    }
 
    /**
+    * Drop completed request payload retained by the synchronous cycle.
+    *
+    * Decode metadata stays intact for the active decoder, while body bytes
+    * and parsed fields are released together. Keep this unconditional and
+    * straight-line: the encoder calls it for every completed or deferred
+    * request so an idle keep-alive peer cannot park unreserved payload.
+    */
+   final public function scrub (): void
+   {
+      $this->Body->raw = '';
+      $this->Body->input = null;
+      $this->_fields = [];
+   }
+
+   /**
     * Assume a decoded template Request on this per-connection instance.
     *
     * Replaces the per-request `clone $template` of the Decoder_ L1 cache-hit
