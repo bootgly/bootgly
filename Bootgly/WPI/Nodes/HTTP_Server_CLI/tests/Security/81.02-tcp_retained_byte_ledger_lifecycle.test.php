@@ -1336,7 +1336,11 @@ return new Specification(
          foreach ($Tokens as $Token) {
             $Token->release();
          }
-         if ($Destructor instanceof Buffers) {
+         // ? The destructor-fallback leg unsets this variable on purpose, so
+         //   reaching that point leaves nothing to release here. Test the
+         //   binding first: the framework promotes the "undefined variable"
+         //   warning to an ErrorException, which would abort this cleanup.
+         if (isSet($Destructor) && $Destructor instanceof Buffers) {
             $Destructor->release();
          }
          foreach ($Resources as $Resource) {

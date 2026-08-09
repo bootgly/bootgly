@@ -179,7 +179,16 @@ SH;
          $probe['exit_code'] = $exitCode >= 0 ? $exitCode : $closed;
          $probe['help_rendered'] = str_contains("{$output}{$error}", 'Test usage');
 
-         $lines = file($evidencePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+         // ? An absent evidence file is the SECURE outcome: the poisoned tput
+         //   was never executed, so there is nothing to classify below and the
+         //   verdict falls through to the pass at the end of test().
+         //   `file()` on a missing path emits a warning the framework promotes
+         //   to an ErrorException, which would abort into $probe['error'] and
+         //   report a fixture failure — the `=== false` guard below can never
+         //   be reached under that handler. Test the absence first.
+         $lines = is_file($evidencePath)
+            ? file($evidencePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES)
+            : [];
          if ($lines === false) {
             $lines = [];
          }
