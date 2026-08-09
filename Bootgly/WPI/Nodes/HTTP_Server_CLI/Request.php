@@ -455,12 +455,14 @@ class Request
     */
    public array $fields {
       get {
-         // ? Parse once, and only with something to parse: `length` is written
-         //   by every decoder that completes a body (`decode()` for a declared
-         //   Content-Length, `Decoder_Chunked` on the terminal chunk), so a
-         //   body-less request never reaches `receive()`. A streaming body has
-         //   no `raw` — `Decoder_Downloading` owns its fields.
-         if ($this->_fields === [] && ! $this->Body->streaming && $this->Body->length > 0) {
+         // ? Parse once, and only with something to parse. `length` leads
+         //   because it is the cheapest test and the one that settles the
+         //   body-less case in a single scalar compare — it is written by every
+         //   decoder that completes a body (`decode()` for a declared
+         //   Content-Length, `Decoder_Chunked` on the terminal chunk), so a GET
+         //   exits here and never reaches `receive()`. A streaming body has no
+         //   `raw` — `Decoder_Downloading` owns its fields.
+         if ($this->Body->length > 0 && $this->_fields === [] && ! $this->Body->streaming) {
             /** @var array<string, array<string>|bool|float|int|string>|null $input */
             $input = $this->input();
             return $input ?? [];
