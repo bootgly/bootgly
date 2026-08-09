@@ -82,6 +82,12 @@ return new Suite(
          '1.18.1-request_as_response-content-post',
          '1.18.2-request_as_response-content-post',
          '1.18.3-request_as_response-content-post',
+         // Body parsing is dispatched on the media type, not on the method
+         // (REQ-1) — .4 is the POST control read straight from `fields`.
+         '1.18.4-request_as_response-content-post',
+         '1.18.5-request_as_response-content-put',
+         '1.18.6-request_as_response-content-patch',
+         '1.18.7-request_as_response-content-delete',
          '1.19.1-request_as_response-content-post-file',
          '1.19.2-request_as_response-content-post-file',
          '1.19.3-request_as_response-content-post-file',

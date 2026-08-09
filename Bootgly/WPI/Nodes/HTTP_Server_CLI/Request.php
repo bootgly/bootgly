@@ -442,6 +442,12 @@ class Request
     * The Request fields (parsed body for application/x-www-form-urlencoded
     * and multipart/form-data; raw decoded array for application/json).
     *
+    * Dispatch is on the media type, never on the request method: a PUT, PATCH
+    * or DELETE body parses exactly like the same bytes sent as POST, which is
+    * what `CSRF` (form field `_token`) and `Validator(Sources::Fields)` rely
+    * on. Media types `input()` cannot parse still yield `[]` — it refuses to
+    * guess.
+    *
     * Replaces the legacy $post property; no superglobal $_POST is used
     * anywhere in the HTTP_Server_CLI request lifecycle.
     *
@@ -449,7 +455,12 @@ class Request
     */
    public array $fields {
       get {
-         if ($this->method === 'POST' && $this->_fields === [] && ! $this->Body->streaming) {
+         // ? Parse once, and only with something to parse: `length` is written
+         //   by every decoder that completes a body (`decode()` for a declared
+         //   Content-Length, `Decoder_Chunked` on the terminal chunk), so a
+         //   body-less request never reaches `receive()`. A streaming body has
+         //   no `raw` — `Decoder_Downloading` owns its fields.
+         if ($this->_fields === [] && ! $this->Body->streaming && $this->Body->length > 0) {
             /** @var array<string, array<string>|bool|float|int|string>|null $input */
             $input = $this->input();
             return $input ?? [];
@@ -1339,7 +1350,7 @@ class Request
     * declared `application/json` MUST NOT silently fall through to
     * `parse_str()` on parse failure — otherwise an attacker can submit an
     * invalid-JSON / valid-urlencoded payload to inject arbitrary keys into
-    * `$Request->post` (mass-assignment, CSRF-token confusion, `_method`
+    * `$Request->fields` (mass-assignment, CSRF-token confusion, `_method`
     * override). An unknown / missing Content-Type yields `[]`.
     *
     * @return array<string>|null
