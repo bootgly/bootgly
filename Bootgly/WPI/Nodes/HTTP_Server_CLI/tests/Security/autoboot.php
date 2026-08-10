@@ -111,6 +111,8 @@ return new Suite(
       // # Decoder Downloading (multipart)
       // boundary not validated (charset + length cap)
       '07.01-multipart_boundary_injection_and_oversize',
+      // leading-dot filename sanitization (was never registered before DEC-1)
+      '07.02-multipart_filename_leading_dot',
       // # Decoder_ cache
       // shallow clone → sub-object state bleed
       '08.01-decoder_cache_shallow_clone_subobject_bleed',

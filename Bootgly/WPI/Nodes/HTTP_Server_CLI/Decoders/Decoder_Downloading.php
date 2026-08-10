@@ -40,9 +40,9 @@ use function parse_str;
 use function preg_match;
 use function preg_replace;
 use function random_bytes;
+use function str_starts_with;
 use function strcspn;
 use function strlen;
-use function str_starts_with;
 use function strpos;
 use function strspn;
 use function strtolower;
@@ -912,6 +912,27 @@ class Decoder_Downloading extends Decoders implements Disconnecting
                         if (preg_match('/name="(.*?)"; filename="(.*?)"/i', $value, $match)) {
                            $isFile = true;
                            $uploadKey = $match[1];
+
+                           // ? An empty RAW filename is a browser's "no file
+                           //   chosen" part — commit the no-file record PHP's
+                           //   rfc1867 parser produces for the same bytes. The
+                           //   pre-set error keeps every filesystem step below
+                           //   behind its `error === 0` guard, so no temp
+                           //   inode is ever created for it. Only the raw
+                           //   value discriminates: a non-empty filename that
+                           //   SANITIZES down to empty still takes the
+                           //   `'upload'` placeholder path.
+                           if ($match[2] === '') {
+                              $file = [
+                                 'name' => '',
+                                 'tmp_name' => '',
+                                 'size' => 0,
+                                 'error' => UPLOAD_ERR_NO_FILE,
+                                 'type' => '',
+                              ];
+                              break;
+                           }
+
                            // ! Sanitize filename: strip directory traversal and restrict to safe characters
                            $rawFilename = basename($match[2]);
                            $safeFilename = (string) preg_replace('/[^\w.\- ]/', '_', $rawFilename);
@@ -935,7 +956,11 @@ class Decoder_Downloading extends Decoders implements Disconnecting
 
                         break;
                      case 'content-type':
-                        $file['type'] = trim($value);
+                        // ? A record already carrying an error keeps `type`
+                        //   empty — $_FILES parity for the no-file part.
+                        if (($file['error'] ?? 0) === 0) {
+                           $file['type'] = trim($value);
+                        }
                         break;
                   }
                }
@@ -1006,8 +1031,12 @@ class Decoder_Downloading extends Decoders implements Disconnecting
                   //   nothing, so a fallback warning cannot hide a created
                   //   path from decoder ownership.
                   try {
+                     // ? A record that already carries an error — the no-file
+                     //   part above — skips every filesystem step: the two
+                     //   guards below already read the same condition.
                      if (
-                        ! is_dir($tempUploadedDir)
+                        ($file['error'] ?? 0) === 0
+                        && ! is_dir($tempUploadedDir)
                         && ! mkdir($tempUploadedDir, 0700, true)
                         && ! is_dir($tempUploadedDir)
                      ) {

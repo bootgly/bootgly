@@ -104,6 +104,8 @@ return new Suite(
          '1.20.7-request_as_response-content-streaming-file',
          // Streaming Decoder → Storage disk (upload persistence)
          '1.20.8-request_store-persist',
+         // Streaming Decoder — empty file input is no-file (DEC-1)
+         '1.20.9-request_as_response-content-streaming-empty_input',
          '1.21-request_as_response-on',
          '1.22-request_as_response-at',
          '1.23-request_as_response-time',
