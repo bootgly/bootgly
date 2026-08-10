@@ -18,6 +18,8 @@ return new Suite(
       '1.2-handshake-fallback',
       '2.1-frame',
       // # Cross-worker relay mailbox (WS-1)
-      '3.1-relay'
+      '3.1-relay',
+      // # Relay fork topology (bus inheritance + both constructor roles)
+      '3.2-relay_fork'
    ]
 );
