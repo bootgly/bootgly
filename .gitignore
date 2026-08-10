@@ -41,7 +41,7 @@ _*.benchmark.php
 # Examples
 _*.example.php
 # Tests
-_*.test.php
+_*.Test.php
 
 
 #-- /Classes --#

@@ -32,7 +32,7 @@ use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Results;
 use Bootgly\ACI\Tests\Suite\Test;
-use Bootgly\ACI\Tests\Suite\Test\Specification;
+use Bootgly\ACI\Tests\Suite\Tester;
 use Bootgly\ACI\Tests\Suites;
 use Bootgly\API\Environment;
 
@@ -58,7 +58,7 @@ class Suite
    public bool $autoReport;
    public bool $autoSummarize;
    /**
-    * Default Fixture propagated to Specifications without their own Fixture.
+    * Default Fixture propagated to Tests without their own Fixture.
     */
    public null|Fixture $Fixture;
    // exit
@@ -76,9 +76,9 @@ class Suite
    public string $name;
    /** @var array<string> */
    public array $tests;
-   /** @var array<int,Specification> */
+   /** @var array<int,Test> */
    public array $Tests;
-   public protected(set) Test $Test;
+   public protected(set) Tester $Tester;
    /** @var array<string> */
    public array $artfacts;
 
@@ -206,8 +206,8 @@ class Suite
          }
 
          // @
-         /** @var Specification|false $Test */
-         $Test = @include "{$dir}{$test}.test.php";
+         /** @var Test|false $Test */
+         $Test = @include "{$dir}{$test}.Test.php";
          // ?
          if ($test[0] === '_' && $Test === false) {
             continue;
@@ -215,8 +215,8 @@ class Suite
          else if ($test[0] !== '_' && $Test === false) {
             throw new Exception("Test case not found: \n {$dir}{$test}");
          }
-         else if ($Test instanceof Specification === false) {
-            throw new Exception("Test case must return a Specification instance: \n {$dir}{$test}");
+         else if ($Test instanceof Test === false) {
+            throw new Exception("Test case must return a Test instance: \n {$dir}{$test}");
          }
 
          // * Metadata (Test Case)
@@ -333,11 +333,11 @@ class Suite
    /**
     * Test the current Test Case.
     * 
-    * @param null|Specification $Test
+    * @param null|Test $Test
     *
-    * @return Test|null
+    * @return Tester|null
     */
-   public function test (null|Specification $Test): Test|null
+   public function test (null|Test $Test): Tester|null
    {
       if ($Test === null) {
          $this->skipped++;
@@ -349,13 +349,13 @@ class Suite
 
       $Test->Fixture ??= $this->Fixture;
 
-      $this->Test = new Test($this, $Test);
+      $this->Tester = new Tester($this, $Test);
 
       if (key($this->tests) < $this->assertions) {
          next($this->tests);
       }
 
-      return $this->Test;
+      return $this->Tester;
    }
    /**
     * Skip a Test Case.

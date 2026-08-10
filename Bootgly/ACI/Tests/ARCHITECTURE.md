@@ -106,11 +106,10 @@ Bootgly/ACI/Tests/
 │   └── Hooks/                             # (reserved for future hook implementations)
 │
 ├── Suite/                                 # ── Suite internals ──
-│   ├── Test.php                           # class — single test case executor & reporter
-│   └── Test/
-│       ├── Specification.php              # class — test case config parsed from array
-│       └── Specification/
-│           └── Separator.php              # class — visual separator config
+│   ├── Test/
+│   │   └── Separator.php                  # class — visual separator config
+│   ├── Test.php                           # class — test case value object (returned by test files)
+│   └── Tester.php                         # class — single test case executor & reporter
 │
 ├── Suites/                                # ── Suites (collection) support ──
 │   └── Reports/                           # (reserved for future report formats)
@@ -175,7 +174,7 @@ Bootgly/ACI/Tests/
 │   └── Spy.php                            # class — $Wrapped property; verify()/reset() on real instance
 │
 ├── templates/                             # test file templates
-├── tests/                                 # self-tests (autoboot.php + *.test.php)
+├── tests/                                 # self-tests (autoboot.php + *.Test.php)
 └── docs/
     └─ ROADMAP.md
 ```
@@ -219,17 +218,17 @@ classDiagram
         +name: string
         +tests: array~string~
         +Tests: array~array~
-        +Test: Test
+        +Tester: Tester
         +autoboot(pathbase) void
         +autoinstance(instance) void
-        +test(&Test) Test│null
+        +test(&Test) Tester│null
         +skip(info) void
         +summarize() void
     }
 
-    class Test {
+    class Tester {
         +Suite: Suite
-        +Specification: Specification
+        +Test: Test
         +descriptions: array
         -results: array~bool│null~
         -pretest() bool
@@ -239,7 +238,7 @@ classDiagram
         +fail(message) void
     }
 
-    class Specification {
+    class Test {
         +description: string│null
         +Separator: Separator
         +skip: bool
@@ -258,9 +257,9 @@ classDiagram
     }
 
     Suites --> Suite : iterates
-    Suite --> Test : creates
-    Test --> Specification : reads config
-    Specification --> Separator : contains
+    Suite --> Tester : creates
+    Tester --> Test : reads config
+    Test --> Separator : contains
 
     %% ━━━ Assertion (Level 3) ━━━
     class Assertion {
@@ -511,7 +510,7 @@ sequenceDiagram
         Suites->>SuiteBootstrap: require '{dir}/tests/autoboot.php'
         SuiteBootstrap-->>Suites: Suite(tests, autoBoot, ...)
         Suites->>Suite: autoboot(pathbase)
-        Suite->>Suite: load all .test.php files → $this->Tests[]
+        Suite->>Suite: load all .Test.php files → $this->Tests[]
         Suites->>Suite: autoinstance(true)
     end
 
@@ -523,38 +522,36 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant Suite as Suite
-    participant Test as Test
-    participant Spec as Specification
-    participant TestFile as .test.php
+    participant Tester as Tester
+    participant TestFile as test file
 
     Suite->>Suite: autoinstance(true)
 
     loop for each $Test in $this->Tests
         Suite->>Suite: test(&Test)
-        Suite->>Test: new Test(Suite, specifications)
-        Test->>Spec: new Specification(array)
+        Suite->>Tester: new Tester(Suite, Test)
 
-        Test->>Test: test()
-        Test->>Test: pretest() → separate()
+        Tester->>Tester: test()
+        Tester->>Tester: pretest() → separate()
 
         alt Level 1 (Closure → bool)
-            Test->>TestFile: $test()
-            TestFile-->>Test: true/false
+            Tester->>TestFile: $test()
+            TestFile-->>Tester: true/false
         else Level 2 (Closure → Generator<bool>)
-            Test->>TestFile: $test()
-            TestFile-->>Test: yield true/false...
+            Tester->>TestFile: $test()
+            TestFile-->>Tester: yield true/false...
         else Level 3 (Assertions instance)
-            Test->>TestFile: $test->run()
-            TestFile-->>Test: yield Assertion...
-            Test->>Test: check Assertion.asserted
+            Tester->>TestFile: $test->run()
+            TestFile-->>Tester: yield Assertion...
+            Tester->>Tester: check Assertion.asserted
         end
 
-        Test->>Test: postest()
+        Tester->>Tester: postest()
 
         alt passed
-            Test->>Test: pass() → Suite.passed++
+            Tester->>Tester: pass() → Suite.passed++
         else failed (AssertionError)
-            Test->>Test: fail(message) → Suite.failed++
+            Tester->>Tester: fail(message) → Suite.failed++
         end
     end
 
@@ -646,8 +643,8 @@ graph TD
     subgraph "ACI\Tests — Orchestration"
         Suites["Suites"]
         Suite["Suite"]
+        Tester["Suite\Tester"]
         Test["Suite\Test"]
-        Specification["Specification"]
         Separator["Separator"]
     end
 
@@ -695,8 +692,8 @@ graph TD
     Suite --> ACI_Benchmark
     Suite --> ACI_LoggableEscaped
     Suite --> API_Environment
-    Test --> ACI_Benchmark
-    Test --> ACI_LoggableEscaped
+    Tester --> ACI_Benchmark
+    Tester --> ACI_LoggableEscaped
 
     Assertion_class --> ABI_Argument
     Assertion_class --> ABI_Backtrace
@@ -709,11 +706,11 @@ graph TD
 
     %% Internal relationships
     Suites --> Suite
-    Suite --> Test
-    Test --> Specification
-    Specification --> Separator
-    Test --> Assertion_class
-    Test --> Assertions_class
+    Suite --> Tester
+    Tester --> Test
+    Test --> Separator
+    Tester --> Assertion_class
+    Tester --> Assertions_class
 
     Assertion_class --> Expectations_abs
     Expectations_abs --> Expectation_trait
@@ -789,17 +786,17 @@ Each fluent method (e.g., `be()`, `find()`) creates a concrete implementation of
 
 ---
 
-## Test File Specification (`.test.php` format)
+## Test File format (`.Test.php`)
 
-Each test file returns a `new Specification(...)` instance with named parameters:
+Each test file returns a `new Test(...)` instance with named parameters:
 
-### Base Specification (`ACI\Tests\Suite\Test\Specification`)
+### Base Test (`ACI\Tests\Suite\Test`)
 
 ```php
-use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
+use Bootgly\ACI\Tests\Suite\Test;
+use Bootgly\ACI\Tests\Suite\Test\Separator;
 
-return new Specification(
+return new Test(
     // * Data (required)
     test: Assertions|Closure,           // test logic
 
@@ -812,7 +809,7 @@ return new Specification(
 );
 ```
 
-### Separator value object (`ACI\Tests\Suite\Test\Specification\Separator`)
+### Separator value object (`ACI\Tests\Suite\Test\Separator`)
 
 ```php
 new Separator(
@@ -822,15 +819,15 @@ new Separator(
 )
 ```
 
-### E2E Specification (`WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification`)
+### E2E Test (`WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test`)
 
-Extends the base `Specification` with HTTP-specific parameters:
+Extends the base `Test` with HTTP-specific parameters:
 
 ```php
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
-use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
+use Bootgly\ACI\Tests\Suite\Test\Separator;
 
-return new Specification(
+return new Test(
     // * Config (optional - inherited)
     description: null|string,
     Separator: null|Separator,
@@ -863,9 +860,9 @@ return new Specification(
 ### Level 1 — Boolean return
 
 ```php
-use Bootgly\ACI\Tests\Suite\Test\Specification;
+use Bootgly\ACI\Tests\Suite\Test;
 
-return new Specification(
+return new Test(
     description: 'X should equal X',
 
     test: function (): bool {
@@ -880,9 +877,9 @@ return new Specification(
 use Generator;
 
 use Bootgly\ACI\Tests\Assertion;
-use Bootgly\ACI\Tests\Suite\Test\Specification;
+use Bootgly\ACI\Tests\Suite\Test;
 
-return new Specification(
+return new Test(
     test: function (): Generator {
         yield 1 === 1;
 
@@ -898,9 +895,9 @@ return new Specification(
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertion\Auxiliaries\Value;
 use Bootgly\ACI\Tests\Assertions;
-use Bootgly\ACI\Tests\Suite\Test\Specification;
+use Bootgly\ACI\Tests\Suite\Test;
 
-return new Specification(
+return new Test(
     description: 'It should test values',
 
     test: new Assertions(Case: function (): Generator {
@@ -926,5 +923,5 @@ return new Specification(
 - **`Asserting` as the universal contract**: Every expectation category (Comparator, Behavior, Finder, Delimiter, Matcher, Thrower, Waiter) and Snapshot implement the same `Asserting` interface, making them interchangeable in the pipeline.
 - **Subassertion pattern (Waiter)**: `Waiter` extends `Subassertion` to allow nested assertions on output values (e.g., asserting the duration of a timed operation). The `output()` interface enables extraction of computed metadata.
 - **Static `$description` and `$fallback`**: These are static on `Assertion` to allow Level 2 (plain boolean yields) to attach descriptions without requiring an `Assertion` object instance.
-- **`Specification` as a value object**: Each `.test.php` file returns `new Specification(...)` with named parameters. The base class (`ACI\Tests\Suite\Test\Specification`) handles config + test logic; E2E tests use a subclass (`WPI\...\Specification`) that adds `$request`, `$response`, and `$middlewares`. Metadata (`$case`, `$last`) is injected at runtime via `index()` with asymmetric visibility (`public private(set)`). Visual separators use the `Separator` value object instead of flat keys.
+- **`Test` as a value object**: Each `.Test.php` file returns `new Test(...)` with named parameters. The base class (`ACI\Tests\Suite\Test`) holds config + test logic and the `Tester` executes/reports it; E2E tests use a subclass (`WPI\...\Tests\Suite\Test`) that adds `$request`, `$response`, and `$middlewares`. Metadata (`$case`, `$last`) is injected at runtime via `index()` with asymmetric visibility (`public private(set)`). Visual separators use the `Separator` value object instead of flat keys.
 - **Snapshot abstraction**: `Snapshot` base class with `capture`/`restore` allows swappable storage backends (memory for speed, file for persistence) without changing assertion logic.

@@ -1,0 +1,26 @@
+<?php
+
+use Bootgly\ABI\Code\__String\Path;
+
+use Bootgly\ACI\Tests\Assertion\Expectations\Matchers\VariadicDirPath;
+use Bootgly\ACI\Tests\Assertion;
+use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Suite\Test;
+
+
+return new Test(
+   description: 'It should compare using the matcher "VariadicDirPath"',
+   test: new Assertions(Case: function (): Generator
+   {
+      // Path
+      $Path = new Path('/etc/php/');
+      $Path->match(path: '%', pattern: '8.*');
+      yield new Assertion(
+         description: 'Valid relative path',
+      )
+         ->assert(
+            actual: (string) $Path,
+            expected: new VariadicDirPath('/etc/php/8.*'),
+         );
+   })
+);

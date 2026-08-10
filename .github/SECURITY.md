@@ -51,7 +51,7 @@ benchmark hosts, CI) and social-engineering/physical attacks are always out of s
 
 Three holistic, adversarial audits have run against the network-facing surface. All three
 are closed — every finding is fixed and covered by a regression test in the corresponding
-test suite (`.../tests/Security/*.test.php`).
+test suite (`.../tests/Security/*.Test.php`).
 
 We publish audits only once their findings are remediated. An audit that is still being
 worked is not listed here, and its findings are not described publicly until they ship as

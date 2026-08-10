@@ -140,7 +140,7 @@ use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Process;
 use Bootgly\ACI\Tests\Fixture;
 use Bootgly\ACI\Tests\Suite;
-use Bootgly\ACI\Tests\Suite\Test\Specification;
+use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Endpoints\Server\Status;
 use Bootgly\API\Environments;
@@ -165,7 +165,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification as E2ESpecification;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test as E2ETest;
 
 
 class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
@@ -2423,7 +2423,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       $specs ??= BOOTGLY_ROOT_DIR . $classPath . '/tests/' . $testsDir;
 
       foreach ($selected as $index => $case) {
-         $file = "{$specs}/{$case}.test.php";
+         $file = "{$specs}/{$case}.Test.php";
          $Test_Case_File = new File($file);
          // ? Fail closed like Suite::autoboot() — a missing or invalid spec
          //   must abort the run, never silently shrink it (`_` = private spec)
@@ -2437,8 +2437,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
          $test = self::load($Test_Case_File);
          // ?
-         if ($test instanceof E2ESpecification === false) {
-            throw new Exception("Test case must return a Specification instance: \n {$file}");
+         if ($test instanceof E2ETest === false) {
+            throw new Exception("Test case must return a Test instance: \n {$file}");
          }
 
          $test->index(case: $index + 1);
@@ -2456,7 +2456,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
       $Suite->tests = SAPI::$tests[self::class];
    }
-   /** Load one test Specification in an isolated local variable scope. */
+   /** Load one Test in an isolated local variable scope. */
    private static function load (File $File): mixed
    {
       return require $File;
@@ -2586,24 +2586,24 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   $reconnect();
                }
 
-               /** @var Specification|null $test */
+               /** @var Test|null $test */
                $test = SAPI::$Tests[self::class][$specIndex] ?? null;
 
-               if ($test instanceof Specification) {
+               if ($test instanceof Test) {
                   $test->index(case: $test->case ?? ((int) $index + 1));
                }
                // @ Init Test
                $Suite->case = $test->case ?? ((int) $index + 1);
 
                $Test = $Suite->test($test);
-               if ($Test === null || !($test instanceof E2ESpecification)) {
+               if ($Test === null || !($test instanceof E2ETest)) {
                   $Suite->skip();
                   $specIndex++;
                   continue;
                }
 
                // @ Fixture lifecycle — early prepare() so request: closure can
-               //   read seeded state. Idempotent: base Test::pretest() will
+               //   read seeded state. Idempotent: base Tester::pretest() will
                //   call prepare() again later as a no-op.
                $test->Fixture?->prepare();
 

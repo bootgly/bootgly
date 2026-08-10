@@ -15,7 +15,7 @@ namespace Bootgly\ACI\Tests;
  * Hosts a Fixture slot on the consuming class.
  *
  * Reserved for classes that want to participate in fixture lifecycle without
- * extending Fixture directly (e.g. Specification, Suite extensions).
+ * extending Fixture directly (e.g. Test, Suite extensions).
  */
 trait Fixturable // @phpstan-ignore trait.unused
 {

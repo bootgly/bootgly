@@ -1,0 +1,44 @@
+<?php
+
+use Bootgly\ABI\Debugging\Data\Vars;
+use Bootgly\ACI\Tests\Suite\Test\Separator;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
+
+
+return new Test(
+   Separator: new Separator(header: '@send'),
+
+   request: function () {
+      // return $Request->get('//header/changed/1');
+      return "GET /test/content/json/1 HTTP/1.1\r\nHost: localhost\r\n\r\n";
+   },
+   response: function (Request $Request, Response $Response): Response {
+      return $Response->JSON->send(['Hello' => 'World!']); // JSON
+   },
+
+   test: function ($response) {
+      /*
+      return $Response->code === '500'
+      && $Response->body === ' ';
+      */
+
+      $expected = <<<HTML_RAW
+      HTTP/1.1 200 OK\r
+      Server: Bootgly\r
+      Content-Type: application/json\r
+      Content-Length: 18\r
+      \r
+      {"Hello":"World!"}
+      HTML_RAW;
+
+      if ($response !== $expected) {
+         Vars::$labels = ['HTTP Response:', 'Expected:'];
+         dump(json_encode($response), json_encode($expected));
+         return 'Response body is a valid JSON?';
+      }
+
+      return true;
+   }
+);

@@ -32,7 +32,7 @@ class Assertions
 {
    // * Config
    /**
-    * Fixture injected by the owning Specification/Test runner.
+    * Fixture injected by the owning Test/Tester runner.
     */
    public null|Fixture $Fixture = null;
    /**

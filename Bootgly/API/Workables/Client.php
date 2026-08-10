@@ -12,7 +12,7 @@ namespace Bootgly\API\Workables;
 
 
 use Bootgly\ACI\Tests\Suite;
-use Bootgly\ACI\Tests\Suite\Test\Specification;
+use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\API\Environments;
 
 
@@ -34,6 +34,6 @@ class Client
 
    // * Metadata
    // # Tests
-   /** @var array<string,array<int|string,Specification|null>> Test Cases instances (Specification objects) */
+   /** @var array<string,array<int|string,Test|null>> Test Cases instances (Test objects) */
    public static array $Tests = [];
 }

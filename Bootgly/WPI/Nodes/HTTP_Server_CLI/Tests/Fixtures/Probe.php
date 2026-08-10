@@ -23,7 +23,7 @@ use Bootgly\ACI\Tests\Fixture;
  *
  * Usage:
  *   $Probe = new Probe(['authorization' => null]);
- *   return new Specification(
+ *   return new Test(
  *      Fixture:  $Probe,
  *      request:  fn () => …$Probe->State->update('authorization', …)…,
  *      response: fn ($R, $W) use ($Probe) { … },

@@ -16,7 +16,7 @@ use function opcache_invalidate;
 use Closure;
 
 use Bootgly\ACI\Tests\Suite;
-use Bootgly\ACI\Tests\Suite\Test\Specification;
+use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\API\Environments;
 use Bootgly\API\Workables\Server\Handling;
 use Bootgly\API\Workables\Server\Middleware;
@@ -45,7 +45,7 @@ class Server
    // # Tests
    /**
     * Test Cases instances
-    * @var array<string,array<int|string,Specification|Closure|null>>
+    * @var array<string,array<int|string,Test|Closure|null>>
     */
    public static array $Tests;
 

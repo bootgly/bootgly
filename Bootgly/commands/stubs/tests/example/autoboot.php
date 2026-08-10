@@ -12,8 +12,8 @@ use Bootgly\ACI\Tests\Suite;
 
 // Example suite — a running tour of the Bootgly test API.
 //
-// A Suite lists its test files (below, without the `.test.php` extension);
-// each file returns a Specification with the actual assertions. Remove this
+// A Suite lists its test files (below, without the `.Test.php` extension);
+// each file returns a Test with the actual assertions. Remove this
 // example (and its registry entry in `tests/autoboot.php`) when your own
 // suites take over.
 //

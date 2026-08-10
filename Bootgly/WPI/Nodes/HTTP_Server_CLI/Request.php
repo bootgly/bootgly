@@ -837,7 +837,7 @@ class Request
       //   this Request (e.g. `$Request->Body->raw = ...`) do NOT contaminate
       //   the Decoder_ L1 cache template and bleed into future connections
       //   that send byte-identical headers.
-      //   See tests/Security/08.01-decoder_cache_shallow_clone_subobject_bleed.test.php
+      //   See tests/Security/08.01-decoder_cache_shallow_clone_subobject_bleed.Test.php
       $this->Body = clone $this->Body;
       $this->Header = clone $this->Header;
    }

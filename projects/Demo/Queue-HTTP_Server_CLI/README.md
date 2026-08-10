@@ -16,7 +16,7 @@ HTTP request ──► route handler ──► Queues::dispatch(SendEmail, paylo
 
 | File | Role |
 |---|---|
-| `Queue-HTTP_Server_CLI.project.php` | boots `HTTP_Server_CLI`, registers the router, configures the queue (`Queues::boot`) |
+| `Queue-HTTP_Server_CLI.Project.php` | boots `HTTP_Server_CLI`, registers the router, configures the queue (`Queues::boot`) |
 | `router/Queue.SAPI.php` | routes — `/email/:to` enqueues a job and responds immediately |
 | `SendEmail.php` | the `Queues\Handler` that runs in the worker (logs proof of work) |
 | `queues.php` | worker config + **handler loading** (the worker `require`s it) |

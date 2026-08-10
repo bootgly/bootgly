@@ -23,7 +23,7 @@ use Bootgly\ACI\Tests\Fixture\State;
  * Lifecycle is idempotent: prepare()/dispose() are guarded unless the fixture
  * is in the matching prerequisite phase. A disposed fixture can be prepared
  * again; it is reset to the seed first. Test runners may call prepare()
- * earlier than ACI\Tests\Suite\Test::pretest() (e.g. WPI E2E runners that
+ * earlier than ACI\Tests\Suite\Tester::pretest() (e.g. WPI E2E runners that
  * need state ready before the request closure runs); the second call from
  * the base runner becomes a guarded no-op.
  *

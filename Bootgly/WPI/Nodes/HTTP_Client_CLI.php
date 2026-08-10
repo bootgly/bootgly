@@ -62,7 +62,7 @@ use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Suite;
-use Bootgly\ACI\Tests\Suite\Test\Specification;
+use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\API\Workables\Client as CAPI;
 use Bootgly\WPI\Event;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI;
@@ -79,7 +79,7 @@ use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response\Decoders\Decoder_;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response\Decoders\Decoder_Chunked;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Session;
-use Bootgly\WPI\Nodes\HTTP_Client_CLI\Tests\Suite\Test\Specification as E2ESpecification;
+use Bootgly\WPI\Nodes\HTTP_Client_CLI\Tests\Suite\Test as E2ETest;
 
 
 class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
@@ -2200,7 +2200,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $classPath = str_replace('\\', '/', __CLASS__);
 
       foreach ($selected as $index => $case) {
-         $file = BOOTGLY_ROOT_DIR . $classPath . '/tests/' . $testsDir . '/' . $case . '.test.php';
+         $file = BOOTGLY_ROOT_DIR . $classPath . '/tests/' . $testsDir . '/' . $case . '.Test.php';
          $Test_Case_File = new File($file);
          // ? Fail closed like Suite::autoboot() — a missing or invalid spec
          //   must abort the run, never silently shrink it (`_` = private spec)
@@ -2214,8 +2214,8 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
          $test = require $Test_Case_File;
          // ?
-         if ($test instanceof E2ESpecification === false) {
-            throw new Exception("Test case must return a Specification instance: \n {$file}");
+         if ($test instanceof E2ETest === false) {
+            throw new Exception("Test case must return a Test instance: \n {$file}");
          }
 
          $test->index(case: $index + 1);
@@ -2323,7 +2323,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                }
 
                // @ Get response for this request
-               /** @var E2ESpecification|null $spec */
+               /** @var E2ETest|null $spec */
                $spec = CAPI::$Tests[self::class][$specIndex] ?? null;
 
                if ($spec === null) {
@@ -2361,7 +2361,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
                // ?: Keep the connection open while a keep-alive spec still has
                //    responses queued for it
-               $serve = $spec instanceof E2ESpecification
+               $serve = $spec instanceof E2ETest
                   && $spec->keepAlive
                   && $requestIndex > 0;
             }
@@ -2432,10 +2432,10 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       // Each request completes before the next starts, keeping
       // client and mock server in lock-step order.
       foreach ($testFiles as $index => $value) {
-         /** @var E2ESpecification|null $spec */
+         /** @var E2ETest|null $spec */
          $spec = CAPI::$Tests[self::class][$specIndex] ?? null;
 
-         if (!($spec instanceof E2ESpecification)) {
+         if (!($spec instanceof E2ETest)) {
             $specIndex++;
             continue;
          }
@@ -2458,7 +2458,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          $specIndex++;
 
          // @ Assert results
-         if ($spec instanceof Specification) { // @phpstan-ignore instanceof.alwaysTrue
+         if ($spec instanceof Test) { // @phpstan-ignore instanceof.alwaysTrue
             $spec->index(case: $spec->case ?? ((int) $index + 1));
          }
 

@@ -295,7 +295,7 @@ class Decoder_ extends Decoders
          //   member from the template and scrubs all per-request state
          //   unconditionally — no state survives between requests on the
          //   same connection.
-         //   See tests/Security/03.01-decoder_cache_shared_request_across_connections.test.php
+         //   See tests/Security/03.01-decoder_cache_shared_request_across_connections.Test.php
          /** @var Request $Request */
          $Request = $Package->decoded ??= new Request;
          $Request->assume($Template, $Package->Connection);

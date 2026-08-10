@@ -52,7 +52,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
  *
  * Database access goes through the canonical `$Response->Database` response
  * resource (registered in the project bootstrap with `Database::provide()`,
- * configured by `configs/database/database.config.php` + `DB_*` env vars) —
+ * configured by `configs/database/database.Config.php` + `DB_*` env vars) —
  * the same code API documented for users.
  *
  * Bootgly-specific stress routes (catch-all, nested, middleware, the

@@ -1,0 +1,40 @@
+<?php
+
+use Bootgly\ABI\Templates\Template;
+use Bootgly\ACI\Tests\Suite\Test;
+
+
+return new Test(
+   description: 'It should render simple switch',
+   test: function () {
+      // @ Valid
+      $Template11 = new Template(
+         <<<'TEMPLATE'
+         @switch $bootglyIs:
+            @case 'foo':
+               @break;
+            @case 'cool':
+               @> 'Bootgly Template is cool!';
+               @break;
+            @default:
+               @> '...';
+         @switch;
+         TEMPLATE
+      );
+      $Template11->render([
+         'bootglyIs' => 'cool',
+      ]);
+      yield assert(
+         assertion: $Template11->output === <<<OUTPUT
+         Bootgly Template is cool!
+         OUTPUT,
+         description: "Template: output does not match: \n`" . $Template11->output . '`'
+      );
+
+      // @ Neutral
+      // ...
+
+      // @ Invalid
+      // ...
+   }
+);

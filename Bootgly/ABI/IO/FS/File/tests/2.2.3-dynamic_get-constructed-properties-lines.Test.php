@@ -1,0 +1,31 @@
+<?php
+
+use Bootgly\ABI\IO\FS\File;
+use Bootgly\ACI\Tests\Suite\Test;
+
+
+return new Test(
+   description: '',
+   test: function () {
+      // @ Valid
+      $File1 = new File(__DIR__ . '/1.1-construct-real_file.Test.php');
+      yield assert(
+         assertion: $File1->lines === 24,
+         description: 'Invalid File #1 lines count: ' . $File1->lines
+      );
+
+      // @ Neutral
+      $File2 = new File('');
+      yield assert(
+         assertion: $File2->lines === null,
+         description: 'File #2 lines: ' . $File2->lines
+      );
+
+      // @ Invalid
+      $File3 = new File(__DIR__ . '/1.1.3-fake.Test.php');
+      yield assert(
+         assertion: $File3->lines === null,
+         description: 'File #3 lines should be null!'
+      );
+   }
+);

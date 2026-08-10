@@ -1,0 +1,33 @@
+<?php
+
+use Bootgly\ABI\IO\FS\File;
+use Bootgly\ACI\Tests\Suite\Test;
+
+
+return new Test(
+   description: '',
+   test: function () {
+      // @ Valid
+      $File1 = new File(__DIR__ . '/1.1-construct-real_file.Test.php');
+      yield assert(
+         assertion: $File1->extension === 'php',
+         description: 'File #1 extension: ' . $File1->extension
+      );
+
+      $File2 = new File(__DIR__ . '/1.1.3-fake.Test.php');
+      yield assert(
+         assertion: $File2->extension === 'php',
+         description: 'File #2 (fake) extension: ' . $File2->extension
+      );
+
+      // @ Neutral
+      $File3 = new File('');
+      yield assert(
+         assertion: $File3->extension === false,
+         description: 'File #3 extension should be false!'
+      );
+
+      // @ Invalid
+      // ...
+   }
+);
