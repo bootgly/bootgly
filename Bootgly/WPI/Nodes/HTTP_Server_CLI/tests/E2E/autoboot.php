@@ -271,6 +271,10 @@ return new Suite(
          // @ HTTP niceties hardening
          '2.15-hint_route_cache_http10_guard',
          '2.16-code_1xx_rejected',
+         // @ end() preset (RES-1 — appended last to keep the X-Bootgly-Test
+         //   indices of the specs above stable)
+         '1.2.2-end_preserves_status_and_headers',
+         '1.z.2.3.7-upload_file_with_malformed_range',
       ],
       'Router/' => [
          '1.1-route_callback-closure',

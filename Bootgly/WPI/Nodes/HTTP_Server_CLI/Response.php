@@ -895,7 +895,9 @@ class Response extends Server\Response
          $ranges = WPI->Request->range($size, $Range, combine: true);
 
          switch ($ranges) {
-            case -2: // Malformed Range header string
+            case -2: // Malformed Range header string (no `=`) — rejected
+               //   with a real 400: RFC 9110 §14.2 allows ignore or reject,
+               //   and 416 would presuppose a parseable ranges-specifier.
                $this->end(400);
                return $this;
             case -1:
@@ -1597,7 +1599,6 @@ class Response extends Server\Response
       if ($code) {
          // @ Preset
          switch ($code) {
-            case 400: // Bad Request
             case 416: // Range Not Satisfiable
                $this->code(416);
                // Clean prepared headers / header fields already set
