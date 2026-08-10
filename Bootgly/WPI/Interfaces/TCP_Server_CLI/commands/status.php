@@ -39,6 +39,12 @@ return new class extends Command
    private static int $stat = -1;
    /** @var array<int,int> */
    private static array $stats = [];
+   /**
+    * PID that owned each worker index when its CPU sample was taken.
+    *
+    * @var array<int,int>
+    */
+   private static array $owners = [];
 
 
    public function run (array $arguments = [], array $options = []): bool
@@ -53,10 +59,11 @@ return new class extends Command
       // * Metadata
       $stat = &self::$stat;
       $stats = &self::$stats;
+      $owners = &self::$owners;
 
       // @
       $context(function ()
-      use (&$stat, &$stats) {
+      use (&$stat, &$stats, &$owners) {
          /** @var Server $Server */
          $Server = $this; // @phpstan-ignore-line
 
@@ -157,19 +164,25 @@ return new class extends Command
          $Fieldset2->content = PHP_EOL;
    
          // TODO use only Progress\Bar
-         $Progress = [];
-         $Progress[0] = new Progress($Output);
+         // ! One configured template, cloned per worker inside the loop. It must
+         //   NOT be an array keyed by the `PIDs` key: `Process::recover()` unsets
+         //   the dead index and `revive()` re-pushes it, which APPENDS to the
+         //   ordered hash — so after one crash+refork a 2-worker master iterates
+         //   as [1,0] and any `$Progress[$i]` lookup throws `Undefined array key`,
+         //   which `Errors::collect()` escalates into a fatal that takes the whole
+         //   server down from a read-only command.
+         $Template = new Progress($Output);
          // * Config
-         $Progress[0]->throttle = 0.0;
-         $Progress[0]->Precision->percent = 0;
+         $Template->throttle = 0.0;
+         $Template->Precision->percent = 0;
          // @ render
-         $Progress[0]->render = Progress::RETURN_OUTPUT;
+         $Template->render = Progress::RETURN_OUTPUT;
          // * Data
-         $Progress[0]->total = 100;
+         $Template->total = 100;
          // ! Templating
-         $Progress[0]->template = "[@bar;] @percent;%\n";
+         $Template->template = "[@bar;] @percent;%\n";
          // _ Bar
-         $Bar = $Progress[0]->Bar;
+         $Bar = $Template->Bar;
          // * Config
          $Bar->units = 50;
          // * Data
@@ -187,6 +200,17 @@ return new class extends Command
             if ( is_dir($procPath) ) {
                $process_stat = file_get_contents("$procPath/stat") ?: '';
                $process_stats = explode(' ', $process_stat);
+
+               // ? A reforked worker reuses its index with a fresh PID, and its
+               //   /proc counters restart at zero — keeping the dead worker's
+               //   sample would make the first delta after a refork nonsense.
+               //   Both slots are seeded from this same read (never unset, or the
+               //   `case 0`/`case 1` arms below would leave one of them missing),
+               //   so the first delta for a new worker is exactly zero.
+               if (($owners[$i] ?? null) !== $PID) {
+                  $owners[$i] = $PID;
+                  $stats[$i] = [$process_stats, $process_stats]; // @phpstan-ignore-line
+               }
 
                $stats[$i] ??= [];
 
@@ -218,15 +242,13 @@ return new class extends Command
                $workerLoad = (int) abs($userDiff + $sysDiff);
 
                // @ Output
-               $Progress[$i]->start();
-               $Progress[$i]->advance($workerLoad);
-   
-               $CPU_usage = $Progress[$i]->output;
-   
+               $Progress = clone $Template;
+               $Progress->start();
+               $Progress->advance($workerLoad);
+
+               $CPU_usage = $Progress->output;
+
                $Fieldset2->content .= " Worker #{$id}: {$CPU_usage}";
-   
-               // new Progress
-               $Progress[$i + 1] = clone $Progress[0];
             }
             else {
                $Fieldset2->content .= <<<OUTPUT

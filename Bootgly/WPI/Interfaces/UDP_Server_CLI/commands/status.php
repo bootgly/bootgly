@@ -39,6 +39,12 @@ return new class extends Command
    private static int $stat = -1;
    /** @var array<int,int> */
    private static array $stats = [];
+   /**
+    * PID that owned each worker index when its CPU sample was taken.
+    *
+    * @var array<int,int>
+    */
+   private static array $owners = [];
 
 
    public function run (array $arguments = [], array $options = []): bool
@@ -53,10 +59,11 @@ return new class extends Command
       // * Metadata
       $stat = &self::$stat;
       $stats = &self::$stats;
+      $owners = &self::$owners;
 
       // @
       $context(function ()
-      use (&$stat, &$stats) {
+      use (&$stat, &$stats, &$owners) {
          /** @var Server $Server */
          $Server = $this; // @phpstan-ignore-line
 
@@ -146,14 +153,17 @@ return new class extends Command
          $Fieldset2->title = '@#Black: Workers Load (CPU usage) @;';
          $Fieldset2->content = PHP_EOL;
 
-         $Progress = [];
-         $Progress[0] = new Progress($Output);
-         $Progress[0]->throttle = 0.0;
-         $Progress[0]->Precision->percent = 0;
-         $Progress[0]->render = Progress::RETURN_OUTPUT;
-         $Progress[0]->total = 100;
-         $Progress[0]->template = "[@bar;] @percent;%\n";
-         $Bar = $Progress[0]->Bar;
+         // ! One configured template, cloned per worker inside the loop. Keying
+         //   a render object by the `PIDs` key breaks after a crash+refork:
+         //   `recover()` unsets the dead index and `revive()` re-pushes it, so
+         //   the hash iterates [1,0] and `$Progress[$i]` throws.
+         $Template = new Progress($Output);
+         $Template->throttle = 0.0;
+         $Template->Precision->percent = 0;
+         $Template->render = Progress::RETURN_OUTPUT;
+         $Template->total = 100;
+         $Template->template = "[@bar;] @percent;%\n";
+         $Bar = $Template->Bar;
          $Bar->units = 50;
          $Bar->Symbols->incomplete = '▁';
          $Bar->Symbols->current = '';
@@ -167,6 +177,15 @@ return new class extends Command
             if ( is_dir($procPath) ) {
                $process_stat = file_get_contents("$procPath/stat") ?: '';
                $process_stats = explode(' ', $process_stat);
+
+               // ? A reforked worker reuses its index with a fresh PID and its
+               //   /proc counters restart at zero. Seed both slots from this
+               //   read (never unset — the `case` arms below fill only one), so
+               //   the first delta for a new worker is exactly zero.
+               if (($owners[$i] ?? null) !== $PID) {
+                  $owners[$i] = $PID;
+                  $stats[$i] = [$process_stats, $process_stats]; // @phpstan-ignore-line
+               }
 
                $stats[$i] ??= [];
 
@@ -193,14 +212,13 @@ return new class extends Command
 
                $workerLoad = (int) abs($userDiff + $sysDiff);
 
-               $Progress[$i]->start();
-               $Progress[$i]->advance($workerLoad);
+               $Progress = clone $Template;
+               $Progress->start();
+               $Progress->advance($workerLoad);
 
-               $CPU_usage = $Progress[$i]->output;
+               $CPU_usage = $Progress->output;
 
                $Fieldset2->content .= " Worker #{$id}: {$CPU_usage}";
-
-               $Progress[$i + 1] = clone $Progress[0];
             }
             else {
                $Fieldset2->content .= <<<OUTPUT
