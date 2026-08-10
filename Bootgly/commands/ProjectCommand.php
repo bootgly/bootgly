@@ -1044,7 +1044,14 @@ class ProjectCommand extends Command
             $instance,
             $PIDs['master'],
          );
-         $status = $masterAlive ? '@#green:running@;' : '@#red:stopped@;';
+         // ? The state document's `status` is discovery data — trust it only
+         //   over an authenticated (live) master. A paused server is alive and
+         //   holds its lock, so without this it would print as plain running.
+         $status = match (true) {
+            $masterAlive === false => '@#red:stopped@;',
+            ($PIDs['status'] ?? '') === 'Paused' => '@#yellow:paused@;',
+            default => '@#green:running@;'
+         };
 
          // @ locate() already retained only workers authenticated as direct
          //   children holding this exact qualified instance lock.
@@ -2738,7 +2745,7 @@ class ProjectCommand extends Command
     * @param string $projectName
     * @param null|string $instance Optional instance qualifier — the bound port (e.g. '8080').
     *
-    * @return null|array{master:int,workers:array<int>,started:int,type:string,host?:string,port?:int,AutoTLS?:array<string,mixed>}
+    * @return null|array{master:int,workers:array<int>,started:int,status?:string,type:string,host?:string,port?:int,AutoTLS?:array<string,mixed>}
     */
    private function locate (string $projectName, null|string $instance = null): null|array
    {
@@ -2812,7 +2819,7 @@ class ProjectCommand extends Command
          }
       }
 
-      /** @var array{master:int,workers:array<int>,started:int,type:string,host?:string,port?:int,AutoTLS?:array<string,mixed>} $data */
+      /** @var array{master:int,workers:array<int>,started:int,status?:string,type:string,host?:string,port?:int,AutoTLS?:array<string,mixed>} $data */
       return $data;
    }
 
@@ -2855,7 +2862,7 @@ class ProjectCommand extends Command
     *
     * @param string $projectName
     *
-    * @return array<string, array{master:int,workers:array<int>,started:int,type:string,host?:string,port?:int,AutoTLS?:array<string,mixed>}>
+    * @return array<string, array{master:int,workers:array<int>,started:int,status?:string,type:string,host?:string,port?:int,AutoTLS?:array<string,mixed>}>
     *         Keys are instance qualifiers ('' for legacy unqualified files, the bound port otherwise)
     */
    private function scan (string $projectName): array
