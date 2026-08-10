@@ -11,7 +11,7 @@
 /**
  * Router index — the manifest read by `Router::load()`.
  *
- * Returns the active route set names. Each name resolves to `routes/<Name>.php`
+ * Returns the active route set names. Each name resolves to `routes/<Name>.routes.php`
  * (a generator-closure `(Request, Response, Router): Generator`). List more than one to
  * compose several sets into a single handler. Comment / uncomment to toggle.
  */

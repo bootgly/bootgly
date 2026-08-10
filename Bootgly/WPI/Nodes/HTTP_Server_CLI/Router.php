@@ -116,7 +116,7 @@ class Router
     * Load the router from its folder and return the request handler.
     *
     * Reads the router index (`router.index.php`) inside `$path` — a manifest of route set
-    * names. Each name resolves to `routes/<Name>.php`, a generator-closure
+    * names. Each name resolves to `routes/<Name>.routes.php`, a generator-closure
     * `(Request, Response, Router): Generator`. A single set is returned directly; multiple
     * sets are composed (`yield from` each) into one handler. Pass the result to
     * `->on(Events::RequestReceived, ...)`.
@@ -153,10 +153,10 @@ class Router
             throw new InvalidArgumentException('router.index.php must return an array of route set name strings.');
          }
 
-         $Set = new File("$path/routes/$name.php");
+         $Set = new File("$path/routes/$name.routes.php");
          // ? Set file must exist
          if ($Set->exists === false) {
-            throw new InvalidArgumentException("Route set not found: $path/routes/$name.php");
+            throw new InvalidArgumentException("Route set not found: $path/routes/$name.routes.php");
          }
          $Handler = require $Set->file;
          // ? Set must be a generator-closure

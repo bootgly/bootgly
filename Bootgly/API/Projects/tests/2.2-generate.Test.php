@@ -68,7 +68,7 @@ return new Test(
          assertion: $done === true
             && is_file("{$base}App/Web/Web.Project.php") === true
             && is_file("{$base}App/Web/router/router.index.php") === true
-            && is_file("{$base}App/Web/router/routes/Welcome.php") === true,
+            && is_file("{$base}App/Web/router/routes/Welcome.routes.php") === true,
          description: 'generates a WPI project with its router'
       );
 
