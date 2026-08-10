@@ -191,5 +191,8 @@ return new Suites(
       // # Dual-stack listener (host '[::]') — IPv4-mapped peer canonicalization
       //   (appended last to keep every suite index above stable)
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/E2E_DualStack/',
+      // # UDP client one-shot datagram writer (UDP-1)
+      //   (appended last to keep every suite index above stable)
+      'Bootgly/WPI/Interfaces/UDP_Client_CLI/tests/',
    ]
 );

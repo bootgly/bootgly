@@ -115,9 +115,13 @@ class Packages implements WPI\Connections\Packages
       return false;
    }
    /**
-    * Send a datagram to the server.
+    * Send the queued datagram to the server.
     *
-    * Datagrams are atomic — no partial-write retry loop.
+    * The output buffer is authoritative and datagrams are atomic: a
+    * successful send consumes the whole buffer and drops the EVENT_WRITE
+    * registration — arm it AFTER queueing `output`; one arm delivers one
+    * datagram. A failed send keeps buffer and registration, so the next
+    * write-ready wakeup retries.
     *
     * @param resource $Socket
     * @param null|int<0, max> $length
@@ -127,6 +131,22 @@ class Packages implements WPI\Connections\Packages
    public function writing (&$Socket, null|int $length = null): bool
    {
       $buffer = $this->output;
+
+      // ? Nothing queued — a spurious write-ready wakeup delivers nothing.
+      //   Drop the stale registration: the reactor is level-triggered and a
+      //   datagram socket is essentially always writable, so keeping it
+      //   would redispatch this no-op forever.
+      if ($buffer === '') {
+         if ( isSet(Client::$Event) ) {
+            try {
+               Client::$Event->del($Socket, Client::$Event::EVENT_WRITE);
+            }
+            catch (Throwable) {}
+         }
+
+         return true;
+      }
+
       $expected = strlen($buffer);
 
       try {
@@ -138,7 +158,7 @@ class Packages implements WPI\Connections\Packages
          $sent = false;
       }
 
-      // @ Check issues
+      // ? Failed — buffer and registration stay untouched for the retry.
       if ($sent === false || $sent < 0) {
          return $this->fail($Socket, 'write', $sent);
       }
@@ -150,15 +170,26 @@ class Packages implements WPI\Connections\Packages
          );
       }
 
+      // @ Consume the datagram — atomic; the buffer never re-sends.
+      $this->output = '';
+      $this->written = $sent;
+
       // @ Set Stats
       if (Connections::$stats) {
          // Global
          Connections::$writes++;
          Connections::$written += $sent;
          // Per client
-         if ( isSet(Connections::$Connections[(int) $Socket]) ) {
-            Connections::$Connections[(int) $Socket]->writes++;
+         $this->Connection->writes++;
+      }
+
+      // ? One datagram per arm: drop the registration BEFORE the hook so a
+      //   hook that re-arms is not silently disarmed right after.
+      if ( isSet(Client::$Event) ) {
+         try {
+            Client::$Event->del($Socket, Client::$Event::EVENT_WRITE);
          }
+         catch (Throwable) {}
       }
 
       // # Hook

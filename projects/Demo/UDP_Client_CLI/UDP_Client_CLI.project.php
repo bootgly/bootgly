@@ -52,13 +52,17 @@ return new Project(
             UDP_Client_CLI::$Event->add($Socket, UDP_Client_CLI::$Event::EVENT_WRITE, $Connection);
          })
          ->on(Events::ClientDisconnect, function ($Connection) use ($UDP_Client_CLI) {
-            $UDP_Client_CLI->log(
-               'Connection #' . $Connection->id . ' (' . $Connection->address . ':' . $Connection->port . ')'
-               . ' from Worker with PID @_:' . $UDP_Client_CLI->Process->id . '_@ was closed! @\;'
+            $UDP_Client_CLI->Logger->log(
+               info: "Connection #{$Connection->id} ({$Connection->address}:{$Connection->port})"
+               . " from Worker with PID {$UDP_Client_CLI->Process->id} was closed!" . PHP_EOL
             );
          })
-         ->on(Events::DatagramWrite, function ($Socket, $Connection) {
-            UDP_Client_CLI::$Event->add($Socket, UDP_Client_CLI::$Event::EVENT_WRITE, $Connection);
+         ->on(Events::DatagramWrite, function ($Socket, $Connection) use ($UDP_Client_CLI) {
+            // The EVENT_WRITE registration is one-shot: it was already
+            // dropped — re-arm only after queueing a new `output`.
+            $UDP_Client_CLI->Logger->log(
+               info: "Sent {$Connection->written} bytes." . PHP_EOL
+            );
          });
 
       $UDP_Client_CLI->start();
