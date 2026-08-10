@@ -44,6 +44,10 @@ class Connection extends Packages
    public int $used;
    // @ Stats
    public int $writes;
+   // Last `writes` value observed by `expire()` (activity detection)
+   protected int $expiredWrites;
+   // Last `writes` value observed by `limit()` (rate window baseline)
+   protected int $limitedWrites;
 
 
    /**
@@ -72,6 +76,8 @@ class Connection extends Packages
       $this->used = time();
       // @ Stats
       $this->writes = 0;
+      $this->expiredWrites = 0;
+      $this->limitedWrites = 0;
 
 
       parent::__construct($this);
@@ -104,21 +110,17 @@ class Connection extends Packages
          return true;
       }
 
-      static $writes = 0;
-
-      if ($writes < $this->writes) {
-         $this->used = time();
-      }
-      if ($writes > $this->writes) {
-         $writes = $this->writes;
+      // ! Per-instance snapshot (was a per-method `static` shared by every
+      //   Connection in the worker — one busy peer masked the idleness of
+      //   all others and no peer was ever reclaimed).
+      if ($this->expiredWrites !== $this->writes) {
+         $this->expiredWrites = $this->writes;
          $this->used = time();
       }
 
       if ((time() - $this->used) >= $timeout) {
          return $this->close();
       }
-
-      $writes = $this->writes;
 
       return false;
    }
@@ -128,14 +130,14 @@ class Connection extends Packages
          return true;
       }
 
-      static $writes = 0;
-
-      if (($this->writes - $writes) >= $packages) {
+      // ! Per-instance window baseline (was a per-method `static` shared by
+      //   every Connection — the delta measured one peer against another).
+      if (($this->writes - $this->limitedWrites) >= $packages) {
          Connections::$blacklist[$this->ip] = true;
          return $this->close();
       }
 
-      $writes = $this->writes;
+      $this->limitedWrites = $this->writes;
 
       return false;
    }
