@@ -18,7 +18,9 @@ enum Status : int {
 
    case Running = 4;
 
-   case Pausing = 5;
+   // ! `5` was `Pausing`, removed as never-assigned — pause() jumps straight
+   //   from Running to Paused. The remaining values stay put: out-of-tree
+   //   consumers persisting the int backing must never be silently remapped.
    case Paused = 6;
 
    case Stopping = 7;

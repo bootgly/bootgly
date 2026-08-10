@@ -22,7 +22,6 @@ return new Specification(
       $States = [
          Status::Starting,
          Status::Running,
-         Status::Pausing,
          Status::Paused,
          Status::Stopping
       ];
