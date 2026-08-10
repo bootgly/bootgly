@@ -18,6 +18,7 @@ use function substr;
 use const Bootgly\CLI;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI;
+use Bootgly\WPI\Connections\Peer;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections\Connection;
 
@@ -132,8 +133,8 @@ class Connections implements WPI\Connections
    }
 
    /**
-    * Resolve a peer address to its Connection, creating one if the peer
-    * is new. Called by the Router on every inbound datagram.
+    * Resolve a peer address to its Connection, admitting and creating one
+    * if the peer is new. Called by the Router on every inbound datagram.
     */
    public function accept (string $peer): null|Connection
    {
@@ -141,12 +142,17 @@ class Connections implements WPI\Connections
          return self::$Connections[$peer];
       }
 
-      $Connection = new Connection($this->Server->Socket, $peer);
-
-      if ( $Connection->check() === false ) {
+      // ? Admission before allocation — a rejected peer must not construct
+      //   a Connection: its persistent expire() task in the static
+      //   Timer::$tasks map would outlive the rejection and retain the
+      //   object.
+      [$ip] = Peer::parse($peer);
+      if ( isSet(self::$blacklist[$ip]) ) {
          self::$errors['connection']++;
          return null;
       }
+
+      $Connection = new Connection($this->Server->Socket, $peer);
 
       $this->connections++;
       self::$Connections[$peer] = $Connection;

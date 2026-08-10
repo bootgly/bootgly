@@ -50,7 +50,7 @@ class Connection extends Packages
     * @param resource $Socket Shared UDP server socket.
     * @param string $peer "ip:port" peer address (IPv4 or "[ip]:port" for IPv6).
     */
-   public function __construct (&$Socket, string $peer)
+   public function __construct ($Socket, string $peer)
    {
       $this->Socket = $Socket;
 

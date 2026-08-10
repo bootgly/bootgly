@@ -15,6 +15,8 @@ return new Suite(
    // * Data
    tests: [
       '1.1-connection_close_timer_release',
-      '1.2-console'
+      '1.2-console',
+      // # Peer admission before allocation (UDP-2)
+      '1.3-accept_admission'
    ]
 );
