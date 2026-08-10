@@ -365,7 +365,7 @@ abstract class Projects
     * Import a project available on disk into the consumer projects directory.
     *
     * The source directory must carry the Bootgly project signature — a
-    * `*.project.php` file at its root. The project is copied, its signature
+    * `*.Project.php` file at its root. The project is copied, its signature
     * file is renamed to the new leaf and the path is registered in the
     * registry allow-list. The imported content is kept as-is.
     *
@@ -382,15 +382,15 @@ abstract class Projects
       $source = rtrim($source, '/');
       $base ??= self::CONSUMER_DIR;
 
-      // ? Source must be a Bootgly project (signature: `*.project.php` at its root)
+      // ? Source must be a Bootgly project (signature: `*.Project.php` at its root)
       if (is_dir($source) === false) {
          return false;
       }
-      $signatures = glob("{$source}/*.project.php");
+      $signatures = glob("{$source}/*.Project.php");
       if ($signatures === false || $signatures === []) {
          return false;
       }
-      $leaf = basename($signatures[0], '.project.php');
+      $leaf = basename($signatures[0], '.Project.php');
 
       // ? Target path-safety + collision
       if (self::check($path) === false) {
@@ -410,9 +410,9 @@ abstract class Projects
 
       // @ Rename the signature file to the new leaf
       $newLeaf = basename($path);
-      $file = "{$target}/{$newLeaf}.project.php";
+      $file = "{$target}/{$newLeaf}.Project.php";
       if ($leaf !== $newLeaf) {
-         rename("{$target}/{$leaf}.project.php", $file);
+         rename("{$target}/{$leaf}.Project.php", $file);
 
          // @ Best-effort: rename old leaf references inside the project file
          $content = file_get_contents($file);

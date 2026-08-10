@@ -121,7 +121,7 @@ class Router
     * sets are composed (`yield from` each) into one handler. Pass the result to
     * `->on(Events::RequestReceived, ...)`.
     *
-    * The folder is the router home — reserved for future `router.config.php` defaults.
+    * The folder is the router home — reserved for future `router.Config.php` defaults.
     *
     * @param string $path The router folder path.
     */
@@ -130,8 +130,8 @@ class Router
       // ? Normalize router folder path
       $path = rtrim($path, '/');
 
-      // @ (future) router.config.php — customize Router defaults
-      //   $Config = new File("$path/router.config.php"); apply if present.
+      // @ (future) router.Config.php — customize Router defaults
+      //   $Config = new File("$path/router.Config.php"); apply if present.
 
       // @ Read router index (manifest of route set names)
       $Index = new File("$path/router.index.php");

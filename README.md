@@ -146,7 +146,7 @@ Create more projects anytime — from scratch or importing a platform project (l
 php bootgly project create
 ```
 
-Or import any Project from Platforms or git repository carrying the Bootgly project signature (a `*.project.php` file at its root):
+Or import any Project from Platforms or git repository carrying the Bootgly project signature (a `*.Project.php` file at its root):
 
 ```bash
 php bootgly project import

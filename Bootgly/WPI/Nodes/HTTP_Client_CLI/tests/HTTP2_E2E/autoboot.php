@@ -25,7 +25,7 @@ return new Suite(
 
       // @ A project context is required for the process state lock.
       if ( ! defined('BOOTGLY_PROJECT') ) {
-         $projectFile = BOOTGLY_ROOT_DIR . 'projects/Demo/HTTP_Server_CLI/HTTP_Server_CLI.project.php';
+         $projectFile = BOOTGLY_ROOT_DIR . 'projects/Demo/HTTP_Server_CLI/HTTP_Server_CLI.Project.php';
          $TestProject = require $projectFile;
          define('BOOTGLY_PROJECT', $TestProject);
       }

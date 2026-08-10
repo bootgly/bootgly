@@ -133,7 +133,7 @@ class ProjectCommand extends Command
       'import' => [
          'description' => 'Import a project from a git repository URL',
          'arguments'   => [
-            '<url>'  => 'Repository URL with a *.project.php signature at its root',
+            '<url>'  => 'Repository URL with a *.Project.php signature at its root',
             '[name]' => 'Project path to import as (defaults to the repository name)'
          ]
       ],
@@ -420,7 +420,7 @@ class ProjectCommand extends Command
     * Import projects — from the Platforms or from a git repository URL.
     *
     * With a URL argument, imports the repository directly (it must carry the
-    * Bootgly project signature — a `*.project.php` file at its root). Without
+    * Bootgly project signature — a `*.Project.php` file at its root). Without
     * one, interactive terminals choose the import source: the Platforms
     * (pick, confirm, transfer) or a Git remote (asks the URL).
     *
@@ -594,10 +594,10 @@ class ProjectCommand extends Command
       }
 
       // ? Bootgly project signature
-      if ((glob("{$tmp}/*.project.php") ?: []) === []) {
+      if ((glob("{$tmp}/*.Project.php") ?: []) === []) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = 'Not a Bootgly project: no @#cyan:*.project.php@; signature file at the repository root.';
+         $Alert->message = 'Not a Bootgly project: no @#cyan:*.Project.php@; signature file at the repository root.';
          $Alert->render();
 
          $this->erase($tmp);
@@ -780,7 +780,7 @@ class ProjectCommand extends Command
          : $arguments;
 
       // @ Load and boot the project file
-      $projectFile = $projectDir . basename($projectName) . '.project.php';
+      $projectFile = $projectDir . basename($projectName) . '.Project.php';
       if (is_file($projectFile) === false) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
@@ -2322,7 +2322,7 @@ class ProjectCommand extends Command
    private function inspect (string $dir): bool
    {
       // ? Bootgly project signature
-      $signatures = glob("{$dir}/*.project.php") ?: [];
+      $signatures = glob("{$dir}/*.Project.php") ?: [];
       if ($signatures === []) {
          return false;
       }
@@ -2362,7 +2362,7 @@ class ProjectCommand extends Command
       foreach ($bases as $base) {
          $dir = "{$base}{$from}";
 
-         if (is_dir($dir) === true && (glob("{$dir}/*.project.php") ?: []) !== []) {
+         if (is_dir($dir) === true && (glob("{$dir}/*.Project.php") ?: []) !== []) {
             // :
             return $dir;
          }
@@ -2618,7 +2618,7 @@ class ProjectCommand extends Command
          return null;
       }
 
-      $projectFile = $projectDir . basename($projectName) . '.project.php';
+      $projectFile = $projectDir . basename($projectName) . '.Project.php';
       if (is_file($projectFile) === false) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
@@ -2967,7 +2967,7 @@ class ProjectCommand extends Command
       // @ Iterate the registered paths for this interface (leaf-named project files)
       foreach (Projects::filter($interface) as $path) {
          $leaf = basename($path);
-         $file = $projectsDir . $path . '/' . $leaf . '.project.php';
+         $file = $projectsDir . $path . '/' . $leaf . '.Project.php';
          if (is_file($file)) {
             $projects[$path] = $this->get($file, $path);
          }
@@ -3034,7 +3034,7 @@ class ProjectCommand extends Command
       }
 
       // @ Load metadata from project file (leaf-named)
-      $projectFile = $projectDir . basename($folder) . '.project.php';
+      $projectFile = $projectDir . basename($folder) . '.Project.php';
       $meta = is_file($projectFile)
          ? $this->get($projectFile, $folder)
          : ['name' => $folder, 'description' => '', 'version' => '', 'author' => ''];

@@ -27,6 +27,6 @@ return new Project(
       $Output = CLI->Terminal->Output;
 
       $Output->render('@#green:__NAME__ booted!@;@.;');
-      $Output->render('Edit @#cyan:projects/__PATH__/__LEAF__.project.php@; to start building.@.;');
+      $Output->render('Edit @#cyan:projects/__PATH__/__LEAF__.Project.php@; to start building.@.;');
    }
 );

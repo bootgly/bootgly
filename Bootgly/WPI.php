@@ -75,7 +75,7 @@ class WPI extends Projects // Web Programming Interface
                $projectDir = Projects::AUTHOR_DIR . $default . '/';
             }
 
-            $projectFile = $projectDir . $leaf . '.project.php';
+            $projectFile = $projectDir . $leaf . '.Project.php';
 
             if (is_file($projectFile)) {
                $result = require $projectFile;

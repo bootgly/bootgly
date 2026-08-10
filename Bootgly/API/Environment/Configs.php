@@ -30,7 +30,7 @@ use Bootgly\API\Environment\Configs\Scopes;
 /**
  * Loads Bootgly configuration scopes from filesystem directories.
  *
- * A scope maps to `configs/<scope>/<scope>.config.php` plus optional `.env`
+ * A scope maps to `configs/<scope>/<scope>.Config.php` plus optional `.env`
  * files. Scope names are validated, paths are contained with `File::guard()`,
  * and `.env` values are kept local to this loader instance.
  *
@@ -41,7 +41,7 @@ use Bootgly\API\Environment\Configs\Scopes;
  * Nested config values are accessed by object navigation on the returned
  * `Config`; `Configs::get()` is intentionally scope-only.
  *
- * Security: `<scope>.config.php` is trusted PHP code executed with `require`.
+ * Security: `<scope>.Config.php` is trusted PHP code executed with `require`.
  * See `docs/TRUST_BOUNDARY.md`.
  */
 class Configs
@@ -182,7 +182,7 @@ class Configs
     * Load a `.env` file into the local config environment map.
     *
     * Values are not exported with `putenv()` and are visible only while the
-    * matching `.config.php` file is being required. Invalid, disallowed or
+    * matching `.Config.php` file is being required. Invalid, disallowed or
     * locked keys fail closed.
     */
    protected function inject (string $scope, string $file): bool
@@ -297,7 +297,7 @@ class Configs
       }
 
       // @ Load PHP config file
-      $file = "$dir$scope.config.php";
+      $file = "$dir$scope.Config.php";
       try {
          $Config = $this->include($file);
       }
