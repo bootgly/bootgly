@@ -14,6 +14,7 @@ return new Suite(
    suiteName: __NAMESPACE__,
    // * Data
    tests: [
-      '1.1-connection_close_timer_release'
+      '1.1-connection_close_timer_release',
+      '1.2-console'
    ]
 );

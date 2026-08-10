@@ -15,8 +15,10 @@ return new Specification(
       $master = 0;
       $PIDs = [];
       $paused = false;
+      $advertised = false;
       $ticking = false;
       $resumed = false;
+      $readvertised = false;
       $stopped = false;
 
       $Wait = static function (Closure $Condition, float $seconds = 6.0): bool {
@@ -85,11 +87,29 @@ return new Specification(
                static fn (): bool => (int) @file_get_contents($counter) >= $baseline + 2
             );
 
+            // @ The pause must be visible out-of-process: pause() republishes
+            //   the state document with the master's Status name, which is
+            //   what `project show` renders as `paused`.
+            $advertised = $Wait(static function () use ($state): bool {
+               $JSON = @file_get_contents($state);
+               $topology = is_string($JSON) ? json_decode($JSON, true) : null;
+
+               return ($topology['status'] ?? '') === 'Paused';
+            });
+
             // @ SIGCONT — only a live loop can dispatch it into `resume()`.
             posix_kill($master, SIGCONT);
             $resumed = $Wait(
                static fn (): bool => str_contains((string) @file_get_contents($journal), 'resume')
             );
+
+            // @ ...and the state document must advertise the resume too.
+            $readvertised = $Wait(static function () use ($state): bool {
+               $JSON = @file_get_contents($state);
+               $topology = is_string($JSON) ? json_decode($JSON, true) : null;
+
+               return ($topology['status'] ?? '') === 'Running';
+            });
 
             // @ SIGTERM — an orderly stop() teardown must still follow.
             fclose($Pipes[0]);
@@ -161,8 +181,16 @@ return new Specification(
          description: 'the paused master keeps dispatching signals and ticking — Paused is not terminal'
       );
       yield assert(
+         assertion: $advertised,
+         description: 'the paused master republishes its state document with status Paused'
+      );
+      yield assert(
          assertion: $resumed,
          description: 'SIGCONT reaches resume() — the paused master is still a control channel'
+      );
+      yield assert(
+         assertion: $readvertised,
+         description: 'the resumed master republishes its state document with status Running'
       );
       yield assert(
          assertion: $stopped,
