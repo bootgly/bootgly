@@ -831,8 +831,15 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
       $this->timer = 0;
       $this->timerDeadline = 0;
 
-      // ? Already told the peer (connection error / GOAWAY drained)
-      if ($this->closing === false && $this->Package !== null) {
+      // ? Already told the peer (connection error / GOAWAY drained), or the
+      //   transport abandoned owed bytes — a GOAWAY appended to a wire that
+      //   ends mid-DATA-frame would be read as payload of the unfinished
+      //   frame, not as a control frame.
+      if (
+         $this->closing === false
+         && $this->Package !== null
+         && $this->Package->truncated === false
+      ) {
          $Socket = $this->Package->Connection->Socket;
 
          if (is_resource($Socket)) {

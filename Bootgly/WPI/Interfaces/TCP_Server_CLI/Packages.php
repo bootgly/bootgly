@@ -161,6 +161,11 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
    protected bool $outputFailed = false;
    protected bool $uploadClosing = false;
    protected bool $uploadCloseRequested = false;
+   //   Whether teardown abandoned owed output (an undrained `pendingBuffer`,
+   //   queued responses or an active file cursor). The wire stops at an
+   //   arbitrary byte of a promised segment, so best-effort raw teardown
+   //   writes (HTTP/2 GOAWAY) must not append to a truncated stream.
+   public private(set) bool $truncated = false;
    // # Receive carry (per-connection request reassembly)
    //   Unconsumed inbound bytes retained at the end of a receive event —
    //   an incomplete request head or frame fragment. The next event
@@ -1355,6 +1360,20 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
    {
       $this->disarm();
 
+      // ? Record abandoned output before discarding it, so teardown paths
+      //   that still run after this release (`Connection::close()` invokes
+      //   Disconnecting decoders later) can refuse to write on a wire that
+      //   ends mid-segment. `$uploading` has no default — constructor-bypass
+      //   fixtures reach this via __destruct() with it uninitialized.
+      if (
+         $this->pendingBuffer !== ''
+         || (isset($this->uploading) && $this->uploading !== []) // @phpstan-ignore isset.initializedProperty
+         || $this->pendingResponses !== []
+         || $this->directUploadRemaining > 0
+      ) {
+         $this->truncated = true;
+      }
+
       // upload() does not own its caller-supplied handler. Dropping this
       // reference lets the caller's lifecycle decide when to close it while
       // ensuring a closed Connection cannot pin it until cycle collection.
@@ -2019,13 +2038,46 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       //   cycle.
       $this->rejected = true;
 
-      try {
-         @fwrite($this->Connection->Socket, $raw);
-      }
-      catch (Throwable) {
-         // ...
+      // ? Mid-handshake there is no application wire yet — writing() would
+      //   reroute the buffer into handshake(). Drop the bytes and close.
+      if ($this->Connection->handshaking) {
+         $this->Connection->close();
+
+         return;
       }
 
-      $this->Connection->close();
+      // @ One ordered nonblocking writer owns every response segment: the
+      //   error bytes drain BEHIND any owed tail and queued heads instead of
+      //   splicing into an advertised body — or vanishing on a full socket.
+      // ? `false` means abort() already closed and accounted the connection.
+      if ($this->writing($this->Connection->Socket, buffer: $raw) === false) {
+         return;
+      }
+
+      // ?: Idle writer — the error is on the wire; close immediately.
+      if (
+         $this->pendingBuffer === ''
+         && $this->uploading === []
+         && $this->pendingResponses === []
+         && $this->stagedUploading === []
+         && $this->directUploadRemaining === 0
+         && ! $this->uploadAwaiting
+         && ! $this->writeRegistered
+      ) {
+         $this->Connection->close();
+
+         return;
+      }
+
+      // : Owed bytes still queued — defer the close to the terminal drain,
+      //   bounded by `maxPendingBytes` and the write stall deadline. A
+      //   rejected connection accepts no further input while it drains.
+      $this->closeAfterDrain = true;
+      if (isset(Server::$Event)) {
+         try {
+            Server::$Event->del($this->Connection->Socket, Server::$Event::EVENT_READ);
+         }
+         catch (Throwable) {}
+      }
    }
 }

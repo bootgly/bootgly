@@ -43,6 +43,8 @@ return new Suite(
       '1.25-router_static_serve',
       '1.26-request_fields_method_agnostic',
       '1.27-request_input_keeps_streaming_fields',
-      '1.28-decoder_empty_file_input'
+      '1.28-decoder_empty_file_input',
+      // # Ordered writer ownership of reject() bytes (TCP-3)
+      '1.29-reject_ordered_writer_drain'
    ]
 );
