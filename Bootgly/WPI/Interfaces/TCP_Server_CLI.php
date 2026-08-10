@@ -206,6 +206,23 @@ class TCP_Server_CLI implements Servers
    // Linux caps one SCM_RIGHTS control message at 253 descriptors. Keep room
    // for node-owned listeners (for example Auto-TLS' HTTP-01 gate).
    private const int RELOAD_HANDOFF_MAX_RESOURCES = 240;
+   // Every signal the master handles. One list: `start()` installs it and
+   // `disarm()` re-installs it after each readline prompt cycle.
+   private const array SIGNALS = [
+      SIGALRM,  // Timer
+      SIGUSR1,  // Custom command
+      SIGURG,   // Node-specific out-of-band wake-up (Auto-TLS)
+      SIGHUP,   // stop
+      SIGINT,   // stop (CTRL + C)
+      SIGQUIT,  // stop
+      SIGTERM,  // stop
+      SIGTSTP,  // pause (CTRL + Z)
+      SIGCONT,  // resume
+      SIGUSR2,  // reload
+      SIGCHLD,  // recover
+      SIGIOT,   // connection info
+      SIGIO,    // connection stats
+   ];
 
    public Logger $Logger {
       get {
@@ -453,7 +470,21 @@ class TCP_Server_CLI implements Servers
 
          Shutdown::debug();
 
-         $Process->Signals->send(SIGINT, master: false, children: true);
+         // ? An orderly `stop()` already terminated the children and released
+         //   the state, so there is nothing left to do — `stopping` is the flag
+         //   it sets before doing any of it.
+         if ($Process->stopping) {
+            return;
+         }
+
+         // @ Abnormal master exit (an uncaught Throwable in a console command,
+         //   a fatal, a bare `return` out of start()): a raw SIGINT leaves the
+         //   workers to race their own teardown and abandons the published
+         //   state file, so `project status` keeps advertising dead PIDs. Do the
+         //   same teardown `stop()` does, minus the exit.
+         $Process->stopping = true;
+         $Process->Children->terminate();
+         $Process->State->clean();
       });
    }
    public function __get (string $name): mixed
@@ -814,21 +845,7 @@ class TCP_Server_CLI implements Servers
 
       // ? Signals
       // @ Install process signals
-      $this->Process->Signals->install([
-         SIGALRM,  // Timer
-         SIGUSR1,  // Custom command
-         SIGURG,   // Node-specific out-of-band wake-up (Auto-TLS)
-         SIGHUP,   // stop
-         SIGINT,   // stop (CTRL + C)
-         SIGQUIT,  // stop
-         SIGTERM,  // stop
-         SIGTSTP,  // pause (CTRL + Z)
-         SIGCONT,  // resume
-         SIGUSR2,  // reload
-         SIGCHLD,  // recover
-         SIGIOT,   // connection info
-         SIGIO,    // connection stats
-      ]);
+      $this->Process->Signals->install(self::SIGNALS);
       pcntl_signal(SIGPIPE, SIG_IGN, false);
 
       // @ Pre-fork setup hook (e.g. HTTP upload counter, WS broadcast bus).
@@ -1602,7 +1619,7 @@ class TCP_Server_CLI implements Servers
       //   Child exits are reaped exclusively by the SIGCHLD handler
       //   (`recover()` drains every reapable child) — a raw waitpid here
       //   would RACE it and could steal a worker exit, losing the refork.
-      while ($this->Status === Status::Running) { // @phpstan-ignore identical.alwaysTrue
+      while ($this->Status !== Status::Stopping) { // @phpstan-ignore notIdentical.alwaysTrue
          pcntl_signal_dispatch();
 
          // @ Master supervision tick (node overrides)
@@ -1623,7 +1640,7 @@ class TCP_Server_CLI implements Servers
       //   Child exits are reaped exclusively by the SIGCHLD handler
       //   (`recover()` drains every reapable child) — a raw waitpid here
       //   would RACE it and could steal a worker exit, losing the refork.
-      while ($this->Status === Status::Running) { // @phpstan-ignore identical.alwaysTrue
+      while ($this->Status !== Status::Stopping) { // @phpstan-ignore notIdentical.alwaysTrue
          pcntl_signal_dispatch();
 
          // @ Master supervision tick (node overrides)
@@ -1631,6 +1648,25 @@ class TCP_Server_CLI implements Servers
 
          usleep(500000); // 0.5s
       }
+   }
+   /**
+    * Detach the readline callback handler and re-arm the process signals
+    * behind it.
+    *
+    * Accepting a line and removing the callback handler make libreadline
+    * restore the sigaction slots it saved when the prompt was armed — raw
+    * `sigaction`, beneath zend_signals' bookkeeping — and on PHP 8.4 that
+    * restore leaves slots pointing at `SIG_ERR` (-1): the next delivered
+    * signal makes the kernel jump to address -1 and the master dies with
+    * SIGSEGV inside `stream_select` (measured by core dump; an idle prompt
+    * and mid-line keystrokes are unaffected). Re-registering every handler
+    * immediately rewrites each slot with a valid zend trampoline.
+    */
+   private function disarm (): void
+   {
+      readline_callback_handler_remove();
+
+      $this->Process->Signals->install(self::SIGNALS);
    }
    protected function interacting (): void
    {
@@ -1664,7 +1700,13 @@ class TCP_Server_CLI implements Servers
       $Install();
 
       try {
-         while ($this->Mode === Modes::Interactive && $this->Status === Status::Running) {
+         // ? `Stopping` is the only terminal status. `Paused` must NOT end this
+         //   loop: the master is the control channel, so it keeps dispatching
+         //   signals, keeps supervising (a worker that dies while paused is
+         //   still reforked) and keeps the prompt alive — which is the only way
+         //   `resume` can ever be typed. Pausing acts on the workers, which
+         //   drop their accept registration in `pause()`.
+         while ($this->Mode === Modes::Interactive && $this->Status !== Status::Stopping) {
             pcntl_signal_dispatch();
             $this->tick();
 
@@ -1679,7 +1721,7 @@ class TCP_Server_CLI implements Servers
                continue;
             }
 
-            readline_callback_handler_remove();
+            $this->disarm();
             $installed = false;
             $available = false;
 
@@ -1696,14 +1738,14 @@ class TCP_Server_CLI implements Servers
                usleep(100000 * $this->workers);
             }
 
-            if ($this->Mode === Modes::Interactive && $this->Status === Status::Running) {
+            if ($this->Mode === Modes::Interactive && $this->Status !== Status::Stopping) {
                $Install();
             }
          }
       }
       finally {
          if ($installed) {
-            readline_callback_handler_remove();
+            $this->disarm();
          }
       }
 
@@ -1778,7 +1820,9 @@ class TCP_Server_CLI implements Servers
       $Viewer = new LogsViewer($Input, $Output);
 
       // @ Loop
-      while ($this->Mode === Modes::Monitor && $this->Status === Status::Running) {
+      // ? Same invariant as `interacting()`: only `Stopping` ends the loop, so a
+      //   paused master keeps dispatching signals and supervising its workers.
+      while ($this->Mode === Modes::Monitor && $this->Status !== Status::Stopping) {
          // @ Dispatch pending signals (reforks, reload, shutdown, resize)
          pcntl_signal_dispatch();
 
@@ -2350,6 +2394,16 @@ class TCP_Server_CLI implements Servers
                || Environment::get('GIT_EXEC_PATH'); // Git Hooks?
             if ($this->Mode === Modes::Foreground && $CI_CD) {
                break;
+            }
+
+            // ? `exit()` skips `finally`, so `interacting()`'s cleanup never
+            //   runs on this path. Disarm the prompt (a no-op when none is
+            //   installed — a typed `stop` already disarmed it) or the master
+            //   shuts down with the callback handler live and stale sigaction
+            //   slots. Covers Ctrl+C/SIGTERM, whose dispatch runs with the
+            //   prompt installed.
+            if ($this->Mode === Modes::Interactive) {
+               $this->disarm();
             }
 
             exit(0);

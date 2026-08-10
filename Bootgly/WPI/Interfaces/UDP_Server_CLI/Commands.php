@@ -68,7 +68,8 @@ class Commands extends CLI\Terminal
       // @ operations
       'check',
       'error',
-      'test',
+      // ? `test` is deliberately absent: it is driven programmatically by the
+      //   `Modes::Test` suite autoboots, never typed at a live server's prompt.
       // ! \ Connection
       'stats',
       'connections',
@@ -137,7 +138,11 @@ class Commands extends CLI\Terminal
             error_reporting(E_ALL) && ini_set('display_errors', 'On') && true,
          'error off' =>
             error_reporting(0) && ini_set('display_errors', 'Off') && true,
-         'test' =>
+         // ? Not an operator command — see the TCP twin. Only a `Modes::Test`
+         //   server may drive its workers through the test sequence.
+         'test' => $this->Server->Mode !== Modes::Test
+            ? true
+            : (
             $this->saveCommand('test init')
             && $this->Server->Process->Signals->send(SIGUSR1, master: false, children: true)
 
@@ -145,7 +150,8 @@ class Commands extends CLI\Terminal
             && $this->Server->Process->Signals->send(SIGUSR1, master: true, children: false)
 
             && $this->saveCommand('test end')
-            && $this->Server->Process->Signals->send(SIGUSR1, master: false, children: true) && true, // @phpstan-ignore-line
+            && $this->Server->Process->Signals->send(SIGUSR1, master: false, children: true) && true // @phpstan-ignore-line
+            ),
 
          // ! \ Connection
          'stats' =>
@@ -193,7 +199,6 @@ class Commands extends CLI\Terminal
       @:i: `check jit` @;   = Check if JIT is enabled;
       @:i: `error on` @;    = Enable PHP error reporting;
       @:i: `error off` @;   = Disable PHP error reporting;
-      @:i: `test` @;        = Run Server test suites;
 
       @:i: `stats` @;       = Show stats about datagrams / data per worker;
       @:i: `stats reset` @; = Reset stats about datagrams / data per worker;

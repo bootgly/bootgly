@@ -17,7 +17,6 @@ use const LOCK_SH;
 use const LOCK_UN;
 use const PHP_EOL;
 use const SIGCONT;
-use const SIGINT;
 use const SIGIO;
 use const SIGIOT;
 use const SIGTSTP;
@@ -26,7 +25,6 @@ use const SIGUSR2;
 use function array_pad;
 use function bin2hex;
 use function chmod;
-use function count;
 use function error_reporting;
 use function explode;
 use function fclose;
@@ -94,7 +92,8 @@ class Commands extends CLI\Terminal
       'check',
       'error',
       // TODO 'log'
-      'test',
+      // ? `test` is deliberately absent: it is driven programmatically by the
+      //   `Modes::Test` suite autoboots, never typed at a live server's prompt.
       // ! \ Connection
       'stats',
       'connections',
@@ -140,16 +139,29 @@ class Commands extends CLI\Terminal
          'status' =>
             CLI->Commands->find('status', From: $this->Server)?->run() && true,
          // @ control
+         // ? In-process, like `pause`/`resume` below: routing the stop through
+         //   a self-raised SIGINT would queue it for the next
+         //   `pcntl_signal_dispatch()` — after `interacting()` has reinstalled
+         //   the readline callback handler — and `stop()` exits from inside
+         //   that dispatch, skipping the `finally` that removes the handler.
+         //   Shutting down with a live handler segfaults ext/readline's
+         //   teardown. Here the handler is already removed: `interacting()`
+         //   detaches it before executing any typed command.
          'stop' =>
-            $this->Logger->log(
-               warning: '@\;Stopping ' . (string) count($this->Server->Process->Children->PIDs) . ' worker(s)... '
-            )
-            && $this->Server->Process->Signals->send(SIGINT)
-            && false,
+            $this->stop(),
+         // ? Act on the master in-process and signal only the workers. Raising
+         //   SIGTSTP at ourselves would queue it for the next
+         //   `pcntl_signal_dispatch()`, i.e. into a live readline callback
+         //   handler — a race that segfaults the master (SIGSEGV, termsig 11).
+         //   The SIGTSTP arm of `handle()` stays for the tty's own Ctrl+Z.
          'pause' =>
-            $this->Server->Process->Signals->send(SIGTSTP) && false,
+            $this->Server->pause()
+            && $this->Server->Process->Signals->send(SIGTSTP, master: false)
+            && false,
          'resume' =>
-            $this->Server->Process->Signals->send(SIGCONT) && false,
+            $this->Server->resume()
+            && $this->Server->Process->Signals->send(SIGCONT, master: false)
+            && false,
          'reload' =>
             // @ Signal the MASTER (children: false) — it orchestrates the graceful
             //   re-exec in reload(); workers are driven from there via SIGQUIT.
@@ -172,7 +184,15 @@ class Commands extends CLI\Terminal
          'error off' =>
             error_reporting(0) && ini_set('display_errors', 'Off') && true,
          // TODO 'log'
-         'test' => // TODO use CLI wizard to choose the tests
+         // ? Not an operator command. Running a suite inside a live server
+         //   drives every worker through `test init`/`test`/`test end` via
+         //   SIGUSR1, reconfiguring them mid-flight while real traffic is being
+         //   served. The suite autoboots (tests/E2E, Security, Fuzz,
+         //   E2E_DualStack) call this on a `Modes::Test` server, which is the
+         //   only context where it is safe — and the only one still allowed.
+         'test' => $this->Server->Mode !== Modes::Test
+            ? true
+            : ( // TODO use CLI wizard to choose the tests
             $this->save('test init')
             && $this->Server->Process->Signals->send(SIGUSR1, master: false, children: true)
 
@@ -180,7 +200,8 @@ class Commands extends CLI\Terminal
             && $this->Server->Process->Signals->send(SIGUSR1, master: true, children: false)
 
             && $this->save('test end')
-            && $this->Server->Process->Signals->send(SIGUSR1, master: false, children: true) && true, // @phpstan-ignore-line
+            && $this->Server->Process->Signals->send(SIGUSR1, master: false, children: true) && true // @phpstan-ignore-line
+            ),
 
          // ! \ Connection
          'stats' =>
@@ -199,6 +220,15 @@ class Commands extends CLI\Terminal
 
          default => true
       };
+   }
+   /** Stop the server in-process; only a `Modes::Test` server survives it. */
+   private function stop (): bool
+   {
+      $this->Server->stop();
+
+      // : Reachable only in `Modes::Test`, where `stop()` returns control to
+      //   the suite runner instead of exiting — end the interaction.
+      return false;
    }
    public function save (string $command, string $context = ''): bool
    {
@@ -360,7 +390,6 @@ class Commands extends CLI\Terminal
       @:i: `check jit` @;   = Check if JIT is enabled;
       @:i: `error on` @;    = Enable PHP error reporting;
       @:i: `error off` @;   = Disable PHP error reporting;
-      @:i: `test` @;        = Run Server test suites;
 
       @:i: `stats` @;       = Show stats about connections / data per worker;
       @:i: `stats reset` @; = Reset stats about connections / data per worker;
