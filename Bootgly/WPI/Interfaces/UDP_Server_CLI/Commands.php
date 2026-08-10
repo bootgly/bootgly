@@ -14,14 +14,10 @@ namespace Bootgly\WPI\Interfaces\UDP_Server_CLI;
 use const E_ALL;
 use const FILE_APPEND;
 use const PHP_EOL;
-use const SIGCONT;
-use const SIGINT;
 use const SIGIO;
 use const SIGIOT;
-use const SIGTSTP;
 use const SIGUSR1;
 use const SIGUSR2;
-use function count;
 use function error_reporting;
 use function file_put_contents;
 use function function_exists;
@@ -111,18 +107,24 @@ class Commands extends CLI\Terminal
          'status' =>
             CLI->Commands->find('status', From: $this->Server)?->run() && true,
          // @ control
+         // ? In-process, like the TCP twin: a signal raised at ourselves is
+         //   only dispatched at the top of the NEXT console iteration, one
+         //   prompt behind the operator. `pause()`/`resume()` own their
+         //   worker signal legs.
          'stop' =>
-            $this->Logger->log(
-               warning: '@\;Stopping ' . (string) count($this->Server->Process->Children->PIDs) . ' worker(s)... '
-            )
-            && $this->Server->Process->Signals->send(SIGINT)
-            && false,
+            $this->stop(),
          'pause' =>
-            $this->Server->Process->Signals->send(SIGTSTP) && false,
+            $this->Server->pause() && false,
          'resume' =>
-            $this->Server->Process->Signals->send(SIGCONT) && false,
-         'reload' =>
-            $this->Server->Process->Signals->send(SIGUSR2, master: false)
+            $this->Server->resume() && false,
+         // ? A `Modes::Test` master IS the suite-runner process: reloading it
+         //   would drain the workers and exec-replace the runner itself.
+         'reload' => $this->Server->Mode === Modes::Test
+            ? true
+            // @ Signal the MASTER (children: false) — reload() is master-level
+            //   (`handle()` ignores SIGUSR2 in workers). The previous
+            //   `master: false` made this command a complete no-op.
+            : $this->Server->Process->Signals->send(SIGUSR2, children: false)
             && true,
          // @ mode
          'monitor' =>
@@ -170,6 +172,15 @@ class Commands extends CLI\Terminal
 
          default => true
       };
+   }
+   /** Stop the server in-process; only a `Modes::Test` server survives it. */
+   private function stop (): bool
+   {
+      $this->Server->stop();
+
+      // : Reachable only in `Modes::Test`, where `stop()` returns control to
+      //   the suite runner instead of exiting — end the interaction.
+      return false;
    }
    public function saveCommand (string $command, string $context = ''): bool
    {

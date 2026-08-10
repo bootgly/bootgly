@@ -968,6 +968,7 @@ class TCP_Server_CLI implements Servers
          'host'    => $this->host ?? '0.0.0.0',
          'port'    => $this->port ?? 0,
          'started' => $this->started,
+         'status'  => $this->Status->name,
          'type'    => 'WPI'
       ];
    }
@@ -2321,6 +2322,20 @@ class TCP_Server_CLI implements Servers
 
       $this->Status = Status::Running;
 
+      if ($this->Process->level === 'master') {
+         // @ Resume the workers too — the signal leg lives HERE, not in the
+         //   typed command, so a direct SIGCONT resumes the same server the
+         //   console does. A worker resumed twice hits resume()'s Status
+         //   guard and no-ops.
+         $this->Process->Signals->send(SIGCONT, master: false);
+
+         // @ Republish the state so `project show` stops reporting the pause.
+         //   `check()` keeps a shutdown race from resurrecting a tombstone.
+         if ($this->Process->State->check()) {
+            $this->Process->State->save($this->describe());
+         }
+      }
+
       return true;
    }
    public function pause (): bool
@@ -2343,6 +2358,23 @@ class TCP_Server_CLI implements Servers
       };
 
       $this->Status = Status::Paused;
+
+      if ($this->Process->level === 'master') {
+         // @ Pause the workers too: they own the accept registration, and
+         //   dropping it is the actual pause. The signal leg lives HERE — not
+         //   in the typed command — so a direct `kill -TSTP <master>` pauses
+         //   the same server the console does, instead of depending on
+         //   libreadline's job-control re-raise reaching the process group by
+         //   accident (measured: it stops innocent same-group processes and
+         //   misses whenever the prompt is detached).
+         $this->Process->Signals->send(SIGTSTP, master: false);
+
+         // @ Republish the state so `project show` reports the pause.
+         //   `check()` keeps a shutdown race from resurrecting a tombstone.
+         if ($this->Process->State->check()) {
+            $this->Process->State->save($this->describe());
+         }
+      }
 
       return true;
    }
@@ -2985,6 +3017,17 @@ class TCP_Server_CLI implements Servers
 
       // ! Mark reloading so recover() does not refork the workers we drain.
       $this->Process->reloading = true;
+
+      // ? Point of no return for the console: every path from here ends in
+      //   `pcntl_exec` or `exit(1)`. Disarm the prompt now — placed AFTER the
+      //   abort guards above, which return into a still-interactive master —
+      //   or the image is replaced with a live readline callback handler and
+      //   readline-prepped (raw) termios: the fresh master would snapshot RAW
+      //   as the terminal's "original" state and leave the operator tty raw
+      //   after its final shutdown.
+      if ($this->Mode === Modes::Interactive) {
+         $this->disarm();
+      }
 
       // @ Drain every worker gracefully (SIGQUIT → worker drain()), then reap.
       //   Stragglers past the budget are force-killed by terminate()'s SIGKILL.

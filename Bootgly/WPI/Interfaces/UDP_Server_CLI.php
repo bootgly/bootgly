@@ -486,14 +486,7 @@ class UDP_Server_CLI implements Servers
 
                      $this->Logger->log(notice: "Worker #{$deadIndex} recovered (new PID: {$newPID})@.;");
 
-                     $this->Process->State->save([
-                        'master'  => $this->Process->master,
-                        'workers' => $this->Process->Children->PIDs,
-                        'host'    => $this->host ?? '0.0.0.0',
-                        'port'    => $this->port ?? 0,
-                        'started' => $this->started,
-                        'type'    => 'WPI'
-                     ]);
+                     $this->Process->State->save($this->describe());
                   }
                }
             }
@@ -634,15 +627,8 @@ class UDP_Server_CLI implements Servers
       // @ Set master process title
       $this->Process->title = 'Bootgly_UDP_Server_CLI: master process';
 
-      // @ Save full process state (master + workers + host + port)
-      $this->Process->State->save([
-         'master'  => $this->Process->master,
-         'workers' => $this->Process->Children->PIDs,
-         'host'    => $this->host ?? '0.0.0.0',
-         'port'    => $this->port ?? 0,
-         'started' => time(),
-         'type'    => 'WPI'
-      ]);
+      // @ Save full process state (master + workers + host + port + status)
+      $this->Process->State->save($this->describe());
 
       // @ Report daemon success only after the final master owns the lock,
       //   workers exist, and their topology has been published.
@@ -1083,6 +1069,19 @@ class UDP_Server_CLI implements Servers
       return $closed;
    }
 
+   /** @return array<string,mixed> The state document published for out-of-process readers. */
+   protected function describe (): array
+   {
+      return [
+         'master'  => $this->Process->master,
+         'workers' => $this->Process->Children->PIDs,
+         'host'    => $this->host ?? '0.0.0.0',
+         'port'    => $this->port ?? 0,
+         'started' => $this->started,
+         'status'  => $this->Status->name,
+         'type'    => 'WPI'
+      ];
+   }
    public function resume (): bool
    {
       if ($this->Status !== Status::Paused) {
@@ -1103,6 +1102,17 @@ class UDP_Server_CLI implements Servers
       };
 
       $this->Status = Status::Running;
+
+      if ($this->Process->level === 'master') {
+         // @ Resume the workers too — the signal leg lives HERE, not in the
+         //   typed command, mirroring the TCP twin.
+         $this->Process->Signals->send(SIGCONT, master: false);
+
+         // @ Republish the state so `project show` stops reporting the pause.
+         if ($this->Process->State->check()) {
+            $this->Process->State->save($this->describe());
+         }
+      }
 
       return true;
    }
@@ -1126,6 +1136,18 @@ class UDP_Server_CLI implements Servers
       };
 
       $this->Status = Status::Paused;
+
+      if ($this->Process->level === 'master') {
+         // @ Pause the workers too: they own the datagram-read registration,
+         //   and dropping it is the actual pause. The signal leg lives HERE —
+         //   not in the typed command — mirroring the TCP twin.
+         $this->Process->Signals->send(SIGTSTP, master: false);
+
+         // @ Republish the state so `project show` reports the pause.
+         if ($this->Process->State->check()) {
+            $this->Process->State->save($this->describe());
+         }
+      }
 
       return true;
    }

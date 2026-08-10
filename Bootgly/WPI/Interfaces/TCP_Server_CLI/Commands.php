@@ -16,10 +16,8 @@ use const LOCK_EX;
 use const LOCK_SH;
 use const LOCK_UN;
 use const PHP_EOL;
-use const SIGCONT;
 use const SIGIO;
 use const SIGIOT;
-use const SIGTSTP;
 use const SIGUSR1;
 use const SIGUSR2;
 use function array_pad;
@@ -149,23 +147,21 @@ class Commands extends CLI\Terminal
          //   detaches it before executing any typed command.
          'stop' =>
             $this->stop(),
-         // ? Act on the master in-process and signal only the workers. Raising
-         //   SIGTSTP at ourselves would queue it for the next
-         //   `pcntl_signal_dispatch()`, i.e. into a live readline callback
-         //   handler — a race that segfaults the master (SIGSEGV, termsig 11).
-         //   The SIGTSTP arm of `handle()` stays for the tty's own Ctrl+Z.
+         // ? In-process — never a signal raised at ourselves, which would be
+         //   queued into the next dispatch. `pause()`/`resume()` own their
+         //   worker signal legs, so the console, a tty Ctrl+Z and a direct
+         //   `kill -TSTP <master>` all pause the same server.
          'pause' =>
-            $this->Server->pause()
-            && $this->Server->Process->Signals->send(SIGTSTP, master: false)
-            && false,
+            $this->Server->pause() && false,
          'resume' =>
-            $this->Server->resume()
-            && $this->Server->Process->Signals->send(SIGCONT, master: false)
-            && false,
-         'reload' =>
+            $this->Server->resume() && false,
+         // ? A `Modes::Test` master IS the suite-runner process: reloading it
+         //   would drain the workers and exec-replace the runner itself.
+         'reload' => $this->Server->Mode === Modes::Test
+            ? true
             // @ Signal the MASTER (children: false) — it orchestrates the graceful
             //   re-exec in reload(); workers are driven from there via SIGQUIT.
-            $this->Server->Process->Signals->send(SIGUSR2, children: false)
+            : $this->Server->Process->Signals->send(SIGUSR2, children: false)
             && true,
          // TODO restart command
          // @ mode
