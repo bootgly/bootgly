@@ -133,6 +133,8 @@ return new Suite(
       '1.4-lease',
       '1.5-orphan',
       '1.6-startup',
-      '1.7-certifier'
+      '1.7-certifier',
+      '1.8-pause',
+      '1.9-console'
    ]
 );
