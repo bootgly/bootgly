@@ -17,6 +17,7 @@ use function fwrite;
 use function max;
 use function pack;
 use function stream_set_blocking;
+use function stream_set_chunk_size;
 use function strlen;
 use function substr;
 use function unpack;
@@ -60,6 +61,10 @@ class Relay
       // ! Keep my own receive end (non-blocking) — the rest are peers'.
       $this->Socket = $buses[$index][0];
       stream_set_blocking($this->Socket, false);
+      // ! PHP streams never recv() more than their chunk_size (8192 by
+      //   default), and a short recv() on a datagram socket DISCARDS the
+      //   rest of the datagram — the mailbox must read whole envelopes.
+      stream_set_chunk_size($this->Socket, self::$maxDatagram);
 
       // @ Keep the send end of every peer mailbox; close the ends I do not own.
       for ($worker = 0; $worker < $workers; $worker++) {
@@ -123,6 +128,14 @@ class Relay
             continue;
          }
          $length = $header[1];
+
+         // ? A short or malformed envelope must be undeliverable — a
+         //   partial frame written to members corrupts their stream
+         //   framing beyond recovery.
+         if (strlen($datagram) < 4 + $length + 2) {
+            continue;
+         }
+
          $channel = substr($datagram, 4, $length);
          $frame = substr($datagram, 4 + $length);
 

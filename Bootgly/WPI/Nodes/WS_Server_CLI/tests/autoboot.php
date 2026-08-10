@@ -16,6 +16,8 @@ return new Suite(
    tests: [
       '1.1-handshake',
       '1.2-handshake-fallback',
-      '2.1-frame'
+      '2.1-frame',
+      // # Cross-worker relay mailbox (WS-1)
+      '3.1-relay'
    ]
 );
