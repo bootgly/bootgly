@@ -16,16 +16,18 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
  * rate-limit counters.
  *
  * With a fixed clock and one-second sliding window, the production RateLimit
- * middleware increments `ratelimit:<principal>:12345`. The two printable
- * principals below give that full key the same CRC32. An identical-key control
- * must be rejected on its second request, proving the live limiter is active.
- * Each colliding principal is then requested twice in alternating order; a
- * collision-safe backend must reject both second requests independently.
+ * middleware increments a versioned, policy-scoped principal key. The two
+ * printable principals below give that full key the same CRC32. An identical-
+ * key control must be rejected on its second request, proving the live limiter
+ * is active. Each colliding principal is then requested twice in alternating
+ * order; a collision-safe backend must reject both second requests independently.
  */
 $collisionA = 'b97186618aa1434e';
 $collisionB = '2f6843fd71907689';
 $controlKey = 'm7-control';
 $now = 12_345;
+$scope = 'security-m7-crc32';
+$principalNamespace = 'v2:p:' . hash('sha256', $scope) . ':sliding:1:';
 $Clock = static fn (): int => $now;
 
 $Cache = new Cache([
@@ -47,6 +49,7 @@ $RateLimit = new RateLimit(
    },
    clock: $Clock,
    Cache: $Cache,
+   scope: $scope,
 );
 
 return new Test(
@@ -88,6 +91,7 @@ return new Test(
       $collisionA,
       $collisionB,
       $controlKey,
+      $principalNamespace,
       $now
    ): bool|string {
       try {
@@ -95,9 +99,9 @@ return new Test(
             return 'M7 probe did not receive all six RateLimit responses.';
          }
 
-         $wireA = "ratelimit:{$collisionA}:{$now}";
-         $wireB = "ratelimit:{$collisionB}:{$now}";
-         $controlWire = "ratelimit:{$controlKey}:{$now}";
+         $wireA = "ratelimit:{$principalNamespace}{$collisionA}:{$now}";
+         $wireB = "ratelimit:{$principalNamespace}{$collisionB}:{$now}";
+         $controlWire = "ratelimit:{$principalNamespace}{$controlKey}:{$now}";
          $CRCA = crc32($wireA);
          $CRCB = crc32($wireB);
          if ($wireA === $wireB || $CRCA !== $CRCB || $CRCA === crc32($controlWire)) {

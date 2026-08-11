@@ -59,7 +59,10 @@ return static function (Request $Request, Response $Response, Router $Router)
    // # Level 2 — Group: append RateLimit + CORS to ALL subsequent routes
    //   CORS defaults to a restrictive empty allowlist; this demo opts into a
    //   wildcard explicitly. In production, pass an explicit origin allowlist.
-   $Router->intercept(new RateLimit(limit: 100, window: 60), new CORS(origins: ['*']));
+   $Router->intercept(
+      new RateLimit(limit: 100, window: 60, scope: 'demo-api'),
+      new CORS(origins: ['*'])
+   );
 
    // # GET /api/users — inherits SecureHeaders + RequestId + RateLimit + CORS + per-route ETag
    yield $Router->route('/api/users', function (Request $Request, Response $Response) {
@@ -82,7 +85,7 @@ return static function (Request $Request, Response $Response, Router $Router)
    // @ Group middlewares set INSIDE the nested closure apply to all routes inside that group.
    yield $Router->route('/admin/:*', function () use ($Router) {
       // @ Group intercept scoped to /admin/* routes only
-      $Router->intercept(new RateLimit(limit: 10, window: 60));
+      $Router->intercept(new RateLimit(limit: 10, window: 60, scope: 'demo-admin'));
 
       // # GET /admin/dashboard — inherits outer SecureHeaders + RequestId + inner RateLimit(10/min)
       yield $Router->route('dashboard', function (Request $Request, Response $Response) {

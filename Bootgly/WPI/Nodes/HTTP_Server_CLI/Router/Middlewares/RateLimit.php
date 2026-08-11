@@ -11,19 +11,27 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares;
 
 
+use function constant;
 use function chr;
+use function debug_backtrace;
+use function defined;
 use function floor;
+use function hash;
 use function inet_ntop;
 use function inet_pton;
 use function intdiv;
+use function is_int;
 use function is_numeric;
 use function is_string;
 use function max;
 use function str_pad;
+use function str_starts_with;
 use function strlen;
 use function substr;
 use function time;
+use function trim;
 use Closure;
+use InvalidArgumentException;
 
 use Bootgly\ABI\Resources\Cache;
 use Bootgly\API\Workables\Server\Middleware;
@@ -44,6 +52,12 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\RateLimit\Algorithms;
  *  - An optional cross-worker global ceiling caps aggregate request volume.
  *  - The counter key is pluggable (IP by default, or any identity/API key) via a
  *    `key` resolver closure.
+ *  - Every logical policy has a stable namespace. Distinct constructor source
+ *    lines are isolated by default; `scope` deliberately shares principal counters,
+ *    while `globalScope` can share only the application-wide ceiling.
+ *    Factories, subclasses, or multiple expressions on one source line that
+ *    create independent policies must pass explicit scopes. A shared global
+ *    scope is intended for route-disjoint policies, so one request is counted once.
  */
 class RateLimit implements Middleware
 {
@@ -56,9 +70,17 @@ class RateLimit implements Middleware
    public private(set) Algorithms $algorithm;
    public private(set) null|Closure $key;
    public private(set) null|Closure $clock;
+   /** Stable identity for this policy's per-principal counters. */
+   public private(set) string $scope;
+   /** Stable identity for its optional aggregate counter. */
+   public private(set) string $globalScope;
 
    // * Data
    protected Cache $Cache;
+   /** Versioned, domain-separated prefix for per-principal counters. */
+   private string $principalNamespace;
+   /** Versioned, domain-separated prefix for the aggregate counter. */
+   private string $globalNamespace;
 
    // * Metadata
    /** Shared cache key for the optional global aggregate counter. */
@@ -74,7 +96,9 @@ class RateLimit implements Middleware
       Algorithms $algorithm = Algorithms::Sliding,
       null|Closure $key = null,
       null|Closure $clock = null,
-      null|Cache $Cache = null
+      null|Cache $Cache = null,
+      null|string $scope = null,
+      null|string $globalScope = null
    )
    {
       // * Config
@@ -98,6 +122,31 @@ class RateLimit implements Middleware
       //   the IP key. Lets callers rate-limit on something other than the IP.
       $this->key = $key;
       $this->clock = $clock;
+      // ? A route set is materialized independently inside every worker. A
+      //   random/object identity would therefore split one logical quota into
+      //   per-worker buckets. The construction site is deterministic across
+      //   those worker-local builds; factories or rolling deployments that
+      //   need an identity independent of source location pass `scope`.
+      $this->scope = $scope === null
+         ? self::locate()
+         : self::validate($scope, 'scope');
+      $this->globalScope = $globalScope === null
+         ? $this->scope
+         : self::validate($globalScope, 'globalScope');
+
+      // @ Version and domain separation prevent a custom principal named
+      //   `__global__` from reaching the aggregate counter. Window/algorithm
+      //   semantics prevent explicitly shared but incompatible policies from
+      //   inheriting one another's TTL or counter representation.
+      $algorithmKey = $this->algorithm === Algorithms::Sliding
+         ? 'sliding'
+         : 'fixed';
+      $this->principalNamespace = 'v2:p:'
+         . hash('sha256', $this->scope)
+         . ":{$algorithmKey}:{$this->window}:";
+      $this->globalNamespace = 'v2:g:'
+         . hash('sha256', $this->globalScope)
+         . ":{$this->window}:";
 
       // * Data
       $this->Cache = $Cache ?? new Cache([
@@ -131,6 +180,7 @@ class RateLimit implements Middleware
             : $Request->peer;   // @phpstan-ignore-line
          $key = self::mask((string) $ip, $this->ipv6Prefix);
       }
+      $key = $this->principalNamespace . $key;
 
       // @ Count this request under the configured algorithm.
       if ($this->algorithm === Algorithms::Sliding) {
@@ -162,9 +212,10 @@ class RateLimit implements Middleware
       //   distributed/botnet client cannot dodge by spreading across keys. Only
       //   counted for requests that passed the per-key check.
       if ($this->globalLimit > 0) {
-         $globalCount = $this->Cache->increment(self::GLOBAL_KEY, 1, $this->window);
+         $globalKey = $this->globalNamespace . self::GLOBAL_KEY;
+         $globalCount = $this->Cache->increment($globalKey, 1, $this->window);
          if ($globalCount > $this->globalLimit) {
-            $globalTTL = $this->Cache->remain(self::GLOBAL_KEY);
+            $globalTTL = $this->Cache->remain($globalKey);
             $retry = $globalTTL > 0 ? $globalTTL : $this->window;
             $Response->Header->set('Retry-After', (string) max(1, $retry)); // @phpstan-ignore-line
 
@@ -206,6 +257,63 @@ class RateLimit implements Middleware
       $reset = ($index + 1) * $window;
 
       return [$estimated, $reset];
+   }
+
+   /**
+    * Derive the same default policy identity when a lazy route declaration is
+    * materialized independently by multiple workers.
+    *
+    * Two intentional policies produced by one factory or physical source line
+    * must pass an explicit `scope`; source movement resets the automatic namespace once.
+    */
+   private static function locate (): string
+   {
+      $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 8);
+      $frame = null;
+      foreach ($trace as $index => $candidate) {
+         if (
+            $index > 0
+            && is_string($candidate['file'] ?? null)
+            && is_int($candidate['line'] ?? null)
+         ) {
+            $frame = $candidate;
+
+            break;
+         }
+      }
+      if ($frame === null) {
+         throw new InvalidArgumentException(
+            'RateLimit requires an explicit scope when its construction site cannot be identified.'
+         );
+      }
+
+      $file = $frame['file'];
+      $line = $frame['line'];
+      foreach (['BOOTGLY_WORKING_DIR', 'BOOTGLY_ROOT_DIR'] as $rootName) {
+         if (defined($rootName)) {
+            $root = (string) constant($rootName);
+            if (str_starts_with($file, $root)) {
+               $file = $rootName . ':' . substr($file, strlen($root));
+
+               break;
+            }
+         }
+      }
+
+      return 'auto:' . hash('sha256', "{$file}:{$line}");
+   }
+
+   /** Validate an explicit policy namespace before hashing it into cache keys. */
+   private static function validate (string $scope, string $parameter): string
+   {
+      $length = strlen($scope);
+      if ($length === 0 || $length > 256 || trim($scope) === '') {
+         throw new InvalidArgumentException(
+            "RateLimit {$parameter} must contain between 1 and 256 non-whitespace bytes."
+         );
+      }
+
+      return $scope;
    }
 
    /**

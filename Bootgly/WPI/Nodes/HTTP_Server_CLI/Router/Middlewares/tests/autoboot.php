@@ -19,6 +19,7 @@ return new Suite(
       '2.1-rate_limit',
       '2.2-rate_limit_immutable_peer',
       '2.3-rate_limit_aggregation_global_sliding',
+      '2.4-rate_limit_policy_scope',
       '3.1-body_parser',
       '4.1-compression',
       '4.2-compression_status_gate',

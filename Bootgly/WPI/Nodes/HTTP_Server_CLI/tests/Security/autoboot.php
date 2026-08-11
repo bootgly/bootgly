@@ -260,6 +260,10 @@ return new Suite(
       // Two independently limited custom principals must retain separate
       // counters even when their full sliding-window cache keys collide.
       '40.01-shared_cache_crc32_rate_limit_collision',
+      // # RateLimit policy namespace + TTL ownership (audit 2026-08-02 M2)
+      // A permissive short-window policy must not recreate a strict policy's
+      // principal counter or weaken its independent 60-second quota.
+      '40.02-rate_limit_policy_namespace_ttl_bypass',
       // # TCP server Connection (partial-construction cleanup regression)
       // A destructor must not read TLS cleanup state that lacks a neutral
       // default when construction or a protocol-layer test double omits it.
