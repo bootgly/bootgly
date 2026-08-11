@@ -518,5 +518,9 @@ return new Suite(
       // Whatever produced it, a stored entry must carry exactly the body its
       // head advertises — otherwise a warm hit desyncs the connection.
       '96.02-route_cache_entry_framing',
+      // # Shared-cache expired-record reclamation (audit 2026-08-02 M3)
+      // Expired RateLimit principals must release fixed SysV capacity without
+      // requiring an operator to call purge() before the next request.
+      '97.01-rate_limit_shared_expired_capacity',
    ],
 );

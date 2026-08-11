@@ -84,10 +84,15 @@ class Shared extends Driver
     * Key band (outside the crc32 + index range) separating tag sets from values.
     */
    private const int TAG_BAND = 8589934592;
+   /** Internal RuntimeException code identifying fixed-segment capacity. */
+   private const int CAPACITY_ERROR = 1;
 
    // * Metadata
+   /** @var array<int,int> Last automatic reclaim tick per segment in this worker. */
+   private static array $reclaimed = [];
    private SysvSharedMemory $Segment;
    private SysvSemaphore $Semaphore;
+   private int $segment;
    /**
     * Current Unix timestamp via the configured clock (time() when unset).
     */
@@ -388,55 +393,43 @@ class Shared extends Driver
    {
       $this->attach();
 
-      $now = $this->now;
-      $id = crc32($key);
-
-      sem_acquire($this->Semaphore);
+      if (sem_acquire($this->Semaphore) === false) {
+         throw new RuntimeException('Failed to lock the shared-memory semaphore.');
+      }
       try {
-         $base = 0;
-         $expiry = 0;
-         $live = false;
-         $existed = shm_has_var($this->Segment, $id);
-         $stored = $existed === true
-            ? shm_get_var($this->Segment, $id)
-            : null;
-         $record = $this->find($stored, $key);
-
-         if ($record !== null) {
-            if (
-               $record['e'] === 0
-               || $record['e'] > $now
-            ) {
-               if (is_int($record['v']) === true) {
-                  $base = $record['v'];
-               }
-               $expiry = $record['e'];
-               $live = true;
+         $now = $this->now;
+         try {
+            return $this->advance($key, $by, $TTL, $now);
+         }
+         catch (RuntimeException $Exception) {
+            if ($Exception->getCode() !== self::CAPACITY_ERROR) {
+               throw $Exception;
             }
-         }
 
-         // @ TTL applies only when creating the counter
-         $value = $base + $by;
-         if ($TTL > 0 && $live === false) {
-            $expiry = $now + $TTL;
-         }
+            // ! Reclaim only after proven capacity pressure. Stamp before the
+            //   O(N) sweep so one hostile full segment can trigger at most one
+            //   scan per clock tick in each worker, even when nothing expired.
+            $now = $this->now;
+            if ((self::$reclaimed[$this->segment] ?? null) === $now) {
+               throw $Exception;
+            }
+            self::$reclaimed[$this->segment] = $now;
 
-         $tags = $live === true && is_array($record['t'] ?? null)
-            ? $record['t']
-            : [];
-         $this->put(
-            $id,
-            $this->write($stored, $key, ['e' => $expiry, 'v' => $value, 't' => $tags])
-         );
-         if ($existed === false) {
-            $this->track($id);
+            if ($this->reclaim($now) < 1) {
+               throw $Exception;
+            }
+
+            // @ The failed mutation was rolled back before reclaim(). Re-read
+            //   shared state and execute it once, so collision buckets or
+            //   index cleanup cannot be overwritten by a stale serialized value.
+            //   Re-sample after the O(N) sweep so a short window cannot receive
+            //   an expiry timestamp that already elapsed while the lock was held.
+            return $this->advance($key, $by, $TTL, $this->now);
          }
       }
       finally {
          sem_release($this->Semaphore);
       }
-
-      return $value;
    }
 
    public function remain (string $key): int
@@ -566,66 +559,11 @@ class Shared extends Driver
    {
       $this->attach();
 
-      $now = $this->now;
-      $count = 0;
-
       sem_acquire($this->Semaphore);
       try {
-         for ($b = 0; $b < self::INDEX_BUCKETS; $b++) {
-            $bucketId = self::INDEX_BAND + $b;
-            if (shm_has_var($this->Segment, $bucketId) === false) {
-               continue;
-            }
-
-            $bucket = shm_get_var($this->Segment, $bucketId);
-            if (is_array($bucket) === false) {
-               continue;
-            }
-
-            $changed = false;
-            foreach (array_keys($bucket) as $id) {
-               $id = (int) $id;
-
-               if (shm_has_var($this->Segment, $id) === false) {
-                  unset($bucket[$id]);
-                  $changed = true;
-                  continue;
-               }
-
-               // @ Tag metadata occupies its own band and has no expiry.
-               if ($id >= self::TAG_BAND) {
-                  continue;
-               }
-
-               $stored = shm_get_var($this->Segment, $id);
-               $records = $this->expand($stored);
-               $slotChanged = false;
-               foreach ($records as $key => $record) {
-                  $expiry = $record['e'];
-                  if ($expiry !== 0 && $expiry <= $now) {
-                     unset($records[$key]);
-                     $count++;
-                     $slotChanged = true;
-                  }
-               }
-
-               if ($slotChanged === true) {
-                  $updated = $this->collapse($records);
-                  if ($updated === null) {
-                     $this->drop($id);
-                     unset($bucket[$id]);
-                  }
-                  else {
-                     $this->put($id, $updated);
-                  }
-                  $changed = true;
-               }
-            }
-
-            if ($changed === true) {
-               $this->put($bucketId, $bucket);
-            }
-         }
+         $now = $this->now;
+         $count = $this->reclaim($now);
+         self::$reclaimed[$this->segment] = $now;
       }
       finally {
          sem_release($this->Semaphore);
@@ -647,9 +585,11 @@ class Shared extends Driver
          return true;
       }
 
+      $segment = $this->segment;
       shm_remove($this->Segment);
       sem_remove($this->Semaphore);
-      unset($this->Segment, $this->Semaphore);
+      unset($this->Segment, $this->Semaphore, $this->segment);
+      unset(self::$reclaimed[$segment]);
 
       return true;
    }
@@ -914,6 +854,126 @@ class Shared extends Driver
 
       $this->Segment = $Segment;
       $this->Semaphore = $Semaphore;
+      $this->segment = $key;
+   }
+
+   /**
+    * Execute one atomic counter mutation (caller holds the semaphore).
+    */
+   private function advance (string $key, int $by, int $TTL, int $now): int
+   {
+      $id = crc32($key);
+      $base = 0;
+      $expiry = 0;
+      $live = false;
+      $existed = shm_has_var($this->Segment, $id);
+      $stored = $existed === true
+         ? shm_get_var($this->Segment, $id)
+         : null;
+      $record = $this->find($stored, $key);
+
+      if ($record !== null) {
+         if (
+            $record['e'] === 0
+            || $record['e'] > $now
+         ) {
+            if (is_int($record['v']) === true) {
+               $base = $record['v'];
+            }
+            $expiry = $record['e'];
+            $live = true;
+         }
+      }
+
+      // @ TTL applies only when creating the counter
+      $value = $base + $by;
+      if ($TTL > 0 && $live === false) {
+         $expiry = $now + $TTL;
+      }
+
+      $tags = $live === true && is_array($record['t'] ?? null)
+         ? $record['t']
+         : [];
+      $this->put(
+         $id,
+         $this->write($stored, $key, ['e' => $expiry, 'v' => $value, 't' => $tags])
+      );
+      if ($existed === false) {
+         $this->track($id);
+      }
+
+      return $value;
+   }
+
+   /**
+    * Remove every expired indexed record (caller holds the semaphore).
+    */
+   private function reclaim (int $now): int
+   {
+      $count = 0;
+
+      for ($b = 0; $b < self::INDEX_BUCKETS; $b++) {
+         $bucketId = self::INDEX_BAND + $b;
+         if (shm_has_var($this->Segment, $bucketId) === false) {
+            continue;
+         }
+
+         $bucket = shm_get_var($this->Segment, $bucketId);
+         if (is_array($bucket) === false) {
+            continue;
+         }
+
+         $changed = false;
+         foreach (array_keys($bucket) as $id) {
+            $id = (int) $id;
+
+            if (shm_has_var($this->Segment, $id) === false) {
+               unset($bucket[$id]);
+               $changed = true;
+               continue;
+            }
+
+            // @ Tag metadata occupies its own band and has no expiry.
+            if ($id >= self::TAG_BAND) {
+               continue;
+            }
+
+            $stored = shm_get_var($this->Segment, $id);
+            $records = $this->expand($stored);
+            $slotChanged = false;
+            foreach ($records as $key => $record) {
+               $expiry = $record['e'];
+               if ($expiry !== 0 && $expiry <= $now) {
+                  unset($records[$key]);
+                  $count++;
+                  $slotChanged = true;
+               }
+            }
+
+            if ($slotChanged === true) {
+               $updated = $this->collapse($records);
+               if ($updated === null) {
+                  $this->drop($id);
+                  unset($bucket[$id]);
+               }
+               else {
+                  $this->put($id, $updated);
+               }
+               $changed = true;
+            }
+         }
+
+         if ($changed === true) {
+            if ($bucket === []) {
+               $this->drop($bucketId);
+            }
+            else {
+               $this->put($bucketId, $bucket);
+            }
+         }
+      }
+
+      return $count;
    }
 
    /** Derive a stable per-application key when no explicit segment is configured. */
@@ -976,12 +1036,50 @@ class Shared extends Driver
       throw new RuntimeException("Failed to locate SysV {$table} key {$key} after attach.");
    }
 
-   /** Persist one shared-memory variable and fail explicitly on capacity/IPC errors. */
+   /** Persist one variable, rolling back PHP's destructive capacity failure. */
    private function put (int $id, mixed $value): void
    {
-      if (shm_put_var($this->Segment, $id, $value) === false) {
-         throw new RuntimeException("Failed to write shared-memory variable {$id}.");
+      $existed = shm_has_var($this->Segment, $id);
+      $previous = $existed === true
+         ? shm_get_var($this->Segment, $id)
+         : null;
+
+      if ($this->commit($id, $value) === true) {
+         return;
       }
+
+      $this->restore($id, $existed, $previous);
+
+      throw new RuntimeException(
+         "Shared-memory capacity exhausted while writing variable {$id}.",
+         self::CAPACITY_ERROR,
+      );
+   }
+
+   /** Write one raw SysV value without recording the expected capacity warning. */
+   private function commit (int $id, mixed $value): bool
+   {
+      return @shm_put_var($this->Segment, $id, $value);
+   }
+
+   /** Restore one variable to the state captured immediately before put(). */
+   private function restore (int $id, bool $existed, mixed $previous): void
+   {
+      if ($existed === false) {
+         if (shm_has_var($this->Segment, $id) === true) {
+            $this->drop($id);
+         }
+
+         return;
+      }
+
+      if ($this->commit($id, $previous) === true) {
+         return;
+      }
+
+      throw new RuntimeException(
+         "Failed to restore shared-memory variable {$id} after a write failure."
+      );
    }
 
    /** Remove one shared-memory variable and fail explicitly on IPC errors. */
@@ -1007,7 +1105,17 @@ class Shared extends Driver
       }
 
       $bucket[$id] = true;
-      $this->put($bucketId, $bucket);
+      try {
+         $this->put($bucketId, $bucket);
+      }
+      catch (Throwable $Throwable) {
+         // ! The value was created immediately before its first index entry.
+         //   Roll it back so a failed index expansion cannot leave an orphan
+         //   that clear()/purge() can never discover.
+         $this->drop($id);
+
+         throw $Throwable;
+      }
    }
 
    /**
@@ -1027,7 +1135,12 @@ class Shared extends Driver
       }
 
       unset($bucket[$id]);
-      $this->put($bucketId, $bucket);
+      if ($bucket === []) {
+         $this->drop($bucketId);
+      }
+      else {
+         $this->put($bucketId, $bucket);
+      }
    }
 
    /**

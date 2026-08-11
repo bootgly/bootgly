@@ -35,5 +35,8 @@ return new Suite(
       '5.4-shared-collisions',
 
       '6.1-events',
+
+      // @ Appended to preserve every existing selected-case index.
+      '5.5-shared-expired-capacity',
    ]
 );
