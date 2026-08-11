@@ -84,5 +84,6 @@ return new Suite(
       '8.6-sql_fallback_retry_state',
       '10.18-mysql_prepare_flag',
       '4.5-pool-finished_assign',
+      '7.16-postgresql_float_text',
    ]
 );

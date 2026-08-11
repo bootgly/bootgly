@@ -4,6 +4,7 @@ namespace Bootgly\ADI\Databases\SQL\Schema\Tests\DDL;
 
 
 use function assert;
+use function ini_set;
 use function preg_match;
 use function strlen;
 use InvalidArgumentException;
@@ -299,6 +300,20 @@ return new Test(
          assertion: $Query->SQL === 'ALTER TABLE "users" RENAME COLUMN "email" TO "contact"'
             && $SQLite->unindex(Tables::Users, 'users_email_index')->SQL === 'DROP INDEX IF EXISTS "users_email_index"',
          description: 'Schema compiles SQLite ALTER RENAME COLUMN and DROP INDEX'
+      );
+
+      // # Float defaults — shortest round-trip rendering (PG-3)
+      $previous = (string) ini_set('precision', '14');
+
+      $Query = $Schema->create('ratios', function (Blueprint $Table): void {
+         $Table->add('ratio', Types::Float)->default = 0.1 + 0.2;
+      });
+
+      ini_set('precision', $previous);
+
+      yield assert(
+         assertion: $Query->SQL === 'CREATE TABLE "ratios" ("ratio" DOUBLE PRECISION NOT NULL DEFAULT 0.30000000000000004)',
+         description: 'Schema renders float defaults with shortest round-trip digits'
       );
    }
 );

@@ -14,11 +14,13 @@ namespace Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL;
 use function count;
 use function is_array;
 use function is_bool;
+use function is_float;
 use function is_int;
 use function is_scalar;
 use function is_string;
 use function pack;
 use function strlen;
+use function var_export;
 use InvalidArgumentException;
 
 use Bootgly\ADI\Database\Config;
@@ -350,6 +352,12 @@ class Encoder
 
       if (is_bool($value)) {
          return $value ? 't' : 'f';
+      }
+
+      // ? Floats — shortest round-trip rendering, immune to the `precision`
+      //   ini (the backend parses the text itself, so no digits are lost).
+      if (is_float($value)) {
+         return var_export($value, true);
       }
 
       if (is_scalar($value)) {

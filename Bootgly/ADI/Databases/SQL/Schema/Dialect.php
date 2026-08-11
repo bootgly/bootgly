@@ -18,6 +18,7 @@ use function is_float;
 use function is_int;
 use function is_string;
 use function str_replace;
+use function var_export;
 use BackedEnum;
 use InvalidArgumentException;
 use Stringable;
@@ -168,8 +169,13 @@ abstract class Dialect
          return $value ? 'TRUE' : 'FALSE';
       }
 
-      if (is_int($value) || is_float($value)) {
+      if (is_int($value)) {
          return (string) $value;
+      }
+
+      // ? Floats — shortest round-trip rendering, immune to the `precision` ini.
+      if (is_float($value)) {
+         return var_export($value, true);
       }
 
       if (is_string($value)) {
