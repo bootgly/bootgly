@@ -94,5 +94,6 @@ return new Suite(
       '10.19-mysql_abandoned_head',
       '4.6-pool-expiry_release',
       '10.20-mysql_abandon_contract',
+      '7.23-postgresql_abandoned_pipeline',
    ]
 );

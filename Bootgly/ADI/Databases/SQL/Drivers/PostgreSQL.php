@@ -98,6 +98,9 @@ class PostgreSQL extends Driver
    //   per statement name — a queued Close waits for their bytes.
    /** @var array<string,array<int,Operation>> */
    private array $Holders = [];
+   // @ Detached stand-ins draining the answers of abandoned operations.
+   /** @var array<int,true> */
+   private array $abandoned = [];
    private null|Readiness $ReadReadiness = null;
    private null|Readiness $WriteReadiness = null;
    /** @var resource|null */
@@ -468,6 +471,71 @@ class PostgreSQL extends Driver
    }
 
    /**
+    * Reconcile the wire when the pool abandons one operation.
+    *
+    * A pipelined batch always ends in Sync, so the backend keeps answering an
+    * operation the pool has already finished. The slot is handed to a
+    * detached stand-in that absorbs the remaining messages up to its
+    * ReadyForQuery — the driver keeps every session effect it owes itself
+    * (ParseComplete, ParameterDescription, evictions) while the object the
+    * pool took back is never read, written or resolved here again. When
+    * nothing can be reconciled — the batch is half written, or no sibling is
+    * left to pump the answer — the session is dropped instead.
+    */
+   public function abandon (DatabaseOperation $Operation): void
+   {
+      $index = null;
+
+      foreach ($this->pipeline as $id => $Queued) {
+         if ($Queued === $Operation) {
+            $index = $id;
+
+            break;
+         }
+      }
+
+      // ? Not pipelined here — an operation only joins the pipeline once its
+      //   batch is whole on the wire, so nothing is owed to this one.
+      if ($index === null) {
+         // ? Unless it holds the write stream: a half-written batch leaves the
+         //   backend parsing a message that never ends.
+         if ($this->writing === $Operation) {
+            $this->abort($Operation, 'PostgreSQL operation was abandoned while writing its batch.');
+         }
+
+         return;
+      }
+
+      /** @var Operation $Operation */
+
+      // ? Draining needs a reader: the pool has already released this
+      //   operation, so only a sibling advance still pumps this socket.
+      $readers = 0;
+
+      foreach ($this->pipeline as $Queued) {
+         if ($Queued !== $Operation && isset($this->abandoned[spl_object_id($Queued)]) === false) {
+            $readers++;
+         }
+      }
+
+      if ($readers === 0) {
+         $this->abort($Operation, 'PostgreSQL abandoned batch has no reader left to drain its answer.');
+
+         return;
+      }
+
+      // @ Detach the operation from the pipeline slot it still owns.
+      $Stand = new Operation(null, $Operation->SQL);
+      $Stand->state = OperationStates::Reading;
+      $Stand->statement = $Operation->statement;
+      $Stand->portal = $Operation->portal;
+      $Stand->prepared = $Operation->prepared;
+
+      $this->pipeline[$index] = $Stand;
+      $this->abandoned[spl_object_id($Stand)] = true;
+   }
+
+   /**
     * Check whether this connection still has pipelined operations.
     */
    public function check (): bool
@@ -504,6 +572,7 @@ class PostgreSQL extends Driver
       $this->preparing = [];
       $this->closing = [];
       $this->Holders = [];
+      $this->abandoned = [];
       $this->writing = null;
       $this->Decoder = new Decoder;
 
@@ -886,7 +955,17 @@ class PostgreSQL extends Driver
 
          if ($Active->finished && ($Message->type === 'Z' || $Active->state === OperationStates::Finished)) {
             array_shift($this->pipeline);
-            $this->completed[] = $Active;
+
+            // ? A stand-in is not an operation the pool ever assigned:
+            //   draining it must not release a connection a second time.
+            $id = spl_object_id($Active);
+
+            if (isset($this->abandoned[$id])) {
+               unset($this->abandoned[$id]);
+            }
+            else {
+               $this->completed[] = $Active;
+            }
          }
       }
 
@@ -954,6 +1033,15 @@ class PostgreSQL extends Driver
       }
 
       if ($type === 'Z') {
+         // ? A stand-in only drains an abandoned answer: nothing is resolved
+         //   with it and no query event is emitted on its behalf.
+         if ($this->abandoned !== [] && isset($this->abandoned[spl_object_id($Operation)])) {
+            $this->discard($Operation);
+            $this->Connection->transition();
+
+            return $Operation->fail('PostgreSQL abandoned batch answer was drained.');
+         }
+
          if ($Operation->state === OperationStates::Failed) {
             $this->discard($Operation);
             $this->Connection->transition();
