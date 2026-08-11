@@ -23,6 +23,7 @@ return new Suite(
       '2.2-prompt-interruption',
       '2.3-prompt-mouse',
       '2.4-prompt-native',
+      '2.5-prompt-triggers',
       '3.1-tabs-add',
       '3.2-tabs-bar',
       '3.3-tabs-switch',
