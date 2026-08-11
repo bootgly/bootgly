@@ -52,5 +52,24 @@ return new Test(
          assertion: substr($Operation->write, 0, strlen($expected)) === $expected,
          description: 'Small ints keep declaring int4'
       );
+
+      // # Cast-like text inside literals and comments is not a cast
+      $sql = "UPDATE templates SET body = 'uses \$1::int4 syntax' WHERE slug = \$1";
+      $Operation = $Database->query($sql, ['home']);
+      $expected = $parse($Operation->statement, $sql, [0]);
+
+      yield assert(
+         assertion: substr($Operation->write, 0, strlen($expected)) === $expected,
+         description: 'A cast written inside a string literal never types a string parameter'
+      );
+
+      $sql = 'SELECT body FROM templates WHERE slug = $1 -- TODO migrate to $1::int4';
+      $Operation = $Database->query($sql, ['home']);
+      $expected = $parse($Operation->statement, $sql, [0]);
+
+      yield assert(
+         assertion: substr($Operation->write, 0, strlen($expected)) === $expected,
+         description: 'A cast written inside a comment never types a string parameter'
+      );
    }
 );

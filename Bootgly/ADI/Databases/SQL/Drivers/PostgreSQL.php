@@ -1196,9 +1196,15 @@ class PostgreSQL extends Driver
          return 701;
       }
 
-      // ! Strings carry no reliable OID — declaring text (25) pinned the
-      //   backend to that type and broke most column targets; the cast scan
-      //   below (or OID 0) lets the backend infer from context instead.
+      // ?: Strings carry no reliable OID — declaring text (25) pinned the
+      //    backend to that type and broke most column targets. The cast scan
+      //    below is a plain text match, so a `$N::type` written inside a
+      //    literal or a comment would pin the wrong type just as hard: a
+      //    string parameter is always left for the backend to infer.
+      if (is_string($parameter)) {
+         return 0;
+      }
+
       $position = $index + 1;
       $pattern = '/\\$' . $position . '\\s*::\\s*([a-zA-Z_][a-zA-Z0-9_]*)(?:\\s+([a-zA-Z_][a-zA-Z0-9_]*))?/i';
 
