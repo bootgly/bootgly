@@ -31,6 +31,7 @@ use function is_scalar;
 use function is_string;
 use function preg_match;
 use function sha1;
+use function spl_object_id;
 use function str_starts_with;
 use function stream_socket_client;
 use function strlen;
@@ -93,6 +94,10 @@ class PostgreSQL extends Driver
    // @ Statement names evicted client-side, awaiting their paired wire Close.
    /** @var array<string,true> */
    private array $closing = [];
+   // @ Operations that composed a warm Bind of a statement they do not Parse,
+   //   per statement name — a queued Close waits for their bytes.
+   /** @var array<string,array<int,Operation>> */
+   private array $Holders = [];
    private null|Readiness $ReadReadiness = null;
    private null|Readiness $WriteReadiness = null;
    /** @var resource|null */
@@ -191,6 +196,10 @@ class PostgreSQL extends Driver
             }
 
             $Operation->write = "{$bind}{$describe}{$execute}{$sync}";
+
+            // ! This batch Binds a statement it does not Parse — hold the name
+            //   against any queued Close until these bytes reach the socket.
+            $this->Holders[$Operation->statement][spl_object_id($Operation)] = $Operation;
 
             return $Operation;
          }
@@ -353,9 +362,17 @@ class PostgreSQL extends Driver
             $closes = '';
 
             foreach ($this->closing as $name => $queued) {
-               // ? A queued Close must never decapitate the batch it rides
-               //   ahead of — a name this warm batch binds stays queued.
-               if ($name === $Operation->statement && $Operation->prepared) {
+               // ? A queued Close must never decapitate a Bind that no longer
+               //   Parses the name: this batch when it binds the name warm, or
+               //   any sibling composed warm and still unflushed. A batch that
+               //   re-Parses the name always leads with the Close — statement
+               //   identity is content-derived, so the re-Parse restores an
+               //   identical statement for every holder behind it.
+               $held = $name === $Operation->statement
+                  ? $Operation->prepared
+                  : $this->scan($name);
+
+               if ($held) {
                   continue;
                }
 
@@ -378,6 +395,7 @@ class PostgreSQL extends Driver
          }
 
          $this->writing = null;
+         $this->free($Operation);
 
          if ($Operation->statement !== '' && $Operation->prepared === false) {
             $this->preparing[$Operation->statement] = true;
@@ -485,6 +503,7 @@ class PostgreSQL extends Driver
       $this->statements = [];
       $this->preparing = [];
       $this->closing = [];
+      $this->Holders = [];
       $this->writing = null;
       $this->Decoder = new Decoder;
 
@@ -550,6 +569,53 @@ class PostgreSQL extends Driver
       $this->closing[$statement] = true;
 
       return $this;
+   }
+
+   /**
+    * Scan for a composed batch still binding one prepared statement name.
+    */
+   private function scan (string $statement): bool
+   {
+      $Holders = $this->Holders[$statement] ?? [];
+
+      // @@ Holders — a flushed or finished operation no longer holds anything:
+      //    its Bind bytes are already ordered ahead of any later Close.
+      foreach ($Holders as $id => $Held) {
+         if ($Held->finished || $Held->write === '') {
+            unset($this->Holders[$statement][$id]);
+
+            continue;
+         }
+
+         // :
+         return true;
+      }
+
+      if (($this->Holders[$statement] ?? []) === []) {
+         unset($this->Holders[$statement]);
+      }
+
+      // :
+      return false;
+   }
+
+   /**
+    * Free one operation's hold on its prepared statement name.
+    */
+   private function free (Operation $Operation): void
+   {
+      $statement = $Operation->statement;
+
+      // ?
+      if (isset($this->Holders[$statement]) === false) {
+         return;
+      }
+
+      unset($this->Holders[$statement][spl_object_id($Operation)]);
+
+      if ($this->Holders[$statement] === []) {
+         unset($this->Holders[$statement]);
+      }
    }
 
    /**
