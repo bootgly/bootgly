@@ -15,6 +15,7 @@ return new Suite(
    suiteName: __NAMESPACE__,
    tests: [
       '1.1-render-color_name_to_color',
+      '1.2-render-background_name_to_color',
       '2.1-render-dots_to_EOL',
       '3.1-render-log_level_to_style',
       '4.1-render-style_symbol_to_style',

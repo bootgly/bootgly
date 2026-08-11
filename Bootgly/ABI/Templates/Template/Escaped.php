@@ -76,10 +76,36 @@ class Escaped
       
                default => self::_DEFAULT_FOREGROUND
             };
-      
+
             return self::wrap($color);
          },
-   
+
+         '/@(![a-zA-Z]+):(\s?)/m' => function ($matches) {
+            $color = match ($matches[1]) {
+               '!black' => self::_BLACK_BACKGROUND,
+               '!red' => self::_RED_BACKGROUND,
+               '!green' => self::_GREEN_BACKGROUND,
+               '!yellow' => self::_YELLOW_BACKGROUND,
+               '!blue' => self::_BLUE_BACKGROUND,
+               '!magenta' => self::_MAGENTA_BACKGROUND,
+               '!cyan' => self::_CYAN_BACKGROUND,
+               '!white' => self::_WHITE_BACKGROUND,
+
+               '!Black', '!BLACK' => self::_BLACK_BRIGHT_BACKGROUND,
+               '!Red', '!RED' => self::_RED_BRIGHT_BACKGROUND,
+               '!Green', '!GREEN' => self::_GREEN_BRIGHT_BACKGROUND,
+               '!Yellow', '!YELLOW' => self::_YELLOW_BRIGHT_BACKGROUND,
+               '!Blue', '!BLUE' => self::_BLUE_BRIGHT_BACKGROUND,
+               '!Magenta', '!MAGENTA' => self::_MAGENTA_BRIGHT_BACKGROUND,
+               '!Cyan', '!CYAN' => self::_CYAN_BRIGHT_BACKGROUND,
+               '!White', '!WHITE' => self::_WHITE_BRIGHT_BACKGROUND,
+
+               default => self::_DEFAULT_BACKGROUND
+            };
+
+            return self::wrap($color);
+         },
+
          '/@(\\\\+);/m' => function ($matches) { // DEPRECATED
             if ($matches[0]) {
                return str_repeat(PHP_EOL, strlen($matches[1]));

@@ -87,6 +87,8 @@ trait Formattable
    public const string _GREEN_DIM_BACKGROUND  = '48;2;42;50;42';
    public const string _GREEN_SOFT_BACKGROUND = '48;2;48;58;48';
    public const string _GREEN_PALE_BACKGROUND = '48;2;38;97;38';
+   public const string _BLACK_DIM_BACKGROUND  = '48;2;38;38;38';
+   public const string _BLACK_SOFT_BACKGROUND = '48;2;58;58;58';
 
 
    // ! Styling
