@@ -14,13 +14,15 @@ namespace Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL;
 use function count;
 use function is_array;
 use function is_bool;
+use function is_finite;
 use function is_float;
 use function is_int;
+use function is_nan;
 use function is_scalar;
 use function is_string;
 use function pack;
+use function sprintf;
 use function strlen;
-use function var_export;
 use InvalidArgumentException;
 
 use Bootgly\ADI\Database\Config;
@@ -354,10 +356,10 @@ class Encoder
          return $value ? 't' : 'f';
       }
 
-      // ? Floats — shortest round-trip rendering, immune to the `precision`
-      //   ini (the backend parses the text itself, so no digits are lost).
+      // ? Floats — shortest round-trip rendering (the backend parses the text
+      //   itself, so no digits may be lost on the way out).
       if (is_float($value)) {
-         return var_export($value, true);
+         return $this->render($value);
       }
 
       if (is_scalar($value)) {
@@ -365,6 +367,40 @@ class Encoder
       }
 
       throw new InvalidArgumentException('PostgreSQL parameter must be scalar or null.');
+   }
+
+   /**
+    * Render one float as the shortest text that reads back identically.
+    *
+    * Neither `var_export()` nor a `(string)` cast can be used here: their digit
+    * counts follow the `serialize_precision` and `precision` inis, so the same
+    * double would reach the backend differently on two installations.
+    */
+   private function render (float $value): string
+   {
+      // ?: Non-finite values carry no digits — these spellings are the ones
+      //    PostgreSQL parses and emits itself.
+      if (is_finite($value) === false) {
+         if (is_nan($value)) {
+            return 'NaN';
+         }
+
+         return $value > 0 ? 'Infinity' : '-Infinity';
+      }
+
+      // @@ Digits — 17 significant digits always round-trip a double; shorter
+      //    renderings are tried first so ordinary values stay readable.
+      foreach ([15, 16, 17] as $digits) {
+         $rendered = sprintf("%.{$digits}G", $value);
+
+         if ((float) $rendered === $value) {
+            // :
+            return $rendered;
+         }
+      }
+
+      // :
+      return sprintf('%.17G', $value);
    }
 
    /**

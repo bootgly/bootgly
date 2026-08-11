@@ -9,49 +9,60 @@ return new Test(
    description: 'Database: PostgreSQL encoder renders text floats round-trip exact',
    test: function () {
       $Encoder = new Encoder;
-      $expected = function (string $rendered): string {
-         $formatCount = pack('n', 0);
-         $parameterCount = pack('n', 1);
-         $length = pack('N', strlen($rendered));
-         $resultFormatCount = pack('n', 0);
-         $body = "\0s1\0{$formatCount}{$parameterCount}{$length}{$rendered}{$resultFormatCount}";
-
-         return 'B' . pack('N', strlen($body) + 4) . $body;
-      };
-      $encode = fn (float $value): string => $Encoder->encode(Encoder::BIND, [
+      // ! Text format is mandatory for the first execution of every
+      //   parameterized statement — no cached OIDs, so no binary path.
+      $bind = fn (float $value): string => $Encoder->encode(Encoder::BIND, [
          'portal' => '',
          'statement' => 's1',
          'parameters' => [$value],
       ]);
+      // ! The rendered parameter follows the 4-byte length at offset 13.
+      $read = function (string $message): string {
+         $length = unpack('N', substr($message, 13, 4));
 
-      // ! The `precision` ini governs (string) float casts — pin the default
-      //   so the divergence this spec guards against is deterministic.
-      $previous = (string) ini_set('precision', '14');
+         return substr($message, 17, $length === false ? 0 : (int) $length[1]);
+      };
 
-      $samples = [0.1 + 0.2, 1 / 3, M_PI, 1.2345678901234567, PHP_FLOAT_EPSILON, PHP_FLOAT_MAX, PHP_FLOAT_MIN, -0.0];
-      $exact = true;
+      $samples = [0.1 + 0.2, 1 / 3, M_PI, 1.2345678901234567, PHP_FLOAT_EPSILON, PHP_FLOAT_MAX, PHP_FLOAT_MIN, -0.0, 1e-320];
+      // ! Every ini that governs a float-to-string conversion in PHP: a wire
+      //   serializer must render the same bytes under all of them.
+      $inis = [
+         ['serialize_precision', '-1'],
+         ['serialize_precision', '10'],
+         ['serialize_precision', '17'],
+         ['precision', '10'],
+         ['precision', '14'],
+         ['precision', '17'],
+      ];
       $roundtrip = true;
+      $stable = true;
 
       foreach ($samples as $sample) {
-         $rendered = var_export($sample, true);
-         $exact = $exact && $encode($sample) === $expected($rendered);
-         $roundtrip = $roundtrip && (float) $rendered === $sample;
+         $expected = $bind($sample);
+         $roundtrip = $roundtrip && (float) $read($expected) === $sample;
+
+         foreach ($inis as [$ini, $value]) {
+            $previous = (string) ini_set($ini, $value);
+            $stable = $stable && $bind($sample) === $expected;
+            ini_set($ini, $previous);
+         }
       }
 
-      $specials = $encode(INF) === $expected('INF')
-         && $encode(-INF) === $expected('-INF')
-         && $encode(NAN) === $expected('NAN');
-
-      ini_set('precision', $previous);
-
       yield assert(
-         assertion: $exact && $roundtrip,
-         description: 'Text-format floats render with shortest round-trip digits, immune to the precision ini'
+         assertion: $roundtrip,
+         description: 'Text-format floats render with digits that read back to the same double'
       );
 
       yield assert(
-         assertion: $specials,
-         description: 'INF, -INF and NAN keep their PostgreSQL-parsable text spellings'
+         assertion: $stable,
+         description: 'The rendering never changes with the precision or serialize_precision inis'
+      );
+
+      yield assert(
+         assertion: $read($bind(INF)) === 'Infinity'
+            && $read($bind(-INF)) === '-Infinity'
+            && $read($bind(NAN)) === 'NaN',
+         description: 'Infinities and NaN use the spellings PostgreSQL parses and emits'
       );
    }
 );

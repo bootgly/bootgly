@@ -303,17 +303,24 @@ return new Test(
       );
 
       // # Float defaults — shortest round-trip rendering (PG-3)
-      $previous = (string) ini_set('precision', '14');
+      $ratios = function () use ($Schema): string {
+         return $Schema->create('ratios', function (Blueprint $Table): void {
+            $Table->add('ratio', Types::Float)->default = 0.1 + 0.2;
+         })->SQL;
+      };
+      $expected = 'CREATE TABLE "ratios" ("ratio" DOUBLE PRECISION NOT NULL DEFAULT 0.30000000000000004)';
+      // ! Compiled DDL must not depend on a display-formatting ini.
+      $stable = true;
 
-      $Query = $Schema->create('ratios', function (Blueprint $Table): void {
-         $Table->add('ratio', Types::Float)->default = 0.1 + 0.2;
-      });
-
-      ini_set('precision', $previous);
+      foreach ([['precision', '10'], ['precision', '14'], ['serialize_precision', '10']] as [$ini, $value]) {
+         $previous = (string) ini_set($ini, $value);
+         $stable = $stable && $ratios() === $expected;
+         ini_set($ini, $previous);
+      }
 
       yield assert(
-         assertion: $Query->SQL === 'CREATE TABLE "ratios" ("ratio" DOUBLE PRECISION NOT NULL DEFAULT 0.30000000000000004)',
-         description: 'Schema renders float defaults with shortest round-trip digits'
+         assertion: $ratios() === $expected && $stable,
+         description: 'Schema renders float defaults with shortest round-trip digits under any precision ini'
       );
    }
 );
