@@ -164,6 +164,40 @@ enum Keystrokes : string
          return $sequence;
       }
 
+      // ! Kitty functional keys — the keypad translates to its main-keyboard
+      //   equivalent (a numpad `/` arrives as KP_DIVIDE 57410 once the protocol
+      //   is on) and then flows through the regular reconstruction below
+      $code = match ($code) {
+         57399, 57400, 57401, 57402, 57403,
+         57404, 57405, 57406, 57407, 57408 => $code - 57351, // KP_0..KP_9 → '0'..'9'
+         57409 => 46,  // KP_DECIMAL   → '.'
+         57410 => 47,  // KP_DIVIDE    → '/'
+         57411 => 42,  // KP_MULTIPLY  → '*'
+         57412 => 45,  // KP_SUBTRACT  → '-'
+         57413 => 43,  // KP_ADD       → '+'
+         57414 => 13,  // KP_ENTER     → Enter
+         57415 => 61,  // KP_EQUAL     → '='
+         57416 => 44,  // KP_SEPARATOR → ','
+         default => $code
+      };
+
+      // ? Unmodified keypad navigation rewrites to its legacy sequence
+      if ($code >= 57417 && $code <= 57426 && $modifiers <= 1) {
+         // :
+         return match ($code) {
+            57417 => self::LEFT->value,
+            57418 => self::RIGHT->value,
+            57419 => self::UP->value,
+            57420 => self::DOWN->value,
+            57421 => self::PAGEUP->value,
+            57422 => self::PAGEDOWN->value,
+            57423 => self::HOME->value,
+            57424 => self::END->value,
+            57425 => self::INSERT->value,
+            57426 => self::DELETE->value
+         };
+      }
+
       // ? Non-ASCII keys keep their legacy encoding — nothing to reconstruct
       if ($code > 127) {
          // :
@@ -199,6 +233,10 @@ enum Keystrokes : string
          $held === 1 && $code === 13 => self::SHIFT_ENTER->value,
          $held === 2 && $code === 13 => self::ALT_ENTER->value,
          $held === 4 && $code === 13 => self::CTRL_ENTER->value,
+         // ? Shift (or AltGr = Ctrl+Alt) + printable — the code is the resolved
+         //   grapheme (international layouts reach punctuation through these
+         //   modifiers; dropping the sequence would swallow the typed character)
+         ($held === 1 || $held === 6) && $code >= 32 && $code <= 126 => chr($code),
          default => $sequence
       };
    }

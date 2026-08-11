@@ -68,6 +68,43 @@ return new Test(
          description: 'Sequences that are not protocol reports pass through'
       );
 
+      // @ Shift + printable reconstructs the typed character — terminals on
+      //   international layouts report shifted punctuation through the protocol
+      yield assert(
+         assertion: $listen("\e[27;2;47~") === '/'
+            && $listen("\e[47;2u") === '/'
+            && $listen("\e[64;2u") === '@',
+         description: 'Shifted printable reports resolve to their characters'
+      );
+
+      yield assert(
+         assertion: $listen("\e[27;7;47~") === '/'
+            && $listen("\e[64;7u") === '@',
+         description: 'AltGr (Ctrl+Alt) printable reports resolve to their characters'
+      );
+
+      // @ Kitty keypad reports translate to their main-keyboard equivalents
+      //   (VSCode's xterm.js sends KP_DIVIDE for a numpad `/`)
+      yield assert(
+         assertion: $listen("\e[57410u") === '/'
+            && $listen("\e[57399u") === '0'
+            && $listen("\e[57408u") === '9'
+            && $listen("\e[57413u") === '+',
+         description: 'Keypad characters resolve to their typed characters'
+      );
+
+      yield assert(
+         assertion: $listen("\e[57414u") === Keystrokes::ENTER->value
+            && $listen("\e[57414;2u") === Keystrokes::SHIFT_ENTER->value,
+         description: 'Keypad Enter behaves as Enter — Shift included'
+      );
+
+      yield assert(
+         assertion: $listen("\e[57419u") === Keystrokes::UP->value
+            && $listen("\e[57426u") === Keystrokes::DELETE->value,
+         description: 'Unmodified keypad navigation rewrites to its legacy sequence'
+      );
+
       // @ Unknown reports stay verbatim rather than becoming a wrong key
       yield assert(
          assertion: $listen("\e[57441;2u") === "\e[57441;2u",
