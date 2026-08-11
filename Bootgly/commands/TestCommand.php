@@ -19,6 +19,8 @@ use const DIRECTORY_SEPARATOR;
 use const JSON_THROW_ON_ERROR;
 use const PHP_BINARY;
 use const PHP_EOL;
+use const SIG_IGN;
+use const SIGPIPE;
 use const STDERR;
 use const STDIN;
 use const STDOUT;
@@ -39,10 +41,12 @@ use function defined;
 use function dirname;
 use function escapeshellarg;
 use function explode;
+use function fclose;
 use function file_get_contents;
 use function file_put_contents;
 use function function_exists;
 use function fwrite;
+use function get_resources;
 use function getcwd;
 use function getenv;
 use function getmypid;
@@ -78,6 +82,7 @@ use function proc_open;
 use function putenv;
 use function random_bytes;
 use function realpath;
+use function register_shutdown_function;
 use function rename;
 use function round;
 use function rtrim;
@@ -89,6 +94,7 @@ use function str_pad;
 use function str_repeat;
 use function str_replace;
 use function str_starts_with;
+use function stream_get_meta_data;
 use function strlen;
 use function strtolower;
 use function substr;
@@ -220,6 +226,32 @@ class TestCommand extends Command
          $code = 1;
          passthru($line, $code);
          exit($code);
+      }
+
+      // ! Socket teardown
+      // Suites that drive a live server keep TLS sessions open by design (the
+      // client pool, an E2E harness leg). PHP flushes a TLS `close_notify` on
+      // each one while destroying resources — after the pcntl handlers are
+      // already gone, so a peer that went away first turns that write into a
+      // fatal SIGPIPE and a fully green run still exits 141. Close them here,
+      // where the signal can still be ignored. Forked children inherit this
+      // callback, so only the process that registered it may run it.
+      if (function_exists('pcntl_signal')) {
+         $owner = getmypid();
+         register_shutdown_function(static function () use ($owner): void {
+            if (getmypid() !== $owner) {
+               return;
+            }
+
+            pcntl_signal(SIGPIPE, SIG_IGN, false);
+
+            foreach (get_resources('stream') as $Stream) {
+               $metadata = @stream_get_meta_data($Stream);
+               if (str_contains($metadata['stream_type'], 'socket')) {
+                  @fclose($Stream);
+               }
+            }
+         });
       }
 
       // ! Agent detection
