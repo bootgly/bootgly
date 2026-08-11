@@ -239,7 +239,7 @@ class Encoder
 
       foreach ($parameters as $parameter) {
          $type = is_scalar($types[$position] ?? null) ? (int) $types[$position] : 0;
-         $format = $this->select($type);
+         $format = $this->select($type, $parameter);
          $formats[] = $format;
          $formatted[] = $this->format($parameter, $type, $format);
          $position++;
@@ -368,12 +368,17 @@ class Encoder
    }
 
    /**
-    * Select one PostgreSQL parameter format code by OID.
+    * Select one PostgreSQL parameter format code by OID and PHP value.
     */
-   private function select (int $type): int
+   private function select (int $type, mixed $value): int
    {
+      // : Binary only when the PHP value provably fits the declared OID —
+      //   anything else travels as text so the backend validates it itself.
       return match ($type) {
-         16, 21, 23, 700, 701 => 1,
+         16 => is_bool($value) ? 1 : 0,
+         21 => is_int($value) && $value >= -32768 && $value <= 32767 ? 1 : 0,
+         23 => is_int($value) && $value >= -2147483648 && $value <= 2147483647 ? 1 : 0,
+         700, 701 => is_float($value) ? 1 : 0,
          default => 0,
       };
    }
@@ -399,20 +404,27 @@ class Encoder
     */
    private function pack (mixed $value, int $type): string
    {
-      if (is_scalar($value) === false) {
-         throw new InvalidArgumentException('PostgreSQL binary parameter must be scalar.');
-      }
-
-      if ($type !== 16 && $type !== 21 && $type !== 23 && $type !== 700 && $type !== 701) {
-         throw new InvalidArgumentException('PostgreSQL binary parameter type is unsupported.');
-      }
-
+      // : Every arm validates the PHP value against the declared OID — a
+      //   mismatch throws instead of masking bytes into a wrong-but-valid row.
       return match ($type) {
-         16 => $value ? "\x01" : "\x00",
-         21 => pack('n', ((int) $value) & 0xFFFF),
-         23 => pack('N', ((int) $value) & 0xFFFFFFFF),
-         700 => pack('G', (float) $value),
-         701 => pack('E', (float) $value),
+         16 => match ($value) {
+            true => "\x01",
+            false => "\x00",
+            default => throw new InvalidArgumentException('PostgreSQL binary boolean parameter must be a bool.'),
+         },
+         21 => is_int($value) && $value >= -32768 && $value <= 32767
+            ? pack('n', $value)
+            : throw new InvalidArgumentException('PostgreSQL binary smallint parameter is out of range.'),
+         23 => is_int($value) && $value >= -2147483648 && $value <= 2147483647
+            ? pack('N', $value)
+            : throw new InvalidArgumentException('PostgreSQL binary integer parameter is out of range.'),
+         700 => is_float($value)
+            ? pack('G', $value)
+            : throw new InvalidArgumentException('PostgreSQL binary real parameter must be a float.'),
+         701 => is_float($value)
+            ? pack('E', $value)
+            : throw new InvalidArgumentException('PostgreSQL binary double parameter must be a float.'),
+         default => throw new InvalidArgumentException('PostgreSQL binary parameter type is unsupported.'),
       };
    }
 }

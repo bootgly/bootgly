@@ -85,5 +85,8 @@ return new Suite(
       '10.18-mysql_prepare_flag',
       '4.5-pool-finished_assign',
       '7.16-postgresql_float_text',
+      '7.17-postgresql_encoder_value_formats',
+      '7.18-postgresql_parameter_inference',
+      '7.19-postgresql_statement_identity',
    ]
 );

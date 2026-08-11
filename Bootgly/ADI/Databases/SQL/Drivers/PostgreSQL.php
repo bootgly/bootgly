@@ -20,6 +20,7 @@ use function feof;
 use function fread;
 use function fwrite;
 use function hex2bin;
+use function implode;
 use function is_array;
 use function is_bool;
 use function is_float;
@@ -142,19 +143,6 @@ class PostgreSQL extends Driver
             return $Operation;
          }
 
-         $statement = $this->names[$Operation->SQL] ?? '';
-
-         if ($statement === '') {
-            $hash = sha1($Operation->SQL);
-            $statement = "bootgly_{$hash}";
-            $this->names[$Operation->SQL] = $statement;
-         }
-
-         $Operation->statement = $statement;
-         $Operation->portal = '';
-         $cached = $this->statements[$Operation->statement] ?? false;
-         $preparing = isset($this->preparing[$Operation->statement]);
-         $Operation->prepared = $cached !== false || $preparing;
          $types = [];
          $index = 0;
 
@@ -162,6 +150,24 @@ class PostgreSQL extends Driver
             $types[] = $this->infer($parameter, $Operation, $index);
             $index++;
          }
+
+         // ! Inferred types join the statement identity — the same SQL with a
+         //   different type signature must Parse as a different statement.
+         $signature = implode(',', $types);
+         $key = "{$Operation->SQL}\0{$signature}";
+         $statement = $this->names[$key] ?? '';
+
+         if ($statement === '') {
+            $hash = sha1($key);
+            $statement = "bootgly_{$hash}";
+            $this->names[$key] = $statement;
+         }
+
+         $Operation->statement = $statement;
+         $Operation->portal = '';
+         $cached = $this->statements[$Operation->statement] ?? false;
+         $preparing = isset($this->preparing[$Operation->statement]);
+         $Operation->prepared = $cached !== false || $preparing;
 
          $bind = $Encoder->bind([
             'portal' => $Operation->portal,
@@ -1105,7 +1111,9 @@ class PostgreSQL extends Driver
    private function infer (mixed $parameter, Operation $Operation, int $index): int
    {
       if (is_int($parameter)) {
-         return 23;
+         // ?: int4 only when the value fits — int8 otherwise, so magnitude
+         //    joins the statement identity and can never truncate silently.
+         return $parameter >= -2147483648 && $parameter <= 2147483647 ? 23 : 20;
       }
 
       if (is_bool($parameter)) {
@@ -1116,10 +1124,9 @@ class PostgreSQL extends Driver
          return 701;
       }
 
-      if (is_string($parameter)) {
-         return 25;
-      }
-
+      // ! Strings carry no reliable OID — declaring text (25) pinned the
+      //   backend to that type and broke most column targets; the cast scan
+      //   below (or OID 0) lets the backend infer from context instead.
       $position = $index + 1;
       $pattern = '/\\$' . $position . '\\s*::\\s*([a-zA-Z_][a-zA-Z0-9_]*)(?:\\s+([a-zA-Z_][a-zA-Z0-9_]*))?/i';
 
