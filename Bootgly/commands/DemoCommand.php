@@ -224,6 +224,8 @@ class DemoCommand extends Command
          '60.2' => 'UI/Heatmap-03.demo.php', // Live failures + custom palette
          // Button
          61 => 'UI/Button-01.demo.php',
+         // Scrollbar
+         62 => 'UI/Scrollbar-01.demo.php',
       ];
 
       $last = array_key_last($examples);

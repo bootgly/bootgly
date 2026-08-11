@@ -17,13 +17,11 @@ use const PREG_SPLIT_NO_EMPTY;
 use function array_splice;
 use function count;
 use function explode;
-use function intdiv;
 use function max;
 use function mb_str_split;
 use function preg_match;
 use function preg_split;
 use function rewind;
-use function round;
 use function str_ends_with;
 use function stream_get_contents;
 use function substr;
@@ -33,13 +31,14 @@ use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
 use Bootgly\API\Component;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output;
+use Bootgly\CLI\UI\Atoms\Scrollbar;
 
 
 /**
  * Scrollable content band — an internally buffered window of rows rendered into a
- * fixed screen band, with its own scrollbar. Content fed while the area is stuck to
- * the bottom auto-follows; scrolling up holds the position while new rows arrive
- * (the scrollbar tracks it). Non-interactive output degrades to plain writes.
+ * fixed screen band, with a right-edge `Scrollbar` Atom strip. Content fed while the
+ * area is stuck to the bottom auto-follows; scrolling up holds the position while new
+ * rows arrive (the bar tracks it). Non-interactive output degrades to plain writes.
  */
 class Scrollarea extends Component
 {
@@ -70,7 +69,11 @@ class Scrollarea extends Component
    /** Following the newest rows (auto-scroll on feed)? */
    public private(set) bool $stuck;
    /** Pointer over the thumb (highlight)? */
-   public private(set) bool $hovered;
+   public bool $hovered {
+      get => $this->Scrollbar->hovered;
+   }
+   /** The right-edge bar (restyle its glyphs and paints through it) */
+   public private(set) Scrollbar $Scrollbar;
 
 
    public function __construct (Output $Output)
@@ -90,7 +93,7 @@ class Scrollarea extends Component
       // * Metadata
       $this->first = 0;
       $this->stuck = true;
-      $this->hovered = false;
+      $this->Scrollbar = new Scrollbar($Output);
    }
 
 
@@ -224,16 +227,14 @@ class Scrollarea extends Component
       }
 
       // ? The scrollbar column (rendered when the buffer overflows the band)
-      if (
-         $this->scrollbar === true && $column === $this->width
-         && count($this->buffer) > $this->rows
-      ) {
-         [$start, $size] = $this->measure();
+      if ($this->scrollbar === true && $column === $this->width) {
+         $this->sync();
 
-         $offset = $line - $this->row;
-
-         // :
-         return ($offset >= $start && $offset < $start + $size) ? 'thumb' : 'track';
+         $part = $this->Scrollbar->hit($column, $line);
+         if ($part !== null) {
+            // :
+            return $part;
+         }
       }
 
       // :
@@ -257,31 +258,21 @@ class Scrollarea extends Component
          return;
       }
 
-      [, $size] = $this->measure();
-
-      // ! Thumb start aimed by its center
-      $span = $this->rows - $size;
-      $offset = $line - $this->row - intdiv($size, 2);
-      if ($offset < 0) {
-         $offset = 0;
-      }
-      if ($offset > $span) {
-         $offset = $span;
-      }
+      $this->sync();
 
       // ! Buffer row from the thumb proportion
-      $bottom = $total - $this->rows;
-      $aimed = $span > 0 ? (int) round($offset / $span * $bottom) : $bottom;
+      $aimed = $this->Scrollbar->aim($line);
 
       // * Metadata
       $this->first = $aimed;
-      $this->stuck = ($aimed === $bottom);
+      $this->stuck = ($aimed === $total - $this->rows);
 
       $this->render();
    }
 
    /**
-    * Updates the pointer-over-thumb state — the thumb highlights while hovered.
+    * Updates the pointer-over-thumb state — the thumb highlights while hovered,
+    * repainting the bar strip only.
     *
     * @param bool $over Whether the pointer is over the thumb.
     *
@@ -289,15 +280,9 @@ class Scrollarea extends Component
     */
    public function hover (bool $over): void
    {
-      // ? Unchanged
-      if ($this->hovered === $over) {
-         return;
-      }
+      $this->sync();
 
-      // * Metadata
-      $this->hovered = $over;
-
-      $this->render();
+      $this->Scrollbar->hover($over);
    }
 
    /**
@@ -313,7 +298,8 @@ class Scrollarea extends Component
       // * Metadata
       $this->first = 0;
       $this->stuck = true;
-      $this->hovered = false;
+
+      $this->Scrollbar->reset();
    }
 
    /**
@@ -326,39 +312,27 @@ class Scrollarea extends Component
     */
    public function render (int $mode = self::WRITE_OUTPUT): null|string
    {
-      $total = count($this->buffer);
-      $sliding = ($this->scrollbar === true && $total > $this->rows);
+      $this->sync();
 
-      // ! Scrollbar thumb geometry
-      $size = 0;
-      $start = 0;
+      $sliding = ($this->scrollbar === true && $this->Scrollbar->check() === true);
+
+      // ! Bar strip rows (the Scrollbar Atom derives the thumb)
+      $bars = [];
       if ($sliding === true) {
-         [$start, $size] = $this->measure();
+         $bars = explode("\n", (string) $this->Scrollbar->render(self::RETURN_OUTPUT));
       }
 
       // ! Band rows
       $lines = [];
       for ($index = 0; $index < $this->rows; $index++) {
-         $content = $this->buffer[$this->first + $index] ?? '';
-
-         $bar = '';
-         if ($sliding === true) {
-            $aimed = ($index >= $start && $index < $start + $size);
-            $glyph = $aimed ? '█' : '│';
-            $color = ($aimed === true && $this->hovered === true)
-               ? self::_WHITE_BRIGHT_FOREGROUND
-               : self::_BLACK_BRIGHT_FOREGROUND;
-
-            $bar = self::wrap($color) . $glyph . self::_RESET_FORMAT;
-         }
-
-         $lines[] = [$content, $bar];
+         $lines[] = $this->buffer[$this->first + $index] ?? '';
       }
 
       // ?: Frame as string
       if ($mode === self::RETURN_OUTPUT || $this->render === self::RETURN_OUTPUT) {
          $frame = '';
-         foreach ($lines as [$content, $bar]) {
+         foreach ($lines as $index => $content) {
+            $bar = $bars[$index] ?? '';
             $frame .= "{$content}{$bar}\n";
          }
 
@@ -366,37 +340,32 @@ class Scrollarea extends Component
          return $frame;
       }
 
-      // @ Repaint the band rows in place
-      foreach ($lines as $index => [$content, $bar]) {
+      // @ Repaint the band rows in place, then the bar strip over the right edge
+      foreach ($lines as $index => $content) {
          $this->Output->Cursor->moveTo(line: $this->row + $index, column: 1);
          $this->Output->Text->trim(right: true);
          $this->Output->write($content);
+      }
 
-         if ($bar !== '') {
-            $this->Output->Cursor->moveTo(line: $this->row + $index, column: $this->width);
-            $this->Output->write($bar);
-         }
+      if ($sliding === true) {
+         $this->Scrollbar->render();
       }
 
       return null;
    }
 
    /**
-    * Computes the scrollbar thumb geometry from the buffer and view state.
+    * Syncs the view numbers and the strip geometry into the Scrollbar Atom.
     *
-    * @return array{0: int, 1: int} The thumb [start, size], in band rows.
+    * @return void
     */
-   private function measure (): array
+   private function sync (): void
    {
-      $total = count($this->buffer);
-
-      $size = max(1, (int) round($this->rows * $this->rows / $total));
-
-      $bottom = max(1, $total - $this->rows);
-      $start = (int) round($this->first / $bottom * ($this->rows - $size));
-
-      // :
-      return [$start, $size];
+      $this->Scrollbar->row = $this->row;
+      $this->Scrollbar->column = $this->width;
+      $this->Scrollbar->height = $this->rows;
+      $this->Scrollbar->total = count($this->buffer);
+      $this->Scrollbar->first = $this->first;
    }
 
    /**

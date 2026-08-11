@@ -12,6 +12,7 @@ namespace Bootgly\CLI\UI\Base;
 
 
 use function count;
+use function explode;
 use function implode;
 use function max;
 use function mb_strimwidth;
@@ -20,13 +21,13 @@ use function mb_strlen;
 use function mb_strwidth;
 use function mb_substr;
 use function min;
-use function round;
 use function str_repeat;
 
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\API\Component;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\Terminal\Output\Window;
+use Bootgly\CLI\UI\Atoms\Scrollbar;
 
 
 /**
@@ -83,6 +84,8 @@ class Listbox extends Component
    public private(set) int $aimed;
    /** The visible slice calculator */
    public private(set) Window $Window;
+   /** The right-edge bar (restyle its glyphs and paints through it) */
+   public private(set) Scrollbar $Scrollbar;
    /** Rows the last render produced — hosts place the block by it */
    public private(set) int $height;
 
@@ -114,6 +117,7 @@ class Listbox extends Component
       // * Metadata
       $this->aimed = 0;
       $this->Window = new Window;
+      $this->Scrollbar = new Scrollbar($Output);
       $this->height = 0;
    }
 
@@ -238,16 +242,16 @@ class Listbox extends Component
 
       $visible = $this->Window->last - $this->Window->first + 1;
 
-      // ! Scrollbar thumb geometry — mirrors the Scrollarea's proportions
-      $sliding = $this->scrollbar === true && $total > $visible;
-      $size = 0;
-      $start = 0;
-      if ($sliding === true) {
-         $size = max(1, (int) round($visible * $visible / $total));
+      // ! Scrollbar — the Atom derives the thumb from the view numbers
+      $this->Scrollbar->total = $total;
+      $this->Scrollbar->height = $visible;
+      $this->Scrollbar->first = $this->Window->first;
 
-         $limit = $visible - $size;
-         $start = (int) round($this->Window->first * $limit / max(1, $total - $visible));
-      }
+      $sliding = $this->scrollbar === true && $this->Scrollbar->check() === true;
+
+      $bars = $sliding === true
+         ? explode("\n", (string) $this->Scrollbar->render(self::RETURN_OUTPUT))
+         : [];
 
       // ! Rows — without a scrollbar, the clipped edges announce what they hide
       $rows = [];
@@ -327,10 +331,7 @@ class Listbox extends Component
          // ? Scrollbar column at the right edge
          $bar = '';
          if ($sliding === true) {
-            $row = $index - $this->Window->first;
-            $glyph = ($row >= $start && $row < $start + $size) ? '█' : '│';
-
-            $bar = "@#Black:{$glyph}\e[0m";
+            $bar = $bars[$index - $this->Window->first] ?? '';
          }
 
          $rows[] = $aimed === true

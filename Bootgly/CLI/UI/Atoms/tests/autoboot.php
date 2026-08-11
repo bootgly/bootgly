@@ -32,5 +32,8 @@ return new Suite(
 
       '7.1-button-render',
       '7.2-button-pointer',
+
+      '8.1-scrollbar-render',
+      '8.2-scrollbar-pointer',
    ]
 );

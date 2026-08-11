@@ -164,7 +164,7 @@ return new Suites(
       'Bootgly/WPI/Nodes/HTTP_Client_CLI/tests/HTTP2_TLS/',
       // # UDP_Server_CLI — per-peer Connection lifecycle unit doubles
       'Bootgly/WPI/Interfaces/UDP_Server_CLI/tests/',
-      // # CLI UI Atoms — Text (+Effects), Highlighter, Dumper, Statusbar, Figlet, Differ, Button
+      // # CLI UI Atoms — Text (+Effects), Highlighter, Dumper, Statusbar, Figlet, Differ, Button, Scrollbar
       'Bootgly/CLI/UI/Atoms/',
       // # CLI UI Base — Frame (region canvas), Fieldset, Flyout (anchored overlay), Listbox
       'Bootgly/CLI/UI/Base/',
