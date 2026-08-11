@@ -338,6 +338,13 @@ class Pool
     */
    public function assign (Operation $Operation): Operation
    {
+      // ? A finished operation must never be re-prepared — on synchronous
+      //   drivers prepare() executes, so a cancelled or refused statement
+      //   would run anyway.
+      if ($Operation->finished) {
+         return $Operation;
+      }
+
       $Operation->Pool = $this;
       $Connection = $this->acquire($Operation->Connection, $Operation->lock === false);
 
