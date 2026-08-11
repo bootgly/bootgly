@@ -518,6 +518,15 @@ class PostgreSQL extends Driver
          }
       }
 
+      // @ The batch still being written is a reader too — it is the operation
+      //   its caller is actively advancing, and it joins the pipeline behind
+      //   this slot as soon as its bytes are whole on the wire.
+      $Writing = $this->writing;
+
+      if ($Writing !== null && $Writing !== $Operation && $Writing->finished === false) {
+         $readers++;
+      }
+
       if ($readers === 0) {
          $this->abort($Operation, 'PostgreSQL abandoned batch has no reader left to drain its answer.');
 

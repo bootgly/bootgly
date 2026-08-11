@@ -232,7 +232,19 @@ class Pool
          return $Operation->fail('Database operation has no protocol to cancel.');
       }
 
-      return $Protocol->cancel($Operation);
+      $Operation = $Protocol->cancel($Operation);
+
+      // ? The cancel never reached the server: the operation is finished while
+      //   the driver still owns the answer the server keeps sending. That is
+      //   the same state an elapsed deadline leaves behind, so it takes the
+      //   same route — reconcile the wire, then take the connection back.
+      if ($Operation->finished && $Operation->cancelled === false) {
+         $Protocol->abandon($Operation);
+         $this->forget($Operation);
+         $this->release($Operation);
+      }
+
+      return $Operation;
    }
 
    /**

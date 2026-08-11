@@ -4,6 +4,7 @@
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\ADI\Database\Operation\OperationStates;
 use Bootgly\ADI\Databases\SQL;
+use Bootgly\ADI\Databases\SQL\Operation;
 
 
 return new Test(
@@ -155,6 +156,42 @@ return new Test(
 
       fclose($server);
       $Database->Connection->disconnect();
+
+      // # A sibling still writing its batch is a reader too
+      [$Database, $server] = $connect();
+      $Head = new Operation(null, 'SELECT 1 AS value', [], 0.02);
+      $Database->Pool->assign($Head);
+      $Database->advance($Head);
+      fread($server, 8192);
+
+      // @ Saturate the client side so the next batch cannot flush whole: the
+      //   sibling then holds the write stream instead of the pipeline.
+      $junk = str_repeat('x', 65536);
+
+      for ($i = 0; $i < 64 && @fwrite($Database->Connection->socket, $junk) > 0; $i++) {
+         // @@ fill the socket buffer
+      }
+
+      $Writer = new Operation(null, 'SELECT $1::text AS value', [str_repeat('y', 900000)], 30.0);
+      $Database->Pool->assign($Writer);
+      $Database->advance($Writer);
+
+      yield assert(
+         assertion: $Writer->write !== '' && $Writer->finished === false,
+         description: 'The sibling batch is only partially written'
+      );
+
+      usleep(30_000);
+      $Database->advance($Head);
+
+      yield assert(
+         assertion: $Database->Connection->connected
+            && $Database->Pool->created === 1
+            && $Writer->finished === false,
+         description: 'The batch still being written counts as a reader of the abandoned answer'
+      );
+
+      fclose($server);
 
       // # The pool path: an expired operation gives its slot back
       [$Database, $server] = $connect(0.02);
