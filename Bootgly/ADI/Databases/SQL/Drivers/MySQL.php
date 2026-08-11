@@ -88,6 +88,9 @@ class MySQL extends Driver
    private array $meta = [];
    private string $phase = '';
    private bool $draining = false;
+   // @ The server finished answering the current command — the only point at
+   //   which the pipeline head may leave the wire.
+   private bool $synced = false;
    // @ COM_STMT_PREPARE response in flight for the pipeline head.
    private bool $preparing = false;
    // @ Parameter/column definition packets left to consume after prepare-OK.
@@ -647,6 +650,14 @@ class MySQL extends Driver
 
          $this->apply($Active, $Message);
 
+         // ? Only a protocol sync point retires the head. An operation the
+         //   pool finished from the outside — an elapsed deadline — still owns
+         //   the wire until the server stops answering it: leaving earlier
+         //   would hand its remaining packets to the next co-located command.
+         if ($this->pipeline !== [] && $this->synced === false) {
+            continue;
+         }
+
          if ($Active->finished) {
             if (($this->pipeline[0] ?? null) === $Active) {
                array_shift($this->pipeline);
@@ -693,6 +704,7 @@ class MySQL extends Driver
       $this->meta = [];
       $this->phase = '';
       $this->draining = false;
+      $this->synced = false;
       $this->preparing = false;
       $this->definitions = 0;
       $this->binary = false;
@@ -831,7 +843,10 @@ class MySQL extends Driver
          }
 
          if ($first === 0xFB) {
-            return $Operation->fail('MySQL LOCAL INFILE requests are not supported.');
+            // ? LOCAL INFILE — the server is now waiting for file content this
+            //   client never sends, so the wire can never resynchronize: the
+            //   next command would be read as the contents of a file.
+            return $this->abort($Operation, 'MySQL LOCAL INFILE requests are not supported.');
          }
 
          // ! Result set header — column count
@@ -914,6 +929,16 @@ class MySQL extends Driver
     */
    private function execute (Operation $Operation): Operation
    {
+      // ! Sync point — the COM_STMT_PREPARE response is complete and the
+      //   EXECUTE that follows is a new command on the wire.
+      $this->synced = true;
+
+      // ? Never re-arm an operation the pool already finished from the
+      //   outside: its retry may be running on another connection by now.
+      if ($Operation->finished) {
+         return $Operation;
+      }
+
       $entry = $this->statements[$Operation->SQL] ?? null;
 
       // ?
@@ -1192,6 +1217,9 @@ class MySQL extends Driver
          return $Operation;
       }
 
+      // ! Sync point — the server stopped answering this command.
+      $this->synced = true;
+
       $affected = $fields['affected'] ?? 0;
       $affected = is_int($affected) ? $affected : 0;
       $inserted = $fields['inserted'] ?? 0;
@@ -1229,6 +1257,9 @@ class MySQL extends Driver
     */
    private function fail (Operation $Operation, string $payload): Operation
    {
+      // ! Sync point — an ERR packet terminates the command.
+      $this->synced = true;
+
       $fields = $this->Decoder->read($payload, 'error');
       $code = $fields['code'] ?? 0;
       $code = is_int($code) ? $code : 0;

@@ -91,5 +91,6 @@ return new Suite(
       '7.20-postgresql_error_lifecycle',
       '7.21-postgresql_transient_statements',
       '7.22-postgresql_close_holders',
+      '10.19-mysql_abandoned_head',
    ]
 );
