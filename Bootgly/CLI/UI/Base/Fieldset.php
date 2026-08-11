@@ -16,6 +16,7 @@ use function max;
 use function mb_strlen;
 use function preg_replace;
 use function str_repeat;
+use function str_replace;
 
 use Bootgly\ABI\Code\__String;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
@@ -54,6 +55,8 @@ class Fieldset extends Component
    ];
    /** @var array<string,string> */
    public array $borders;
+   /** Inner background (markup token, e.g. `@!Black:`) — null keeps the terminal's */
+   public null|string $background;
 
    // * Data
    public null|string $title = null {
@@ -80,6 +83,7 @@ class Fieldset extends Component
       // # Style
       $this->color = '@#Black:';
       $this->borders = self::DEFAULT_BORDERS;
+      $this->background = null;
 
       // * Data
       $this->title = null;
@@ -128,19 +132,31 @@ class Fieldset extends Component
          . str_repeat($borders['top'], max(0, $inner - $entitled + 2))
          . "{$borders['top-right']}{$reset}\n";
 
+      // ! Inner background — re-asserted after content resets, so it spans the
+      //   row; sealed before the right border, so it never bleeds past the box
+      $fill = $this->background !== null
+         ? TemplateEscaped::render($this->background)
+         : '';
+      $seal = $fill !== '' ? $reset : '';
+
       // # Content rows
       foreach ($lines as $line) {
          // ? Separator row
          if ($line === '@---;') {
-            $frame .= "{$edge}{$borders['left']}{$reset} "
+            $frame .= "{$edge}{$borders['left']}{$reset}{$fill} "
                . str_repeat($borders['mid'], $inner)
-               . " {$edge}{$borders['right']}{$reset}\n";
+               . " {$seal}{$edge}{$borders['right']}{$reset}\n";
 
             continue;
          }
 
+         // ? A reset inside the content would drop the background mid-row
+         if ($fill !== '') {
+            $line = str_replace($reset, "{$reset}{$fill}", $line);
+         }
+
          $padding = str_repeat(' ', max(0, $inner - $this->measure($line)));
-         $frame .= "{$edge}{$borders['left']}{$reset} {$line}{$padding} {$edge}{$borders['right']}{$reset}\n";
+         $frame .= "{$edge}{$borders['left']}{$reset}{$fill} {$line}{$padding} {$seal}{$edge}{$borders['right']}{$reset}\n";
       }
 
       // # Bottom border
