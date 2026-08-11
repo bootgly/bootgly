@@ -21,5 +21,9 @@ return new Suite(
       '2.1-fieldset-render',
       '3.1-flyout-render',
       '4.1-listbox-render',
+      '5.1-tabs-add',
+      '5.2-tabs-bar',
+      '5.3-tabs-switch',
+      '5.4-tabs-switching',
    ]
 );

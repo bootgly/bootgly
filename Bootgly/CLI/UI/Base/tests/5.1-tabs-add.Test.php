@@ -1,6 +1,6 @@
 <?php
 
-namespace Bootgly\CLI\UX\Components;
+namespace Bootgly\CLI\UI\Base;
 
 
 use function array_keys;

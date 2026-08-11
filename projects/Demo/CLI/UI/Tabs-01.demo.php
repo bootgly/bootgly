@@ -7,10 +7,10 @@ use function date;
 use function sin;
 
 use const Bootgly\CLI;
-use Bootgly\CLI\UI\Components\Charts\Graph;
 use Bootgly\CLI\UI\Base\Frame\Borders;
+use Bootgly\CLI\UI\Base\Tabs;
+use Bootgly\CLI\UI\Components\Charts\Graph;
 use Bootgly\CLI\UI\Components\Table;
-use Bootgly\CLI\UX\Components\Tabs;
 
 
 $Input = CLI->Terminal->Input;
@@ -20,7 +20,7 @@ $Output->reset();
 
 $Output->render(<<<OUTPUT
 /* @*:
- * @#green: Bootgly CLI UX - Tabs component @;
+ * @#green: Bootgly CLI UI - Tabs component @;
  * @#yellow: @@: Demo 47 - Example #1 - btop-like tabbed dashboard @;
  * {$location}
  */\n\n

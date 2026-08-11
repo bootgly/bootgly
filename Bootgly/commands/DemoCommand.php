@@ -171,8 +171,8 @@ class DemoCommand extends Command
          // UI - Grid component (btop-like dashboard)
          46 => 'UI/Grid-01.demo.php',
 
-         // UX - Tabs component (btop-like tabbed dashboard)
-         47 => 'UX/Tabs-01.demo.php',
+         // UI - Tabs component (btop-like tabbed dashboard)
+         47 => 'UI/Tabs-01.demo.php',
 
          // UX - Wizard component (declarative multi-step flow)
          48 => 'UX/Wizard-01.demo.php',
