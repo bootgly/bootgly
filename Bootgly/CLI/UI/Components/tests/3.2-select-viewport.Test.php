@@ -18,7 +18,7 @@ use Bootgly\CLI\Terminal\Output;
 return new Test(
    description: 'It should window long option lists with `↑/↓ N more` indicators',
    test: function () {
-      // ! Menu with in-memory streams (Enter finishes the interactive loop)
+      // ! Select with in-memory streams (Enter finishes the interactive loop)
       $stream = fopen('php://memory', 'r+');
       fwrite($stream, "\n");
       rewind($stream);
@@ -26,31 +26,28 @@ return new Test(
       $Input = new Input($stream); // @phpstan-ignore-line
       $Output = new Output('php://memory');
 
-      $Menu = new Menu($Input, $Output);
-      $Menu->prompt = 'Pick an item';
-
-      $Options = $Menu->Items->Options;
-      $Options->Selection::Unique->set();
-      $Options->viewport = 3;
+      $Select = new Select($Input, $Output);
+      $Select->title = 'Pick an item';
+      $Select->viewport = 3;
 
       for ($index = 0; $index < 10; $index++) {
-         $Options->add(label: "Item {$index}");
+         $Select->options[] = "Item {$index}";
       }
 
-      // @ Aim down to the 5th option — the window slides to keep it visible
-      $Options->control("\e[B");
-      $Options->control("\e[B");
-      $Options->control("\e[B");
-      $Options->control("\e[B");
-
-      // @ Valid
-      yield assert(
-         assertion: $Options->Window->first === 2 && $Options->Window->last === 4,
-         description: 'The window slides to keep the aimed option visible ([2..4] aims 4)'
-      );
+      // @ Aim down to the 5th option
+      $Select->control("\e[B");
+      $Select->control("\e[B");
+      $Select->control("\e[B");
+      $Select->control("\e[B");
 
       // @@ Render (interactive: consumes the Enter; non-interactive: renders once)
-      foreach ($Menu->rendering() as $ignored);
+      foreach ($Select->selecting() as $ignored);
+
+      // @ Valid — the window slid to keep the aimed option visible
+      yield assert(
+         assertion: $Select->Listbox->Window->first === 2 && $Select->Listbox->Window->last === 4,
+         description: 'The window slides to keep the aimed option visible ([2..4] aims 4)'
+      );
 
       rewind($Output->stream);
       $output = (string) stream_get_contents($Output->stream);

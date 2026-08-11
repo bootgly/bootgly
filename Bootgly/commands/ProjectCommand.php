@@ -99,7 +99,7 @@ use Bootgly\CLI\Command;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\UI\Base\Fieldset;
 use Bootgly\CLI\UI\Components\Alert;
-use Bootgly\CLI\UI\Components\Menu;
+use Bootgly\CLI\UI\Components\Select;
 use Bootgly\CLI\UI\Components\Textbox;
 use Bootgly\CLI\UX\Components\Wizard;
 use Bootgly\commands\BootCommand;
@@ -2419,7 +2419,7 @@ class ProjectCommand extends Command
    }
 
    /**
-    * Choose one option from a vertical, unique-selection Menu.
+    * Choose one option from a vertical, single-selection Select.
     *
     * @param string $prompt
     * @param array<string> $labels
@@ -2432,31 +2432,29 @@ class ProjectCommand extends Command
    {
       $Terminal = CLI->Terminal;
 
-      $Menu = new Menu($Terminal->Input, $Terminal->Output);
-      $Menu->prompt = "@#Cyan:{$prompt}@;\n@#Black:(↑/↓ to move, Space to select one, Enter to confirm)@;\n";
-
-      $Options = $Menu->Items->Options;
-      $Options->Selection::Unique->set();
+      $Select = new Select($Terminal->Input, $Terminal->Output);
+      $Select->title = "@#Cyan:{$prompt}@;\n@#Black:(↑/↓ to move, Space to select one, Enter to confirm)@;";
 
       // ! Pinned labels render first — always marked, locked out of the selection
       foreach ($pinned as $label) {
-         $Options->add(label: (string) $label, locked: true);
+         $Select->locked[] = count($Select->options);
+         $Select->options[] = (string) $label;
       }
       foreach ($labels as $label) {
-         $Options->add(label: (string) $label);
+         $Select->options[] = (string) $label;
       }
 
       // @@ Render until Enter
-      foreach ($Menu->rendering() as $ignored);
+      foreach ($Select->selecting() as $ignored);
 
       // : Index relative to $labels (pinned options never enter the selection)
       $offset = count($pinned);
 
-      return (int) ($Menu->selected[0] ?? $default + $offset) - $offset;
+      return (int) ($Select->selected[0] ?? $default + $offset) - $offset;
    }
 
    /**
-    * Select options from a vertical, multiple-selection Menu.
+    * Select options from a vertical, multiple-selection Select.
     *
     * @param string $prompt
     * @param array<string> $labels
@@ -2468,29 +2466,27 @@ class ProjectCommand extends Command
    {
       $Terminal = CLI->Terminal;
 
-      $Menu = new Menu($Terminal->Input, $Terminal->Output);
-      $Menu->prompt = "@#Cyan:{$prompt}@;\n@#Black:(↑/↓ to move, Space to select multiple, Enter to confirm)@;\n";
-
-      $Options = $Menu->Items->Options;
-      // ? Selection mode is static per enum — always set it explicitly
-      $Options->Selection::Multiple->set();
+      $Select = new Select($Terminal->Input, $Terminal->Output);
+      $Select->multiple = true;
+      $Select->title = "@#Cyan:{$prompt}@;\n@#Black:(↑/↓ to move, Space to select multiple, Enter to confirm)@;";
 
       // ! Pinned labels render first — always marked, locked out of the selection
       foreach ($pinned as $label) {
-         $Options->add(label: (string) $label, locked: true);
+         $Select->locked[] = count($Select->options);
+         $Select->options[] = (string) $label;
       }
       foreach ($labels as $label) {
-         $Options->add(label: (string) $label);
+         $Select->options[] = (string) $label;
       }
 
       // @@ Render until Enter
-      foreach ($Menu->rendering() as $ignored);
+      foreach ($Select->selecting() as $ignored);
 
       // ! Integer-only index list, relative to $labels (pinned options never enter the selection)
       $offset = count($pinned);
 
       $indexes = [];
-      foreach ($Menu->selected as $index) {
+      foreach ($Select->selected as $index) {
          $indexes[] = (int) $index - $offset;
       }
 

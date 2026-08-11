@@ -18,7 +18,7 @@ return new Suite(
       '1.2-terminal-size-fallback',
       '2.1-cursor-position-shape',
       '3.1-progress-anchored-render',
-      '4.1-menu-control-keys',
+      '4.1-select-control-keys',
       '5.1-mouse-report-escapes',
       '6.1-input-reading-roles',
       '6.2-input-reading-timeout',

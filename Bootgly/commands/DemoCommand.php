@@ -87,13 +87,10 @@ class DemoCommand extends Command
          // UI - Alert component
          12 => 'UI/Alert-01.demo.php',
 
-         // UI - Menu component
-         13 => 'UI/Menu-01.demo.php',
-         14 => 'UI/Menu-02.demo.php',
-         15 => 'UI/Menu-03.demo.php',
-         16 => 'UI/Menu-04.demo.php',
-         17 => 'UI/Menu-05.demo.php',
-         18 => 'UI/Menu-06.demo.php',
+         // UI - Select component
+         13 => 'UI/Select-01.demo.php',
+         14 => 'UI/Select-02.demo.php',
+         15 => 'UI/Select-03.demo.php',
 
          // UI - Progress component
          19 => 'UI/Progress-01.demo.php',
@@ -125,12 +122,6 @@ class DemoCommand extends Command
 
          // UI - Textbox component (masked input)
          29 => 'UI/Textbox-02.demo.php',
-
-         // UI - Menu component (viewport + type-ahead)
-         30 => 'UI/Menu-07.demo.php',
-
-         // UI - Menu component (grid columns)
-         31 => 'UI/Menu-08.demo.php',
 
          // UI - Spinner component
          32 => 'UI/Spinner-01.demo.php',

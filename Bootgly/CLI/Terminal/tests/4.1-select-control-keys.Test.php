@@ -16,14 +16,14 @@ use Bootgly\CLI\Terminal\Output;
 
 
 return new Test(
-   description: 'It should resolve BOOTGLY_TTY and finish Menu control on both Enter byte forms',
+   description: 'It should resolve BOOTGLY_TTY and finish Select control on both Enter byte forms',
    test: function () {
-      // ! Menu with in-memory streams
+      // ! Select with in-memory streams
       $stream = fopen('php://memory', 'r+');
       $Input = new Input($stream); // @phpstan-ignore-line
       $Output = new Output('php://memory');
-      $Menu = new Menu($Input, $Output);
-      $Options = $Menu->Items->Options;
+      $Select = new Select($Input, $Output);
+      $Select->options = ['Single'];
 
       // @ Valid
       yield assert(
@@ -31,51 +31,48 @@ return new Test(
          description: 'BOOTGLY_TTY resolved to a boolean: ' . (BOOTGLY_TTY ? 'interactive' : 'non-interactive')
       );
       yield assert(
-         assertion: $Options->control(PHP_EOL) === false,
-         description: 'Enter (line feed) finishes the Menu control loop'
+         assertion: $Select->control(PHP_EOL) === false,
+         description: 'Enter (line feed) finishes the Select control loop'
       );
       yield assert(
-         assertion: $Options->control("\r") === false,
-         description: 'Enter (carriage return — raw terminals without icrnl) finishes the Menu control loop'
+         assertion: $Select->control("\r") === false,
+         description: 'Enter (carriage return — raw terminals without icrnl) finishes the Select control loop'
       );
       yield assert(
-         assertion: $Options->control('') === true,
-         description: 'Empty read keeps the Menu control loop running'
+         assertion: $Select->control('') === true,
+         description: 'Empty read keeps the Select control loop running'
       );
       yield assert(
-         assertion: $Options->control('x') === true,
-         description: 'Unmapped key keeps the Menu control loop running'
+         assertion: $Select->control("\e[5~") === true,
+         description: 'Unmapped key keeps the Select control loop running'
       );
 
       // ! Locked options (display-only: never aimed, never selected)
-      $Menu = new Menu($Input, $Output);
-      $Options = $Menu->Items->Options;
-      $Options->Selection::Multiple->set();
-
-      $Options->add(label: 'Pinned', locked: true);
-      $Options->add(label: 'Real A');
-      $Options->add(label: 'Real B');
+      $Select = new Select($Input, $Output);
+      $Select->multiple = true;
+      $Select->options = ['Pinned', 'Real A', 'Real B'];
+      $Select->locked = [0];
 
       // @ Space on the initial aim: the locked option never holds the aim
-      $Options->control(' ');
+      $Select->control(' ');
 
       // @ Valid
       yield assert(
-         assertion: in_array(1, $Options::$selected[0]) === true,
+         assertion: in_array(1, $Select->selected) === true,
          description: 'Initial aim skips the locked option — Space selects the first unlocked one'
       );
 
       // @ Aiming up from the first unlocked option wraps over the locked one
-      $Options->control("\e[A");
-      $Options->control(' ');
+      $Select->control("\e[A");
+      $Select->control(' ');
 
       // @ Valid
       yield assert(
-         assertion: in_array(2, $Options::$selected[0]) === true,
+         assertion: in_array(2, $Select->selected) === true,
          description: 'Aim movement skips locked options (wraps to the last unlocked one)'
       );
       yield assert(
-         assertion: in_array(0, $Options::$selected[0]) === false,
+         assertion: in_array(0, $Select->selected) === false,
          description: 'Locked options never enter the selection'
       );
    }

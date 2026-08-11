@@ -29,7 +29,7 @@ $CLI = $Bootgly->add('CLI', value: 'Bootgly/CLI');
 $CLI->add('Terminal', value: 'Bootgly/CLI/Terminal')->collapse();
 $UI = $CLI->add('UI', value: 'Bootgly/CLI/UI');
 $Components = $UI->add('Components', value: 'Bootgly/CLI/UI/Components');
-$Components->add('Menu.php', value: 'Bootgly/CLI/UI/Components/Menu.php');
+$Components->add('Select.php', value: 'Bootgly/CLI/UI/Components/Select.php');
 $Components->add('Tree.php', value: 'Bootgly/CLI/UI/Components/Tree.php');
 $Bootgly->add('WPI', value: 'Bootgly/WPI')->collapse();
 

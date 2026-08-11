@@ -6,7 +6,7 @@ use function usleep;
 use Exception;
 
 use const Bootgly\CLI;
-use Bootgly\CLI\UI\Components\Menu;
+use Bootgly\CLI\UI\Components\Select;
 use Bootgly\CLI\UI\Components\Textbox;
 use Bootgly\CLI\UX\Components\Wizard;
 
@@ -45,18 +45,15 @@ $Wizard->add('Name', function (Wizard $Wizard): string {
 });
 
 $Wizard->add('Interface', rows: 6, handler: function (Wizard $Wizard): string {
-   $Menu = new Menu($Wizard->Input, $Wizard->Output);
-   $Menu->prompt = "@#Cyan:Which interface?@;\n@#Black:(↑/↓ to move, Space to select one, Enter to confirm)@;\n";
+   $Select = new Select($Wizard->Input, $Wizard->Output);
+   $Select->title = "@#Cyan:Which interface?@;\n@#Black:(↑/↓ to move, Space to select one, Enter to confirm)@;";
 
-   $Options = $Menu->Items->Options;
-   $Options->Selection::Unique->set();
-   $Options->add(label: 'CLI — Console app');
-   $Options->add(label: 'WPI — Web (HTTP) server');
+   $Select->options = ['CLI — Console app', 'WPI — Web (HTTP) server'];
 
    // @@ Render until Enter
-   foreach ($Menu->rendering() as $ignored);
+   foreach ($Select->selecting() as $ignored);
 
-   $interface = (int) ($Menu->selected[0] ?? 0) === 1 ? 'WPI' : 'CLI';
+   $interface = (int) ($Select->selected[0] ?? 0) === 1 ? 'WPI' : 'CLI';
 
    // ? WPI flows branch: a Port step slots in right after this one
    if ($interface === 'WPI') {

@@ -21,7 +21,7 @@ return new Test(
    description: 'It should ask fields sequentially and confirm deterministically on both stream modes',
    test: function () {
       // ! Form with in-memory streams
-      // Interactive terminals consume: Text line, Menu Enter, Confirm line, summary Enter.
+      // Interactive terminals consume: Text line, Select Enter, Confirm line, summary Enter.
       // Non-interactive streams consume: Text line, Select line (empty = default), Confirm line.
       $stream = fopen('php://memory', 'r+');
       fwrite($stream, "Alpha\n\ny\n\n");
@@ -60,7 +60,7 @@ return new Test(
          );
          yield assert(
             assertion: str_contains($output, 'Confirm') === true,
-            description: 'The summary Menu offers the Confirm option'
+            description: 'The summary Select offers the Confirm option'
          );
 
          // @ Editing a field from the summary before confirming
@@ -80,13 +80,13 @@ return new Test(
 
          yield assert(
             assertion: $answers['Name'] === 'Beta',
-            description: 'The summary Menu re-edits the chosen field before confirming'
+            description: 'The summary Select re-edits the chosen field before confirming'
          );
       }
       else {
          yield assert(
             assertion: str_contains($output, 'Confirm') === false,
-            description: 'Non-interactive streams never render the summary Menu'
+            description: 'Non-interactive streams never render the summary Select'
          );
       }
    }

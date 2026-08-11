@@ -3,9 +3,12 @@
 namespace Bootgly\CLI;
 
 
+use function is_string;
+
 use const Bootgly\CLI;
 use Bootgly\CLI\UI\Base\Fieldset;
-use Bootgly\CLI\UI\Components\Menu;
+use Bootgly\CLI\UI\Components\Select;
+
 
 $Input = CLI->Terminal->Input;
 $Output = CLI->Terminal->Output;
@@ -48,42 +51,18 @@ $Fieldset->render();
 $Fieldset2 = new Fieldset($Output);
 $Fieldset2->title = 'Using another component inside!!';
 // ---
-$Menu = new Menu($Input, $Output);
+$Select = new Select($Input, $Output);
 // * Config
-$Menu->render = Menu::RETURN_OUTPUT;
-$Menu::$width = 80;
-$Menu->prompt = "Choose one or more options:\n";
-// > Items
-$Items = $Menu->Items;
-// * Config
-// @ Selecting
-// @ Styling
-// @ Displaying
-// > Items > Options
-$Options = $Items->Options;
-// * Config
-// @ Selecting
-$Options->Selection::Multiple->set();
-$Options->selectable = true;
-$Options->deselectable = true;
-// @ Styling
-$Options->divisors = '-';
-// @ Displaying
-$Options->Orientation::Vertical->set();
-$Options->Aligment::Left->set();
-// * Items set - Option #1 */
-$Items->Options->add(label: 'Option 1');
-$Items->Options->add(label: 'Option 2');
-$Items->Options->add(label: 'Option 3');
-$Items->Options->advance();
+$Select->render = Select::RETURN_OUTPUT;
+$Select->multiple = true;
+$Select->title = 'Choose one or more options:';
+// * Data
+$Select->options = ['Option 1', 'Option 2', 'Option 3'];
 // ---
-foreach ($Menu->rendering() as $output) {
-   if ($output === false) {
-      break;
-   }
-
-   if (is_string($output) === true) {
-      $Fieldset2->content = $output;
+// @@ Streaming: the pinned RETURN mode yields each frame for the host to place
+foreach ($Select->selecting() as $frame) {
+   if (is_string($frame) === true) {
+      $Fieldset2->content = $frame;
       $Fieldset2->render();
    }
 }

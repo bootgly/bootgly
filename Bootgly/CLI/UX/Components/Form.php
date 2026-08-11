@@ -39,7 +39,7 @@ use Bootgly\CLI\Terminal\Input\Line;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\UI\Base\Fieldset;
 use Bootgly\CLI\UI\Components\Alert;
-use Bootgly\CLI\UI\Components\Menu;
+use Bootgly\CLI\UI\Components\Select;
 use Bootgly\CLI\UI\Components\Textbox;
 use Bootgly\CLI\UX\Components\Form\Controls;
 use Bootgly\CLI\UX\Components\Form\Field;
@@ -221,22 +221,19 @@ class Form extends Component
       while (true) {
          $this->render();
 
-         // ! Confirm Menu — option 0 confirms; option N edits field N-1
-         $Menu = new Menu($this->Input, $this->Output);
-         $Menu->prompt = "@#Black:(↑/↓ to move, Enter to confirm)@;\n";
+         // ! Confirm Select — option 0 confirms; option N edits field N-1
+         $Select = new Select($this->Input, $this->Output);
+         $Select->title = '@#Black:(↑/↓ to move, Enter to confirm)@;';
 
-         $Options = $Menu->Items->Options;
-         $Options->Selection::Unique->set();
-
-         $Options->add(label: 'Confirm');
+         $Select->options[] = 'Confirm';
          foreach ($Fields as $Field) {
-            $Options->add(label: "Edit {$Field->label}");
+            $Select->options[] = "Edit {$Field->label}";
          }
 
          // @@ Render until Enter
-         foreach ($Menu->rendering() as $ignored);
+         foreach ($Select->selecting() as $ignored);
 
-         $choice = (int) ($Menu->selected[0] ?? 0);
+         $choice = (int) ($Select->selected[0] ?? 0);
 
          // ?: Confirm submits the form
          if ($choice === 0) {

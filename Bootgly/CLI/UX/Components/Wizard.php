@@ -113,7 +113,7 @@ class Wizard extends Component
     * @param string $label The step label.
     * @param Closure $handler The step handler: `function (Wizard $Wizard): null|string`.
     * @param int $rows Content rows reserved for this step (0 follows $reserve) —
-    *                  size it to the step's tallest editor (e.g. a Menu's frame).
+    *                  size it to the step's tallest editor (e.g. a Select's frame).
     *
     * @return Step
     */
