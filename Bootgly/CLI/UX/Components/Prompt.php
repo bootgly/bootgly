@@ -185,8 +185,10 @@ class Prompt extends Component
    private string $absorbed;
    /** Next content line in the native flow (1-based screen row) */
    private int $flowed;
-   /** Dragging the scrollbar thumb? */
+   /** Dragging the band scrollbar thumb? */
    private bool $dragging;
+   /** Dragging the menu scrollbar thumb? */
+   private bool $sliding;
    /** Mouse reporting currently on? */
    private bool $tracking;
    /** Selection mode on (Ctrl+T released the mouse for native selection)? */
@@ -258,6 +260,7 @@ class Prompt extends Component
       $this->flowed = 0;
       $this->resized = false;
       $this->dragging = false;
+      $this->sliding = false;
       $this->tracking = false;
       $this->selecting = false;
       $this->interrupted = 0.0;
@@ -693,8 +696,11 @@ class Prompt extends Component
    }
 
    /**
-    * Handles a pointer (SGR mouse) report: the wheel scrolls the content band;
-    * the scrollbar thumb accepts hover, click and drag; a track click jumps the view.
+    * Handles a pointer (SGR mouse) report: the wheel scrolls the content band
+    * (or aims the open trigger menu under the pointer); the band scrollbar
+    * thumb accepts hover, click and drag; a track click jumps the view; over
+    * the open menu, movement aims the option under the pointer, a left press
+    * selects it (as Tab does) and the menu bar accepts hover, click and drag.
     *
     * @param string $report The raw SGR report (`\e[<Cb;Cx;Cy` + `M`/`m`).
     *
@@ -716,19 +722,40 @@ class Prompt extends Component
 
       $Action = Mousestrokes::tryFrom($button);
 
-      // @ The wheel scrolls the content band (three rows per notch)
-      if ($Action === Mousestrokes::SCROLL_UP) {
-         $this->Scrollarea->scroll(-3);
+      // ! Trigger-menu geometry — the flyout box opens the frame rows, the
+      //   option window sits right after its top border and the bar strip
+      //   rides the inner right edge (full-width boxes only)
+      $menued = $this->matches !== [] && $this->menu !== '';
+      $boxed = $menued === true
+         && $line > $this->region && $line <= $this->region + $this->Flyout->height;
+      $row = $line - ($this->region + 2);
+      $optioned = $menued === true && $row >= 0 && $row < $this->Listbox->height;
+      $barred = $optioned === true
+         && $this->Flyout->width === 0
+         && $column === (int) Terminal::$width - 2
+         && $this->Listbox->Scrollbar->check() === true;
+
+      // @ The wheel aims the open menu under the pointer — and scrolls the
+      //   content band (three rows per notch) elsewhere
+      if ($Action === Mousestrokes::SCROLL_UP || $Action === Mousestrokes::SCROLL_DOWN) {
+         if ($boxed === true) {
+            $Action === Mousestrokes::SCROLL_UP
+               ? $this->Listbox->regress()
+               : $this->Listbox->advance();
+
+            $this->search();
+            $this->fit();
+            $this->render();
+
+            return;
+         }
+
+         $this->Scrollarea->scroll($Action === Mousestrokes::SCROLL_UP ? -3 : +3);
 
          return;
       }
-      if ($Action === Mousestrokes::SCROLL_DOWN) {
-         $this->Scrollarea->scroll(+3);
 
-         return;
-      }
-
-      // @ Dragging the thumb follows the pointer line
+      // @ Dragging the band thumb follows the pointer line
       if ($this->dragging === true) {
          // ? Release drops the thumb
          if ($state === Mousestrokes::UNCLICKED->value) {
@@ -742,8 +769,45 @@ class Prompt extends Component
          return;
       }
 
-      // @ Pressing the scrollbar grabs the thumb or jumps the view
+      // @ Dragging the menu thumb slides the option window
+      if ($this->sliding === true) {
+         // ? Release (or a closed menu) drops the thumb
+         if ($state === Mousestrokes::UNCLICKED->value || $menued === false) {
+            $this->sliding = false;
+
+            return;
+         }
+
+         $this->slide($line);
+
+         return;
+      }
+
       if ($Action === Mousestrokes::LEFT_CLICK && $state === Mousestrokes::CLICKED->value) {
+         // ? A press on the menu bar grabs the thumb — a track press jumps the
+         //   window first (a thumb-center press holds)
+         if ($barred === true) {
+            $this->slide($line);
+
+            $this->sliding = true;
+
+            return;
+         }
+
+         // ? A press on a menu option selects it — complete, keep the menu
+         //   flow (the argument hint rises on the resolved command)
+         if ($optioned === true) {
+            $this->Listbox->aim($this->Listbox->Window->first + $row);
+            $this->complete();
+
+            $this->search();
+            $this->fit();
+            $this->render();
+
+            return;
+         }
+
+         // @ Pressing the band scrollbar grabs the thumb or jumps the view
          $hit = $this->Scrollarea->hit($column, $line);
 
          if ($hit === 'thumb' || $hit === 'track') {
@@ -758,12 +822,79 @@ class Prompt extends Component
          return;
       }
 
-      // @ Hovering highlights the thumb
       if ($Action === Mousestrokes::NONE_CLICK_WITH_MOVEMENT) {
+         // ? Movement over the menu bar accents its thumb
+         if ($barred === true) {
+            $this->Scrollarea->hover(false);
+
+            $Scrollbar = $this->Listbox->Scrollbar;
+            $Scrollbar->row = $this->region + 2;
+            $Scrollbar->column = $column;
+            $Scrollbar->hover($Scrollbar->hit($column, $line) === 'thumb');
+
+            return;
+         }
+
+         // ? Movement over the menu aims the option under the pointer
+         if ($optioned === true) {
+            $this->Scrollarea->hover(false);
+            $this->Listbox->Scrollbar->hover(false);
+
+            $aimed = $this->Listbox->Window->first + $row;
+            if ($aimed !== $this->Listbox->aimed) {
+               $this->Listbox->aim($aimed);
+
+               $this->search();
+               $this->fit();
+               $this->render();
+            }
+
+            return;
+         }
+
+         // ? Leaving the menu drops its bar accent
+         if ($menued === true) {
+            $this->Listbox->Scrollbar->hover(false);
+         }
+
+         // @ Hovering highlights the band thumb
          $this->Scrollarea->hover(
             $this->Scrollarea->hit($column, $line) === 'thumb'
          );
       }
+   }
+
+   /**
+    * Slides the trigger-menu window by the bar thumb center: maps the pointer
+    * line back to the window's first option and aims leading in the drag
+    * direction — the window top going up, the window bottom going down. A
+    * thumb-center press maps to the current window and holds.
+    *
+    * @param int $line The screen line (1-based).
+    *
+    * @return void
+    */
+   private function slide (int $line): void
+   {
+      $Scrollbar = $this->Listbox->Scrollbar;
+      $Scrollbar->row = $this->region + 2;
+      $Scrollbar->column = (int) Terminal::$width - 2;
+
+      $current = $this->Listbox->Window->first;
+      $first = $Scrollbar->aim($line);
+
+      // ? The thumb holds — nothing slides
+      if ($first === $current) {
+         return;
+      }
+
+      $this->Listbox->aim(
+         $first < $current ? $first : $first + $Scrollbar->height - 1
+      );
+
+      $this->search();
+      $this->fit();
+      $this->render();
    }
 
    /**
@@ -910,11 +1041,12 @@ class Prompt extends Component
       $this->symbol = mb_substr($query, 0, 1);
 
       // ? A full-width box spans the terminal — pad/crop the rows to its inner
-      //   columns, so the aimed-row highlight sweeps the whole line
+      //   columns (borders + paddings take 4, the scrollbar column one more),
+      //   so the aimed-row highlight sweeps the whole line
       if ($this->Flyout->width === 0) {
          $columns = isSet(Terminal::$width) === true ? (int) Terminal::$width : 80;
 
-         $this->Listbox->width = max(1, $columns - 4 - mb_strwidth($this->Listbox->marker));
+         $this->Listbox->width = max(1, $columns - 5 - mb_strwidth($this->Listbox->marker));
       }
 
       // ? An all-empty detail column keeps the plain row layout
@@ -1098,10 +1230,11 @@ class Prompt extends Component
          $Listbox->viewport = max(1, min(count($labels), (int) Terminal::$height - 8));
 
          // ? A full-width box pads/crops the rows to its inner columns
+         //   (borders + paddings take 4, the scrollbar column one more)
          if ($this->Flyout->width === 0) {
             $columns = isSet(Terminal::$width) === true ? (int) Terminal::$width : 80;
 
-            $Listbox->width = max(1, $columns - 4 - mb_strwidth($Listbox->marker));
+            $Listbox->width = max(1, $columns - 5 - mb_strwidth($Listbox->marker));
          }
 
          // @ Compose the sheet — the boxed Listbox rows, with the dim hint
