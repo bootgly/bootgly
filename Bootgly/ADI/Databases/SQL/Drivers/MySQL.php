@@ -13,6 +13,7 @@ namespace Bootgly\ADI\Databases\SQL\Drivers;
 
 use function array_key_first;
 use function array_shift;
+use function array_splice;
 use function count;
 use function fclose;
 use function feof;
@@ -91,6 +92,10 @@ class MySQL extends Driver
    // @ The server finished answering the current command — the only point at
    //   which the pipeline head may leave the wire.
    private bool $synced = false;
+   // @ The head command is whole on the wire; a partial write is not.
+   private bool $flushed = false;
+   // @ The pool took the head away — its response is drained into a stand-in.
+   private bool $abandoned = false;
    // @ COM_STMT_PREPARE response in flight for the pipeline head.
    private bool $preparing = false;
    // @ Parameter/column definition packets left to consume after prepare-OK.
@@ -316,11 +321,16 @@ class MySQL extends Driver
             $this->closing = '';
          }
 
+         // ! A half-written command can never be reconciled with the server —
+         //   the head only counts as flushed once the whole packet is out.
+         $this->flushed = false;
+
          if ($this->flush($Operation) === false) {
             return $Operation;
          }
 
          $this->clear();
+         $this->flushed = true;
          $this->preparing = $Operation->statement !== '' && $Operation->prepared === false;
          $this->binary = $Operation->prepared;
          $Operation->state = OperationStates::Reading;
@@ -466,6 +476,76 @@ class MySQL extends Driver
       finally {
          fclose($socket);
       }
+   }
+
+   /**
+    * Reconcile the wire when the pool abandons one operation.
+    *
+    * Only the FIFO head ever owns the wire, so a queued sibling is provably
+    * clean and simply leaves the queue. The head is replaced by a detached
+    * stand-in that drains the response the server is still sending — the
+    * operation object belongs to the pool from here on, and a fallback retry
+    * may already be running it on another connection. When nothing can be
+    * reconciled — the command never made it whole onto the wire, or no
+    * sibling is left to pump the answer — the session is dropped instead.
+    */
+   public function abandon (DatabaseOperation $Operation): void
+   {
+      $index = null;
+
+      foreach ($this->pipeline as $id => $Queued) {
+         if ($Queued === $Operation) {
+            $index = $id;
+
+            break;
+         }
+      }
+
+      // ? This connection never queued it, so it wrote nothing for it.
+      if ($index === null) {
+         return;
+      }
+
+      /** @var Operation $Operation */
+
+      // @ A sibling that never wrote just leaves the FIFO.
+      if ($index !== 0) {
+         array_splice($this->pipeline, $index, 1);
+
+         if ($this->abandoned && count($this->pipeline) < 2) {
+            $this->abort($Operation, 'MySQL abandoned command has no reader left to drain its response.');
+         }
+
+         return;
+      }
+
+      // ? A partially written command leaves the server parsing a packet that
+      //   never ends — the session can never be resynchronized.
+      if ($this->flushed === false) {
+         $this->abort($Operation, 'MySQL operation was abandoned before its command reached the wire.');
+
+         return;
+      }
+
+      // ? Draining needs a reader: the pool has already released this
+      //   operation, so only a sibling advance still pumps this socket.
+      if (count($this->pipeline) < 2) {
+         $this->abort($Operation, 'MySQL abandoned command has no reader left to drain its response.');
+
+         return;
+      }
+
+      // @ Detach the operation from the wire — its response is applied to a
+      //   stand-in nobody waits for, so the object the pool took away is
+      //   never read, written or resolved by this driver again.
+      $Stand = new Operation(null, $Operation->SQL);
+      $Stand->state = OperationStates::Reading;
+      $Stand->statement = $Operation->statement;
+      $Stand->prepared = $Operation->prepared;
+
+      $this->pipeline[0] = $Stand;
+      $this->abandoned = true;
+      $this->draining = true;
    }
 
    /**
@@ -661,7 +741,12 @@ class MySQL extends Driver
          if ($Active->finished) {
             if (($this->pipeline[0] ?? null) === $Active) {
                array_shift($this->pipeline);
-               $this->completed[] = $Active;
+
+               // ? An abandoned head is a stand-in the pool never assigned:
+               //   draining it must not release a connection a second time.
+               if ($this->abandoned === false) {
+                  $this->completed[] = $Active;
+               }
             }
 
             $this->clear();
@@ -705,6 +790,8 @@ class MySQL extends Driver
       $this->phase = '';
       $this->draining = false;
       $this->synced = false;
+      $this->flushed = false;
+      $this->abandoned = false;
       $this->preparing = false;
       $this->definitions = 0;
       $this->binary = false;
@@ -932,6 +1019,15 @@ class MySQL extends Driver
       // ! Sync point — the COM_STMT_PREPARE response is complete and the
       //   EXECUTE that follows is a new command on the wire.
       $this->synced = true;
+
+      // ? The pool took this command away — execute nothing on its behalf and
+      //   close the statement the abandoned prepare left on the server.
+      if ($this->abandoned) {
+         $Operation->prepared = true;
+         $this->discard($Operation);
+
+         return $Operation->fail('MySQL abandoned prepared command was not executed.');
+      }
 
       // ? Never re-arm an operation the pool already finished from the
       //   outside: its retry may be running on another connection by now.
@@ -1219,6 +1315,15 @@ class MySQL extends Driver
 
       // ! Sync point — the server stopped answering this command.
       $this->synced = true;
+
+      // ? The pool took this command away: the response is only being drained
+      //   off the wire, so nothing is resolved and no query event is emitted.
+      if ($this->abandoned) {
+         $this->discard($Operation);
+         $this->Connection->transition();
+
+         return $Operation->fail('MySQL abandoned command response was drained.');
+      }
 
       $affected = $fields['affected'] ?? 0;
       $affected = is_int($affected) ? $affected : 0;

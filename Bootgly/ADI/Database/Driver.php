@@ -61,6 +61,21 @@ abstract class Driver
    }
 
    /**
+    * Reconcile the wire when the pool abandons one operation.
+    *
+    * The pool finishes operations from the outside — an elapsed deadline —
+    * while the server may still be answering them, and a fallback retry may
+    * start running the very same object on another connection. A driver that
+    * holds wire state for the abandoned operation reconciles it here: it
+    * either keeps owning the wire until the response has been drained, or
+    * drops the session when the remaining bytes can no longer be attributed.
+    * Drivers that keep no such state do nothing.
+    */
+   public function abandon (Operation $Operation): void
+   {
+   }
+
+   /**
     * Check whether this driver still has in-flight operations.
     */
    public function check (): bool

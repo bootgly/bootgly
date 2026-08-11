@@ -115,6 +115,11 @@ class Pool
       }
 
       if ($Operation->expire()) {
+         // @ The driver still owns whatever the server is sending for this
+         //   operation: let it reconcile the wire before the connection is
+         //   handed to anyone else and before fallback() revives the object.
+         $Operation->Protocol?->abandon($Operation);
+
          $this->forget($Operation);
          $this->release($Operation);
 
