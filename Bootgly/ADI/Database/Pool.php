@@ -175,6 +175,14 @@ class Pool
          }
 
          if ($Readiness === null) {
+            $Pool = $Operation->Pool;
+
+            // ?: Fallback re-dispatched this operation to another pool mid-wait —
+            //    the new pool arms readiness on its next advance.
+            if ($Pool !== null && $Pool !== $this) {
+               return $Pool->wait($Operation);
+            }
+
             throw new RuntimeException('Database operation did not provide readiness.');
          }
 

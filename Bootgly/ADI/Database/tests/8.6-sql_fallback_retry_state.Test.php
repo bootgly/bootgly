@@ -138,6 +138,28 @@ return new Test(
          description: 'Server-error fallback releases both connections without quarantine'
       );
 
+      // # Synchronous await() across a mid-wait fallback (readiness delegation)
+      fwrite($replicaServer, $partial);
+      fwrite($primaryServer, $full);
+      $Awaited = $Database->query($SQL);
+      $caught = null;
+
+      try {
+         $Database->await($Awaited);
+      }
+      catch (RuntimeException $Exception) {
+         $caught = $Exception->getMessage();
+      }
+
+      yield assert(
+         assertion: $caught === null
+            && $Awaited->fallback
+            && $Awaited->finished
+            && $Awaited->error === null
+            && count($Awaited->rows) === 4,
+         description: 'await() survives a mid-wait replica fallback without a readiness exception'
+      );
+
       // # retry() unit surface — every per-attempt field resets
       $Retry = new SQLOperation(null, 'SELECT 1 AS value');
       $Retry->statement = 'stale';

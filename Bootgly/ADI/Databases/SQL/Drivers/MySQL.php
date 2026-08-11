@@ -150,13 +150,14 @@ class MySQL extends Driver
          // # Binary protocol — prepared statements keyed by SQL text
          $Operation->statement = $Operation->SQL;
          $entry = $this->statements[$Operation->SQL] ?? null;
+         // ! Stale flags from a previous attempt never survive into this one
+         $Operation->prepared = $entry !== null;
 
          if ($entry !== null) {
             // @ Cache hit — LRU touch and execute directly.
             unset($this->statements[$Operation->SQL]);
             $this->statements[$Operation->SQL] = $entry;
 
-            $Operation->prepared = true;
             $Operation->write = $this->Encoder->encode(Encoder::EXECUTE, [
                'statement' => $entry['statement'],
                'parameters' => $Operation->parameters,
