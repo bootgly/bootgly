@@ -101,4 +101,27 @@ class Operation extends DatabaseOperation
 
       return $this;
    }
+
+   /**
+    * Retry this operation from a clean pending state.
+    */
+   public function retry (null|Connection $Connection = null): self
+   {
+      // ! Per-attempt protocol state — a fallback attempt must restart clean
+      $this->statement = '';
+      $this->portal = '';
+      $this->prepared = false;
+      $this->write = '';
+      $this->status = '';
+      $this->rows = [];
+      $this->columns = [];
+      $this->types = [];
+      $this->parameterTypes = [];
+      $this->affected = 0;
+
+      parent::retry($Connection);
+
+      // :
+      return $this;
+   }
 }

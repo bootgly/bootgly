@@ -80,5 +80,7 @@ return new Suite(
       '10.15-mysql_e2e_live',
       '10.16-mysql_transport_failures',
       '10.17-mysql_event_head_flush',
+      // ! Appended last so earlier case indexes stay stable.
+      '8.6-sql_fallback_retry_state',
    ]
 );
