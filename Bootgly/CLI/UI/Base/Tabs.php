@@ -15,17 +15,25 @@ use const BOOTGLY_TTY;
 use function array_keys;
 use function array_values;
 use function count;
+use function explode;
 use function implode;
 use function is_int;
+use function mb_strwidth;
 use function microtime;
+use function preg_replace;
+use function strncmp;
+use function substr;
 use function usleep;
 use Generator;
 
+use Bootgly\ABI\Code\__String;
+use Bootgly\ABI\Code\__String\Escapeable\Mouse\Reportable;
 use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\API\Component;
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Input\Keystrokes;
+use Bootgly\CLI\Terminal\Input\Mousestrokes;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\UI\Atoms\Boxing;
 use Bootgly\CLI\UI\Base\Frame;
@@ -37,11 +45,14 @@ use Bootgly\CLI\UI\Base\Frame;
  * border (the labels strip becomes its title, the active label highlighted).
  * Inactive tabs keep buffering their isolated Outputs, drained and bounded on
  * every render. Switch with `switch()`/`cycle()` or drive the interactive
- * `switching()` lifecycle (arrows, Tab/Shift+Tab, 1-9).
+ * `switching()` lifecycle — arrows, Tab/Shift+Tab and 1-9 by keyboard; by
+ * pointer, movement hovers the bar labels, a left press switches and the
+ * wheel cycles over the bar row.
  */
 class Tabs extends Component implements Boxing
 {
    use Formattable;
+   use Reportable;
 
 
    public Input $Input;
@@ -62,6 +73,8 @@ class Tabs extends Component implements Boxing
    public string $color;
    /** Active label paint (raw SGR or Template markup) */
    public string $highlight;
+   /** Hovered inactive label paint (raw SGR or Template markup) */
+   public string $hover;
    // # Timing
    /** Seconds per interactive tick — held keys never accelerate the clock */
    public float $throttle;
@@ -79,6 +92,10 @@ class Tabs extends Component implements Boxing
          ? array_values($this->Frames)[$this->tab - 1]
          : null;
    }
+   /** Hovered tab ordinal (1-based; 0 = none) */
+   public private(set) int $hovered;
+   /** @var array<int,array{int,int}> Bar label spans — ordinal ⇒ [first, last] composed-strip columns (0-based) */
+   private array $spans;
 
 
    public function __construct (Input $Input, Output $Output)
@@ -95,12 +112,17 @@ class Tabs extends Component implements Boxing
       // # Style
       $this->color = '@#Black:';
       $this->highlight = self::wrap(self::_INVERSE_STYLE, self::_BOLD_STYLE);
+      $this->hover = self::wrap(self::_UNDERLINE_STYLE);
       // # Timing
       $this->throttle = 0.05;
 
       // * Data
       $this->Frames = [];
       $this->tab = 0;
+
+      // * Metadata
+      $this->hovered = 0;
+      $this->spans = [];
    }
 
 
@@ -215,6 +237,177 @@ class Tabs extends Component implements Boxing
    }
 
    /**
+    * Hovers a tab by 1-based ordinal (`0` leaves) — the bar recomposes with
+    * the hovered label accented by the `hover` paint. The active tab keeps
+    * its highlight; out-of-range ordinals clear. Pure state: the next render
+    * paints the new bar.
+    *
+    * @param int $tab The tab ordinal (1-based; 0 clears the hover).
+    *
+    * @return void
+    */
+   public function hover (int $tab): void
+   {
+      // ? Out-of-range hovers clear
+      if ($tab < 0 || $tab > count($this->Frames)) {
+         $tab = 0;
+      }
+      // ? Already there
+      if ($tab === $this->hovered) {
+         return;
+      }
+
+      // * Metadata
+      $this->hovered = $tab;
+
+      // @ The bar repaints on the next render
+      $this->compose();
+   }
+
+   /**
+    * Hit-tests the bar — resolves an absolute screen position to the 1-based
+    * ordinal of the label under it, or `0` off the labels. Only the bar row
+    * (the active frame's top border) hits; the divisors and the trailing
+    * border fill miss.
+    *
+    * @param int $column The pointer column (1-based screen coordinate).
+    * @param int $line The pointer line (1-based screen coordinate).
+    *
+    * @return int The label ordinal (1-based), or 0 on a miss.
+    */
+   public function hit (int $column, int $line): int
+   {
+      // ? Off the bar row
+      if ($line !== $this->row || $this->Frames === []) {
+         return 0;
+      }
+
+      // ! Strip-relative offset — the composed strip starts after the corner
+      //   glyph + the title pad space; the border crop bounds the far edge
+      $offset = $column - ($this->column + 2);
+
+      // ? Outside the strip
+      if ($offset < 0 || $offset > $this->width - 4) {
+         return 0;
+      }
+
+      // @@
+      foreach ($this->spans as $ordinal => [$first, $last]) {
+         if ($offset >= $first && $offset <= $last) {
+            // :
+            return $ordinal;
+         }
+      }
+
+      // :
+      return 0;
+   }
+
+   /**
+    * Controls one input sequence — keyboard navigation (←/→, Tab/Shift+Tab
+    * cycle, `1`-`9` jump) and SGR mouse reports (movement hovers the bar
+    * labels, a left press switches, the wheel cycles over the bar row).
+    *
+    * @param string $sequence The assembled input sequence (key or report).
+    *
+    * @return bool false when the sequence ends the session (`q`/Ctrl+C).
+    */
+   public function control (string $sequence): bool
+   {
+      // ? Mouse reports route to the pointer handler
+      if (strncmp($sequence, "\e[<", 3) === 0) {
+         $this->point($sequence);
+
+         // :
+         return true;
+      }
+
+      // @ Navigation
+      match ($sequence) {
+         Keystrokes::RIGHT->value,
+         Keystrokes::TAB->value => $this->cycle(+1),
+         Keystrokes::LEFT->value,
+         Keystrokes::SHIFT_TAB->value => $this->cycle(-1),
+         '1', '2', '3', '4', '5', '6', '7', '8', '9' => $this->switch((int) $sequence),
+         default => null
+      };
+
+      // ?: `q` (or Ctrl+C via the restore net) ends the session
+      return $sequence !== 'q' && $sequence !== Keystrokes::CTRL_C->value;
+   }
+
+   /**
+    * Routes one SGR mouse report — the wheel cycles the tabs over the bar
+    * row, a left press on a label switches to its tab and plain movement
+    * hovers the label under the pointer (leaving clears).
+    *
+    * @param string $report The raw SGR report (`\e[<Cb;Cx;Cy` + `M`/`m`).
+    *
+    * @return void
+    */
+   private function point (string $report): void
+   {
+      // ! Payload: button code, column and line — plus the press/release state
+      $state = substr($report, -1);
+      $parts = explode(';', substr($report, 3, -1));
+      // ?
+      if (count($parts) !== 3) {
+         return;
+      }
+
+      [$button, $column, $line] = $parts;
+      $column = (int) $column;
+      $line = (int) $line;
+
+      $Action = Mousestrokes::tryFrom($button);
+
+      // @ The wheel cycles the tabs over the bar row
+      if ($Action === Mousestrokes::SCROLL_UP || $Action === Mousestrokes::SCROLL_DOWN) {
+         if ($line === $this->row
+            && $column >= $this->column && $column < $this->column + $this->width
+         ) {
+            $this->cycle($Action === Mousestrokes::SCROLL_UP ? -1 : +1);
+         }
+
+         return;
+      }
+
+      // @ A left press on a label switches to its tab (a miss is a no-op)
+      if ($Action === Mousestrokes::LEFT_CLICK && $state === Mousestrokes::CLICKED->value) {
+         $this->switch($this->hit($column, $line));
+
+         return;
+      }
+
+      // @ Plain movement hovers the label under the pointer (0 leaves)
+      if ($Action === Mousestrokes::NONE_CLICK_WITH_MOVEMENT) {
+         $this->hover($this->hit($column, $line));
+      }
+   }
+
+   /**
+    * Toggles SGR pointer tracking — all events (movement, click, wheel), so
+    * the bar labels can hover. A leaked tracking floods the shell with
+    * escapes, so `switching()` always pairs the enable with the disable.
+    *
+    * @param bool $enabled Whether to track the pointer.
+    *
+    * @return void
+    */
+   private function track (bool $enabled): void
+   {
+      if ($enabled === true) {
+         $this->Output->escape(self::_MOUSE_SET_SGR_EXT_MODE);
+         $this->Output->escape(self::_MOUSE_ENABLE_ALL_EVENT_REPORTING);
+
+         return;
+      }
+
+      $this->Output->escape(self::_MOUSE_DISABLE_ALL_EVENT_REPORTING);
+      $this->Output->escape(self::_MOUSE_UNSET_SGR_EXT_MODE);
+   }
+
+   /**
     * Invalidates the active Frame — the next render repaints the full
     * rectangle (screen cleared externally, overlapped, ...).
     *
@@ -302,9 +495,10 @@ class Tabs extends Component implements Boxing
          return;
       }
 
-      // ! Raw input + hidden cursor for the session
+      // ! Raw input + hidden cursor + pointer tracking for the session
       $this->Input->configure(blocking: false, canonical: false, echo: false);
       $this->Output->Cursor->hide();
+      $this->track(true);
 
       $ended = false;
 
@@ -334,18 +528,8 @@ class Tabs extends Component implements Boxing
                break;
             }
 
-            // @ Navigation
-            match ($key) {
-               Keystrokes::RIGHT->value,
-               Keystrokes::TAB->value => $this->cycle(+1),
-               Keystrokes::LEFT->value,
-               Keystrokes::SHIFT_TAB->value => $this->cycle(-1),
-               '1', '2', '3', '4', '5', '6', '7', '8', '9' => $this->switch((int) $key),
-               default => null
-            };
-
-            // ? `q` (or Ctrl+C via the restore net) ends the session
-            if ($key === 'q' || $key === Keystrokes::CTRL_C->value) {
+            // @ Keyboard navigation + pointer reports
+            if ($this->control($key) === false) {
                $ended = true;
 
                break;
@@ -360,6 +544,7 @@ class Tabs extends Component implements Boxing
       }
 
       // @ Restore the terminal
+      $this->track(false);
       $this->Input->configure(blocking: true, canonical: true, echo: true);
       $this->Output->Cursor->show();
    }
@@ -385,20 +570,39 @@ class Tabs extends Component implements Boxing
       $divisor = $map['left'] ?? '';
       $paint = TemplateEscaped::render($this->color);
       $highlight = TemplateEscaped::render($this->highlight);
+      $accent = TemplateEscaped::render($this->hover);
       $reset = self::_RESET_FORMAT;
 
-      // @@ Label segments — the active one highlighted
+      // @@ Label segments — the active one highlighted, the hovered accented —
+      //    and their strip spans (escape-aware widths, for pointer hit-testing)
       $segments = [];
+      $spans = [];
       $ordinal = 0;
+      $offset = 0;
       foreach (array_keys($this->Frames) as $label) {
          $ordinal++;
 
-         $segments[] = ($ordinal === $this->tab)
-            ? "{$highlight} {$label} {$reset}"
-            : "{$paint} {$label} {$reset}";
+         $segments[] = match (true) {
+            $ordinal === $this->tab => "{$highlight} {$label} {$reset}",
+            $ordinal === $this->hovered => "{$accent} {$label} {$reset}",
+            default => "{$paint} {$label} {$reset}"
+         };
+
+         // ! Span — the visible label width + the segment pad spaces (escapes
+         //   and control characters measure zero, mirroring the title strip)
+         $width = mb_strwidth((string) preg_replace(
+            [__String::ANSI_ESCAPE_SEQUENCE_REGEX, '/[\x00-\x1A\x1C-\x1F\x7F]/'],
+            '',
+            TemplateEscaped::render((string) $label)
+         )) + 2;
+         $spans[$ordinal] = [$offset, $offset + $width - 1];
+         $offset += $width + 1; // + the divisor / space glue
       }
 
       $glue = ($divisor !== '') ? "{$paint}{$divisor}{$reset}" : ' ';
+
+      // * Metadata
+      $this->spans = $spans;
 
       $Active->title = implode($glue, $segments);
    }

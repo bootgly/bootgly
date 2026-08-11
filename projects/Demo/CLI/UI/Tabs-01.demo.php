@@ -27,7 +27,8 @@ $Output->render(<<<OUTPUT
 OUTPUT);
 
 // @ Three tab frames sharing one rectangle — the bar rides the active border;
-//   ←/→ and Tab/Shift+Tab cycle, 1-3 jump, `q` quits
+//   ←/→ and Tab/Shift+Tab cycle, 1-3 jump, `q` quits; by pointer, movement
+//   hovers the labels, a click switches and the wheel cycles over the bar
 $Tabs = new Tabs($Input, $Output);
 $Tabs->width = CLI->Terminal::$columns;
 $Tabs->height = CLI->Terminal::$lines - 1;
@@ -56,7 +57,7 @@ $Table->render();
 
 $Log->Output->render("@#Black:boot@; Tabs ready — feeding every tick\n");
 
-$hint = '@#Black: ←/→ · Tab cycles · 1-3 jump · q quits @;';
+$hint = '@#Black: ←/→ · Tab cycles · 1-3 jump · hover/click/wheel the bar · q quits @;';
 
 if (BOOTGLY_TTY === true) {
    $Screen->open();

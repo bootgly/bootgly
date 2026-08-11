@@ -25,5 +25,6 @@ return new Suite(
       '5.2-tabs-bar',
       '5.3-tabs-switch',
       '5.4-tabs-switching',
+      '5.5-tabs-pointer',
    ]
 );
