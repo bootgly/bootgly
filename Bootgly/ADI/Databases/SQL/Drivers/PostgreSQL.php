@@ -90,6 +90,9 @@ class PostgreSQL extends Driver
    private array $names = [];
    /** @var array<string,true> */
    private array $preparing = [];
+   // @ Statement names evicted client-side, awaiting their paired wire Close.
+   /** @var array<string,true> */
+   private array $closing = [];
    private null|Readiness $ReadReadiness = null;
    private null|Readiness $WriteReadiness = null;
    /** @var resource|null */
@@ -181,8 +184,10 @@ class PostgreSQL extends Driver
 
          if ($Operation->prepared) {
             if ($cached !== false) {
-               $this->evict($Operation->statement);
-               $this->cache($Operation->statement, $cached);
+               // ! LRU touch — reinsert inline: evict() queues a wire Close,
+               //   which a touch must never do.
+               unset($this->statements[$Operation->statement]);
+               $this->statements[$Operation->statement] = $cached;
             }
 
             $Operation->write = "{$bind}{$describe}{$execute}{$sync}";
@@ -190,15 +195,12 @@ class PostgreSQL extends Driver
             return $Operation;
          }
 
-         $close = '';
-
          if ($this->SQLConfig->statements > 0 && count($this->statements) >= $this->SQLConfig->statements) {
             $evicted = array_key_first($this->statements);
+
+            // ! The paired Close rides the driver-level buffer and is rendered
+            //   ahead of the next flushed batch.
             $this->evict($evicted);
-            $close = $Encoder->encode(Encoder::CLOSE, [
-               'type' => 'S',
-               'name' => $evicted,
-            ]);
          }
 
          $parse = $Encoder->parse([
@@ -210,7 +212,7 @@ class PostgreSQL extends Driver
             'type' => 'S',
             'name' => $Operation->statement,
          ]);
-         $Operation->write = "{$close}{$parse}{$describeStatement}{$bind}{$describe}{$execute}{$sync}";
+         $Operation->write = "{$parse}{$describeStatement}{$bind}{$describe}{$execute}{$sync}";
 
          return $Operation;
       }
@@ -345,6 +347,28 @@ class PostgreSQL extends Driver
             $Operation->state = OperationStates::Querying;
          }
 
+         // ! Pending statement Closes ride ahead of this batch — rendered once
+         //   per batch: a partial-flush re-entry keeps $writing === $Operation.
+         if ($this->closing !== [] && $this->writing !== $Operation) {
+            $closes = '';
+
+            foreach ($this->closing as $name => $queued) {
+               // ? A queued Close must never decapitate the batch it rides
+               //   ahead of — a name this warm batch binds stays queued.
+               if ($name === $Operation->statement && $Operation->prepared) {
+                  continue;
+               }
+
+               $closes .= $this->Encoder->encode(Encoder::CLOSE, [
+                  'type' => 'S',
+                  'name' => $name,
+               ]);
+               unset($this->closing[$name]);
+            }
+
+            $Operation->write = "{$closes}{$Operation->write}";
+         }
+
          $this->writing = $Operation;
 
          if ($this->flush($Operation) === false) {
@@ -460,6 +484,7 @@ class PostgreSQL extends Driver
       // ! Session state — packets and named statements die with the socket
       $this->statements = [];
       $this->preparing = [];
+      $this->closing = [];
       $this->writing = null;
       $this->Decoder = new Decoder;
 
@@ -512,8 +537,35 @@ class PostgreSQL extends Driver
     */
    public function evict (string $statement): self
    {
+      // ?
+      if ($statement === '') {
+         return $this;
+      }
+
       unset($this->preparing[$statement]);
       unset($this->statements[$statement]);
+
+      // ! Pair every client-side removal with a wire Close on the next batch.
+      //   A Close for a name the backend never registered is harmless.
+      $this->closing[$statement] = true;
+
+      return $this;
+   }
+
+   /**
+    * Discard transient statement metadata after a batch completes.
+    */
+   private function discard (Operation $Operation): self
+   {
+      // ?
+      if ($this->SQLConfig->statements > 0 || $Operation->statement === '') {
+         return $this;
+      }
+
+      // ! With a zero statements budget every statement is transient — evict
+      //   queues the wire Close that frees the backend entry.
+      $this->evict($Operation->statement);
+      $Operation->prepared = false;
 
       return $this;
    }
@@ -837,6 +889,7 @@ class PostgreSQL extends Driver
 
       if ($type === 'Z') {
          if ($Operation->state === OperationStates::Failed) {
+            $this->discard($Operation);
             $this->Connection->transition();
 
             return $Operation;
@@ -853,6 +906,7 @@ class PostgreSQL extends Driver
             return $Operation;
          }
 
+         $this->discard($Operation);
          $this->Connection->transition();
 
          return $Operation->resolve(new Result(
@@ -881,13 +935,15 @@ class PostgreSQL extends Driver
          return $Operation;
       }
 
-      // @ Extended query no-ops — emitted by Bind / NoData / PortalSuspended.
-      if ($type === '2' || $type === 'n' || $type === 's') {
+      // @ Extended query no-ops — Bind / NoData / PortalSuspended / CloseComplete.
+      if ($type === '2' || $type === 'n' || $type === 's' || $type === '3') {
          return $Operation;
       }
 
       if ($type === '1') {
-         if ($Operation->statement !== '' && $this->SQLConfig->statements > 0) {
+         // ! Unconditional — the driver model mirrors the backend truth; a
+         //   zero statements budget discards transiently at ReadyForQuery.
+         if ($Operation->statement !== '') {
             $this->cache($Operation->statement);
             $Operation->prepared = true;
          }
@@ -905,7 +961,7 @@ class PostgreSQL extends Driver
             }
          }
 
-         if ($Operation->statement !== '' && $this->SQLConfig->statements > 0) {
+         if ($Operation->statement !== '') {
             $this->cache($Operation->statement, $Operation->parameterTypes);
          }
 
@@ -916,8 +972,24 @@ class PostgreSQL extends Driver
          $message = $Message->fields['message'] ?? 'PostgreSQL error.';
 
          if ($Operation->statement !== '') {
-            $this->evict($Operation->statement);
-            $Operation->prepared = false;
+            if (isset($this->statements[$Operation->statement]) === false) {
+               // ? No ParseComplete arrived — the backend never registered the
+               //   statement: drop every local trace of it.
+               $this->evict($Operation->statement);
+               $Operation->prepared = false;
+            }
+            else {
+               $code = $Message->fields['code'] ?? '';
+               $code = is_string($code) ? $code : '';
+
+               // ? Only errors that invalidate the server-side statement evict
+               //   it — a runtime SQLSTATE (duplicate key, division by zero,
+               //   timeout...) leaves the prepared statement usable.
+               if ($code === '' || $code === '0A000' || $code === '26000') {
+                  $this->evict($Operation->statement);
+                  $Operation->prepared = false;
+               }
+            }
          }
 
          if (is_scalar($message) === false) {

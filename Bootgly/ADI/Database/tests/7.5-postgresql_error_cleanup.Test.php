@@ -5,6 +5,7 @@ use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Database\Connection\ConnectionStates;
 use Bootgly\ADI\Database\Operation\OperationStates;
 use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Encoder;
 
 
 return new Test(
@@ -47,6 +48,22 @@ return new Test(
             && count($Database->Pool->idle) === 1
             && $Database->Pool->busy === [],
          description: 'Recoverable PostgreSQL error returns a ready connection to the idle pool'
+      );
+
+      // # Recovery — the code-less eviction still pairs a Close on the wire
+      $Next = $Database->query('SELECT $1::int AS value', [2]);
+      $Database->advance($Next);
+      $wire = (string) fread($server, 8192);
+      $Encoder = new Encoder;
+      $close = $Encoder->encode(Encoder::CLOSE, [
+         'type' => 'S',
+         'name' => $Operation->statement,
+      ]);
+
+      yield assert(
+         assertion: substr($wire, 0, strlen($close)) === $close
+            && substr($wire, strlen($close), 1) === 'P',
+         description: 'The next batch closes the evicted statement on the wire before re-preparing it'
       );
 
       fclose($server);

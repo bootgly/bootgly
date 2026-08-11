@@ -88,5 +88,7 @@ return new Suite(
       '7.17-postgresql_encoder_value_formats',
       '7.18-postgresql_parameter_inference',
       '7.19-postgresql_statement_identity',
+      '7.20-postgresql_error_lifecycle',
+      '7.21-postgresql_transient_statements',
    ]
 );
