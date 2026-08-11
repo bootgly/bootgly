@@ -142,6 +142,29 @@ class Scrollarea extends Component
    }
 
    /**
+    * Clears the content buffer and repaints the empty band — the view sticks
+    * back to the bottom, with nothing left to scroll into.
+    *
+    * @return void
+    */
+   public function clear (): void
+   {
+      // * Data
+      $this->buffer = [];
+
+      // * Metadata
+      $this->first = 0;
+      $this->stuck = true;
+
+      // ? Non-interactive output has no band to repaint
+      if (BOOTGLY_TTY === false) {
+         return;
+      }
+
+      $this->render();
+   }
+
+   /**
     * Scrolls the view by a row delta (negative = up). Scrolling back to the last
     * row re-sticks the view to the bottom.
     *
