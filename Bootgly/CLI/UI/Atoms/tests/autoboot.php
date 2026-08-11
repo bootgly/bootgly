@@ -29,5 +29,8 @@ return new Suite(
 
       '6.1-differ-render',
       '6.2-differ-split',
+
+      '7.1-button-render',
+      '7.2-button-pointer',
    ]
 );
