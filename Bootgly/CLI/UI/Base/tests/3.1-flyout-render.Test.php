@@ -4,124 +4,130 @@ namespace Bootgly\CLI\UI\Base;
 
 
 use function assert;
+use function fseek;
+use function ftell;
+use function rewind;
 use function str_contains;
+use function stream_get_contents;
 use function substr_count;
 
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\CLI\Terminal\Output;
+use Bootgly\CLI\UI\Base\Flyout\Placements;
 
 
 return new Test(
-   description: 'It should compose an anchored option list, windowed around the aim',
+   description: 'It should compose and paint a generic anchored overlay block',
    test: function () {
       $Output = new Output('php://memory');
 
       $Flyout = new Flyout($Output);
-      $Flyout->options = ['/help', '/clear', '/model', '/exit'];
 
-      // @ Closed while there is nothing to offer
-      $Flyout->options = [];
-
+      // @ Closed while there is nothing to show
       yield assert(
          assertion: $Flyout->render(Flyout::RETURN_OUTPUT) === '' && $Flyout->height === 0,
-         description: 'An empty list renders nothing and reports a height of 0'
+         description: 'Empty content renders nothing and reports a height of 0'
       );
 
-      // @ Every option renders when the viewport is unlimited
-      $Flyout->options = ['/help', '/clear', '/model', '/exit'];
-      $frame = (string) $Flyout->render(Flyout::RETURN_OUTPUT);
+      // @ The borderless block is the content itself, one trailing break
+      $Flyout->content = "one\ntwo";
+      $block = (string) $Flyout->render(Flyout::RETURN_OUTPUT);
 
       yield assert(
-         assertion: $Flyout->height === 4
-            && str_contains($frame, '/help') === true
-            && str_contains($frame, '/exit') === true
-            && str_contains($frame, 'more') === false,
-         description: 'An unlimited viewport renders every option, with no hidden-count markers'
-      );
-
-      // @ The aim marks its row
-      $Flyout->aim(1);
-      $frame = (string) $Flyout->render(Flyout::RETURN_OUTPUT);
-
-      yield assert(
-         assertion: str_contains($frame, '@#Cyan:=> /clear@;') === true
-            && str_contains($frame, '   /help') === true,
-         description: 'The aimed option carries the marker; the others carry the filler'
-      );
-
-      // @ Aiming clamps — the list never wraps
-      $Flyout->aim(99);
-
-      yield assert(
-         assertion: $Flyout->aimed === 3,
-         description: 'aim() clamps past the end'
-      );
-
-      $Flyout->advance();
-
-      yield assert(
-         assertion: $Flyout->aimed === 3,
-         description: 'advance() stops at the last option'
-      );
-
-      $Flyout->aim(0);
-      $Flyout->regress();
-
-      yield assert(
-         assertion: $Flyout->aimed === 0,
-         description: 'regress() stops at the first option'
-      );
-
-      // @ A viewport windows around the aim and announces what it hides
-      $Flyout->viewport = 2;
-      $Flyout->aim(3);
-      $frame = (string) $Flyout->render(Flyout::RETURN_OUTPUT);
-
-      yield assert(
-         assertion: $Flyout->height === 3
-            && str_contains($frame, '↑ 2 more') === true
-            && str_contains($frame, '/model') === true
-            && str_contains($frame, '/exit') === true
-            && str_contains($frame, '/help') === false,
-         description: 'The window slides to the aim and marks the rows it clipped above'
-      );
-
-      $Flyout->aim(0);
-      $frame = (string) $Flyout->render(Flyout::RETURN_OUTPUT);
-
-      yield assert(
-         assertion: str_contains($frame, '↓ 2 more') === true
-            && str_contains($frame, '↑') === false,
-         description: 'Aiming back to the top marks the rows clipped below'
-      );
-
-      // @ Long options crop instead of wrapping
-      $Flyout->viewport = 0;
-      $Flyout->width = 8;
-      $Flyout->options = ['a-very-long-option-label'];
-      $Flyout->aim(0);
-      $frame = (string) $Flyout->render(Flyout::RETURN_OUTPUT);
-
-      yield assert(
-         assertion: str_contains($frame, '…') === true
-            && str_contains($frame, 'a-very-long-option-label') === false,
-         description: 'Options wider than the available columns crop with an ellipsis'
+         assertion: $block === "one\ntwo\n" && $Flyout->height === 2,
+         description: 'Borderless content composes as-is and counts its rows'
       );
 
       // @ The bordered composition delegates the box to the Fieldset
-      $Flyout->width = null;
       $Flyout->bordered = true;
       $Flyout->title = 'Commands';
-      $Flyout->options = ['/help', '/exit'];
-      $frame = (string) $Flyout->render(Flyout::RETURN_OUTPUT);
+      $block = (string) $Flyout->render(Flyout::RETURN_OUTPUT);
 
       yield assert(
          assertion: $Flyout->height === 4
-            && substr_count($frame, "\n") === 4
-            && str_contains($frame, '┌') === true
-            && str_contains($frame, '└') === true
-            && str_contains($frame, 'Commands') === true,
-         description: 'Bordered mode wraps the rows in a titled box and counts its two border rows'
+            && substr_count($block, "\n") === 4
+            && str_contains($block, '┌') === true
+            && str_contains($block, '└') === true
+            && str_contains($block, 'Commands') === true,
+         description: 'Bordered content wraps in a titled box and counts its two border rows'
+      );
+
+      // @ Emptying the content closes the flyout again
+      $Flyout->content = '';
+      $Flyout->render(Flyout::RETURN_OUTPUT);
+
+      yield assert(
+         assertion: $Flyout->height === 0,
+         description: 'Emptied content resets the height to 0'
+      );
+
+      // @ WRITE + Below paints under the anchor and returns to the anchor row
+      $Output = new Output('php://memory');
+      $Flyout = new Flyout($Output);
+      $Flyout->content = "aa\nbb";
+      $Flyout->render();
+
+      rewind($Output->stream);
+      $painted = (string) stream_get_contents($Output->stream);
+
+      yield assert(
+         assertion: $painted === "\n\e[1G\e[0Kaa\n\e[1G\e[0Kbb\e[2F",
+         description: 'Below paints each row under the anchor (`\n` steps scroll-safe) and CPLs back'
+      );
+
+      // @ close() erases exactly the painted rows (Below)
+      $Output = new Output('php://memory');
+      $Flyout = new Flyout($Output);
+      $Flyout->content = "aa\nbb";
+      $Flyout->render();
+
+      // ! Writes land at the stream pointer — mark it to read only what close() emits
+      $offset = (int) ftell($Output->stream);
+
+      $Flyout->close();
+
+      fseek($Output->stream, $offset);
+      $erased = (string) stream_get_contents($Output->stream);
+
+      yield assert(
+         assertion: $erased === "\e[1E\e[2K\e[1B\e[2K\e[1A\e[1F" && $Flyout->height === 0,
+         description: 'close() steps below the anchor, clears the block rows and returns'
+      );
+
+      // @ A closed flyout has nothing to erase
+      $Flyout->close();
+
+      yield assert(
+         assertion: stream_get_contents($Output->stream) === '',
+         description: 'close() is a no-op while closed'
+      );
+
+      // @ WRITE + Above paints over the anchor (the host made room)
+      $Output = new Output('php://memory');
+      $Flyout = new Flyout($Output);
+      $Flyout->placement = Placements::Above;
+      $Flyout->content = "aa\nbb";
+      $Flyout->render();
+
+      rewind($Output->stream);
+      $painted = (string) stream_get_contents($Output->stream);
+
+      yield assert(
+         assertion: $painted === "\e[2F\e[0Kaa\e[1E\e[0Kbb\e[1E",
+         description: 'Above CPLs to the block top, paints row by row and lands on the anchor'
+      );
+
+      // @ close() erases the rows over the anchor (Above)
+      $offset = (int) ftell($Output->stream);
+
+      $Flyout->close();
+
+      fseek($Output->stream, $offset);
+      $erased = (string) stream_get_contents($Output->stream);
+
+      yield assert(
+         assertion: $erased === "\e[2F\e[2K\e[1B\e[2K\e[1A\e[2E" && $Flyout->height === 0,
+         description: 'close() climbs to the block top, clears its rows and returns to the anchor'
       );
    }
 );

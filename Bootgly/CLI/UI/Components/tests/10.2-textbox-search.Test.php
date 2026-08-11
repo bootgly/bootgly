@@ -67,7 +67,7 @@ return new Test(
             description: 'Typing narrows the matches; strict Enter submits the aimed option value'
          );
          yield assert(
-            assertion: str_contains($output, '=> MySQL') === true
+            assertion: str_contains($output, '❯ MySQL') === true
                && str_contains($output, 'Redis') === true,
             description: 'The empty query lists every option with the first one aimed'
          );

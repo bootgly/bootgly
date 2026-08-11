@@ -20,5 +20,6 @@ return new Suite(
       '1.4-frame-drain',
       '2.1-fieldset-render',
       '3.1-flyout-render',
+      '4.1-listbox-render',
    ]
 );

@@ -37,13 +37,13 @@ use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Input\Keystrokes;
 use Bootgly\CLI\Terminal\Input\Line;
 use Bootgly\CLI\Terminal\Output;
-use Bootgly\CLI\UI\Base\Flyout;
+use Bootgly\CLI\UI\Base\Listbox;
 use Bootgly\CLI\UI\Components\Alert;
 
 
 /**
  * Textbox — the single-line text input: a prompt, a line editor and, when it
- * has options to offer, a Flyout listing them under the input.
+ * has options to offer, a Listbox listing them under the input.
  *
  * The same component covers free text (`ask()`), a yes/no answer (`confirm()`),
  * secret input (`mask`), autocompletion (`options`) and search (`source` — a
@@ -435,7 +435,7 @@ class Textbox extends Component
    }
 
    /**
-    * Captures a line interactively with the options listed in a Flyout below it.
+    * Captures a line interactively with the options listed in a Listbox below it.
     * Typing re-queries the options; `↑`/`↓` aim; `Tab` completes to the aimed
     * label; `Esc` closes the list keeping the typed text; Enter submits the
     * typed text — or the aimed option's value on strict mode.
@@ -447,9 +447,9 @@ class Textbox extends Component
       // ! Line editor + option list
       $Line = new Line;
 
-      $Flyout = new Flyout($this->Output);
-      $Flyout->viewport = $this->viewport;
-      $Flyout->width = isSet(Terminal::$width) === true ? Terminal::$width - 4 : null;
+      $Listbox = new Listbox($this->Output);
+      $Listbox->viewport = $this->viewport;
+      $Listbox->width = isSet(Terminal::$width) === true ? Terminal::$width - 4 : null;
 
       // ! Raw input mode
       $this->Input->configure(blocking: false, canonical: false, echo: false);
@@ -479,9 +479,11 @@ class Textbox extends Component
 
          $frame .= $legend;
 
-         // ? The list shows the labels; the values answer for them on submit
-         $Flyout->options = $open === true ? array_column($this->matches, 1) : [];
-         $frame .= (string) $Flyout->render(self::RETURN_OUTPUT);
+         // ? The list shows the labels; the values answer for them on submit —
+         //   the typed text lights up inside each match
+         $Listbox->query = $Line->value;
+         $Listbox->options = $open === true ? array_column($this->matches, 1) : [];
+         $frame .= (string) $Listbox->render(self::RETURN_OUTPUT);
 
          // @ Repaint relatively over the previous frame
          if ($height > 0) {
@@ -520,16 +522,16 @@ class Textbox extends Component
          // @ Control
          switch ($key) {
             case Keystrokes::UP->value:
-               $Flyout->regress();
+               $Listbox->regress();
                break;
             case Keystrokes::DOWN->value:
-               $Flyout->advance();
+               $Listbox->advance();
                break;
             case Keystrokes::TAB->value:
                // ? Tab completes to the aimed label
-               if (isSet($this->matches[$Flyout->aimed]) === true) {
+               if (isSet($this->matches[$Listbox->aimed]) === true) {
                   $Line->reset();
-                  $Line->feed($this->matches[$Flyout->aimed][1]);
+                  $Line->feed($this->matches[$Listbox->aimed][1]);
                }
                break;
             case Keystrokes::ESCAPE->value:
@@ -550,15 +552,15 @@ class Textbox extends Component
                // @ Re-query on any edit — the previous aim means nothing after it
                $this->search($Line->value);
 
-               $Flyout->aim(0);
+               $Listbox->aim(0);
                $open = true;
          }
       }
 
       // ! Captured line — strict mode submits the aimed option's value
       $line = $Line->value;
-      if ($eof === false && $this->strict === true && isSet($this->matches[$Flyout->aimed]) === true) {
-         $line = $this->matches[$Flyout->aimed][0];
+      if ($eof === false && $this->strict === true && isSet($this->matches[$Listbox->aimed]) === true) {
+         $line = $this->matches[$Listbox->aimed][0];
 
          $this->selected = true;
       }

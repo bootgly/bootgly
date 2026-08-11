@@ -166,7 +166,7 @@ return new Suites(
       'Bootgly/WPI/Interfaces/UDP_Server_CLI/tests/',
       // # CLI UI Atoms — Text (+Effects) typographic primitive
       'Bootgly/CLI/UI/Atoms/',
-      // # CLI UI Base — Frame (region canvas: buffer, render, diff, drain)
+      // # CLI UI Base — Frame (region canvas), Fieldset, Flyout (anchored overlay), Listbox
       'Bootgly/CLI/UI/Base/',
       // # ABI/Code/__String/Markdown — pure markdown → AST parser
       'Bootgly/ABI/Code/__String/Markdown/',
