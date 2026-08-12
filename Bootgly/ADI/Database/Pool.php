@@ -307,12 +307,16 @@ class Pool
       $id = spl_object_id($Connection);
       $Protocol = $Operation->Protocol;
 
-      if ($Protocol !== null && $Protocol->check()) {
-         return $this;
-      }
-
+      // ? The reservation is this operation's to release, and the intent lives
+      //   on the object: deferring it because the driver still holds a sibling
+      //   loses it for good — nobody re-runs this release, and the sibling's own
+      //   release then parks the connection as reserved forever.
       if ($Operation->unlock || ($Operation->lock && $Operation->state === OperationStates::Failed)) {
          $this->unlock($Connection);
+      }
+
+      if ($Protocol !== null && $Protocol->check()) {
+         return $this;
       }
 
       unset($this->busy[$id]);
