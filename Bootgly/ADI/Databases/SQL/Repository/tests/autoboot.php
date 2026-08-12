@@ -29,5 +29,6 @@ return new Suite(
       '12.11-orm_pagination_cursor',
       '12.12-orm_pagination_e2e',
       '12.13-orm_pagination_serial',
+      '12.14-orm_insert_key_width',
    ]
 );

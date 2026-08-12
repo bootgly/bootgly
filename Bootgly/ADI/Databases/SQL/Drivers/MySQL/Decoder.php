@@ -13,9 +13,11 @@ namespace Bootgly\ADI\Databases\SQL\Drivers\MySQL;
 
 use function count;
 use function intdiv;
+use function is_int;
 use function is_string;
 use function ord;
 use function sprintf;
+use function str_pad;
 use function strlen;
 use function strpos;
 use function substr;
@@ -245,18 +247,20 @@ class Decoder
    /**
     * Parse an OK packet.
     *
-    * @return array<string,int>
+    * @return array<string,int|string>
     */
    private function confirm (string $payload): array
    {
       $cursor = 1;
       $affected = $this->slice($payload, $cursor);
+      // ! A generated id past the sign bit arrives as an exact decimal string —
+      //   casting it to int here is what made it negative.
       $inserted = $this->slice($payload, $cursor);
 
       // :
       return [
-         'affected' => (int) $affected,
-         'inserted' => (int) $inserted,
+         'affected' => $affected ?? 0,
+         'inserted' => $inserted ?? 0,
          'status' => $this->unpack($payload, $cursor, 2),
          'warnings' => $this->unpack($payload, $cursor + 2, 2),
       ];
@@ -544,28 +548,42 @@ class Decoder
          return null;
       }
 
+      // ! Header width and encoded length, read without moving the cursor: a
+      //   length the payload cannot address must leave it where it was.
       if ($first < 0xFB) {
-         $cursor += 1;
+         $header = 1;
          $length = $first;
       }
       elseif ($first === 0xFC) {
+         $header = 3;
          $length = $this->unpack($payload, $cursor + 1, 2);
-         $cursor += 3;
       }
       elseif ($first === 0xFD) {
+         $header = 4;
          $length = $this->unpack($payload, $cursor + 1, 3);
-         $cursor += 4;
       }
       else {
-         $length = $this->unpack($payload, $cursor + 1, 8);
-         $cursor += 9;
+         $header = 9;
+         $length = $this->extend($payload, $cursor + 1);
       }
 
       // ?: Length-encoded integer position — return the integer itself
       if ($string === false) {
+         $cursor += $header;
+
          return $length;
       }
 
+      // ? A string length no packet can hold is framing corruption, not data:
+      //   `decode()` coalesces 16 MB continuations, so the complete logical
+      //   packet is always in hand here.
+      if (is_int($length) === false || $cursor + $header + $length > strlen($payload)) {
+         throw new InvalidArgumentException(
+            "MySQL length-encoded string overruns the packet: {$length} bytes at offset {$cursor}."
+         );
+      }
+
+      $cursor += $header;
       $value = substr($payload, $cursor, $length);
       $cursor += $length;
 
@@ -579,6 +597,25 @@ class Decoder
    private function skip (string $payload, int &$cursor): void
    {
       $this->slice($payload, $cursor, true);
+   }
+
+   /**
+    * Unpack an unsigned 64-bit little-endian integer from a payload offset.
+    *
+    * Widths up to 4 bytes fit a PHP int with room to spare; 8 bytes do not —
+    * bit 63 would land on PHP's sign bit and turn a protocol-unsigned value
+    * negative. Padding a short tail with NULs keeps `unpack()`'s tolerance for
+    * a truncated payload (a missing byte reads as zero).
+    */
+   private function extend (string $payload, int $offset): int|string
+   {
+      /** @var array{1:int} $parts */
+      $parts = unpack('P', str_pad(substr($payload, $offset, 8), 8, "\0"));
+      $value = $parts[1];
+
+      // ?: Bit 63 set — no PHP int is wide enough, so keep the value exact as
+      //    a decimal string, the contract TYPE_LONGLONG already uses.
+      return $value < 0 ? sprintf('%u', $value) : $value;
    }
 
    /**

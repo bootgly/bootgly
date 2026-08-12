@@ -765,46 +765,50 @@ class MySQL extends Driver
          return $Operation->state;
       }
 
+      // @ Framing and payload parsing share one guard: a packet that decodes
+      //   into a length no payload can address is as unrecoverable as a broken
+      //   header, and leaving the loop outside would let it escape advance().
       try {
          $Messages = $this->Decoder->decode($bytes);
+
+         foreach ($Messages as $Message) {
+            $Active = $this->pipeline[0] ?? ($Operation->finished ? null : $Operation);
+
+            if ($Active === null) {
+               continue;
+            }
+
+            $this->apply($Active, $Message);
+
+            // ? Only a protocol sync point retires the head. An operation the
+            //   pool finished from the outside — an elapsed deadline — still owns
+            //   the wire until the server stops answering it: leaving earlier
+            //   would hand its remaining packets to the next co-located command.
+            if ($this->pipeline !== [] && $this->synced === false) {
+               continue;
+            }
+
+            if ($Active->finished) {
+               if (($this->pipeline[0] ?? null) === $Active) {
+                  array_shift($this->pipeline);
+
+                  // ? An abandoned head is a stand-in the pool never assigned:
+                  //   draining it must not release a connection a second time.
+                  if ($this->abandoned === false) {
+                     $this->completed[] = $Active;
+                  }
+               }
+
+               $this->clear();
+            }
+         }
       }
       catch (Throwable $Throwable) {
-         // ? Framing corruption cannot be resynchronized — kill the session.
+         // ? Protocol corruption cannot be resynchronized — kill the session.
+         //   abort() fails every queued sibling too, so the whole FIFO settles.
          $this->abort($Operation, $Throwable->getMessage());
 
          return $Operation->state;
-      }
-
-      foreach ($Messages as $Message) {
-         $Active = $this->pipeline[0] ?? ($Operation->finished ? null : $Operation);
-
-         if ($Active === null) {
-            continue;
-         }
-
-         $this->apply($Active, $Message);
-
-         // ? Only a protocol sync point retires the head. An operation the
-         //   pool finished from the outside — an elapsed deadline — still owns
-         //   the wire until the server stops answering it: leaving earlier
-         //   would hand its remaining packets to the next co-located command.
-         if ($this->pipeline !== [] && $this->synced === false) {
-            continue;
-         }
-
-         if ($Active->finished) {
-            if (($this->pipeline[0] ?? null) === $Active) {
-               array_shift($this->pipeline);
-
-               // ? An abandoned head is a stand-in the pool never assigned:
-               //   draining it must not release a connection a second time.
-               if ($this->abandoned === false) {
-                  $this->completed[] = $Active;
-               }
-            }
-
-            $this->clear();
-         }
       }
 
       // ? A sibling pump may have re-armed the head (prepare-OK re-queues the
@@ -1460,8 +1464,11 @@ class MySQL extends Driver
 
       $affected = $fields['affected'] ?? 0;
       $affected = is_int($affected) ? $affected : 0;
+      // ! A generated id past PHP_INT_MAX arrives as an exact decimal string.
+      //   Affected rows stay int-only: no result set is that large, so a value
+      //   the decoder could not fit an int is corruption, not a count.
       $inserted = $fields['inserted'] ?? 0;
-      $inserted = is_int($inserted) ? $inserted : 0;
+      $inserted = is_int($inserted) || is_string($inserted) ? $inserted : 0;
 
       // ! Command tag — mirror the PostgreSQL CommandComplete format
       $keyword = preg_match('/^\s*(\w+)/', $Operation->SQL, $matches) === 1

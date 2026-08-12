@@ -106,5 +106,6 @@ return new Suite(
       '10.22-mysql_prepare_window',
       '7.26-postgresql_prepare_window',
       '10.23-mysql_statement_pins',
+      '10.24-mysql_insert_id_width',
    ]
 );

@@ -26,8 +26,13 @@ class Result
    /** @var array<int,string> */
    public array $columns;
    public int $affected;
-   /** Last generated row id reported by the server for INSERT commands; `0` when unavailable. */
-   public int $inserted;
+   /**
+    * Last generated row id reported by the server for INSERT commands; `0` when unavailable.
+    *
+    * An id beyond `PHP_INT_MAX` — a MySQL `BIGINT UNSIGNED` key past 2^63 —
+    * arrives as an exact decimal string, since no PHP int is wide enough.
+    */
+   public int|string $inserted;
 
    // # Views
    /** @var array<string,mixed> */
@@ -63,7 +68,7 @@ class Result
     * @param array<int,array<string,mixed>> $rows
     * @param array<int,string> $columns
     */
-   public function __construct (string $status = '', array $rows = [], array $columns = [], int $affected = 0, int $inserted = 0)
+   public function __construct (string $status = '', array $rows = [], array $columns = [], int $affected = 0, int|string $inserted = 0)
    {
       // * Data
       $this->status = $status;

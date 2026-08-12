@@ -270,8 +270,10 @@ class Repository
       // ? Generated-key backfill — dialects without RETURNING report the
       //   generated id in Result->inserted instead of returning rows.
       if ($entities === [] && $Saved !== null && $Result->inserted > 0) {
-         $this->Model->write($Saved, $this->Model->keyProperty, $Result->inserted);
-         $this->Identity->store($this->Model->class, $Result->inserted, $Saved);
+         $key = $this->adapt($Result->inserted);
+
+         $this->Model->write($Saved, $this->Model->keyProperty, $key);
+         $this->Identity->store($this->Model->class, $key, $Saved);
          $entities = [$Saved];
       }
 
@@ -633,7 +635,34 @@ class Repository
    }
 
    /**
-    * Check whether one reflection type accepts one lazy wrapper class.
+    * Adapt a generated key to the declared key property type.
+    */
+   private function adapt (int|string $key): int|string
+   {
+      // ? An id inside int range is the common path and needs nothing.
+      if (is_string($key) === false) {
+         return $key;
+      }
+
+      $Reflection = $this->Model->Reflections[$this->Model->keyProperty] ?? null;
+      $Type = $Reflection?->getType();
+
+      if ($Type === null || $this->allow($Type, 'string')) {
+         return $key;
+      }
+
+      // ? MySQL reports a `BIGINT UNSIGNED` id past 2^63 as an exact decimal
+      //   string. Narrowing it to int would saturate at PHP_INT_MAX and store a
+      //   key matching no row — silently, on a write the server already made.
+      $property = "{$this->Model->class}::\${$this->Model->keyProperty}";
+
+      throw new RuntimeException(
+         "ORM cannot store a generated key beyond PHP_INT_MAX in an int property: {$property} ({$key}) — declare it as null|int|string."
+      );
+   }
+
+   /**
+    * Check whether one reflection type accepts one class or scalar type name.
     */
    private function allow (ReflectionType $Type, string $class): bool
    {
