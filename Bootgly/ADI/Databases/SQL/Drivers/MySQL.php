@@ -98,6 +98,10 @@ class MySQL extends Driver
    private bool $abandoned = false;
    // @ COM_STMT_PREPARE response in flight for the pipeline head.
    private bool $preparing = false;
+   // @ SQL texts whose COM_STMT_PREPARE is already on the wire — a sibling
+   //   created inside that window must not prepare the same statement again.
+   /** @var array<string,true> */
+   private array $pending = [];
    // @ Parameter/column definition packets left to consume after prepare-OK.
    private int $definitions = 0;
    // @ Binary protocol rows (COM_STMT_EXECUTE) for the current result set.
@@ -174,7 +178,21 @@ class MySQL extends Driver
             return $Operation;
          }
 
+         // ? A sibling already has a COM_STMT_PREPARE in flight for this SQL.
+         //   Leave the command unencoded: the FIFO head re-derives it at flush
+         //   time, by which point the prepare-OK has landed and it becomes a
+         //   cache-hit COM_STMT_EXECUTE. Preparing it again would strand the
+         //   id this one is about to displace. The head itself never skips —
+         //   that is what makes a marker left behind by a dead owner cost one
+         //   extra pass instead of a hang.
+         if (isset($this->pending[$Operation->SQL]) && ($this->pipeline[0] ?? null) !== $Operation) {
+            $Operation->write = '';
+
+            return $Operation;
+         }
+
          // : Cache miss — COM_STMT_PREPARE first; EXECUTE follows the prepare-OK
+         $this->pending[$Operation->SQL] = true;
          $Operation->write = $this->Encoder->encode(Encoder::PREPARE, $Operation->SQL);
 
          return $Operation;
@@ -811,6 +829,7 @@ class MySQL extends Driver
       $this->clear();
       $this->closing = '';
       $this->statements = [];
+      $this->pending = [];
       $this->Decoder = new Decoder;
 
       $Pipeline = $this->pipeline;
@@ -863,6 +882,9 @@ class MySQL extends Driver
       // # COM_STMT_PREPARE response
       if ($this->preparing) {
          $this->preparing = false;
+         // ! The prepare is off the wire either way — a marker kept past this
+         //   point would leak one entry per distinct SQL for the session.
+         unset($this->pending[$Operation->SQL]);
 
          if ($first === 0xFF) {
             return $this->fail($Operation, $payload);
@@ -876,8 +898,17 @@ class MySQL extends Driver
          $parameters = $fields['parameters'] ?? 0;
          $parameters = is_int($parameters) ? $parameters : 0;
 
+         $existing = $this->statements[$Operation->SQL] ?? null;
+
+         // ? This prepare-OK displaces an id no other path would ever close:
+         //   the LRU below closes what it *evicts*, discard() returns early
+         //   while statements > 0 and abort() just empties the map. An
+         //   overwrite also adds no entry, so it must never cost an eviction.
+         if ($existing !== null) {
+            $this->closing .= $this->Encoder->encode(Encoder::CLOSE, $existing['statement']);
+         }
          // ? Cache full — evict the least recently used statement on the wire
-         if ($this->SQLConfig->statements > 0 && count($this->statements) >= $this->SQLConfig->statements) {
+         elseif ($this->SQLConfig->statements > 0 && count($this->statements) >= $this->SQLConfig->statements) {
             $evicted = (string) array_key_first($this->statements);
             $this->closing .= $this->Encoder->encode(Encoder::CLOSE, $this->statements[$evicted]['statement']);
             unset($this->statements[$evicted]);

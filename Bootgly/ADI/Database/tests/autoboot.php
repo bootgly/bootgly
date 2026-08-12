@@ -103,5 +103,7 @@ return new Suite(
       '7.25-postgresql_transaction_teardown',
       '9.10-sqlite_failed_statement_reuse',
       '9.11-sqlite_bind_mismatch',
+      '10.22-mysql_prepare_window',
+      '7.26-postgresql_prepare_window',
    ]
 );

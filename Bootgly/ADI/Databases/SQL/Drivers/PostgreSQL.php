@@ -226,6 +226,12 @@ class PostgreSQL extends Driver
          ]);
          $Operation->write = "{$parse}{$describeStatement}{$bind}{$describe}{$execute}{$sync}";
 
+         // ! Mark the name in flight here, where the Parse is composed — not
+         //   after the flush. A sibling composed inside that gap would read an
+         //   empty ledger and Parse the same name again, and the backend
+         //   answers the second one with 42P05 instead of running the query.
+         $this->preparing[$Operation->statement] = true;
+
          return $Operation;
       }
       catch (Throwable $Throwable) {
@@ -400,10 +406,6 @@ class PostgreSQL extends Driver
          $this->writing = null;
          $this->free($Operation);
 
-         if ($Operation->statement !== '' && $Operation->prepared === false) {
-            $this->preparing[$Operation->statement] = true;
-         }
-
          $Operation->state = OperationStates::Reading;
          $this->queue($Operation);
 
@@ -501,6 +503,20 @@ class PostgreSQL extends Driver
          //   backend parsing a message that never ends.
          if ($this->writing === $Operation) {
             $this->abort($Operation, 'PostgreSQL operation was abandoned while writing its batch.');
+
+            return;
+         }
+
+         // ? It composed a Parse the backend will never receive — releasing the
+         //   name lets the next operation Parse it, instead of Binding a
+         //   statement nothing ever registered.
+         if (
+            $Operation instanceof Operation
+            && $Operation->prepared === false
+            && $Operation->statement !== ''
+            && isset($this->statements[$Operation->statement]) === false
+         ) {
+            unset($this->preparing[$Operation->statement]);
          }
 
          return;
