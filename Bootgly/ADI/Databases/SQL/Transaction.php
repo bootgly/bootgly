@@ -331,7 +331,11 @@ class Transaction implements Awaiting, Querying
    {
       $Operation = new Operation($this->Connection, $sql, $parameters, $this->Database->Config->timeout);
       $Operation->fail($message);
-      $this->Operation = $Operation;
+
+      // ! The refused operation never becomes the tracked one: it is already
+      //   finished, so adopting it would report the serial surface as free while
+      //   the statement that caused the refusal is still in flight — one
+      //   rejection would then admit everything after it.
 
       return $Operation;
    }

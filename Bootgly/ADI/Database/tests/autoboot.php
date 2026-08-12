@@ -98,5 +98,6 @@ return new Suite(
       '4.7-pool-cancel_reconcile',
       '4.8-pool-release_unlock_precedence',
       '4.9-pool-pinned_dead_assign',
+      '7.24-sql_transaction_serial_guard',
    ]
 );
