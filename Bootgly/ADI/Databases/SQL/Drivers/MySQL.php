@@ -96,6 +96,9 @@ class MySQL extends Driver
    private bool $synced = false;
    // @ The head command is whole on the wire; a partial write is not.
    private bool $flushed = false;
+   // @ Operation whose command has begun reaching the socket — a re-entry must
+   //   never splice bytes into a packet that is already partly on the wire.
+   private null|Operation $writing = null;
    // @ The pool took the head away — its response is drained into a stand-in.
    private bool $abandoned = false;
    // @ COM_STMT_PREPARE response in flight for the pipeline head.
@@ -346,8 +349,11 @@ class MySQL extends Driver
             $Operation->state = OperationStates::Querying;
          }
 
-         // ! Pending COM_STMT_CLOSE packets ride ahead of the next command.
-         if ($this->closing !== []) {
+         // ! Pending COM_STMT_CLOSE packets ride ahead of the next command —
+         //   rendered once per command: a partial-flush re-entry keeps
+         //   $writing === $Operation, and prepending to a remainder would
+         //   splice a close into the middle of a packet already on the wire.
+         if ($this->closing !== [] && $this->writing !== $Operation) {
             $closes = '';
 
             foreach ($this->closing as $statement => $queued) {
@@ -369,6 +375,7 @@ class MySQL extends Driver
          // ! A half-written command can never be reconciled with the server —
          //   the head only counts as flushed once the whole packet is out.
          $this->flushed = false;
+         $this->writing = $Operation;
 
          if ($this->flush($Operation) === false) {
             return $Operation;
@@ -376,6 +383,7 @@ class MySQL extends Driver
 
          $this->clear();
          $this->flushed = true;
+         $this->writing = null;
          $this->free($Operation);
          $this->preparing = $Operation->statement !== '' && $Operation->prepared === false;
          $this->binary = $Operation->prepared;
@@ -917,6 +925,7 @@ class MySQL extends Driver
       // ! Session state — packets, statement ids and evictions die with the socket
       $this->clear();
       $this->closing = [];
+      $this->writing = null;
       $this->statements = [];
       $this->pending = [];
       $this->Holders = [];

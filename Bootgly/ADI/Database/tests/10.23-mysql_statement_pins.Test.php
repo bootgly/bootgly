@@ -185,6 +185,58 @@ return new Test(
       $Connection->disconnect();
 
 
+      // # A queued close never splices into a command already on the wire
+      [$MySQL, $Connection, $server] = $connect(statements: 1);
+
+      $warm($MySQL, $server, $SQL, 7);
+      fread($server, 1 << 20);
+
+      // @ This sibling freezes id 7 and is never advanced.
+      $Sibling = $MySQL->query($SQL, [2]);
+
+      // @ A 300 KB parameter cannot leave the socket in one write, so the head
+      //   re-enters advance() holding the remainder of a packet already begun.
+      $Big = $MySQL->query('UPDATE t SET blob = ? WHERE id = 9', [str_repeat('x', 300000)]);
+      $MySQL->advance($Big);
+      fread($server, 1 << 20);
+      fwrite($server, $MySQL->Encoder->frame($prepared(8), 1));
+      fwrite($server, $MySQL->Encoder->frame($definition, 2));
+      fwrite($server, $MySQL->Encoder->frame($eof, 3));
+      $MySQL->advance($Big);
+
+      yield assert(
+         assertion: $Big->write !== '',
+         description: 'A 300 KB command really does leave a remainder to re-enter on'
+      );
+
+      $wire = '';
+      $drain = function () use (&$wire, $server): void {
+         while (($chunk = fread($server, 1 << 16)) !== '' && $chunk !== false) {
+            $wire .= $chunk;
+         }
+      };
+      $drain();
+
+      // @ Release the holder, then let the head finish writing its remainder.
+      $Sibling->fail('caller gave up');
+
+      for ($i = 0; $i < 200 && $Big->write !== ''; $i++) {
+         $MySQL->advance($Big);
+         $drain();
+      }
+
+      $header = unpack('V', substr($wire, 0, 3) . "\x00");
+      $length = $header[1] ?? 0;
+
+      yield assert(
+         assertion: strpos(substr($wire, 4, $length), Encoder::COM_STMT_CLOSE . pack('V', 7)) === false,
+         description: 'A deferred close is never spliced into a packet already on the wire'
+      );
+
+      fclose($server);
+      $Connection->disconnect();
+
+
       // # Control: an unheld id is still closed on the wire
       [$MySQL, $Connection, $server] = $connect(statements: 1);
 
