@@ -370,6 +370,20 @@ class Pool
       $Connection = $this->acquire($Operation->Connection, $Operation->lock === false);
 
       if ($Connection === null) {
+         // ? A pin the pool can no longer provide is never satisfied by waiting:
+         //   acquire() decides a pinned request without ever consulting idle or
+         //   max, so no capacity, no release and no promote() can change the
+         //   answer. Parking it would queue an operation nothing can assign —
+         //   and promote() would keep reconsidering it for as long as the pool
+         //   has room.
+         if ($Operation->Connection !== null) {
+            $this->forget($Operation);
+            $Operation->fail('Database operation lost the connection it was pinned to.');
+            $this->release($Operation);
+
+            return $Operation;
+         }
+
          $Operation->state = OperationStates::Pending;
 
          if ($this->check($Operation) === false) {

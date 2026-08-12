@@ -97,5 +97,6 @@ return new Suite(
       '7.23-postgresql_abandoned_pipeline',
       '4.7-pool-cancel_reconcile',
       '4.8-pool-release_unlock_precedence',
+      '4.9-pool-pinned_dead_assign',
    ]
 );
