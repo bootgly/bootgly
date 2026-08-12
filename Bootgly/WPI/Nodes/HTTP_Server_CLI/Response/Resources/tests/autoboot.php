@@ -23,5 +23,6 @@ return new Suite(
       '1.5-xml_resource',
       '1.6-negotiation_resource',
       '1.7-database_resource_paginate',
+      '1.8-database_resource_transact',
    ]
 );
