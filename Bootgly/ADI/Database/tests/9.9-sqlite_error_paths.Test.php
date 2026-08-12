@@ -51,6 +51,19 @@ return new Test(
          description: 'Orphan child rows violate enforced foreign key constraints'
       );
 
+      // @ Recovery on the SAME statement — reusing the SQL that just failed is
+      //   the path a cached prepared statement actually takes, and it is the
+      //   one the assertion above this block claims to cover.
+      $Database->query('INSERT INTO parents (id) VALUES (?1)', [1]);
+      $Adopted = $Database->query('INSERT INTO children (parent_id) VALUES (?1)', [1]);
+
+      yield assert(
+         assertion: $Adopted->error === null
+            && $Adopted->Result?->affected === 1
+            && $Database->query('SELECT count(*) AS total FROM children')->Result?->cell === 1,
+         description: 'The statement a constraint rejected is reusable for the next valid row'
+      );
+
       $Unwritable = new SQL(['driver' => 'sqlite', 'database' => '/proc/bootgly/impossible.db']);
       $Failed = $Unwritable->query('SELECT 1');
 
