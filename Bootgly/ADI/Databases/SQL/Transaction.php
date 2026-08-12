@@ -178,7 +178,13 @@ class Transaction implements Awaiting, Querying
     */
    public function rollback (null|string $name = null): Operation
    {
-      if ($this->ready() === false) {
+      $savepointing = $this->depth > 1 || $name !== null;
+
+      // ? Only the top-level teardown may overtake an outstanding statement. A
+      //   savepoint rollback is an ordinary statement on the serial surface, but
+      //   a transaction that refuses to roll back strands its pool reservation
+      //   and leaves the server session open inside the transaction.
+      if ($savepointing && $this->ready() === false) {
          return $this->fail('ROLLBACK', [], 'SQL transaction operation is still active.');
       }
 
@@ -190,7 +196,7 @@ class Transaction implements Awaiting, Querying
       $Emitter = Emitter::$Instance;
       $Emitter->check(Events::Rollback) && $Emitter->emit(Events::Rollback, $this);
 
-      if ($this->depth > 1 || $name !== null) {
+      if ($savepointing) {
          $name ??= (string) array_pop($this->savepoints);
 
          if ($name === '') {
@@ -207,6 +213,9 @@ class Transaction implements Awaiting, Querying
 
          return $this->create("ROLLBACK TO SAVEPOINT {$savepoint}");
       }
+
+      // ---
+      $this->discard();
 
       $Operation = $this->create('ROLLBACK', unlock: true);
       $this->depth = 0;
@@ -320,6 +329,38 @@ class Transaction implements Awaiting, Querying
    private function ready (): bool
    {
       return $this->Operation === null || $this->Operation->finished;
+   }
+
+   /**
+    * Discard the statement the top-level teardown overtakes.
+    */
+   private function discard (): void
+   {
+      $Operation = $this->Operation;
+
+      // ? Nothing outstanding — the teardown is the only statement in flight.
+      if ($Operation === null || $Operation->finished) {
+         return;
+      }
+
+      // @ The driver may still own this statement's wire: let it reconcile there
+      //   first, exactly as the pool does for a deadline it expired out of band.
+      $Operation->Protocol?->abandon($Operation);
+
+      // ? A command the wire never carried must never reach it. The transaction
+      //   that would have contained it is ending, so flushing it afterwards
+      //   would run it in autocommit — on a connection the pool has by then
+      //   handed to somebody else. fail() drops the buffered command with it.
+      if ($Operation->finished === false) {
+         $Operation->fail('SQL transaction statement was discarded by the rollback.');
+      }
+
+      // ! Detach it from the pool for good. The caller still holds this object —
+      //   Repository::save() returns it and Hooks::Saved publishes it — and
+      //   awaiting a finished operation still reaches Pool::release(), which
+      //   would hand back a connection the pool has since lent to somebody else.
+      $Operation->Protocol = null;
+      $Operation->Connection = null;
    }
 
    /**
