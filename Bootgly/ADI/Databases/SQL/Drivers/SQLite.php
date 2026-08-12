@@ -327,25 +327,37 @@ class SQLite extends Driver
 
       // @
       if ($parameter === null) {
-         $Statement->bindValue($target, null, SQLITE3_NULL);
+         $bound = $Statement->bindValue($target, null, SQLITE3_NULL);
       }
       elseif (is_bool($parameter)) {
-         $Statement->bindValue($target, $parameter ? 1 : 0, SQLITE3_INTEGER);
+         $bound = $Statement->bindValue($target, $parameter ? 1 : 0, SQLITE3_INTEGER);
       }
       elseif (is_int($parameter)) {
-         $Statement->bindValue($target, $parameter, SQLITE3_INTEGER);
+         $bound = $Statement->bindValue($target, $parameter, SQLITE3_INTEGER);
       }
       elseif (is_float($parameter)) {
-         $Statement->bindValue($target, $parameter, SQLITE3_FLOAT);
+         $bound = $Statement->bindValue($target, $parameter, SQLITE3_FLOAT);
       }
       elseif ($parameter instanceof DateTimeInterface) {
-         $Statement->bindValue($target, $parameter->format('Y-m-d H:i:s.u'), SQLITE3_TEXT);
+         $bound = $Statement->bindValue($target, $parameter->format('Y-m-d H:i:s.u'), SQLITE3_TEXT);
       }
       elseif (is_scalar($parameter)) {
-         $Statement->bindValue($target, (string) $parameter, SQLITE3_TEXT);
+         $bound = $Statement->bindValue($target, (string) $parameter, SQLITE3_TEXT);
       }
       else {
          throw new InvalidArgumentException("SQLite cannot bind the parameter \"{$key}\".");
+      }
+
+      // ? A name the compiled statement does not contain resolves to parameter
+      //   index 0, so the extension binds nothing and says so in this return —
+      //   the placeholder then keeps its default, NULL, and the write lands
+      //   wrong while reporting success. The positional form has its own
+      //   backstop (the step refuses an out-of-range index); the named form
+      //   has none, so this return is the only signal there will ever be.
+      if ($bound === false) {
+         throw new InvalidArgumentException(
+            "SQLite cannot bind the parameter \"{$key}\": the statement has no matching placeholder."
+         );
       }
    }
 
