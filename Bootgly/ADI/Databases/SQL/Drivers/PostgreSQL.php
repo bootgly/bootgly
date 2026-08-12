@@ -89,7 +89,9 @@ class PostgreSQL extends Driver
    private null|Operation $writing = null;
    /** @var array<string,string> */
    private array $names = [];
-   /** @var array<string,true> */
+   // @ Statement names with a Parse in flight, each mapped to the object id of
+   //   the operation that composed it — ownership matters, see prepare().
+   /** @var array<string,int> */
    private array $preparing = [];
    // @ Statement names evicted client-side, awaiting their paired wire Close.
    /** @var array<string,true> */
@@ -177,7 +179,14 @@ class PostgreSQL extends Driver
          $Operation->statement = $statement;
          $Operation->portal = '';
          $cached = $this->statements[$Operation->statement] ?? false;
-         $preparing = isset($this->preparing[$Operation->statement]);
+         // ! An operation must never read its OWN in-flight marker. prepare()
+         //   runs twice for one operation on a cold connection — once from
+         //   Pool::assign(), then again after the handshake overwrote the
+         //   composed batch with the startup packet — and on that second pass
+         //   it has to compose the Parse again, not Bind a name the backend
+         //   never registered.
+         $owner = $this->preparing[$Operation->statement] ?? 0;
+         $preparing = $owner !== 0 && $owner !== spl_object_id($Operation);
          $Operation->prepared = $cached !== false || $preparing;
 
          $bind = $Encoder->bind([
@@ -230,7 +239,7 @@ class PostgreSQL extends Driver
          //   after the flush. A sibling composed inside that gap would read an
          //   empty ledger and Parse the same name again, and the backend
          //   answers the second one with 42P05 instead of running the query.
-         $this->preparing[$Operation->statement] = true;
+         $this->preparing[$Operation->statement] = spl_object_id($Operation);
 
          return $Operation;
       }
@@ -509,14 +518,38 @@ class PostgreSQL extends Driver
 
          // ? It composed a Parse the backend will never receive — releasing the
          //   name lets the next operation Parse it, instead of Binding a
-         //   statement nothing ever registered.
+         //   statement nothing ever registered. Only the operation that composed
+         //   the Parse may release the name: a sibling clearing a marker it does
+         //   not own would let the next one Parse a statement already on the
+         //   wire (42P05).
          if (
             $Operation instanceof Operation
-            && $Operation->prepared === false
             && $Operation->statement !== ''
             && isset($this->statements[$Operation->statement]) === false
+            && ($this->preparing[$Operation->statement] ?? 0) === spl_object_id($Operation)
          ) {
-            unset($this->preparing[$Operation->statement]);
+            $statement = $Operation->statement;
+            unset($this->preparing[$statement]);
+
+            // @@ Siblings composed a warm Bind against that Parse. It is never
+            //    being sent, so their batches would name a statement the backend
+            //    does not have: strip them back to nothing and let advance()
+            //    re-derive each one. The first to reach the wire composes the
+            //    Parse itself. A half-written batch is untouchable — that one
+            //    already owns bytes on the socket.
+            foreach ($this->Holders[$statement] ?? [] as $id => $Held) {
+               if ($Held->finished || $Held->write === '' || $this->writing === $Held) {
+                  continue;
+               }
+
+               $Held->write = '';
+               $Held->prepared = false;
+               unset($this->Holders[$statement][$id]);
+            }
+
+            if (($this->Holders[$statement] ?? []) === []) {
+               unset($this->Holders[$statement]);
+            }
          }
 
          return;

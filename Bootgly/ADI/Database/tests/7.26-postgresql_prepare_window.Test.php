@@ -106,6 +106,36 @@ return new Test(
       $Connection->disconnect();
 
 
+      // # The cold path: prepare() runs twice for ONE operation, because the
+      //   handshake overwrites the batch it composed at assign time. The second
+      //   pass must compose the Parse again — reading its own in-flight marker
+      //   would put a Bind for an unregistered name on the wire, which is what
+      //   the backend answers with 26000.
+      [$PostgreSQL, $Connection, $server] = $connect();
+
+      $Cold = $PostgreSQL->query($SQL, [1]);
+      // ! Exactly what advance()'s Connecting branch does to the composed batch
+      //   when it writes the startup packet over it.
+      $Cold->write = '';
+      $PostgreSQL->prepare($Cold);
+
+      yield assert(
+         assertion: $messages($Cold->write) === 'PDBDES' && $Cold->prepared === false,
+         description: 'An operation re-deriving its own batch composes the Parse again'
+      );
+
+      // @ A sibling of that same operation must still skip the Parse.
+      $Late = $PostgreSQL->query($SQL, [2]);
+
+      yield assert(
+         assertion: $messages($Late->write) === 'BDES' && $Late->prepared === true,
+         description: 'Re-deriving the owner does not reopen the window for a sibling'
+      );
+
+      fclose($server);
+      $Connection->disconnect();
+
+
       // # An owner abandoned before its batch reaches the wire releases the name
       [$PostgreSQL, $Connection, $server] = $connect();
 
@@ -122,6 +152,37 @@ return new Test(
       yield assert(
          assertion: $messages($Next->write) === 'PDBDES',
          description: 'The next operation parses the statement the abandoned owner never sent'
+      );
+
+      fclose($server);
+      $Connection->disconnect();
+
+
+      // # A sibling that already composed a warm Bind is not stranded by that
+      //   release — its batch names a Parse that is never being sent.
+      [$PostgreSQL, $Connection, $server] = $connect();
+
+      $Owner = $PostgreSQL->query($SQL, [1]);
+      $Stranded = $PostgreSQL->query($SQL, [2]);
+
+      yield assert(
+         assertion: $messages($Stranded->write) === 'BDES',
+         description: 'The sibling composed a warm Bind while the owner held the Parse'
+      );
+
+      $PostgreSQL->abandon($Owner);
+
+      yield assert(
+         assertion: $Stranded->write === '' && $Stranded->prepared === false,
+         description: 'Abandoning the owner strips the sibling back to a re-derive'
+      );
+
+      $PostgreSQL->advance($Stranded);
+      $rederived = $messages((string) fread($server, 65536));
+
+      yield assert(
+         assertion: str_starts_with($rederived, 'P'),
+         description: 'The stranded sibling parses the statement itself on its way to the wire'
       );
 
       fclose($server);
