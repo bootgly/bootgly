@@ -25,6 +25,7 @@ use function is_string;
 use function ord;
 use function preg_match;
 use function rtrim;
+use function spl_object_id;
 use function stream_socket_client;
 use function strlen;
 use function strpos;
@@ -108,6 +109,10 @@ class MySQL extends Driver
    private bool $binary = false;
    // @ Pending COM_STMT_CLOSE packets from statement cache evictions.
    private string $closing = '';
+   // @ Operations whose command already froze a server statement id and has not
+   //   reached the socket yet, per id — a queued close waits for their bytes.
+   /** @var array<int,array<int,Operation>> */
+   private array $Holders = [];
    private null|Readiness $ReadReadiness = null;
    private null|Readiness $WriteReadiness = null;
    /** @var resource|null */
@@ -174,6 +179,11 @@ class MySQL extends Driver
                'statement' => $entry['statement'],
                'parameters' => $Operation->parameters,
             ]);
+
+            // ! These bytes carry the server id, and they may sit in the FIFO
+            //   for several round-trips before they are flushed — hold the id
+            //   against any close queued in the meantime.
+            $this->Holders[$entry['statement']][spl_object_id($Operation)] = $Operation;
 
             return $Operation;
          }
@@ -349,6 +359,7 @@ class MySQL extends Driver
 
          $this->clear();
          $this->flushed = true;
+         $this->free($Operation);
          $this->preparing = $Operation->statement !== '' && $Operation->prepared === false;
          $this->binary = $Operation->prepared;
          $Operation->state = OperationStates::Reading;
@@ -799,6 +810,60 @@ class MySQL extends Driver
    }
 
    /**
+    * Scan for an unsent command still carrying one server statement id.
+    */
+   private function scan (int $statement): bool
+   {
+      $Holders = $this->Holders[$statement] ?? [];
+
+      // @@ Holders — a flushed or finished operation no longer holds anything:
+      //    its EXECUTE bytes are already ordered ahead of any later close.
+      foreach ($Holders as $id => $Held) {
+         if ($Held->finished || $Held->write === '') {
+            unset($this->Holders[$statement][$id]);
+
+            continue;
+         }
+
+         // :
+         return true;
+      }
+
+      if (($this->Holders[$statement] ?? []) === []) {
+         unset($this->Holders[$statement]);
+      }
+
+      // :
+      return false;
+   }
+
+   /**
+    * Release the server statement id an operation was holding.
+    */
+   private function free (Operation $Operation): void
+   {
+      // ?
+      if ($Operation->prepared === false || $this->Holders === []) {
+         return;
+      }
+
+      $entry = $this->statements[$Operation->SQL] ?? null;
+
+      // ? The cache entry it froze may already be gone; scan() prunes the rest
+      //   lazily, so a miss here costs a stale reference, never a wrong close.
+      if ($entry === null) {
+         return;
+      }
+
+      $statement = $entry['statement'];
+      unset($this->Holders[$statement][spl_object_id($Operation)]);
+
+      if (($this->Holders[$statement] ?? []) === []) {
+         unset($this->Holders[$statement]);
+      }
+   }
+
+   /**
     * Reset the per-command result set state.
     */
    private function clear (): void
@@ -830,6 +895,7 @@ class MySQL extends Driver
       $this->closing = '';
       $this->statements = [];
       $this->pending = [];
+      $this->Holders = [];
       $this->Decoder = new Decoder;
 
       $Pipeline = $this->pipeline;
@@ -905,13 +971,26 @@ class MySQL extends Driver
          //   while statements > 0 and abort() just empties the map. An
          //   overwrite also adds no entry, so it must never cost an eviction.
          if ($existing !== null) {
-            $this->closing .= $this->Encoder->encode(Encoder::CLOSE, $existing['statement']);
+            if ($this->scan($existing['statement']) === false) {
+               $this->closing .= $this->Encoder->encode(Encoder::CLOSE, $existing['statement']);
+            }
          }
          // ? Cache full — evict the least recently used statement on the wire
          elseif ($this->SQLConfig->statements > 0 && count($this->statements) >= $this->SQLConfig->statements) {
-            $evicted = (string) array_key_first($this->statements);
-            $this->closing .= $this->Encoder->encode(Encoder::CLOSE, $this->statements[$evicted]['statement']);
-            unset($this->statements[$evicted]);
+            // @@ Take the first entry nobody is holding: closing an id a queued
+            //    command already froze would decapitate that command, and the
+            //    driver has no 1243 recovery. Every entry held means no
+            //    eviction at all this round — the next one retries.
+            foreach ($this->statements as $candidate => $entry) {
+               if ($this->scan($entry['statement'])) {
+                  continue;
+               }
+
+               $this->closing .= $this->Encoder->encode(Encoder::CLOSE, $entry['statement']);
+               unset($this->statements[$candidate]);
+
+               break;
+            }
          }
 
          $this->statements[$Operation->SQL] = [
@@ -1079,6 +1158,9 @@ class MySQL extends Driver
             'statement' => $entry['statement'],
             'parameters' => $Operation->parameters,
          ]);
+
+         // ! Same frozen shape as a cache hit — hold the id until it flushes.
+         $this->Holders[$entry['statement']][spl_object_id($Operation)] = $Operation;
       }
       catch (Throwable $Throwable) {
          return $Operation->fail($Throwable->getMessage());
@@ -1317,6 +1399,13 @@ class MySQL extends Driver
       $entry = $this->statements[$Operation->SQL] ?? null;
 
       if ($entry === null) {
+         return;
+      }
+
+      // ? A co-located sibling created inside this command's round-trip already
+      //   froze this id into its own COM_STMT_EXECUTE. Leave the entry cached
+      //   and let the last holder's completion discard it instead.
+      if ($this->scan($entry['statement'])) {
          return;
       }
 

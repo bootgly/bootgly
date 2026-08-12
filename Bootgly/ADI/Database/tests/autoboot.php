@@ -105,5 +105,6 @@ return new Suite(
       '9.11-sqlite_bind_mismatch',
       '10.22-mysql_prepare_window',
       '7.26-postgresql_prepare_window',
+      '10.23-mysql_statement_pins',
    ]
 );
