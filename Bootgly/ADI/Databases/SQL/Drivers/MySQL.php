@@ -33,6 +33,7 @@ use function strtoupper;
 use function substr;
 use DateTimeImmutable;
 use Throwable;
+use WeakReference;
 
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\ACI\Events\Readiness;
@@ -107,11 +108,13 @@ class MySQL extends Driver
    private int $definitions = 0;
    // @ Binary protocol rows (COM_STMT_EXECUTE) for the current result set.
    private bool $binary = false;
-   // @ Pending COM_STMT_CLOSE packets from statement cache evictions.
-   private string $closing = '';
+   // @ Server statement ids removed client-side, awaiting their wire close.
+   /** @var array<int,true> */
+   private array $closing = [];
    // @ Operations whose command already froze a server statement id and has not
    //   reached the socket yet, per id — a queued close waits for their bytes.
-   /** @var array<int,array<int,Operation>> */
+   //   Weak: an operation the caller drops must not pin an id forever.
+   /** @var array<int,array<int,WeakReference<Operation>>> */
    private array $Holders = [];
    private null|Readiness $ReadReadiness = null;
    private null|Readiness $WriteReadiness = null;
@@ -183,7 +186,7 @@ class MySQL extends Driver
             // ! These bytes carry the server id, and they may sit in the FIFO
             //   for several round-trips before they are flushed — hold the id
             //   against any close queued in the meantime.
-            $this->Holders[$entry['statement']][spl_object_id($Operation)] = $Operation;
+            $this->Holders[$entry['statement']][spl_object_id($Operation)] = WeakReference::create($Operation);
 
             return $Operation;
          }
@@ -344,9 +347,23 @@ class MySQL extends Driver
          }
 
          // ! Pending COM_STMT_CLOSE packets ride ahead of the next command.
-         if ($this->closing !== '') {
-            $Operation->write = $this->closing . $Operation->write;
-            $this->closing = '';
+         if ($this->closing !== []) {
+            $closes = '';
+
+            foreach ($this->closing as $statement => $queued) {
+               // ? A queued close must never decapitate a command that already
+               //   froze the id — this batch included, since it is still a
+               //   holder until its own bytes are out. It stays queued and
+               //   rides the first flush that no longer owes it.
+               if ($this->scan($statement)) {
+                  continue;
+               }
+
+               $closes .= $this->Encoder->encode(Encoder::CLOSE, $statement);
+               unset($this->closing[$statement]);
+            }
+
+            $Operation->write = $closes . $Operation->write;
          }
 
          // ! A half-written command can never be reconciled with the server —
@@ -818,8 +835,12 @@ class MySQL extends Driver
 
       // @@ Holders — a flushed or finished operation no longer holds anything:
       //    its EXECUTE bytes are already ordered ahead of any later close.
-      foreach ($Holders as $id => $Held) {
-         if ($Held->finished || $Held->write === '') {
+      foreach ($Holders as $id => $Reference) {
+         $Held = $Reference->get();
+
+         // ? Gone, flushed or finished — none of them still owes bytes carrying
+         //   this id, so none of them can be decapitated by closing it.
+         if ($Held === null || $Held->finished || $Held->write === '') {
             unset($this->Holders[$statement][$id]);
 
             continue;
@@ -847,19 +868,22 @@ class MySQL extends Driver
          return;
       }
 
-      $entry = $this->statements[$Operation->SQL] ?? null;
+      // @@ Release by identity, not through the statement cache: the entry this
+      //    operation froze may already have been evicted or overwritten, and
+      //    resolving the id through the cache would then release the wrong
+      //    bucket — or none at all.
+      $id = spl_object_id($Operation);
 
-      // ? The cache entry it froze may already be gone; scan() prunes the rest
-      //   lazily, so a miss here costs a stale reference, never a wrong close.
-      if ($entry === null) {
-         return;
-      }
+      foreach ($this->Holders as $statement => $Holders) {
+         if (isset($Holders[$id]) === false) {
+            continue;
+         }
 
-      $statement = $entry['statement'];
-      unset($this->Holders[$statement][spl_object_id($Operation)]);
+         unset($this->Holders[$statement][$id]);
 
-      if (($this->Holders[$statement] ?? []) === []) {
-         unset($this->Holders[$statement]);
+         if ($this->Holders[$statement] === []) {
+            unset($this->Holders[$statement]);
+         }
       }
    }
 
@@ -892,7 +916,7 @@ class MySQL extends Driver
    {
       // ! Session state — packets, statement ids and evictions die with the socket
       $this->clear();
-      $this->closing = '';
+      $this->closing = [];
       $this->statements = [];
       $this->pending = [];
       $this->Holders = [];
@@ -971,26 +995,13 @@ class MySQL extends Driver
          //   while statements > 0 and abort() just empties the map. An
          //   overwrite also adds no entry, so it must never cost an eviction.
          if ($existing !== null) {
-            if ($this->scan($existing['statement']) === false) {
-               $this->closing .= $this->Encoder->encode(Encoder::CLOSE, $existing['statement']);
-            }
+            $this->closing[$existing['statement']] = true;
          }
          // ? Cache full — evict the least recently used statement on the wire
          elseif ($this->SQLConfig->statements > 0 && count($this->statements) >= $this->SQLConfig->statements) {
-            // @@ Take the first entry nobody is holding: closing an id a queued
-            //    command already froze would decapitate that command, and the
-            //    driver has no 1243 recovery. Every entry held means no
-            //    eviction at all this round — the next one retries.
-            foreach ($this->statements as $candidate => $entry) {
-               if ($this->scan($entry['statement'])) {
-                  continue;
-               }
-
-               $this->closing .= $this->Encoder->encode(Encoder::CLOSE, $entry['statement']);
-               unset($this->statements[$candidate]);
-
-               break;
-            }
+            $evicted = (string) array_key_first($this->statements);
+            $this->closing[$this->statements[$evicted]['statement']] = true;
+            unset($this->statements[$evicted]);
          }
 
          $this->statements[$Operation->SQL] = [
@@ -1160,7 +1171,7 @@ class MySQL extends Driver
          ]);
 
          // ! Same frozen shape as a cache hit — hold the id until it flushes.
-         $this->Holders[$entry['statement']][spl_object_id($Operation)] = $Operation;
+         $this->Holders[$entry['statement']][spl_object_id($Operation)] = WeakReference::create($Operation);
       }
       catch (Throwable $Throwable) {
          return $Operation->fail($Throwable->getMessage());
@@ -1402,14 +1413,7 @@ class MySQL extends Driver
          return;
       }
 
-      // ? A co-located sibling created inside this command's round-trip already
-      //   froze this id into its own COM_STMT_EXECUTE. Leave the entry cached
-      //   and let the last holder's completion discard it instead.
-      if ($this->scan($entry['statement'])) {
-         return;
-      }
-
-      $this->closing .= $this->Encoder->encode(Encoder::CLOSE, $entry['statement']);
+      $this->closing[$entry['statement']] = true;
       unset($this->statements[$Operation->SQL]);
    }
 
