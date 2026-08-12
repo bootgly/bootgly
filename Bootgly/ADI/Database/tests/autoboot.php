@@ -101,5 +101,6 @@ return new Suite(
       '7.24-sql_transaction_serial_guard',
       '10.21-mysql_transaction_teardown',
       '7.25-postgresql_transaction_teardown',
+      '9.10-sqlite_failed_statement_reuse',
    ]
 );

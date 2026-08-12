@@ -32,6 +32,7 @@ use DateTimeInterface;
 use InvalidArgumentException;
 use RuntimeException;
 use SQLite3;
+use SQLite3Exception;
 use SQLite3Stmt;
 use Throwable;
 
@@ -234,7 +235,19 @@ class SQLite extends Driver
             unset($this->statements[$Operation->SQL]);
             $this->statements[$Operation->SQL] = $Statement;
 
-            $Statement->reset();
+            // ? sqlite3_reset() reports the result code of the statement's
+            //   PREVIOUS step, and the handle raises exceptions — so a statement
+            //   whose last execution the engine rejected throws here, on an
+            //   operation that has nothing to do with that rejection. The reset
+            //   itself always re-arms, so the stale code is the only thing to
+            //   drop: swallowing it costs nothing, since that error was already
+            //   delivered to the operation that earned it.
+            try {
+               $Statement->reset();
+            }
+            catch (SQLite3Exception) {
+            }
+
             $Statement->clear();
          }
 
