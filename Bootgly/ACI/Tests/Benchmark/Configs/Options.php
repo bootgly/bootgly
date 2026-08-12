@@ -20,6 +20,7 @@ use function count;
 use function explode;
 use function implode;
 use function in_array;
+use function intdiv;
 use function intval;
 use function is_array;
 use function is_bool;
@@ -310,6 +311,16 @@ class Options
          if ($step < 1) {
             throw new RuntimeException(
                "Invalid sweep step in '{$value}' — step must be >= 1."
+            );
+         }
+
+         // ? Reject oversized ranges before range() materializes them. The
+         //   post-expansion guard below remains necessary for comma lists.
+         $length = intdiv($end - $start, $step) + 1;
+         if ($length > self::LIMIT) {
+            $limit = self::LIMIT;
+            throw new RuntimeException(
+               "Sweep '{$value}' expands to more than {$limit} values."
             );
          }
 

@@ -49,10 +49,10 @@ return new Test(
          ->assert();
 
       yield new Assertion(
-         description: 'Rejects a series longer than the cap',
-         fallback: 'Oversized series not rejected!'
+         description: 'Rejects a huge series before materializing it',
+         fallback: 'Oversized series was materialized or not rejected!'
       )
-         ->expect($throws('1..100000'), Op::Identical, true)
+         ->expect($throws('1..1000000000'), Op::Identical, true)
          ->assert();
    })
 );

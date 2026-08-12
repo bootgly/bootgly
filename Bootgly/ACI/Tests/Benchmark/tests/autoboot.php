@@ -25,6 +25,8 @@ return new Suite(
       '3.2.1-options-render-help_lines',
       // Configs — global output/format/results
       '4.1.1-configs-parse-output_format_results',
+      // Configs — global load selection
+      '4.2.1-configs-parse-load_selection',
       // Runner — round application
       '5.1.1-runner-apply-server_workers',
       // Summary — clear configuration banner

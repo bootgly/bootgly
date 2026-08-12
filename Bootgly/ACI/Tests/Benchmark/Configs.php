@@ -11,16 +11,16 @@
 namespace Bootgly\ACI\Tests\Benchmark;
 
 
-use function array_map;
+use Bootgly\ACI\Tests\Benchmark\Configs\Options;
 use function array_unique;
 use function array_values;
 use function explode;
-use function intval;
 use function preg_replace;
 use function strpos;
 use function strtolower;
 use function substr;
 use function trim;
+use RuntimeException;
 
 
 class Configs
@@ -68,6 +68,8 @@ class Configs
     * Parse CLI options into a Configs instance.
     *
     * @param array<string, bool|int|string> $options
+    *
+    * @throws RuntimeException On invalid load selection syntax.
     */
    public static function parse (array $options): self
    {
@@ -93,11 +95,12 @@ class Configs
          $runner = strtolower((string) $options['runner']);
       }
 
-      // # Load selection — `--loads=<set>:<indexes>` (e.g. `techempower:1,2` or
-      //   `benchmark:*`). The set names the load group; `*` runs all of it, a
-      //   comma list filters to those 1-based indices. A bare `--loads=1,2`
-      //   (no set) leaves $loadSet null — the run path rejects it, since the
-      //   <set>:<indexes> form is required.
+      // # Load selection — `--loads=<set>:<selector>`. The selector accepts a
+      //   single 1-based index, an inclusive range, a stepped range, a comma
+      //   list or `*` (e.g. `techempower:3..7`, `techempower:3..7:2`,
+      //   `techempower:1,2` or `benchmark:*`). A bare selector without a set
+      //   leaves $loadSet null — the run path rejects it, since the
+      //   <set>:<selector> form is required.
       if (isset($options['loads'])) {
          $raw = (string) $options['loads'];
 
@@ -112,10 +115,10 @@ class Configs
             } else if ($indexes === '') {
                $loads = [];               // set with no indexes → invalid (caller reports)
             } else {
-               $loads = array_map(intval(...), explode(',', $indexes));
+               $loads = Options::expand($indexes);
             }
          } else {
-            $loads = array_map(intval(...), explode(',', $raw));
+            $loads = Options::expand($raw);
          }
       }
 

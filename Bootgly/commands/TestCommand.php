@@ -570,7 +570,7 @@ class TestCommand extends Command
       $Fieldset->content = 'bootgly test @#Black: [suite] [case] @;@.;';
       $Fieldset->content .= 'bootgly test @#Black: [suite] --coverage @;@.;';
       $Fieldset->content .= 'bootgly test @#Black: [suite] --view=heatmap @;@.;';
-      $Fieldset->content .= 'bootgly test @#Black: benchmark CASE --opponents=LIST --loads=SET:IDX @;';
+      $Fieldset->content .= 'bootgly test @#Black: benchmark CASE --opponents=LIST --loads=SET:SELECTOR @;';
       $Fieldset->render();
 
       // # Examples
@@ -1017,7 +1017,7 @@ class TestCommand extends Command
    /**
     * Run a benchmark case.
     *
-    * Usage: bootgly test benchmark <CASE> [--opponents=name1,name2] [--loads=label1,label2]
+    * Usage: bootgly test benchmark <CASE> [--opponents=name1,name2] [--loads=set:selector]
     *
     * @param array<string> $arguments
     * @param array<string, bool|int|string> $options
@@ -1125,7 +1125,7 @@ class TestCommand extends Command
          // @ Global options (common to every case) — required first, then optional
          echo "  {$BOLD}Global options:{$RESET}\n";
          echo "    {$MAGENTA}--opponents{$RESET}=LIST  Comma-separated opponent names ({$MAGENTA}*{$RESET} required)\n";
-         echo "    {$MAGENTA}--loads{$RESET}=SET:IDX   Load set + 1-based indices ({$MAGENTA}*{$RESET} required), e.g. techempower:1,2 or default:*\n";
+         echo "    {$MAGENTA}--loads{$RESET}=SET:SELECTOR  Load set + 1-based selector: N | A..B | A..B:S | N,N | *, e.g. techempower:3..7\n";
          echo "    {$CYAN}--runner{$RESET}=TYPE     Runner (default: case-dependent)\n";
          echo "    {$CYAN}--output{$RESET}=STYLE    Output style: full | compact (default: auto — compact when sweeping)\n";
          echo "    {$CYAN}--format{$RESET}=FORMAT   Results serialization: text | json (default: text)\n";
@@ -1154,7 +1154,9 @@ class TestCommand extends Command
 
             // # Runner options (load autoboot.php to get Runner instance)
             $casePath = "$caseDir/" . BOOTSTRAP_FILENAME;
-            $Configs = Configs::parse($options);
+            // ? Help only needs the runner selector; malformed run selectors
+            //   must not prevent the usage reference from being rendered.
+            $Configs = Configs::parse(array_intersect_key($options, ['runner' => true]));
             if ($Configs->runner !== null) {
                putenv('BENCHMARK_RUNNER=' . $Configs->runner);
             }
@@ -1226,7 +1228,15 @@ class TestCommand extends Command
       }
 
       // @ Parse options
-      $Configs = Configs::parse($options);
+      try {
+         $Configs = Configs::parse($options);
+      }
+      catch (Throwable $Throwable) {
+         $Alert->Type::Failure->set();
+         $Alert->message = $Throwable->getMessage() . '@.;';
+         $Alert->render();
+         return false;
+      }
 
       // ? --vary was replaced by sweep values on the case options themselves
       if (isset($options['vary'])) {
@@ -1344,18 +1354,18 @@ class TestCommand extends Command
          return false;
       }
 
-      // ? Load selection is mandatory and must use the `<set>:<indexes>` form
-      //   (e.g. `techempower:1,2` or `benchmark:*`). Cases without multiple sets
+      // ? Load selection is mandatory and must use the `<set>:<selector>` form
+      //   (e.g. `techempower:3..7` or `benchmark:*`). Cases without multiple sets
       //   use the explicit `default` set (`--loads=default:*`).
       if ($Configs->loadSet === null) {
          $Alert->Type::Failure->set();
-         $Alert->message = "Benchmark requires --loads=<set>:<indexes> (use <set>:* for all loads).@.;";
+         $Alert->message = "Benchmark requires --loads=<set>:<selector> (use <set>:* for all loads).@.;";
          $Alert->render();
          return false;
       }
       if ($Configs->loads === []) {
          $Alert->Type::Failure->set();
-         $Alert->message = "No load indexes in --loads. Use --loads={$Configs->loadSet}:* or --loads={$Configs->loadSet}:1,2.";
+         $Alert->message = "No load selector in --loads. Use --loads={$Configs->loadSet}:*, --loads={$Configs->loadSet}:3..7 or --loads={$Configs->loadSet}:1,2.";
          $Alert->render();
          return false;
       }
