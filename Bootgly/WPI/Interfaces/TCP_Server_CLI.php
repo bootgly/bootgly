@@ -2507,6 +2507,11 @@ class TCP_Server_CLI implements Servers
       return $Resources === [];
    }
 
+   /** Release node-owned state that must not survive the old image's exec. */
+   protected function unload (): void
+   {
+   }
+
    /** Validate that a transferred descriptor is a listener on the exact port. */
    protected function validate (mixed $Listener, int $port): bool
    {
@@ -3048,6 +3053,11 @@ class TCP_Server_CLI implements Servers
       //   race this handoff prevents. The fresh image adopts the descriptor;
       //   Commands::erase() and State::save() supersede old state in place.
       $this->Process->State->detach();
+
+      // Node resources not relayed to the fresh image may themselves survive
+      // pcntl_exec. Release only this old master's descriptor copies after the
+      // relay and drained children have made the handoff irreversible.
+      $this->unload();
 
       // @ Restore the launch directory (a daemon may have chdir'd to /), then
       //   replace this process image with a fresh one. pcntl_exec keeps the PID.

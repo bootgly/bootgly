@@ -2,7 +2,9 @@
 
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\ACME_Client\CertificateSnapshot;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\ACME_Client\Challenges;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\ACME_Client\Swaps;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\AutoTLS;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
@@ -35,6 +37,8 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
  *   after the blocker closes;
  * - stable master PID, replacement worker generation, ready helper, and exact
  *   200/key-authorization after reload;
+ * - the old image's AutoTLS lease is released across pcntl_exec, allowing a
+ *   later production sweep to reclaim it while preserving the fresh image;
  * - orderly teardown and native Security harness routing.
  *
  * The secure assertion is uninterrupted HTTP-01 response service. A mere TCP
@@ -163,6 +167,7 @@ return new Test(
          'launcher' => false,
          'expected_authorization' => '',
          'initial_topology' => false,
+         'initial_swap_namespaces' => [],
          'pre_challenge' => [],
          'application_control' => [],
          'reload_signaled' => false,
@@ -175,6 +180,7 @@ return new Test(
          'reloaded_topology' => false,
          'old_helper_retired' => false,
          'post_challenge' => [],
+         'swap_reexec' => [],
          'stopped' => false,
       ];
 
@@ -375,6 +381,19 @@ return new Test(
             'timed_out' => $response['timed_out'] ?? false,
          ];
       };
+      $Scan = static function (string $base): array {
+         $names = @scandir($base);
+         if (is_array($names) === false) {
+            return [];
+         }
+
+         return array_values(array_filter(
+            $names,
+            static fn (string $name): bool => preg_match('/^[a-f0-9]{16}$/D', $name) === 1
+               && is_link("{$base}{$name}") === false
+               && is_dir("{$base}{$name}")
+         ));
+      };
 
       try {
          if (
@@ -467,6 +486,11 @@ return new Test(
          }, 12.0);
          if ($result['initial_topology'] === false) {
             throw new RuntimeException('daemon did not publish a ready worker/helper topology');
+         }
+         $swapBase = "{$storage}/autotls/swaps/";
+         $result['initial_swap_namespaces'] = $Scan($swapBase);
+         if (count($result['initial_swap_namespaces']) !== 1) {
+            throw new RuntimeException('initial image did not own exactly one isolated swap namespace');
          }
 
          $challengeRequest = "GET /.well-known/acme-challenge/{$token} HTTP/1.1\r\n"
@@ -621,6 +645,53 @@ return new Test(
             throw new RuntimeException('post-reload challenge control did not return the exact authorization');
          }
 
+         // The old master explicitly closes its lease before pcntl_exec. The
+         // relay retains it across the handoff, then exits. A fresh independent
+         // publication must therefore collect the old image while the new
+         // image's still-locked namespace remains byte-for-byte addressable.
+         $beforeProbe = $Scan($swapBase);
+         $oldNamespaces = $result['initial_swap_namespaces'];
+         $liveNamespaces = array_values(array_diff($beforeProbe, $oldNamespaces));
+         $productionBounded = count($liveNamespaces) === 1
+            && array_intersect($oldNamespaces, $beforeProbe) === []
+            && count($beforeProbe) === 1;
+         $probeInstance = bin2hex(random_bytes(8));
+         $SwapProbe = new Swaps($swapBase, $probeInstance);
+         $Snapshot = new CertificateSnapshot(
+            str_repeat('1', 32),
+            '/tmp/l2-reexec-certificate.pem',
+            '/tmp/l2-reexec-key.pem',
+            str_repeat('2', 64),
+            str_repeat('3', 64),
+            time() - 1,
+            time() + 3600,
+            false,
+            ['localhost']
+         );
+         $probeAttempt = $SwapProbe->request($Snapshot);
+         $SwapProbe->sweep();
+         $afterProbe = $Scan($swapBase);
+         $SwapProbe->release();
+         $result['swap_reexec'] = [
+            'before_probe' => $beforeProbe,
+            'old' => $oldNamespaces,
+            'live' => $liveNamespaces,
+            'probe' => $probeInstance,
+            'after_probe' => $afterProbe,
+            'published' => is_string($probeAttempt),
+            'production_bounded' => $productionBounded,
+            'bounded' => $productionBounded
+               && is_string($probeAttempt)
+               && count($liveNamespaces) === 1
+               && array_intersect($oldNamespaces, $afterProbe) === []
+               && array_diff($liveNamespaces, $afterProbe) === []
+               && in_array($probeInstance, $afterProbe, true)
+               && count($afterProbe) === 2,
+         ];
+         if ($result['swap_reexec']['bounded'] === false) {
+            throw new RuntimeException('old AutoTLS namespace lease survived reexec or the live namespace was reclaimed');
+         }
+
          if ($Own($masterPID) === false || posix_kill($masterPID, SIGTERM) === false) {
             throw new RuntimeException('the fixture master identity changed before orderly stop');
          }
@@ -707,6 +778,7 @@ return new Test(
          && ($result['old_worker_live_after_deadline'] ?? false)
          && ($result['reloaded_topology'] ?? false)
          && ($result['old_helper_retired'] ?? false)
+         && ($result['swap_reexec']['bounded'] ?? false)
          && ($result['stopped'] ?? false)
          && ($result['pre_challenge']['complete'] ?? false)
          && ($result['pre_challenge']['status'] ?? 0) === 200

@@ -240,6 +240,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    protected float $pendingSince = 0.0;
    protected int $pendingAttempts = 0;
    protected bool $swapFallbackQueued = false;
+   /** Whether the current start crossed the node-specific ownership barrier. */
+   private bool $startupReady = false;
    public static int $swapAckTimeout = 3;
    public static int $swapAckRetries = 2;
    /**
@@ -375,15 +377,23 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       //   certifier, gate, chartered challenge path — see halt()), but only
       //   AFTER the new configuration proved servable.
       if ($secure instanceof AutoTLS) {
-         if (posix_getuid() === 0 && $user === null && $this->Mode !== Modes::Test) {
+         if (posix_getuid() === 0 && $user === null) {
             throw new RuntimeException(
                'Auto-TLS started as root requires the server `user` option before credential storage is accessed.'
             );
          }
-         if (posix_getuid() === 0 && $user !== null && posix_getpwnam($user) === false) {
-            throw new RuntimeException(
-               "Auto-TLS runtime user `{$user}` does not exist."
-            );
+         if (posix_getuid() === 0 && $user !== null) {
+            $userInfo = posix_getpwnam($user);
+            if ($userInfo === false) {
+               throw new RuntimeException(
+                  "Auto-TLS runtime user `{$user}` does not exist."
+               );
+            }
+            if ($userInfo['uid'] === 0) {
+               throw new RuntimeException(
+                  'Auto-TLS runtime user must be non-root on a privileged launch.'
+               );
+            }
          }
          if (posix_getuid() === 0 && $group !== null && posix_getgrnam($group) === false) {
             throw new RuntimeException(
@@ -409,13 +419,21 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                'Auto-TLS did not produce a fully validated startup credential.'
             );
          }
-         if ($secure->Swaps->request($Snapshot) === null) {
-            throw new RuntimeException(
-               'Auto-TLS could not persist its initial generation rendezvous.'
-            );
+         // No swap pathname operation is allowed while privileged. A storage
+         // tree from an earlier run belongs to the runtime identity, so the
+         // initial rendezvous is deferred until start() irreversibly demotes
+         // the master. Workers join it inside their fail-closed wire().
+         if (posix_geteuid() !== 0) {
+            if ($secure->Swaps->request($Snapshot) === null) {
+               throw new RuntimeException(
+                  'Auto-TLS could not persist its initial generation rendezvous.'
+               );
+            }
          }
 
          if ($this->AutoTLS !== null) {
+            $CurrentSwaps = $this->AutoTLS->Swaps;
+            $CandidateSwaps = $secure->Swaps;
             // ? Same rollback-safe contract as forge() above: a teardown that
             //   cannot prove it retired its auxiliary children leaves the
             //   PREVIOUS runtime in place, so supervise() keeps watching them
@@ -423,10 +441,21 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             //   over a helper still bound to the old spool, with nothing left
             //   supervising it.
             if ($this->halt() === false) {
+               // The candidate may already own a freshly published rendezvous.
+               // A different rejected object has no server owner; release only
+               // that candidate while retaining the old configuration's lease.
+               if ($CurrentSwaps !== $CandidateSwaps) {
+                  $CandidateSwaps->release();
+               }
                throw new RuntimeException(
                   'Auto-TLS could not prove its previous auxiliary children were retired;'
                   . ' the running configuration is unchanged.'
                );
+            }
+            // Reusing the same AutoTLS object is a valid pre-start refresh;
+            // only retire a namespace that the replacement will not own.
+            if ($CurrentSwaps !== $CandidateSwaps) {
+               $CurrentSwaps->release();
             }
             $this->watched = 0;
             $this->checked = 0;
@@ -468,6 +497,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   . ' is retained rather than abandoning a live HTTP-01 responder.'
                );
             }
+            $this->AutoTLS->Swaps->release();
             $this->watched = 0;
             $this->checked = 0;
          }
@@ -563,6 +593,31 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
 
       return $this;
+   }
+
+   /**
+    * Start the HTTP server and retire its Auto-TLS namespace lease when any
+    * setup/readiness exception aborts startup before the server can own it.
+    */
+   public function start (): bool
+   {
+      $this->startupReady = false;
+      try {
+         return parent::start();
+      }
+      catch (Throwable $Throwable) {
+         $this->abort();
+         throw $Throwable;
+      }
+   }
+
+   /** Retire a pre-readiness Auto-TLS lease after startup aborts. */
+   private function abort (): void
+   {
+      $AutoTLS = $this->AutoTLS;
+      if ($this->startupReady === false && $AutoTLS !== null) {
+         $AutoTLS->Swaps->release();
+      }
    }
 
    /**
@@ -709,6 +764,10 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          // serving process or share the upload controller's flock identity.
          $this->Process->State->detach();
          Downloads::destroy();
+         $AutoTLS = $this->AutoTLS;
+         if ($AutoTLS !== null) {
+            $AutoTLS->Swaps->release();
+         }
 
          if (is_resource($this->daemonReady)) {
             fclose($this->daemonReady);
@@ -936,24 +995,42 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       return true;
    }
 
+   /** Do not carry the old Auto-TLS namespace lease through pcntl_exec. */
+   protected function unload (): void
+   {
+      $AutoTLS = $this->AutoTLS;
+      if ($AutoTLS !== null) {
+         $AutoTLS->Swaps->release();
+      }
+      parent::unload();
+   }
+
    /**
     * Do not advertise startup until every current worker has bound its socket,
     * sealed/probed the startup credential and persisted an ACK for the exact
-    * published attempt. ACKs can arrive before the master enters this barrier;
-    * they remain valid because the attempt was published before the fork.
+    * published attempt. On an unprivileged launch ACKs may predate this barrier;
+    * after a privileged launch the already-forked workers join the publication
+    * created here by the demoted master.
     */
    protected function ready (): bool
    {
       $AutoTLS = $this->AutoTLS;
       if ($AutoTLS === null) {
+         $this->startupReady = true;
          return true;
       }
 
-      if ($this->exchange() === false) {
+      // exchange() creates a deferred initial rendezvous only now, after the
+      // master has irreversibly dropped to the runtime identity. request()
+      // also performs the lease-proved stale-namespace sweep.
+      $AutoTLS->Swaps->sweep();
+      $crossed = $this->exchange();
+      if ($crossed === false) {
          $this->fault = $this->diagnose($this->Process->Children->PIDs);
          if ($this->halt() === false) {
             $this->fault .= ' Auto-TLS auxiliary children could not be proved retired.';
          }
+         $AutoTLS->Swaps->release();
          return false;
       }
 
@@ -990,6 +1067,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          if ($this->halt() === false) {
             $this->fault .= ' Auto-TLS auxiliary children could not be proved retired.';
          }
+         $AutoTLS->Swaps->release();
       }
       else if ($this->helperInherited && is_resource($this->Gate)) {
          // Workers are already serving with the fresh image. Replace the old
@@ -1000,6 +1078,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             if ($this->halt() === false) {
                $this->fault .= ' Its auxiliary children could not be proved retired either.';
             }
+            $AutoTLS->Swaps->release();
 
             return false;
          }
@@ -1010,6 +1089,10 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          if ($this->Process->State->check()) {
             $this->Process->State->save($this->describe());
          }
+      }
+
+      if ($ready) {
+         $this->startupReady = true;
       }
 
       return $ready;
@@ -1126,13 +1209,33 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
       $this->Gate = null;
 
-      // A replacement worker joins the current generation before accepting
-      // traffic and emits the acknowledgement the master is waiting for.
-      if (
-         $this->AutoTLS !== null
-         && $this->AutoTLS->Swaps->fetch() !== null
-         && $this->exchange() === false
-      ) {
+      // The privileged first boot cannot publish into its runtime-writable
+      // tree until the master demotes after forking. Wait here, before the
+      // event loop, for that publication; then join its exact lease, activate
+      // the generation and durably ACK it. No Auto-TLS worker serves during
+      // this rendezvous window or after a bounded failure.
+      $AutoTLS = $this->AutoTLS;
+      if ($AutoTLS === null) {
+         return;
+      }
+      $master = $this->Process->master;
+      $budget = max(
+         5,
+         ((self::$swapAckRetries + 1) * max(1, self::$swapAckTimeout)) + 1
+      );
+      $deadline = microtime(true) + $budget;
+      do {
+         $desired = $AutoTLS->Swaps->fetch();
+         if ($desired !== null) {
+            break;
+         }
+         if (posix_getppid() !== $master) {
+            break;
+         }
+         usleep(10000);
+      } while (microtime(true) < $deadline);
+
+      if ($desired === null || $this->exchange() === false) {
          $this->Logger->log(
             critical: '@\\;Auto-TLS: worker startup credential activation/acknowledgement failed; refusing to accept traffic.@\\;'
          );
@@ -1159,6 +1262,12 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
 
       parent::stop();
+      // Test/CI stop paths return to their caller instead of exiting. Retire
+      // this stopped server's descriptor explicitly so a retained object cannot
+      // pin its namespace until PHP shutdown.
+      if ($this->AutoTLS !== null && $this->Process->level === 'master') {
+         $this->AutoTLS->Swaps->release();
+      }
    }
 
    /**
@@ -1294,7 +1403,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       // ! Binding privileged ports as root without a configured demotion
       //   identity would run application workers and writable Auto-TLS state
       //   as root. Refuse that production footgun explicitly.
-      if (posix_getuid() === 0 && $this->user === null && $this->Mode !== Modes::Test) {
+      if (posix_getuid() === 0 && $this->user === null) {
          throw new RuntimeException(
             'Auto-TLS started as root requires the server `user` option so workers, helper and certifier are demoted after privileged binds.'
          );
@@ -1659,6 +1768,13 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    {
       cli_set_process_title("{$this->process}: ACME helper");
       $this->Process->State->detach();
+
+      // The helper reads only the challenge spool. Closing its inherited swap
+      // lease copy avoids extending a retired server namespace after re-exec.
+      $AutoTLS = $this->AutoTLS;
+      if ($AutoTLS !== null) {
+         $AutoTLS->Swaps->release();
+      }
 
       // The helper must not keep the daemon launcher's master-only readiness
       // descriptor alive if the master fails during the rest of startup.

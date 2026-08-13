@@ -178,11 +178,12 @@ class AutoTLS
     */
    public private(set) string $identity;
    /**
-    * Per-INSTANCE swap-rendezvous namespace — random at construction and
-    * fork-inherited, so one running server (master + its workers/certifier)
-    * shares it while unrelated servers on the same storage base can never
-    * clobber each other's desired/applied attempts. Identity scoping is not
-    * enough: two masters may legitimately serve the same SAN set.
+    * Per-INSTANCE swap-rendezvous identity — random at construction and
+    * fork-inherited. Its filesystem namespace is created lazily by the demoted
+    * publisher; workers forked before publication independently join the same
+    * lease. Unrelated servers on one storage base therefore cannot clobber each
+    * other's desired/applied attempts. Identity scoping is not enough: two
+    * masters may legitimately serve the same SAN set.
     */
    public private(set) string $instance;
    /**
@@ -232,8 +233,8 @@ class AutoTLS
    }
    /**
     * Generation-aware swap rendezvous shared by THIS server's master and
-    * workers (fork-inherited `$instance` namespace) — never by another
-    * server on the same storage base.
+    * workers through a fork-inherited identity and an inherited or joined
+    * lease — never by another server on the same storage base.
     */
    public private(set) Swaps $Swaps {
       get {

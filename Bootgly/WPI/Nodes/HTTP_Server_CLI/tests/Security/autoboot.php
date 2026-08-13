@@ -532,5 +532,13 @@ return new Suite(
       // unauthenticated or incompatible inherited helper must be retired and
       // the Gate adopted, never traded for exit(1).
       '98.02-acme_helper_handoff_degradation',
+      // # Stale ACME swap namespaces (audit 2026-08-02 L2)
+      // Reaped AutoTLS owner namespaces must be reclaimed without treating a
+      // short-lived publisher as the owner or deleting a live sibling.
+      '99.01-acme_swap_stale_namespace_reclamation',
+      // # Deferred swap publication privilege boundary (L2 remediation)
+      // Root configuration cannot traverse a runtime-owned swap tree; the
+      // namespace lease and records are first created by the runtime identity.
+      '99.02-acme_swap_deferred_privileged_publication',
    ],
 );
