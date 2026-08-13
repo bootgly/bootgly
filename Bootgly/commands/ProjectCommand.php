@@ -91,6 +91,7 @@ use Bootgly\ADI\Databases\SQL\Schema\Migrations;
 use Bootgly\ADI\Databases\SQL\Schema\Runner as MigrationRunner;
 use Bootgly\ADI\Databases\SQL\Seed\Runner as SeedRunner;
 use Bootgly\ADI\Databases\SQL\Seed\Seeders;
+use Bootgly\API\Environment\Build;
 use Bootgly\API\Environment\Configs\DatabaseConfig;
 use Bootgly\API\Projects;
 use Bootgly\API\Projects\Configs;
@@ -1623,8 +1624,15 @@ class ProjectCommand extends Command
       $url = '';
       $target = '';
 
+      // ! The running build — an install screen must say WHICH code it is
+      //   installing (every `dev-main` install reports the same version, so
+      //   the commit is what tells two of them apart)
+      $Build = Build::detect();
+
       $Wizard = new Wizard($Input, $Output);
-      $Wizard->title = '@#Cyan: Bootgly — New project wizard @;';
+      // ! The breathing space stays OUTSIDE the markup (it swallows adjacent ones)
+      $Wizard->title = '@#Cyan: Bootgly — New project wizard @;'
+         . " @#Black:{$Build->identify()}@;";
 
       // ! Branch steps — appended by the Mode handler once the branch is known
       // # From scratch: Path → Interface → Metadata → Confirm → Scaffold

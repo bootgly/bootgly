@@ -194,5 +194,8 @@ return new Suites(
       // # UDP client one-shot datagram writer (UDP-1)
       //   (appended last to keep every suite index above stable)
       'Bootgly/WPI/Interfaces/UDP_Client_CLI/tests/',
+      // # API/Environment — the running build identity (version + commit)
+      //   (appended last to keep every suite index above stable)
+      'Bootgly/API/Environment/',
    ]
 );
