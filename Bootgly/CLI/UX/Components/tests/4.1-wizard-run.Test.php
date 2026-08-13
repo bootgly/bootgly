@@ -59,6 +59,11 @@ return new Test(
             description: 'The content cursor anchors inside the guide rows, nested between the active and the upcoming steps'
          );
          yield assert(
+            assertion: str_contains($output, "Flow\n\e[90m│\e[0m\n") === true
+               && str_contains($output, "○ Two\e[0m\n\e[90m│\e[0m\n") === true,
+            description: 'A guide caps the timeline above the first step and below the last one'
+         );
+         yield assert(
             assertion: substr_count($output, '✔') >= 3 && str_contains($output, '(n1)'),
             description: 'Frames reprint past steps with the green checkmark and their notes'
          );

@@ -192,8 +192,11 @@ class Wizard extends Component
       $this->Timeline->until = $current;
       $top = (string) $this->Timeline->render(self::RETURN_OUTPUT);
 
+      // ! A guide caps the timeline above the first step (and below the last
+      //   one, in the tail): the flow reads as coming from somewhere and
+      //   going somewhere instead of starting and ending abruptly
       $title = $this->title !== '' ? "{$this->title}\n" : '';
-      $head = $this->paint("{$title}{$top}");
+      $head = $this->paint("{$title}@#Black:│@;\n{$top}");
 
       // ! Content area — `rows` guide rows framed by one breathing guide on
       //   each side; unused rows read as the connector
@@ -206,14 +209,17 @@ class Wizard extends Component
       //   as the breathing one, and outgrowing them grows the region
       $this->reserved = max(1, $reserve - 3);
 
-      // ! Tail — the upcoming steps (the last guide row connects them)
-      $tail = '';
+      // ! Tail — the upcoming steps (the last guide row connects them), closed
+      //   by the guide cap that mirrors the one above the first step
+      $upcoming = '';
       if ($current < $Steps->count - 1) {
          $this->Timeline->from = $current + 1;
          $this->Timeline->until = null;
 
-         $tail = $this->paint((string) $this->Timeline->render(self::RETURN_OUTPUT));
+         $upcoming = (string) $this->Timeline->render(self::RETURN_OUTPUT);
       }
+
+      $tail = $this->paint("{$upcoming}@#Black:│@;\n");
 
       $this->Timeline->from = null;
       $this->Timeline->until = null;
