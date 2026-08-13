@@ -416,7 +416,18 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          }
 
          if ($this->AutoTLS !== null) {
-            $this->halt();
+            // ? Same rollback-safe contract as forge() above: a teardown that
+            //   cannot prove it retired its auxiliary children leaves the
+            //   PREVIOUS runtime in place, so supervise() keeps watching them
+            //   and retries. Proceeding would publish the new configuration
+            //   over a helper still bound to the old spool, with nothing left
+            //   supervising it.
+            if ($this->halt() === false) {
+               throw new RuntimeException(
+                  'Auto-TLS could not prove its previous auxiliary children were retired;'
+                  . ' the running configuration is unchanged.'
+               );
+            }
             $this->watched = 0;
             $this->checked = 0;
          }
@@ -446,7 +457,17 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          //   leaves Auto-TLS management — halt() also releases the challenge
          //   hook this instance chartered. Sibling leases remain intact.
          if ($this->AutoTLS !== null) {
-            $this->halt();
+            // ? Leaving Auto-TLS management is the one transition that must
+            //   never be taken on trust. `supervise()` returns immediately once
+            //   `AutoTLS` is null, so a helper that halt() could not prove
+            //   retired would keep answering on the validation port with
+            //   nothing watching it and nothing left to retire it.
+            if ($this->halt() === false) {
+               throw new RuntimeException(
+                  'Auto-TLS could not prove its auxiliary children were retired; management'
+                  . ' is retained rather than abandoning a live HTTP-01 responder.'
+               );
+            }
             $this->watched = 0;
             $this->checked = 0;
          }
@@ -930,7 +951,9 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
       if ($this->exchange() === false) {
          $this->fault = $this->diagnose($this->Process->Children->PIDs);
-         $this->halt();
+         if ($this->halt() === false) {
+            $this->fault .= ' Auto-TLS auxiliary children could not be proved retired.';
+         }
          return false;
       }
 
@@ -964,7 +987,9 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          && $this->appliedAttempt === $desired['attempt'];
       if ($ready === false) {
          $this->fault = $this->diagnose($Workers);
-         $this->halt();
+         if ($this->halt() === false) {
+            $this->fault .= ' Auto-TLS auxiliary children could not be proved retired.';
+         }
       }
       else if ($this->helperInherited && is_resource($this->Gate)) {
          // Workers are already serving with the fresh image. Replace the old
@@ -972,7 +997,9 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          // that exact point, the inherited helper keeps HTTP-01 continuous.
          if ($this->guard(replace: true) === false) {
             $this->fault = 'Auto-TLS inherited helper ownership could not be retired safely.';
-            $this->halt();
+            if ($this->halt() === false) {
+               $this->fault .= ' Its auxiliary children could not be proved retired either.';
+            }
 
             return false;
          }
@@ -1120,7 +1147,15 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       if (isset($this->Process) && $this->Process->level === 'master') {
          Downloads::destroy();
 
-         $this->halt();
+         // ? A helper that survives this teardown still self-exits: its own
+         //   loop leaves as soon as `posix_getppid()` stops being this master.
+         //   Worth a line anyway — an unproved retirement during shutdown is
+         //   how a stale responder reaches the next start().
+         if ($this->halt() === false) {
+            $this->Logger->log(
+               critical: '@\;Auto-TLS: could not prove its auxiliary children were retired during shutdown.@\;'
+            );
+         }
       }
 
       parent::stop();
@@ -1528,6 +1563,18 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             // The candidate accepts fresh validations before the inherited
             // helper stops accepting. SIGQUIT then drains sockets the old
             // image had already accepted, avoiding a cutover reset.
+            //
+            // ! Accepted cost: this BLOCKS the caller until retirement is
+            //   proved — and one caller is supervise(), which runs from the
+            //   master tick. The old helper bounds its own drain (its clients
+            //   carry 5 s deadlines and it exits once the set empties), so the
+            //   stall is typically short and the 9 s ceiling is headroom, but
+            //   during it the master dispatches no signals and respawns no
+            //   worker. That is deliberate. The two ways to remove it are both
+            //   worse: retiring asynchronously would give up the definitive
+            //   ownership proof this whole handoff is built on, and dispatching
+            //   signals inside the wait would let a second reload re-enter
+            //   while a helper retirement is half-done.
             if (
                $replacing
                && $this->terminate(
