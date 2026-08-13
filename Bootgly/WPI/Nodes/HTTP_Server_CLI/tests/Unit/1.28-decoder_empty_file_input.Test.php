@@ -1,9 +1,6 @@
 <?php
 
 
-use const BOOTGLY_STORAGE_DIR;
-use const UPLOAD_ERR_NO_FILE;
-
 use const Bootgly\WPI;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;

@@ -1,8 +1,6 @@
 <?php
 
 
-use ReflectionProperty;
-
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\ADI\Database\Connection;
 use Bootgly\ADI\Databases\SQL\Config;

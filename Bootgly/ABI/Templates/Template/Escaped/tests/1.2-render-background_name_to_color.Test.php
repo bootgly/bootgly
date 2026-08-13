@@ -1,7 +1,5 @@
 <?php
 
-use function assert;
-
 use Bootgly\ABI\Templates\Template\Escaped;
 use Bootgly\ACI\Tests\Suite\Test;
 
