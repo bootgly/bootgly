@@ -155,6 +155,46 @@ return new Test(
          ->to->be('Invalid CSRF origin')
          ->assert();
 
+      // @ Test 7.1: bracketed IPv6 same-origin authority with a port passes
+      $Session = $createSession();
+      $Session->set('_csrf_token', 'ipv6token');
+      [$Request, $Response] = $createMocks(
+         requestHeaders: [
+            'X-CSRF-Token' => 'ipv6token',
+            'Origin' => 'https://[2001:DB8::1]:8081',
+            'Host' => '[2001:db8::1]:8081'
+         ],
+         requestProps: ['method' => 'POST']
+      );
+      $Request->Session = $Session;
+
+      $Result = $CSRFOrigin->process($Request, $Response, $passthrough);
+
+      yield (new Assertion(description: 'Bracketed IPv6 same-origin request should pass'))
+         ->expect($Result->code)
+         ->to->be(200)
+         ->assert();
+
+      // @ Test 7.2: a different bracketed IPv6 Origin remains rejected
+      $Session = $createSession();
+      $Session->set('_csrf_token', 'ipv6token');
+      [$Request, $Response] = $createMocks(
+         requestHeaders: [
+            'X-CSRF-Token' => 'ipv6token',
+            'Origin' => 'https://[2001:db8::2]:8081',
+            'Host' => '[2001:db8::1]:8081'
+         ],
+         requestProps: ['method' => 'POST']
+      );
+      $Request->Session = $Session;
+
+      $Result = $CSRFOrigin->process($Request, $Response, $passthrough);
+
+      yield (new Assertion(description: 'Different bracketed IPv6 Origin should return 403'))
+         ->expect($Result->code)
+         ->to->be(403)
+         ->assert();
+
       // @ Test 8: Token persists across requests in the same session
       $Session = $createSession();
 

@@ -37,6 +37,7 @@ return new Suite(
       //   attacker-controlled hosts in those PoCs remain absent and rejected.
       Request::$allowedHosts = [
          'localhost',
+         '[2001:db8::1]',
          'control.example.test',
          'tenant-a.example.test',
          'tenant-b.example.test',
@@ -540,5 +541,9 @@ return new Suite(
       // Root configuration cannot traverse a runtime-owned swap tree; the
       // namespace lease and records are first created by the runtime identity.
       '99.02-acme_swap_deferred_privileged_publication',
+      // # CSRF same-origin IPv6 authority parsing (audit 2026-08-02 L3)
+      // A bracketed IPv6 Host must remain intact when its optional port is
+      // removed; splitting at the first colon rejects a valid same-origin POST.
+      '100.01-csrf_ipv6_literal_same_origin',
    ],
 );

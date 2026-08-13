@@ -13,7 +13,6 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares;
 
 use const PHP_URL_HOST;
 use function bin2hex;
-use function explode;
 use function hash_equals;
 use function hex2bin;
 use function in_array;
@@ -22,7 +21,10 @@ use function is_string;
 use function max;
 use function parse_url;
 use function random_bytes;
+use function strcasecmp;
 use function strlen;
+use function strpos;
+use function strrpos;
 use function substr;
 use Closure;
 
@@ -270,15 +272,30 @@ class CSRF implements Middleware
          return in_array($originHost, $this->allowedOrigins, true);
       }
 
-      // @ Same-origin: compare against Host header (strip port)
+      // @ Same-origin: compare against the Host authority without its port.
+      //   HTTP/1 and HTTP/2 validate Host through Request\Frame::check() before
+      //   middleware dispatch. Preserve a bracketed IPv6 literal in full;
+      //   otherwise remove the optional port at the last colon, matching
+      //   Request::allow() without imposing parse_url()'s URI-port rules.
       $host = $Request->Header->get('Host');
       if (is_string($host) === false || $host === '') {
          return false;
       }
 
-      $hostOnly = explode(':', $host, 2)[0];
+      if ($host[0] === '[') {
+         $bracket = strpos($host, ']');
+         if ($bracket === false) {
+            return false;
+         }
+
+         $hostOnly = substr($host, 0, $bracket + 1);
+      }
+      else {
+         $colon = strrpos($host, ':');
+         $hostOnly = $colon === false ? $host : substr($host, 0, $colon);
+      }
 
       // :
-      return $originHost === $hostOnly;
+      return strcasecmp($originHost, $hostOnly) === 0;
    }
 }
