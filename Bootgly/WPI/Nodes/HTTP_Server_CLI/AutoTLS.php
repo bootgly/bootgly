@@ -231,19 +231,15 @@ class AutoTLS
          return $this->Certificates;
       }
    }
+   /** Backing store for `$Swaps` — replaceable, so `retire()` can drop it. */
+   private null|Swaps $Rendezvous = null;
    /**
     * Generation-aware swap rendezvous shared by THIS server's master and
     * workers through a fork-inherited identity and an inherited or joined
     * lease — never by another server on the same storage base.
     */
-   public private(set) Swaps $Swaps {
-      get {
-         if (isSet($this->Swaps) === false) {
-            $this->Swaps = new Swaps("{$this->path}swaps/", $this->instance);
-         }
-
-         return $this->Swaps;
-      }
+   public Swaps $Swaps {
+      get => $this->Rendezvous ??= new Swaps("{$this->path}swaps/", $this->instance);
    }
    /**
     * SSL stream-context options for the server socket: the installed ACME
@@ -510,6 +506,29 @@ class AutoTLS
       }
 
       return true;
+   }
+
+   /**
+    * Give up this configuration's swap rendezvous: close the lease descriptor
+    * and drop the retired object.
+    *
+    * `Swaps::release()` is deliberately terminal for the object it is called
+    * on, so a stale reference can never resurrect a namespace the system has
+    * already decided is collectable. The OWNER is a different matter: a
+    * startup abort that gets retried, `secure: null` followed by re-enabling,
+    * and a rejected candidate all hand this object back, and it has to be able
+    * to publish again. Minting the replacement costs nothing — the `Swaps`
+    * constructor performs no filesystem I/O, so the namespace is created only
+    * once a publisher actually enters it.
+    *
+    * Auxiliary children and the pre-`pcntl_exec` handoff deliberately do NOT
+    * use this: they are dropping an inherited copy they never owned, and a
+    * replacement there could claim a namespace nothing supervises.
+    */
+   public function retire (): void
+   {
+      $this->Rendezvous?->release();
+      $this->Rendezvous = null;
    }
 
    /**

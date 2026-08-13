@@ -30,5 +30,9 @@ return new Suite(
       '5.5-transport_deadline',
       '5.6-protocol_faults',
       '5.7-destination_policy',
+      // # Namespace-lease remediation gaps (audit 2026-08-02 L2 review)
+      // A retired owner must republish, and collection must survive both an
+      // interrupted legacy removal and a glob-unsafe storage path.
+      '5.8-swaps_lifecycle',
    ]
 );

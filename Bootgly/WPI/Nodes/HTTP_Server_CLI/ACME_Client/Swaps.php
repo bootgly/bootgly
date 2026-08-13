@@ -15,23 +15,25 @@ use const JSON_THROW_ON_ERROR;
 use const LOCK_EX;
 use const LOCK_NB;
 use const LOCK_SH;
+use function array_diff;
+use function array_values;
 use function basename;
 use function bin2hex;
 use function chmod;
 use function clearstatcache;
+use function count;
 use function dirname;
 use function explode;
 use function fclose;
 use function fflush;
 use function file_get_contents;
-use function fopen;
 use function flock;
+use function fopen;
 use function fstat;
-use function ftruncate;
 use function fsync;
+use function ftruncate;
 use function function_exists;
 use function fwrite;
-use function glob;
 use function hash_equals;
 use function is_array;
 use function is_bool;
@@ -54,9 +56,11 @@ use function rewind;
 use function rmdir;
 use function rtrim;
 use function scandir;
-use function stream_get_contents;
+use function sort;
 use function str_contains;
+use function str_ends_with;
 use function str_starts_with;
+use function stream_get_contents;
 use function strlen;
 use function substr;
 use function time;
@@ -450,6 +454,16 @@ final class Swaps
             if ($this->move($entry, $target)) {
                $this->remove($target);
             }
+            continue;
+         }
+         // A renamed legacy tree stays this collector's responsibility. The
+         // rename above is its one irreversible step and nothing else in the
+         // base carries this name, so ignoring it turns an interrupted removal
+         // — SIGKILL, ENOSPC, a shutdown deadline — into a permanent orphan.
+         // Removing in place used to be resumed by the next sweep; renaming
+         // first is only safe while the renamed form is collected too.
+         if (preg_match('/^\.legacy-[a-f0-9]{32}-[a-f0-9]{16}$/', $name) === 1) {
+            $this->remove($entry);
             continue;
          }
          if (
@@ -966,13 +980,20 @@ final class Swaps
     */
    private function locate (string $instance): array
    {
+      // Enumerated, never globbed: the base is operator-configured and a glob
+      // metacharacter in it does not merely skip work — a blind lookup reports
+      // "no tombstone", which lets recover() discard a lease whose tombstone is
+      // still standing. Comparing literal names also keeps the instance out of
+      // a pattern it would otherwise be interpolated into.
       $tombstones = [];
-      foreach (glob("{$this->base}.gc-{$instance}-*") ?: [] as $entry) {
+      $prefix = ".gc-{$instance}-";
+      foreach ($this->scan($this->base) ?: [] as $name) {
          if (
-            preg_match('/^\.gc-' . $instance . '-[a-f0-9]{16}$/D', basename($entry)) === 1
-            && $this->inspect($entry) !== false
+            str_starts_with($name, $prefix)
+            && preg_match('/^[a-f0-9]{16}$/D', substr($name, strlen($prefix))) === 1
+            && $this->inspect("{$this->base}{$name}") !== false
          ) {
-            $tombstones[] = $entry;
+            $tombstones[] = "{$this->base}{$name}";
          }
       }
       sort($tombstones);
@@ -1284,7 +1305,11 @@ final class Swaps
       if ($this->validate($directory) === false || is_link($directory) || is_dir($directory) === false) {
          return [];
       }
-      foreach (glob("{$directory}*.json") ?: [] as $file) {
+      foreach ($this->scan($directory) ?: [] as $name) {
+         if (str_ends_with($name, '.json') === false) {
+            continue;
+         }
+         $file = "{$directory}{$name}";
          if (is_link($file)) {
             continue;
          }
@@ -1354,14 +1379,17 @@ final class Swaps
       if ($this->enter(false) === false) {
          return;
       }
-      foreach (glob("{$this->path}*") ?: [] as $entry) {
-         $name = basename($entry);
+      // Enumerated, never globbed — see locate(). Here a metacharacter in the
+      // operator-configured path expands into a DIFFERENT real directory, and
+      // this is the one deletion path with neither validate() nor verify().
+      foreach ($this->scan($this->path) ?: [] as $name) {
+         $entry = "{$this->path}{$name}";
          if (preg_match('/^[a-f0-9]{32}$/', $name) !== 1 || is_link($entry)) {
             continue;
          }
 
-         foreach (glob("{$entry}/*") ?: [] as $attemptDirectory) {
-            $attemptName = basename($attemptDirectory);
+         foreach ($this->scan($entry) ?: [] as $attemptName) {
+            $attemptDirectory = "{$entry}/{$attemptName}";
             // Upgrade cleanup: round-8 ACKs lived directly under the
             // generation as `<PID>.json` before attempts were introduced.
             if (
@@ -1380,8 +1408,10 @@ final class Swaps
             ) {
                continue;
             }
-            foreach (glob("{$attemptDirectory}/*.json") ?: [] as $file) {
-               @unlink($file);
+            foreach ($this->scan($attemptDirectory) ?: [] as $file) {
+               if (str_ends_with($file, '.json')) {
+                  @unlink("{$attemptDirectory}/{$file}");
+               }
             }
             @rmdir($attemptDirectory);
          }

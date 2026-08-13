@@ -445,7 +445,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                // A different rejected object has no server owner; release only
                // that candidate while retaining the old configuration's lease.
                if ($CurrentSwaps !== $CandidateSwaps) {
-                  $CandidateSwaps->release();
+                  $secure->retire();
                }
                throw new RuntimeException(
                   'Auto-TLS could not prove its previous auxiliary children were retired;'
@@ -455,7 +455,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             // Reusing the same AutoTLS object is a valid pre-start refresh;
             // only retire a namespace that the replacement will not own.
             if ($CurrentSwaps !== $CandidateSwaps) {
-               $CurrentSwaps->release();
+               $this->AutoTLS->retire();
             }
             $this->watched = 0;
             $this->checked = 0;
@@ -497,7 +497,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   . ' is retained rather than abandoning a live HTTP-01 responder.'
                );
             }
-            $this->AutoTLS->Swaps->release();
+            $this->AutoTLS->retire();
             $this->watched = 0;
             $this->checked = 0;
          }
@@ -616,7 +616,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    {
       $AutoTLS = $this->AutoTLS;
       if ($this->startupReady === false && $AutoTLS !== null) {
-         $AutoTLS->Swaps->release();
+         $AutoTLS->retire();
       }
    }
 
@@ -1030,7 +1030,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          if ($this->halt() === false) {
             $this->fault .= ' Auto-TLS auxiliary children could not be proved retired.';
          }
-         $AutoTLS->Swaps->release();
+         $AutoTLS->retire();
          return false;
       }
 
@@ -1067,7 +1067,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          if ($this->halt() === false) {
             $this->fault .= ' Auto-TLS auxiliary children could not be proved retired.';
          }
-         $AutoTLS->Swaps->release();
+         $AutoTLS->retire();
       }
       else if ($this->helperInherited && is_resource($this->Gate)) {
          // Workers are already serving with the fresh image. Replace the old
@@ -1078,7 +1078,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             if ($this->halt() === false) {
                $this->fault .= ' Its auxiliary children could not be proved retired either.';
             }
-            $AutoTLS->Swaps->release();
+            $AutoTLS->retire();
 
             return false;
          }
@@ -1266,7 +1266,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       // this stopped server's descriptor explicitly so a retained object cannot
       // pin its namespace until PHP shutdown.
       if ($this->AutoTLS !== null && $this->Process->level === 'master') {
-         $this->AutoTLS->Swaps->release();
+         $this->AutoTLS->retire();
       }
    }
 
