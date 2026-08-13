@@ -18,6 +18,7 @@ use function count;
 use function current;
 use function is_array;
 use function is_callable;
+use function is_file;
 use function key;
 use function method_exists;
 use function microtime;
@@ -205,17 +206,25 @@ class Suite
             continue;
          }
 
-         // @
-         /** @var Test|false $Test */
-         $Test = @include "{$dir}{$test}.Test.php";
-         // ?
-         if ($test[0] === '_' && $Test === false) {
-            continue;
-         }
-         else if ($test[0] !== '_' && $Test === false) {
+         // !
+         $file = "{$dir}{$test}.Test.php";
+         // ? Absent test case
+         // Resolved here, not through a silenced include: silencing the include
+         // also hides every diagnostic the test case emits while loading, which
+         // turns a broken case into a silent no-op.
+         if ( is_file($file) === false ) {
+            // ? Private test case (`_*.Test.php` is not versioned)
+            if ($test[0] === '_') {
+               continue;
+            }
+
             throw new Exception("Test case not found: \n {$dir}{$test}");
          }
-         else if ($Test instanceof Test === false) {
+
+         // @
+         $Test = include $file;
+         // ?
+         if ($Test instanceof Test === false) {
             throw new Exception("Test case must return a Test instance: \n {$dir}{$test}");
          }
 
