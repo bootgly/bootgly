@@ -871,29 +871,41 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       $spool = $matches[3] ?? '';
       $inherited = $PID > 1 && $started !== '';
       $authenticated = $inherited && $this->verify($PID, $started);
-      if ($inherited && $authenticated === false) {
-         // A dead exact child may be reaped and safely downgraded to Gate-only.
-         // A still-running child whose /proc identity cannot be proved must
-         // fail the handoff closed; otherwise a new helper would be forked and
-         // the old responder would remain permanently live and untracked.
-         if ($this->reap($PID) === false) {
-            return false;
-         }
-      }
-
-      $this->Gate = $Gate;
-      if ($authenticated) {
-         $compatible = hash_equals(
+      // ? The spool hash detects a configuration change: a helper that answers
+      //   from the previous challenge directory cannot serve this image.
+      $adoptable = $authenticated
+         && hash_equals(
             $spool,
             substr(hash('sha256', $this->AutoTLS->challenges), 0, 20)
          );
-         if ($compatible === false) {
-            // A challenge may already be pending in the old spool. Do not let
-            // the new-path helper race it to a 404. Reject fresh-image startup
-            // before it forks workers; changing this path requires a controlled
-            // stop/start rather than hot reload.
-            return false;
-         }
+
+      // ? Retire the inherited helper, never refuse the handoff.
+      //
+      // !! This runs on the FRESH image. The old one has already drained its
+      //   workers, closed its listeners and `pcntl_exec`ed itself away, so a
+      //   `false` here reaches `start()`'s `exit(1)` with nothing left to fall
+      //   back into: the refusal IS the outage, ports 80 and 443 released while
+      //   the operator's console reported the reload as sent. That is the
+      //   opposite of `export()`, whose refusal is safe precisely because it
+      //   runs before a single worker is drained.
+      //
+      //   Both reasons to distrust the inherited helper are recoverable here,
+      //   because `pcntl_exec` preserved the parentage: it is a live DIRECT
+      //   CHILD of this exact PID, so `terminate()` retires it deterministically
+      //   and `prime()`/`supervise()` fork a fresh one on the current spool.
+      //   The cost is the brief HTTP-01 pause this handoff exists to remove —
+      //   the pre-fix behaviour — instead of the whole service. `started` is
+      //   deliberately omitted so an unprovable generation cannot re-enter the
+      //   fail-closed branch inside `terminate()`.
+      if ($inherited && $adoptable === false && $this->terminate($PID) === false) {
+         // Retirement itself could not be proved. Only here is the ambiguity
+         // real: continuing would leave a second responder on this port,
+         // answering from a spool this image does not own.
+         return false;
+      }
+
+      $this->Gate = $Gate;
+      if ($adoptable) {
          $this->helper = $PID;
          $this->helperReady = true;
          $this->helperInherited = true;
@@ -2056,9 +2068,18 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             || ($reaped === -1 && posix_kill($PID, 0) === false);
       }
 
-      // SIGKILL cannot be handled. Once delivered to this unreaped child, a
-      // blocking exact wait is safe and preserves the no-zombie contract.
-      $reaped = pcntl_waitpid($PID, $status);
+      // SIGKILL cannot be handled, so this child is already on its way out and
+      // a generous exact wait preserves the no-zombie contract.
+      //
+      // !! It must NOT be a bare blocking `pcntl_waitpid()`. Every master
+      //   signal is installed with `restart_syscalls = false`
+      //   (`ACI/Process/Signals.php`), so any signal — a worker exiting is
+      //   enough — interrupts the wait, `pcntl_waitpid()` returns -1 with
+      //   EINTR, and the just-killed child is still an unreaped zombie, so
+      //   `posix_kill($PID, 0)` is true and this reports lost ownership. The
+      //   callers read that as ambiguity and stop the whole server. `await()`
+      //   already loops on EINTR; reuse it rather than repeating the hole.
+      $reaped = $this->await($PID, $status, 5_000_000_000);
 
       return $reaped === $PID
          || ($reaped === -1 && posix_kill($PID, 0) === false);

@@ -526,5 +526,11 @@ return new Suite(
       // The Gate may stay bound, but validation is unavailable if its only
       // responder is killed before application workers finish draining.
       '98.01-acme_http01_reload_continuity',
+      // # HTTP-01 handoff degradation (audit 2026-08-12 L1, follow-up)
+      // import() runs on the fresh image AFTER the old one drained and exec'd
+      // away, so a false return there is an outage, not a refusal. An
+      // unauthenticated or incompatible inherited helper must be retired and
+      // the Gate adopted, never traded for exit(1).
+      '98.02-acme_helper_handoff_degradation',
    ],
 );
