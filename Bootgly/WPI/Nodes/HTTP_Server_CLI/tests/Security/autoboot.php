@@ -522,5 +522,9 @@ return new Suite(
       // Expired RateLimit principals must release fixed SysV capacity without
       // requiring an operator to call purge() before the next request.
       '97.01-rate_limit_shared_expired_capacity',
+      // # ACME HTTP-01 continuity across daemon reload (audit 2026-08-02 L1)
+      // The Gate may stay bound, but validation is unavailable if its only
+      // responder is killed before application workers finish draining.
+      '98.01-acme_http01_reload_continuity',
    ],
 );

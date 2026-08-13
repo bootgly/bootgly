@@ -37,6 +37,7 @@ use const STREAM_PF_UNIX;
 use const STREAM_SOCK_STREAM;
 use const WNOHANG;
 use function array_diff;
+use function array_key_first;
 use function array_reverse;
 use function array_values;
 use function basename;
@@ -55,6 +56,8 @@ use function fstat;
 use function function_exists;
 use function fwrite;
 use function glob;
+use function hash;
+use function hash_equals;
 use function hrtime;
 use function implode;
 use function in_array;
@@ -92,6 +95,7 @@ use function posix_getpwnam;
 use function posix_getuid;
 use function posix_kill;
 use function preg_match;
+use function preg_split;
 use function rtrim;
 use function scandir;
 use function spl_object_id;
@@ -111,6 +115,7 @@ use function stream_socket_server;
 use function strlen;
 use function strncmp;
 use function strpos;
+use function strrpos;
 use function strtolower;
 use function substr;
 use function substr_count;
@@ -137,7 +142,6 @@ use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Logger;
-use Bootgly\ACI\Process;
 use Bootgly\ACI\Tests\Fixture;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Tests\Suite\Test;
@@ -211,6 +215,10 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    /** Port-80 helper child PID (0 = none). */
    public protected(set) int $helper = 0;
    public protected(set) bool $helperReady = false;
+   /** The ready helper survived a re-exec and still runs the previous image. */
+   private bool $helperInherited = false;
+   /** Authenticated /proc start time of the helper carried through re-exec. */
+   private string $helperStarted = '';
    /** Remote master whose helper serves this instance's exact spool. */
    protected int $validator = 0;
    /** Certifier (issuance) child PID (0 = none). */
@@ -784,12 +792,56 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       return $reaped;
    }
 
+   /** Reap one exited child, or prove that no process remains at its PID. */
+   private function reap (int $PID, int $timeoutNS = 10_000_000): bool
+   {
+      if ($PID < 2) {
+         return true;
+      }
+      $status = 0;
+      $reaped = $this->await($PID, $status, $timeoutNS);
+
+      return $reaped === $PID
+         || ($reaped === -1 && posix_kill($PID, 0) === false);
+   }
+
    /** @return array<string,resource> */
    protected function export (): array
    {
-      return is_resource($this->Gate)
-         ? ['http01.gate' => $this->Gate]
-         : [];
+      $AutoTLS = $this->AutoTLS;
+      if (is_resource($this->Gate) === false || $AutoTLS === null) {
+         return [];
+      }
+
+      $name = 'http01.gate';
+      if ($this->helper > 1 && $this->helperReady) {
+         if ($this->alive($this->helper) === false) {
+            if ($this->reap($this->helper) === false) {
+               return ['!http01.gate' => $this->Gate];
+            }
+            $this->helper = 0;
+            $this->helperReady = false;
+            $this->helperInherited = false;
+            $this->helperStarted = '';
+
+            return [$name => $this->Gate];
+         }
+         $started = $this->identify($this->helper);
+         if (
+            $started === null
+            || ($this->helperStarted !== '' && $started !== $this->helperStarted)
+         ) {
+            // An invalid resource name makes the base relay fail before worker
+            // drain. Silently downgrading to Gate-only would orphan a live but
+            // untracked helper if /proc identity proof transiently failed.
+            return ['!http01.gate' => $this->Gate];
+         }
+         $this->helperStarted = $started;
+         $spool = substr(hash('sha256', $AutoTLS->challenges), 0, 20);
+         $name .= ".{$this->helper}.{$started}.{$spool}";
+      }
+
+      return [$name => $this->Gate];
    }
 
    /** @param array<string,resource> $Resources */
@@ -798,16 +850,55 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       if ($Resources === []) {
          return true;
       }
-      $Gate = $Resources['http01.gate'] ?? null;
+      $name = array_key_first($Resources);
+      $Gate = $Resources[$name];
       if (
          count($Resources) !== 1
+         || preg_match('/^http01\.gate(?:\.([1-9][0-9]*)\.([1-9][0-9]*)\.([a-f0-9]{20}))?$/D', $name, $matches) !== 1
          || $this->AutoTLS === null
          || $this->validate($Gate, $this->AutoTLS->port) === false
       ) {
          return false;
       }
       /** @var resource $Gate */
+      // The authenticated relay carried process identity as metadata on the
+      // already-validated Gate. pcntl_exec preserves this master's PID, so a
+      // live direct child with the same /proc start time is the exact helper
+      // from the previous image, not a recycled PID. The spool hash detects a
+      // configuration change before readiness/issuance is advertised.
+      $PID = isset($matches[1]) ? (int) $matches[1] : 0;
+      $started = $matches[2] ?? '';
+      $spool = $matches[3] ?? '';
+      $inherited = $PID > 1 && $started !== '';
+      $authenticated = $inherited && $this->verify($PID, $started);
+      if ($inherited && $authenticated === false) {
+         // A dead exact child may be reaped and safely downgraded to Gate-only.
+         // A still-running child whose /proc identity cannot be proved must
+         // fail the handoff closed; otherwise a new helper would be forked and
+         // the old responder would remain permanently live and untracked.
+         if ($this->reap($PID) === false) {
+            return false;
+         }
+      }
+
       $this->Gate = $Gate;
+      if ($authenticated) {
+         $compatible = hash_equals(
+            $spool,
+            substr(hash('sha256', $this->AutoTLS->challenges), 0, 20)
+         );
+         if ($compatible === false) {
+            // A challenge may already be pending in the old spool. Do not let
+            // the new-path helper race it to a 404. Reject fresh-image startup
+            // before it forks workers; changing this path requires a controlled
+            // stop/start rather than hot reload.
+            return false;
+         }
+         $this->helper = $PID;
+         $this->helperReady = true;
+         $this->helperInherited = true;
+         $this->helperStarted = $started;
+      }
 
       return true;
    }
@@ -862,6 +953,24 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       if ($ready === false) {
          $this->fault = $this->diagnose($Workers);
          $this->halt();
+      }
+      else if ($this->helperInherited && is_resource($this->Gate)) {
+         // Workers are already serving with the fresh image. Replace the old
+         // responder only after the new helper acknowledges readiness; until
+         // that exact point, the inherited helper keeps HTTP-01 continuous.
+         if ($this->guard(replace: true) === false) {
+            $this->fault = 'Auto-TLS inherited helper ownership could not be retired safely.';
+            $this->halt();
+
+            return false;
+         }
+
+         // start() published the imported helper before entering this barrier.
+         // Publish the replacement immediately rather than leaving stale
+         // topology until the 15-second watchdog tick.
+         if ($this->Process->State->check()) {
+            $this->Process->State->save($this->describe());
+         }
       }
 
       return $ready;
@@ -1006,10 +1115,9 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    }
 
    /**
-    * Reload (SIGUSR2 re-exec): terminate the Auto-TLS auxiliary children but
-    * retain the bound gate for the base class' same-UID descriptor handoff.
-    * The fresh image adopts it and forks a newly-managed helper without ever
-    * regaining root or leaving an orphan responder behind.
+    * Reload (SIGUSR2 re-exec): retain the ready HTTP-01 helper and bound gate
+    * through the base class' same-UID descriptor handoff. The fresh image
+    * replaces that inherited responder only after a new helper is ready.
     */
    protected function reload (): void
    {
@@ -1026,9 +1134,15 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          return;
       }
 
-      // Keep the already-bound gate descriptor for the same-UID SCM_RIGHTS
-      // relay; only its helper/certifier children are torn down here.
-      $this->halt(preserveGate: true);
+      // The certifier cannot survive a code/config reload, but a proven ready
+      // helper can: pcntl_exec preserves this master PID, and the relay carries
+      // both its Gate and authenticated process generation to the fresh image.
+      if ($this->halt(preserveGate: true, preserveHelper: true) === false) {
+         $this->Logger->log(
+            error: '@\\;Reload aborted: the live HTTP-01 helper generation could not be authenticated safely.@\\;'
+         );
+         return;
+      }
 
       parent::reload();
 
@@ -1039,9 +1153,18 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             $this->challengeOwner,
             $this->AutoTLS->challenges
          );
-         if (is_resource($this->Gate) && $this->helper === 0) {
-            $this->guard();
+         if ($this->helper > 0 && $this->alive($this->helper) === false) {
+            if ($this->reap($this->helper)) {
+               $this->helper = 0;
+               $this->helperReady = false;
+               $this->helperInherited = false;
+               $this->helperStarted = '';
+            }
          }
+         // reload() runs inside SIGUSR2 dispatch. Never fork a helper here:
+         // a child would inherit PHP's active signal-dispatch state. The next
+         // ordinary master tick runs immediately after dispatch and retries.
+         $this->watched = 0;
       }
    }
 
@@ -1052,52 +1175,49 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
     * signaled children are reaped (bounded) so no zombie survives a
     * stop/reload/reconfigure.
     */
-   private function halt (bool $preserveGate = false): void
+   private function halt (bool $preserveGate = false, bool $preserveHelper = false): bool
    {
-      $terminated = [];
-
-      if ($this->helper > 0) {
+      $keepHelper = false;
+      $started = null;
+      if ($preserveGate && $preserveHelper && $this->helper > 1 && $this->helperReady) {
          if ($this->alive($this->helper)) {
-            posix_kill($this->helper, SIGTERM);
-            $terminated[] = $this->helper;
+            $started = $this->identify($this->helper);
+            if (
+               $started === null
+               || ($this->helperStarted !== '' && $started !== $this->helperStarted)
+            ) {
+               return false;
+            }
+            $keepHelper = true;
          }
          else {
-            pcntl_waitpid($this->helper, $status, WNOHANG);
+            if ($this->reap($this->helper) === false) {
+               return false;
+            }
+         }
+      }
+
+      if ($keepHelper) {
+         /** @var string $started */
+         $this->helperStarted = $started;
+      }
+      else {
+         if ($this->helper > 0) {
+            if ($this->terminate($this->helper, started: $this->helperStarted) === false) {
+               return false;
+            }
          }
          $this->helper = 0;
          $this->helperReady = false;
+         $this->helperInherited = false;
+         $this->helperStarted = '';
       }
-      $this->helperReady = false;
       $this->validator = 0;
       if ($this->certifier > 0) {
-         if ($this->alive($this->certifier)) {
-            posix_kill($this->certifier, SIGTERM);
-            $terminated[] = $this->certifier;
-         }
-         else {
-            pcntl_waitpid($this->certifier, $status, WNOHANG);
+         if ($this->terminate($this->certifier) === false) {
+            return false;
          }
          $this->certifier = 0;
-      }
-
-      // @ Reap the signaled children (bounded ~2s), then ESCALATE: a child
-      //   still alive past the budget is SIGKILLed and reaped — a live
-      //   auxiliary is never silently forgotten while this master survives
-      $deadline = microtime(true) + 2.0;
-      foreach ($terminated as $PID) {
-         $reaped = 0;
-         while (microtime(true) < $deadline) {
-            $reaped = pcntl_waitpid($PID, $status, WNOHANG);
-            if ($reaped === $PID || $reaped === -1) {
-               break;
-            }
-            usleep(50000);
-         }
-
-         if ($reaped !== $PID && $this->alive($PID)) {
-            posix_kill($PID, SIGKILL);
-            pcntl_waitpid($PID, $status);
-         }
       }
 
       if ($preserveGate === false && is_resource($this->Gate)) {
@@ -1108,6 +1228,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       // @ Release only this server's lease; sibling responders stay active.
       Challenges::release($this->challengeOwner);
       $this->chartered = null;
+
+      return true;
    }
 
    /**
@@ -1150,20 +1272,26 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          }
       }
 
-      $this->bind();
-      if (is_resource($this->Gate) && $this->helper === 0) {
-         $this->guard();
+      if ($this->bind() === false) {
+         throw new RuntimeException('Auto-TLS helper ownership could not be established safely.');
+      }
+      if (
+         is_resource($this->Gate)
+         && $this->helper === 0
+         && $this->guard() === false
+      ) {
+         throw new RuntimeException('Auto-TLS helper ownership could not be established safely.');
       }
    }
 
    /**
     * Bind the validation gate, or consume a proven same-spool helper lease.
     */
-   private function bind (): void
+   private function bind (): bool
    {
       $AutoTLS = $this->AutoTLS;
       if ($AutoTLS === null || is_resource($this->Gate)) {
-         return;
+         return true;
       }
 
       // @ Bind the gate WITHOUT so_reuseport — deliberately exclusive: with
@@ -1196,22 +1324,22 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
          // @ The final daemon master already exists (TCP detach happens before
          //   booting()), so every mode can fork an owned helper here.
-         $this->guard();
-
-         return;
+         return $this->guard();
       }
 
       // ?: The port is genuinely held by someone. Only now may a same-spool
       //    lease explain WHO holds it — the claim is corroborated by the
       //    kernel refusing this bind, never accepted on its own word.
       if ($this->delegate($AutoTLS)) {
-         return;
+         return true;
       }
 
       $this->helperReady = false;
       $this->Logger->log(
          error: "@\\;Auto-TLS: could not prove or bind an HTTP-01 responder on port {$AutoTLS->port} ({$error_message}); renewal is paused until a same-spool helper or the port becomes available.@\\;"
       );
+
+      return true;
    }
 
    /**
@@ -1321,16 +1449,22 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
     * Fork the port-80 helper child on the already-bound gate. Never joins
     * `Process->Children` — `recover()` must not refork it as a TLS worker.
     */
-   private function guard (): void
+   private function guard (bool $replace = false): bool
    {
       if (is_resource($this->Gate) === false) {
-         return;
+         return true;
       }
+
+      $replacing = $replace
+         && $this->helperInherited
+         && $this->helper > 1;
+      $previous = $replacing ? $this->helper : 0;
+      $previousStarted = $replacing ? $this->helperStarted : '';
 
       $Pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
       if ($Pair === false) {
          $this->Logger->log(error: '@\\;Auto-TLS: could not create the helper readiness channel.@\\;');
-         return;
+         return true;
       }
 
       $master = posix_getpid();
@@ -1340,13 +1474,16 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          fclose($Pair[0]);
          fclose($Pair[1]);
          $this->Logger->log(error: '@\\;Auto-TLS: failed to fork the HTTP-01 helper.@\\;');
-         return;
+         return true;
       }
 
       // ?: Master
       if ($PID > 0) {
-         $this->helper = $PID;
-         $this->helperReady = false;
+         if ($replacing === false) {
+            $this->helper = $PID;
+            $this->helperReady = false;
+            $this->helperStarted = '';
+         }
          fclose($Pair[1]);
 
          stream_set_blocking($Pair[0], false);
@@ -1370,18 +1507,80 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             $ready .= $chunk;
          }
          fclose($Pair[0]);
-         if ($ready === 'ready') {
+         $started = $this->identify($PID);
+         if (
+            $ready === 'ready'
+            && $started !== null
+            && $this->verify($PID, $started)
+         ) {
+            // The candidate accepts fresh validations before the inherited
+            // helper stops accepting. SIGQUIT then drains sockets the old
+            // image had already accepted, avoiding a cutover reset.
+            if (
+               $replacing
+               && $this->terminate(
+                  $previous,
+                  graceful: true,
+                  started: $previousStarted
+               ) === false
+            ) {
+               $this->terminate($PID, started: $started);
+               $this->Logger->log(
+                  critical: '@\\;Auto-TLS: inherited HTTP-01 helper retirement could not be proved; stopping instead of losing process ownership.@\\;'
+               );
+               return false;
+            }
+
+            $this->helper = $PID;
             $this->helperReady = true;
-            return;
+            $this->helperInherited = false;
+            $this->helperStarted = $started;
+            return true;
          }
 
-         if ($this->alive($PID)) {
-            posix_kill($PID, SIGKILL);
+         if ($this->terminate($PID, started: $started ?? '') === false) {
+            $this->Logger->log(
+               critical: '@\\;Auto-TLS: failed helper candidate could not be stopped without losing process ownership.@\\;'
+            );
+            return false;
          }
-         pcntl_waitpid($PID, $status);
-         $this->helper = 0;
+         $status = 0;
+         $previousIdentity = $replacing ? $this->identify($previous) : null;
+         $previousState = $replacing
+            ? $this->await($previous, $status, 10_000_000)
+            : -1;
+         if (
+            $replacing
+            && $previousState === 0
+            && ($previousIdentity === null || $previousIdentity === $previousStarted)
+         ) {
+            // Candidate failure is fail-safe: retain the proven responder and
+            // let the watchdog retry replacement with the next fresh child.
+            $this->helper = $previous;
+            $this->helperReady = true;
+            $this->helperInherited = true;
+            $this->helperStarted = $previousStarted;
+         }
+         else {
+            if (
+               $replacing
+               && (
+                  ($previousState === 0 && $previousIdentity !== $previousStarted)
+                  || ($previousState === -1 && posix_kill($previous, 0))
+               )
+            ) {
+               $this->Logger->log(
+                  critical: '@\\;Auto-TLS: inherited HTTP-01 helper identity changed unexpectedly.@\\;'
+               );
+               return false;
+            }
+            $this->helper = 0;
+            $this->helperReady = false;
+            $this->helperInherited = false;
+            $this->helperStarted = '';
+         }
          $this->Logger->log(error: '@\\;Auto-TLS: HTTP-01 helper did not acknowledge readiness.@\\;');
-         return;
+         return true;
       }
 
       // # Helper child
@@ -1392,7 +1591,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    /**
     * Helper child body: a minimal blocking HTTP/1.0 responder on the gate —
     * ACME tokens answered from the shared dir, everything else redirected
-   * to HTTPS (308). Runs demoted; exits with the default signal behavior.
+    * to HTTPS (308). Runs demoted; SIGQUIT stops new accepts and drains the
+    * bounded set of validation sockets already owned by this helper.
     *
     * @param resource $Ready
     */
@@ -1415,6 +1615,11 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       ] as $signal) {
          pcntl_signal($signal, SIG_DFL);
       }
+      pcntl_sigprocmask(SIG_SETMASK, []);
+      $draining = false;
+      pcntl_signal(SIGQUIT, static function () use (&$draining): void {
+         $draining = true;
+      });
 
       // The helper owns only the HTTP-01 gate. On a re-exec boot it also
       // inherits the transferred HTTPS listener pool; retaining those copies
@@ -1442,13 +1647,24 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
       /** @var array<int,array{socket:resource,head:string,response:string,offset:int,deadline:float}> $clients */
       $clients = [];
+      $accepting = true;
       while (true) {
+         pcntl_signal_dispatch();
+
          // ? Orphaned (master killed without stop()) — leave with it
          if (posix_getppid() !== $master) {
             exit(0);
          }
 
-         $read = [$Gate];
+         if ($draining && $accepting) {
+            fclose($Gate);
+            $accepting = false;
+         }
+         if ($draining && $clients === []) {
+            exit(0);
+         }
+
+         $read = $accepting ? [$Gate] : [];
          $write = [];
          foreach ($clients as $client) {
             if ($client['response'] === '') {
@@ -1464,7 +1680,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          // @ Accept every queued connection without blocking. A fixed cap
          //   bounds descriptors/memory under a validation-port flood.
          foreach ($read as $index => $Readable) {
-            if ($Readable !== $Gate) {
+            if ($accepting === false || $Readable !== $Gate) {
                continue;
             }
             unset($read[$index]);
@@ -1636,21 +1852,46 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          // @ (Re)fork the helper — covers a dead helper, a failed first
          //   fork and the deferred Daemon-mode start (the gate fd is still
          //   open in the master, so the fresh child inherits it)
-         if ($this->validator > 0) {
-            if ($this->delegate($AutoTLS) === false) {
-               $this->bind();
+         $replacementAttempted = false;
+         if ($this->helperInherited && is_resource($this->Gate)) {
+            $replacementAttempted = true;
+            if ($this->guard(replace: true) === false) {
+               $this->Logger->log(
+                  critical: '@\\;Auto-TLS: inherited helper ownership became ambiguous; stopping safely.@\\;'
+               );
+               $this->stop();
+               return;
+            }
+         }
+         else if ($this->validator > 0) {
+            if ($this->delegate($AutoTLS) === false && $this->bind() === false) {
+               $this->stop();
+               return;
             }
          }
          else if ($this->helper > 0 && $this->alive($this->helper) === false) {
-            pcntl_waitpid($this->helper, $status, WNOHANG);
-            $this->helper = 0;
-            $this->helperReady = false;
+            if ($this->reap($this->helper)) {
+               $this->helper = 0;
+               $this->helperReady = false;
+               $this->helperInherited = false;
+               $this->helperStarted = '';
+            }
          }
-         if ($this->helper === 0 && is_resource($this->Gate)) {
-            $this->guard();
+         if (
+            $replacementAttempted === false
+            && $this->helper === 0
+            && is_resource($this->Gate)
+         ) {
+            if ($this->guard() === false) {
+               $this->stop();
+               return;
+            }
          }
          else if (is_resource($this->Gate) === false && $this->validator === 0) {
-            $this->bind();
+            if ($this->bind() === false) {
+               $this->stop();
+               return;
+            }
          }
 
          // Refresh the exported local helper PID/readiness after watchdog
@@ -1725,6 +1966,102 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       return preg_match('/^State:\s+Z/m', $status) !== 1
          && preg_match('/^PPid:\t(\d+)$/m', $status, $matches) === 1
          && (int) $matches[1] === posix_getpid();
+   }
+
+   /** Read one child process generation from Linux /proc (stat field 22). */
+   private function identify (int $PID): null|string
+   {
+      if ($PID < 2) {
+         return null;
+      }
+      $stat = @file_get_contents("/proc/{$PID}/stat");
+      $separator = is_string($stat) ? strrpos($stat, ') ') : false;
+      if ($separator === false) {
+         return null;
+      }
+
+      // Fields after comm begin at #3 (state); starttime #22 is index 19.
+      $fields = preg_split('/\s+/', trim(substr($stat, $separator + 2)));
+      $started = is_array($fields) ? ($fields[19] ?? null) : null;
+
+      return is_string($started) && preg_match('/^[1-9][0-9]*$/D', $started) === 1
+         ? $started
+         : null;
+   }
+
+   /** Verify one live direct child and, when supplied, its process generation. */
+   private function verify (int $PID, string $started = ''): bool
+   {
+      return $this->alive($PID)
+         && ($started === '' || $this->identify($PID) === $started);
+   }
+
+   /**
+    * Stop and reap one exact auxiliary child. A graceful helper retirement
+    * first drains accepted validation sockets. Once authenticated, the exact
+    * child remains unreaped throughout this routine, so its PID cannot recycle
+    * between escalation signals.
+    */
+   private function terminate (int $PID, bool $graceful = false, string $started = ''): bool
+   {
+      if ($PID < 2) {
+         return true;
+      }
+      $status = 0;
+      $observed = $started !== '' ? $this->identify($PID) : null;
+      $reaped = pcntl_waitpid($PID, $status, WNOHANG);
+      if ($reaped === $PID) {
+         return true;
+      }
+      if ($reaped === -1) {
+         return posix_kill($PID, 0) === false;
+      }
+      // waitpid()==0 proves this is still our unreaped child. A transient
+      // /proc read failure is therefore not a reason to lose ownership; a
+      // contradictory non-null generation remains a hard fail-closed signal.
+      if ($observed !== null && $observed !== $started) {
+         return false;
+      }
+
+      if (posix_kill($PID, $graceful ? SIGQUIT : SIGTERM) === false) {
+         $reaped = pcntl_waitpid($PID, $status, WNOHANG);
+         return $reaped === $PID
+            || ($reaped === -1 && posix_kill($PID, 0) === false);
+      }
+
+      $reaped = $this->await(
+         $PID,
+         $status,
+         $graceful ? 9_000_000_000 : 2_000_000_000
+      );
+      if ($reaped === $PID) {
+         return true;
+      }
+      if ($reaped === -1) {
+         return posix_kill($PID, 0) === false;
+      }
+
+      posix_kill($PID, SIGTERM);
+      $reaped = $this->await($PID, $status, 500_000_000);
+      if ($reaped === $PID) {
+         return true;
+      }
+      if ($reaped === -1) {
+         return posix_kill($PID, 0) === false;
+      }
+
+      if (posix_kill($PID, SIGKILL) === false) {
+         $reaped = pcntl_waitpid($PID, $status, WNOHANG);
+         return $reaped === $PID
+            || ($reaped === -1 && posix_kill($PID, 0) === false);
+      }
+
+      // SIGKILL cannot be handled. Once delivered to this unreaped child, a
+      // blocking exact wait is safe and preserves the no-zombie contract.
+      $reaped = pcntl_waitpid($PID, $status);
+
+      return $reaped === $PID
+         || ($reaped === -1 && posix_kill($PID, 0) === false);
    }
 
    /**
