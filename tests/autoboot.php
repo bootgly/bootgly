@@ -197,5 +197,8 @@ return new Suites(
       // # API/Environment — the running build identity (version + commit)
       //   (appended last to keep every suite index above stable)
       'Bootgly/API/Environment/',
+      // # commands — the installer's child-process nesting
+      //   (appended last to keep every suite index above stable)
+      'Bootgly/commands/',
    ]
 );

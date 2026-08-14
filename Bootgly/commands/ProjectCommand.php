@@ -38,6 +38,8 @@ use function basename;
 use function count;
 use function escapeshellarg;
 use function explode;
+use function fclose;
+use function fgets;
 use function file_get_contents;
 use function getmypid;
 use function glob;
@@ -50,17 +52,19 @@ use function is_file;
 use function is_int;
 use function is_link;
 use function is_numeric;
+use function is_resource;
 use function is_string;
 use function json_encode;
 use function max;
 use function microtime;
 use function min;
-use function passthru;
 use function posix_get_last_error;
 use function posix_getuid;
 use function posix_kill;
 use function posix_strerror;
 use function preg_match;
+use function proc_close;
+use function proc_open;
 use function putenv;
 use function realpath;
 use function rmdir;
@@ -70,6 +74,7 @@ use function shell_exec;
 use function str_contains;
 use function str_pad;
 use function str_repeat;
+use function str_replace;
 use function str_starts_with;
 use function strlen;
 use function strtolower;
@@ -581,7 +586,10 @@ class ProjectCommand extends Command
       $this->erase($tmp);
 
       $Output->render("@#green:Fetching@; @#cyan:{$url}@;@.;");
-      passthru('git clone --depth 1 ' . escapeshellarg($url) . ' ' . escapeshellarg($tmp), $status);
+      $repository = escapeshellarg($url);
+      $target = escapeshellarg($tmp);
+
+      $status = $this->execute("git clone --depth 1 {$repository} {$target}");
       // ?
       if ($status !== 0 || is_dir($tmp) === false) {
          $Alert = new Alert($Output);
@@ -2198,10 +2206,9 @@ class ProjectCommand extends Command
 
             $Output->render("@.;@#green:Initializing platform submodules:@; @#cyan:{$modules}@;@.;");
 
-            passthru(
-               'git -C ' . escapeshellarg(BOOTGLY_WORKING_DIR) . " submodule update --init {$modules}",
-               $status
-            );
+            $working = escapeshellarg(BOOTGLY_WORKING_DIR);
+
+            $status = $this->execute("git -C {$working} submodule update --init {$modules}");
 
             // ?
             if ($status !== 0) {
@@ -2227,6 +2234,47 @@ class ProjectCommand extends Command
 
       // :
       return true;
+   }
+
+   /**
+    * Runs a system command with its output nested in the current Output.
+    *
+    * A child process inherits the terminal and writes straight to it, escaping
+    * the Wizard's nested region: its lines land without the guide column and
+    * break the frame open. Piping the stream back and writing it line by line
+    * keeps every row inside the region — the guide re-enters on each break and
+    * the content area grows to fit, exactly like any other nested component.
+    *
+    * @param string $command The command line to run.
+    *
+    * @return int The command exit status (non-zero on failure).
+    */
+   private function execute (string $command): int
+   {
+      // ! Resolved at call time — inside a Wizard step this is the nested Region
+      $Output = CLI->Terminal->Output;
+
+      // ! One stream: git reports cloning and checkout notes on stderr, and
+      //   both belong to the same visual flow. Piping also drops the progress
+      //   bars by itself — git only paints them onto a terminal
+      $Pipes = [];
+      $Process = proc_open("{$command} 2>&1", [1 => ['pipe', 'w']], $Pipes);
+
+      // ?
+      if (is_resource($Process) === false) {
+         return 1;
+      }
+
+      // @@ Line by line, as it arrives — carriage returns would drag the
+      //   cursor out of the region column, so they never reach the Output
+      while (($line = fgets($Pipes[1])) !== false) {
+         $Output->write(str_replace("\r", '', rtrim($line, "\n")) . PHP_EOL);
+      }
+
+      fclose($Pipes[1]);
+
+      // :
+      return proc_close($Process);
    }
 
    /**
