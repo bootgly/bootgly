@@ -10,7 +10,6 @@
 
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 
-
 use function explode;
 use function implode;
 use function is_array;
@@ -47,7 +46,6 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Events as RequestEvents;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Exchange;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Telemetry\Admissions;
-
 
 class Encoder_ extends Encoders
 {
@@ -110,7 +108,6 @@ class Encoder_ extends Encoders
       'server' => true,
       'transfer-encoding' => true,
    ];
-
 
    /**
     * Capture every response surface that affects serialization.
@@ -317,41 +314,6 @@ class Encoder_ extends Encoders
       }
 
       return Cache::fetch(Cache::compose($Request, Language::$roots !== []));
-   }
-
-   /**
-    * Resolve a lifecycle promoted by a Response clone, defer or SSE resource.
-    *
-    * Callers gate this helper on escape-only response state, keeping both the
-    * method frame and registry lookups out of the plain synchronous path.
-    *
-    * `$Injected` is the response the encoder handed to the onion, captured
-    * BEFORE a handler-returned replacement could be assigned. It cannot be read
-    * back from `Server::$Response`: the local is an alias of that static, so
-    * assigning the replacement also overwrote it. The escaping response is the
-    * injected one, and only its weak snapshot still names the exchange —
-    * `Exchange::finish()` drops the Request aliases but deliberately keeps the
-    * snapshot alive for exactly this kind of late lookup.
-    */
-   private static function resolve (
-      Response $Response,
-      Response $Injected,
-      Request $Request,
-   ): null|Exchange
-   {
-      $Exchange = Exchange::fetch($Response);
-      if ($Exchange !== null) {
-         return $Exchange;
-      }
-
-      if ($Injected !== $Response) {
-         $Exchange = Exchange::fetch($Injected);
-         if ($Exchange !== null) {
-            return $Exchange;
-         }
-      }
-
-      return Exchange::fetch($Request);
    }
 
    /**

@@ -10,7 +10,6 @@
 
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 
-
 use function implode;
 use function is_array;
 use function stripos;
@@ -41,7 +40,6 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Exchange;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Telemetry\Admissions;
-
 
 class Encoder_Testing extends Encoders
 {
@@ -79,34 +77,6 @@ class Encoder_Testing extends Encoders
       }
 
       return Cache::fetch(Cache::compose($Request, Language::$roots !== []));
-   }
-
-   /**
-    * Resolve a lifecycle promoted by a Response clone, defer or SSE resource.
-    *
-    * `$Injected` mirrors production: the response handed to the onion, captured
-    * before a handler-returned replacement could overwrite the static through
-    * the encoder's alias.
-    */
-   private static function resolve (
-      Response $Response,
-      Response $Injected,
-      Request $Request,
-   ): null|Exchange
-   {
-      $Exchange = Exchange::fetch($Response);
-      if ($Exchange !== null) {
-         return $Exchange;
-      }
-
-      if ($Injected !== $Response) {
-         $Exchange = Exchange::fetch($Injected);
-         if ($Exchange !== null) {
-            return $Exchange;
-         }
-      }
-
-      return Exchange::fetch($Request);
    }
 
    /**
