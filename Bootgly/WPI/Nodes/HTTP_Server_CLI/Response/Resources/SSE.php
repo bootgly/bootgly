@@ -118,8 +118,22 @@ class SSE extends Resource implements Disconnecting
     * Bind the per-request transport context (called by the Response when
     * the resource mounts).
     */
-   public function bind (null|Packages $Package, null|Request $Request): static
+   public function bind (
+      null|Packages $Package,
+      null|Request $Request,
+      null|Response $Owner = null,
+   ): static
    {
+      // ! Follow the response this resource now belongs to. `Resources::fork()`
+      //   drops definition-backed names so they are rebuilt against the forked
+      //   Response, but CARRIES user-mounted instances, which would otherwise
+      //   keep pointing at the response that mounted them — while `defer()`
+      //   opens the scheduler generation on the clone. Without this the two
+      //   mount styles behave differently for identical user code.
+      if ($Owner !== null) {
+         $this->Response = $Owner;
+      }
+
       // ! Transport
       $this->Connection = $Package?->Connection;
       // ! Prefer the owning Response snapshot. Active Request aliases are
@@ -178,6 +192,16 @@ class SSE extends Resource implements Disconnecting
       if ($Response === null || $Connection === null) {
          return $this;
       }
+      // ! A carried resource binds during __clone(), which runs BEFORE defer()
+      //   opens the generation on that clone — so a null snapshot means "not
+      //   known yet", never "none". Fill it once from the response this
+      //   resource belongs to.
+      //   Deliberately `??=`, never a refresh: a settled generation unpublishes
+      //   its owner aliases, so re-reading an existing snapshot would yield
+      //   null and turn the terminal check below into a no-op, letting a stale
+      //   clone emit a late head onto a reused transport.
+      $this->Cancellation ??= Cancellation::fetch($Response);
+
       // ! A stale Response clone or a cancelled deferred generation cannot
       //   emit a late head onto a reused keep-alive transport.
       if ($this->Exchange?->check() || $this->Cancellation?->check()) {

@@ -648,5 +648,9 @@ return new Suite(
       // `&Server::$Response` alias, so the gate's `Server::$Response`
       // operand aliases the replacement and can never fire.
       '101.25-escape_replacement_response_split',
+      // A carried resource keeps pointing at the response that mounted it,
+      // while defer() opens the generation on the clone — so an SSE mounted
+      // under a non-default name silently refuses to open.
+      '101.26-sse_mounted_resource_generation',
    ],
 );

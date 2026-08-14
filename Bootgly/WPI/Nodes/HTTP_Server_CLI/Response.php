@@ -587,7 +587,10 @@ class Response extends Server\Response
          // @ Mounting SSE is the first possible out-of-band escape. Promote
          //   lazily here so ordinary responses never pay lifecycle setup.
          $this->promote();
-         $Resource->bind($this->Package, $this->Request);
+         // ! Pass the owner: a carried instance must follow the response it is
+         //   being attached to, or it keeps observing the generation of the one
+         //   that mounted it.
+         $Resource->bind($this->Package, $this->Request, $this);
       }
 
       if ($Resource instanceof Scheduling) {
