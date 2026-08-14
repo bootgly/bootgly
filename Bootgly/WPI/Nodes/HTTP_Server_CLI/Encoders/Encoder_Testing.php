@@ -11,18 +11,22 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 
 
+use function implode;
 use function is_array;
-use function strlen;
 use function stripos;
+use function strlen;
 use function strncmp;
+use function strtok;
 use Generator;
 use Throwable;
 
 use Bootgly\ABI\Data\Language;
+use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\API\Workables\Server\Middlewares;
 use Bootgly\WPI\Endpoints\Servers\Packages;
+use Bootgly\WPI\Events\Cancellation;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCPPackages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\ACME_Client\Challenges;
@@ -33,8 +37,10 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Challenge;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Check;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Events as RequestEvents;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Exchange;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Telemetry\Admissions;
 
 
 class Encoder_Testing extends Encoders
@@ -76,6 +82,34 @@ class Encoder_Testing extends Encoders
    }
 
    /**
+    * Resolve a lifecycle promoted by a Response clone, defer or SSE resource.
+    *
+    * `$Injected` mirrors production: the response handed to the onion, captured
+    * before a handler-returned replacement could overwrite the static through
+    * the encoder's alias.
+    */
+   private static function resolve (
+      Response $Response,
+      Response $Injected,
+      Request $Request,
+   ): null|Exchange
+   {
+      $Exchange = Exchange::fetch($Response);
+      if ($Exchange !== null) {
+         return $Exchange;
+      }
+
+      if ($Injected !== $Response) {
+         $Exchange = Exchange::fetch($Injected);
+         if ($Exchange !== null) {
+            return $Exchange;
+         }
+      }
+
+      return Exchange::fetch($Request);
+   }
+
+   /**
     * @param int<0,max>|null $length
     * @param-out int<0,max>|null $length
     */
@@ -84,6 +118,9 @@ class Encoder_Testing extends Encoders
       /** @var TCPPackages $Packages */
       $Request = Server::$Request;
       $Response = &Server::$Response;
+      // ! Mirror production: hold the injected response by value, since the
+      //   alias above is overwritten by a handler-returned replacement.
+      $Injected = $Response;
       static $guarded = false;
 
       // @ Skip handler consumption while waiting for request body (chunked)
@@ -100,19 +137,41 @@ class Encoder_Testing extends Encoders
             : Language::$source;
       }
 
-      // @ Events — request fully decoded (guarded: zero-alloc when no listeners)
+      // @ Public event — request fully decoded (no Emission when unobserved)
       $Emitter = Emitter::$Instance;
       $receiving = $Emitter->check(RequestEvents::Received);
+      if ($Response->deferred || $Response->cacheable === false) {
+         Exchange::release($Request);
+      }
+      $Exchange = null;
       if ($receiving) {
+         $Exchange = Admissions::open($Emitter, $Request);
+         if ($Exchange === null) {
+            $Exchange = new Exchange;
+            Exchange::admit($Request, $Exchange);
+         }
+         Exchange::bind($Response, $Packages, $Request, $Exchange);
+         try {
+            $Response->guard();
+         }
+         finally {
+            Exchange::capture($Response);
+         }
+
          // ! Mirror production: protect the pre-reset singleton and invalidate
          //   older wire before Received can persist current-request output.
-         $Response->guard();
          if ($guarded === false) {
             Cache::flush();
             $guarded = true;
          }
 
-         $Emitter->emit(RequestEvents::Received, $Request);
+         try {
+            $Emitter->emit(RequestEvents::Received, $Request);
+         }
+         catch (Throwable $Throwable) {
+            $Exchange->finish(null);
+            throw $Throwable;
+         }
       }
 
       // @ Instance new Router (per-test: each test defines different routes)
@@ -125,13 +184,25 @@ class Encoder_Testing extends Encoders
       $testIndex = SAPI::$testIndexHeader;
       SAPI::$testIndexHeader = null;
       // @ Reset SAPI
-      SAPI::boot(reset: true, base: Server::class, key: 'response', testIndex: $testIndex);
+      try {
+         SAPI::boot(reset: true, base: Server::class, key: 'response', testIndex: $testIndex);
+      }
+      catch (Throwable $Throwable) {
+         $Exchange?->finish(null);
+         throw $Throwable;
+      }
 
       // @ Get callbacks
       $Router   = Server::$Router;
 
       // ! Reset Response state and bind per-request context.
-      $Response->reset($Packages, $Request);
+      try {
+         $Response->reset($Packages, $Request);
+      }
+      catch (Throwable $Throwable) {
+         $Exchange?->finish(null);
+         throw $Throwable;
+      }
       $cacheWire = null;
       $CachedResponse = null;
       // ! Admission snapshot — production tells replay from post-$Next
@@ -281,14 +352,70 @@ class Encoder_Testing extends Encoders
       //   Equivalent because the `try` holds no function-level `return` (they
       //   live inside the admission closure) and the `catch` is total.
 
+      if (
+         $Exchange === null
+         && (
+            $Response->deferred
+            || $Response->cacheable === false
+            || $Injected->cacheable === false
+         )
+      ) {
+         $Exchange = self::resolve($Response, $Injected, $Request);
+      }
+
       // @ Persist the session before the response leaves the server —
       //   mirrors Encoder_ (deterministic save; __destruct is GC-bound).
       if ($Request->sessioned) {
-         $Request->Session?->save();
+         try {
+            $Request->Session?->save();
+         }
+         catch (Throwable $Throwable) {
+            if ($Exchange?->check()) {
+               Throwables::notify($Throwable, [
+                  'interface' => 'WPI',
+                  'phase' => 'Session',
+                  'method' => $Request->method,
+                  'URI' => strtok($Request->URI, '?'),
+                  'peer' => $Request->peer,
+               ]);
+               if ($Request->hasFiles) {
+                  $Request->clean();
+               }
+               $Request->scrub();
+
+               return '';
+            }
+            $Exchange?->finish(null);
+            throw $Throwable;
+         }
       }
 
-      // ?: Check if Response is deferred (async Fiber)
-      if ($Response->deferred) {
+      // ?: Routing may have emitted through a cloned Response or SSE resource.
+      if ($Exchange?->check()) {
+         if ($Request->hasFiles) {
+            $Request->clean();
+         }
+         $Request->scrub();
+
+         return '';
+      }
+
+      // ?: Mirror production selection across the active Response and sibling
+      //   clone generation carried by the stable Exchange token.
+      $Cancellation = $Exchange === null ? null : Cancellation::fetch($Exchange);
+      if ($Response->deferred && $Cancellation === null) {
+         $Exchange?->finish(null);
+      }
+      if (
+         $Response->deferred
+         || ($Exchange?->check() ?? false)
+         || $Cancellation !== null
+      ) {
+         if ($Request->hasFiles) {
+            $Request->clean();
+         }
+         $Request->scrub();
+
          return '';
       }
 
@@ -332,11 +459,71 @@ class Encoder_Testing extends Encoders
          // ! Guard before user event code can clone/defer this Response.
          $Response->guard();
          $before = Encoder_::capture($Response);
-         $Emitter->emit(RequestEvents::Handled, $Request, $Response);
+         try {
+            $Emitter->emit(RequestEvents::Handled, $Request, $Response);
+         }
+         catch (Throwable $Throwable) {
+            if (
+               $Exchange === null
+               && (
+                  $Response->deferred
+                  || $Response->cacheable === false
+                  || $Injected->cacheable === false
+               )
+            ) {
+               $Exchange = self::resolve($Response, $Injected, $Request);
+            }
+            $Cancellation = $Exchange === null ? null : Cancellation::fetch($Exchange);
+            if (
+               $Response->deferred
+               || ($Exchange?->check() ?? false)
+               || $Cancellation !== null
+            ) {
+               Throwables::notify($Throwable, [
+                  'interface' => 'WPI',
+                  'phase' => 'Handled',
+                  'method' => $Request->method,
+                  'URI' => strtok($Request->URI, '?'),
+                  'peer' => $Request->peer,
+               ]);
+            }
+            else {
+               $Exchange?->finish(null);
+               throw $Throwable;
+            }
+         }
 
          if ($before !== Encoder_::capture($Response)) {
             $mutated = true;
          }
+      }
+
+      // ?: Handled can hand output to async work or emit it immediately.
+      if (
+         $Exchange === null
+         && (
+            $Response->deferred
+            || $Response->cacheable === false
+            || $Injected->cacheable === false
+         )
+      ) {
+         $Exchange = self::resolve($Response, $Injected, $Request);
+      }
+      $Cancellation = $Exchange === null ? null : Cancellation::fetch($Exchange);
+      if ($Response->deferred && $Cancellation === null) {
+         $Exchange?->finish(null);
+      }
+      if (
+         $Response->deferred
+         || ($Exchange?->check() ?? false)
+         || $Cancellation !== null
+      ) {
+         if ($Request->hasFiles) {
+            $Request->clean();
+         }
+         $Request->scrub();
+
+         return '';
       }
 
       // ?: A post-middleware/event denial or replacement wins over replay.
@@ -351,28 +538,43 @@ class Encoder_Testing extends Encoders
          // ?: Nothing touched the admitted response after $Next.
          if ($admitted === Encoder_::capture($Response)) {
             $length = strlen($cacheWire);
+            $Exchange?->finish($Response);
             return $cacheWire;
          }
 
          // @ Mutated after $Next — restore underneath the mutation unless the
          //   admission path already did.
-         if ($adopted === false) {
-            Encoder_::adopt($Response, $cacheWire);
+         try {
+            if ($adopted === false) {
+               Encoder_::adopt($Response, $cacheWire);
+            }
+         }
+         catch (Throwable $Throwable) {
+            $Exchange?->finish(null);
+            throw $Throwable;
          }
       }
 
-      // @ Encode HTTP Response
-      $buffer = $Response->encode($Packages, $length);
+      try {
+         // @ Encode HTTP Response
+         $buffer = $Response->encode($Packages, $length);
 
-      // ? Route response cache opt-in — only unmediated handler wire is shared.
-      if ($Response->cache !== 0) {
-         if ($mediated === false && $mutated === false) {
-            $Response->stash($buffer);
-         }
-         else {
-            $Response->cache = 0;
+         // ? Route response cache opt-in — only unmediated handler wire is shared.
+         if ($Response->cache !== 0) {
+            if ($mediated === false && $mutated === false) {
+               $Response->stash($buffer);
+            }
+            else {
+               $Response->cache = 0;
+            }
          }
       }
+      catch (Throwable $Throwable) {
+         $Exchange?->finish(null);
+         throw $Throwable;
+      }
+
+      $Exchange?->finish($Response);
 
       // :
       return $buffer;

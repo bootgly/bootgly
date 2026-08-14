@@ -27,7 +27,9 @@ use function strtolower;
 use function substr;
 use function time;
 
+use Bootgly\WPI\Endpoints\Servers\Ownership;
 use Bootgly\WPI\Endpoints\Servers\Packages;
+use Bootgly\WPI\Events\Cancellation;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Modules\HTTP2;
 use Bootgly\WPI\Modules\HTTP2\Errors;
@@ -75,7 +77,8 @@ final class Encoder_HTTP2
       Request $Request,
       array $files,
       Packages $Package,
-      null|int &$length
+      null|int &$length,
+      null|Cancellation $Cancellation = null,
    ): string
    {
       // !
@@ -231,6 +234,14 @@ final class Encoder_HTTP2
             $length = strlen($raw);
             return $raw;
          }
+      }
+
+      // @ Fully responded — normal stream release must not masquerade as
+      //   transport cancellation. Keep the generation active until the caller
+      //   completes cache preparation and commits its selected Response;
+      //   failure/reset branches above deliberately retain teardown ownership.
+      if ($Cancellation !== null) {
+         Ownership::detach($Stream, $Cancellation);
       }
 
       // @ Fully responded — release the stream

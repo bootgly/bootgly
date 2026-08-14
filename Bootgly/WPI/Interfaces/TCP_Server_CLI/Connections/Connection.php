@@ -22,6 +22,7 @@ use Throwable;
 
 use Bootgly\ACI\Events\Timer;
 use Bootgly\WPI\Endpoints\Servers\Disconnecting;
+use Bootgly\WPI\Endpoints\Servers\Ownership;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
@@ -264,15 +265,45 @@ class Connection extends Packages
       // ! A direct backpressured upload may retain its caller-supplied handler
       //   reference between EVENT_WRITE callbacks. Every transport-close path
       //   drops that cursor immediately instead of waiting for cycle collection.
-      $this->release();
+      try {
+         $this->release();
+      }
+      catch (Throwable) {
+         // Transport teardown must still reach the descriptor and CLOSED state.
+      }
 
       if ($this->status > Connections::STATUS_ESTABLISHED) {
          return true;
       }
 
+      // ! Commit the terminal transition before invoking any owner. A
+      //   re-entrant close becomes a no-op and a re-entrant/late attach is
+      //   notified immediately instead of entering the fresh owner storage.
+      $this->status = Connections::STATUS_CLOSING;
+
+      // ! Keep the accepted descriptor independently of extension callbacks;
+      //   public package state can be mutated during teardown, but the socket
+      //   selected for this terminal transition must still be closed.
+      $Socket = $this->Socket;
+
+      // ! Capture and clear protocol slots before ANY ownership callback.
+      //   Re-entrant close cannot rediscover either teardown target, while the
+      //   local references guarantee both original targets are still notified.
+      $Decoder = $this->Decoder;
+      $this->Decoder = null;
+      $Decoded = $this->decoded;
+      $this->decoded = null;
+
       if ($this->handshakeTimer > 0) {
-         Server::$Event->cancel($this->handshakeTimer);
+         $timer = $this->handshakeTimer;
          $this->handshakeTimer = 0;
+
+         try {
+            Server::$Event->cancel($timer);
+         }
+         catch (Throwable) {
+            // A scheduler failure cannot suppress transport teardown.
+         }
       }
 
       // ! Cancel per-connection timers on the first close transition. The
@@ -283,24 +314,49 @@ class Connection extends Packages
       //   firing. Safe re-entrancy: tick() checks the task status only after
       //   the callback returns, so a del from inside expire()->close() still
       //   suppresses the requeue.
-      foreach ($this->timers as $id) {
-         Timer::del($id);
-      }
+      $timers = $this->timers;
       $this->timers = [];
+      foreach ($timers as $id) {
+         try {
+            Timer::del($id);
+         }
+         catch (Throwable) {
+            // Continue closing even if a timer backend rejects cancellation.
+         }
+      }
+
+      // @ Protocol-independent pending work (for example, an HTTP deferred
+      //   exchange waiting on a database socket) must terminate even though it
+      //   is not the active connection decoder and will not be resumed by
+      //   removing this client socket from the selector.
+      try {
+         Ownership::close($this);
+      }
+      catch (Throwable) {
+         // Registry teardown is subordinate to closing the client descriptor.
+      }
 
       // @ Stateful decoder cleanup: an incomplete protocol body owns resources
       //   independently from the decoded request/session. Abort it first on
       //   every transport close path, including abrupt peer EOF.
-      $Decoder = $this->Decoder;
       if ($Decoder instanceof Disconnecting) {
-         $Decoder->disconnect();
-         $this->Decoder = null;
+         try {
+            $Decoder->disconnect();
+         }
+         catch (Throwable) {
+            // A protocol cleanup failure cannot strand the closing socket.
+         }
       }
 
       // @ Protocol-unit cleanup: a decoded session (e.g. a WebSocket Session)
       //   runs its teardown exactly once on any close path.
-      if ($this->decoded instanceof Disconnecting) {
-         $this->decoded->disconnect();
+      if ($Decoded instanceof Disconnecting) {
+         try {
+            $Decoded->disconnect();
+         }
+         catch (Throwable) {
+            // Continue to selector removal and fclose after extension failure.
+         }
       }
 
       // @ Receive-carry hygiene: a closing connection never revisits its
@@ -314,13 +370,8 @@ class Connection extends Packages
       //   not wait for it is request data: the decoded Request (its body), the
       //   L0 template and its key are released here, on every close path, so
       //   the cycle retains only an empty shell until collection.
-      $this->decoded = null;
       $this->Template = null;
       $this->known = '';
-
-      $this->status = Connections::STATUS_CLOSING;
-
-      $Socket = &$this->Socket;
 
       /*
       if ( isSet(Server::$context['ssl'] ) {
@@ -333,10 +384,20 @@ class Connection extends Packages
       }
       */
 
-      Server::$Event->del($Socket, Server::$Event::EVENT_READ);
-      Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
-
       $this->writeRegistered = false;
+
+      try {
+         Server::$Event->del($Socket, Server::$Event::EVENT_READ);
+      }
+      catch (Throwable) {
+         // The write lane and descriptor still require independent cleanup.
+      }
+      try {
+         Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
+      }
+      catch (Throwable) {
+         // Descriptor closure remains the authoritative teardown boundary.
+      }
 
       try {
          @fclose($Socket);

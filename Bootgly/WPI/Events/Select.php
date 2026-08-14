@@ -28,8 +28,9 @@ use Closure;
 use Fiber;
 use RuntimeException;
 use Throwable;
+use WeakReference;
 
-use Bootgly\ACI\Events\Contextualizing;
+use Bootgly\ACI\Events\Cancelling;
 use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Events\Scheduler;
@@ -37,7 +38,7 @@ use Bootgly\WPI\Connections;
 use Bootgly\WPI\Events;
 
 
-class Select implements Events, Loops, Scheduler, Contextualizing
+class Select implements Events, Loops, Scheduler, Cancelling
 {
    public Connections $Connections;
 
@@ -69,7 +70,7 @@ class Select implements Events, Loops, Scheduler, Contextualizing
    // Tick-based (resumed every iteration)
    /** @var array<int,Fiber<mixed,mixed,mixed,mixed>> */
    private array $Fibers = [];
-   /** @var array<int,array{Enter:Closure,Leave:Closure}> */
+   /** @var array<int,array{Enter:Closure,Leave:Closure,Token:null|Cancellation}> */
    private array $Bindings = [];
    // I/O-bound (resumed when stream_select signals readiness)
    /** @var array<int,array<int,Fiber<mixed,mixed,mixed,mixed>>> */
@@ -368,17 +369,38 @@ class Select implements Events, Loops, Scheduler, Contextualizing
 
          // @ Resume tick-based Fibers (no I/O association)
          if ($this->Fibers) {
-            foreach ($this->Fibers as $id => $Fiber) {
+            // ! Capture every queued generation before the first callback.
+            //   One Fiber may terminalize another later entry in this batch.
+            $Generations = $this->capture($this->Fibers);
+            foreach ($Generations as $id => $Generation) {
+               $Fiber = $Generation['Fiber'];
+               $Token = $Generation['Token'];
+
+               // ! The binding owns one exact pooled-Fiber generation. A
+               //   terminal generation must never execute or be requeued.
+               if ($Token?->check() === true) {
+                  $this->evict($Fiber, $Token);
+
+                  continue;
+               }
+
                if ($Fiber->isSuspended()) {
                   $value = $this->Bindings === []
                      ? $Fiber->resume()
                      : $this->advance($Fiber);
 
+                  // ? Resumed user code may have settled the captured token.
+                  if ($Token?->check() === true) { // @phpstan-ignore identical.alwaysFalse
+                     $this->evict($Fiber, $Token);
+
+                     continue;
+                  }
+
                   // ? Pooled Fiber parked itself (job finished) — drop it
                   //   from the tick queue, never resume it without a job
                   if ($value === self::DETACH) {
                      unset($this->Fibers[$id]);
-                     unset($this->Bindings[spl_object_id($Fiber)]);
+                     $this->evict($Fiber, $Token);
 
                      continue;
                   }
@@ -386,6 +408,12 @@ class Select implements Events, Loops, Scheduler, Contextualizing
                   // @ Convert to I/O-awaiting if Fiber suspended with readiness
                   if (!$Fiber->isTerminated()) {
                      $queued = $this->queue($Fiber, $value);
+                     // ? Selector signal callbacks may settle the token.
+                     if ($Token?->check() === true) { // @phpstan-ignore identical.alwaysFalse
+                        $this->evict($Fiber, $Token);
+
+                        continue;
+                     }
                      if ($queued === true) {
                         unset($this->Fibers[$id]);
 
@@ -402,6 +430,7 @@ class Select implements Events, Loops, Scheduler, Contextualizing
 
                if ($Fiber->isTerminated()) {
                   unset($this->Fibers[$id]);
+                  $this->evict($Fiber, $Token);
                }
             }
 
@@ -521,13 +550,29 @@ class Select implements Events, Loops, Scheduler, Contextualizing
 
                   unset($this->awaitingReads[$id]);
                   unset($this->awaitingReadDeadlines[$id]);
-                  unset($this->reads[$id]);
-
-                  foreach ($Fibers as $Fiber) {
-                     $this->resume($Fiber);
+                  if (
+                     isSet($this->reading[$id]) === false
+                     && isSet($this->connecting[$id]) === false
+                  ) {
+                     unset($this->reads[$id]);
                   }
 
-                  continue;
+                  foreach ($this->capture($Fibers) as $Generation) {
+                     $this->resume(
+                        $Generation['Fiber'],
+                        $Generation['Token'],
+                     );
+                  }
+
+                  // ? The same descriptor may also belong to a persistent
+                  //   listener/package. Resume waiters and dispatch that base
+                  //   owner during this already-observed readiness wakeup.
+                  if (
+                     isSet($this->reading[$id]) === false
+                     && isSet($this->connecting[$id]) === false
+                  ) {
+                     continue;
+                  }
                }
 
                // @ Select action
@@ -559,13 +604,20 @@ class Select implements Events, Loops, Scheduler, Contextualizing
 
                   unset($this->awaitingWrites[$id]);
                   unset($this->awaitingWriteDeadlines[$id]);
-                  unset($this->writes[$id]);
-
-                  foreach ($Fibers as $Fiber) {
-                     $this->resume($Fiber);
+                  if (isSet($this->writing[$id]) === false) {
+                     unset($this->writes[$id]);
                   }
 
-                  continue;
+                  foreach ($this->capture($Fibers) as $Generation) {
+                     $this->resume(
+                        $Generation['Fiber'],
+                        $Generation['Token'],
+                     );
+                  }
+
+                  if (isSet($this->writing[$id]) === false) {
+                     continue;
+                  }
                }
 
                // ! Same single-lookup, by-value shape as the read dispatch.
@@ -581,7 +633,7 @@ class Select implements Events, Loops, Scheduler, Contextualizing
          // if ($except) {}
       }
 
-   $this->finished = microtime(true);
+      $this->finished = microtime(true);
    }
 
    /**
@@ -602,14 +654,33 @@ class Select implements Events, Loops, Scheduler, Contextualizing
     */
    public function schedule (Fiber $Fiber, mixed $value = null, int $flag = self::SCHEDULE_READ): bool
    {
-      // ?
+      $FiberID = spl_object_id($Fiber);
+      $Binding = $this->Bindings[$FiberID] ?? null;
+      $Token = $Binding['Token'] ?? null;
+
+      if ($Token?->check() === true) {
+         $this->evict($Fiber, $Token);
+
+         return false;
+      }
+
       if ($Fiber->isTerminated() || $value === self::DETACH) {
-         unset($this->Bindings[spl_object_id($Fiber)]);
+         if ($Fiber->isTerminated()) {
+            $Token?->cancel();
+         }
+         $this->evict($Fiber, $Token);
+
          return false;
       }
 
       // @ I/O-bound: register socket in stream_select + map to Fiber
       $queued = $this->queue($Fiber, $value, $flag);
+      // ? Selector signal callbacks may settle the captured token.
+      if ($Token?->check() === true) { // @phpstan-ignore identical.alwaysFalse
+         $this->evict($Fiber, $Token);
+
+         return false;
+      }
       if ($queued === true) {
          return true;
       }
@@ -631,10 +702,141 @@ class Select implements Events, Loops, Scheduler, Contextualizing
     */
    public function bind (Fiber $Fiber, Closure $Enter, Closure $Leave): void
    {
-      $this->Bindings[spl_object_id($Fiber)] = [
+      $FiberID = spl_object_id($Fiber);
+      $Token = Cancellation::fetch($Fiber);
+      $this->Bindings[$FiberID] = [
          'Enter' => $Enter,
          'Leave' => $Leave,
+         'Token' => $Token,
       ];
+
+      if ($Token === null) {
+         return;
+      }
+
+      // ! Keep the token observer from retaining a pooled Fiber after every
+      //   external owner alias is gone. Identity is checked again by evict()
+      //   so a late old-generation observer cannot remove a reused Fiber.
+      $Reference = WeakReference::create($Fiber);
+      $Token->observe(function (
+         Cancellation $Observed,
+         bool $cancelled,
+      ) use ($Reference, $Token): void {
+         if ($Observed !== $Token) {
+            return;
+         }
+
+         $Fiber = $Reference->get();
+         if ($Fiber !== null) {
+            $this->evict($Fiber, $Token);
+         }
+      });
+   }
+
+   /**
+    * Evict one exact scheduled generation from every reactor queue.
+    *
+    * The token identity guard is essential for pooled Fibers: cancellation
+    * from an earlier generation must not remove the same Fiber after it has
+    * been rebound to a new response. Persistent socket owners are retained
+    * when their last transient Fiber waiter is removed.
+    *
+    * @param Fiber<mixed,mixed,mixed,mixed> $Fiber
+    */
+   private function evict (Fiber $Fiber, null|Cancellation $Token): bool
+   {
+      $FiberID = spl_object_id($Fiber);
+      $Binding = $this->Bindings[$FiberID] ?? null;
+      if ($Binding === null) {
+         if ($Token === null) {
+            return false;
+         }
+
+         // ? A selector-admission callback may settle this generation after
+         //   queue() begins but before it appends the waiter. Settlement
+         //   unpublishes the weak alias and its observer removes the binding;
+         //   the terminal captured token still owns that late queue entry.
+         //   Conversely, a different current alias proves that the pooled
+         //   Fiber has already been rebound and must remain untouched.
+         $Current = Cancellation::fetch($Fiber);
+         if (
+            ($Current !== null && $Current !== $Token)
+            || ($Current === null && $Token->check() === false)
+         ) {
+            return false;
+         }
+      }
+      else {
+         if ($Binding['Token'] !== $Token) {
+            return false;
+         }
+         unset($this->Bindings[$FiberID]);
+      }
+
+      foreach ($this->Fibers as $id => $Queued) {
+         if ($Queued === $Fiber) {
+            unset($this->Fibers[$id]);
+         }
+      }
+      foreach ($this->awaitingReads as $id => &$Fibers) {
+         foreach ($Fibers as $index => $Queued) {
+            if ($Queued === $Fiber) {
+               unset($Fibers[$index]);
+            }
+         }
+         if ($Fibers === []) {
+            unset($this->awaitingReads[$id]);
+            unset($this->awaitingReadDeadlines[$id]);
+            if (
+               isSet($this->reading[$id]) === false
+               && isSet($this->connecting[$id]) === false
+            ) {
+               unset($this->reads[$id]);
+            }
+         }
+      }
+      unset($Fibers);
+      foreach ($this->awaitingWrites as $id => &$Fibers) {
+         foreach ($Fibers as $index => $Queued) {
+            if ($Queued === $Fiber) {
+               unset($Fibers[$index]);
+            }
+         }
+         if ($Fibers === []) {
+            unset($this->awaitingWrites[$id]);
+            unset($this->awaitingWriteDeadlines[$id]);
+            if (isSet($this->writing[$id]) === false) {
+               unset($this->writes[$id]);
+            }
+         }
+      }
+      unset($Fibers);
+
+      return true;
+   }
+
+   /**
+    * Snapshot exact Fiber generations before dispatching one mutable batch.
+    *
+    * @param array<int,Fiber<mixed,mixed,mixed,mixed>> $Fibers
+    *
+    * @return array<int,array{
+    *    Fiber:Fiber<mixed,mixed,mixed,mixed>,
+    *    Token:null|Cancellation
+    * }>
+    */
+   private function capture (array $Fibers): array
+   {
+      $Generations = [];
+      foreach ($Fibers as $id => $Fiber) {
+         $Binding = $this->Bindings[spl_object_id($Fiber)] ?? null;
+         $Generations[$id] = [
+            'Fiber' => $Fiber,
+            'Token' => $Binding['Token'] ?? null,
+         ];
+      }
+
+      return $Generations;
    }
 
    /**
@@ -818,8 +1020,20 @@ class Select implements Events, Loops, Scheduler, Contextualizing
          );
       }
 
-      $this->expire($this->awaitingReads, $this->reads, $this->awaitingReadDeadlines, $now);
-      $this->expire($this->awaitingWrites, $this->writes, $this->awaitingWriteDeadlines, $now);
+      $this->expire(
+         $this->awaitingReads,
+         $this->reads,
+         $this->awaitingReadDeadlines,
+         $now,
+         self::SCHEDULE_READ,
+      );
+      $this->expire(
+         $this->awaitingWrites,
+         $this->writes,
+         $this->awaitingWriteDeadlines,
+         $now,
+         self::SCHEDULE_WRITE,
+      );
       $this->limit($this->awaitingReadDeadlines, $now, $wait);
       $this->limit($this->awaitingWriteDeadlines, $now, $wait);
 
@@ -833,8 +1047,13 @@ class Select implements Events, Loops, Scheduler, Contextualizing
     * @param array<int,resource> $sockets
     * @param array<int,float> $deadlines
     */
-   private function expire (array &$Fibers, array &$sockets, array &$deadlines, float $now): void
-   {
+   private function expire (
+      array &$Fibers,
+      array &$sockets,
+      array &$deadlines,
+      float $now,
+      int $flag,
+   ): void {
       foreach ($deadlines as $id => $deadline) {
          if ($deadline <= 0.0) {
             continue;
@@ -847,11 +1066,23 @@ class Select implements Events, Loops, Scheduler, Contextualizing
          $Queued = $Fibers[$id] ?? [];
 
          unset($Fibers[$id]);
-         unset($sockets[$id]);
          unset($deadlines[$id]);
+         if (
+            $flag === self::SCHEDULE_READ
+            ? (
+               isSet($this->reading[$id]) === false
+               && isSet($this->connecting[$id]) === false
+            )
+            : isSet($this->writing[$id]) === false
+         ) {
+            unset($sockets[$id]);
+         }
 
-         foreach ($Queued as $Fiber) {
-            $this->resume($Fiber);
+         foreach ($this->capture($Queued) as $Generation) {
+            $this->resume(
+               $Generation['Fiber'],
+               $Generation['Token'],
+            );
          }
       }
    }
@@ -870,6 +1101,14 @@ class Select implements Events, Loops, Scheduler, Contextualizing
       unset($deadlines[$id]);
 
       foreach ($Queued as $Fiber) {
+         $Binding = $this->Bindings[spl_object_id($Fiber)] ?? null;
+         $Token = $Binding['Token'] ?? null;
+         if ($Token?->check() === true) {
+            $this->evict($Fiber, $Token);
+
+            continue;
+         }
+
          if ($Fiber->isSuspended()) {
             $this->Fibers[] = $Fiber;
          }
@@ -909,8 +1148,25 @@ class Select implements Events, Loops, Scheduler, Contextualizing
     *
     * @param Fiber<mixed,mixed,mixed,mixed> $Fiber
     */
-   private function resume (Fiber $Fiber): void
+   private function resume (
+      Fiber $Fiber,
+      null|Cancellation $Expected = null,
+   ): void
    {
+      $FiberID = spl_object_id($Fiber);
+      $Binding = $this->Bindings[$FiberID] ?? null;
+      $Token = $Binding['Token'] ?? null;
+
+      if ($Expected !== null && $Token !== $Expected) {
+         $this->evict($Fiber, $Expected);
+
+         return;
+      }
+      if ($Token?->check() === true) {
+         $this->evict($Fiber, $Token);
+
+         return;
+      }
       if ($Fiber->isSuspended() === false) {
          return;
       }
@@ -919,17 +1175,32 @@ class Select implements Events, Loops, Scheduler, Contextualizing
          ? $Fiber->resume()
          : $this->advance($Fiber);
 
+      // ? Resumed user code may have settled the captured token.
+      if ($Token?->check() === true) { // @phpstan-ignore identical.alwaysFalse
+         $this->evict($Fiber, $Token);
+
+         return;
+      }
       if ($Fiber->isTerminated()) {
+         $this->evict($Fiber, $Token);
+
          return;
       }
 
       // ? Pooled Fiber parked itself (job finished) — drop, do not requeue
       if ($value === self::DETACH) {
-         unset($this->Bindings[spl_object_id($Fiber)]);
+         $this->evict($Fiber, $Token);
+
          return;
       }
 
       $queued = $this->queue($Fiber, $value);
+      // ? Selector signal callbacks may settle the captured token.
+      if ($Token?->check() === true) { // @phpstan-ignore identical.alwaysFalse
+         $this->evict($Fiber, $Token);
+
+         return;
+      }
       if ($queued === null) {
          $this->Fibers[] = $Fiber;
       }
@@ -953,8 +1224,18 @@ class Select implements Events, Loops, Scheduler, Contextualizing
     */
    private function reject (Fiber $Fiber): bool
    {
+      $FiberID = spl_object_id($Fiber);
+      $Binding = $this->Bindings[$FiberID] ?? null;
+      $Token = $Binding['Token'] ?? null;
+
+      if ($Token?->check() === true) {
+         $this->evict($Fiber, $Token);
+
+         return false;
+      }
       if ($Fiber->isSuspended() === false) {
-         unset($this->Bindings[spl_object_id($Fiber)]);
+         $Token?->cancel();
+         $this->evict($Fiber, $Token);
 
          return false;
       }
@@ -967,18 +1248,37 @@ class Select implements Events, Loops, Scheduler, Contextualizing
          $value = $this->advance($Fiber, $Error);
       }
       catch (Throwable) {
-         unset($this->Bindings[spl_object_id($Fiber)]);
+         $Token?->cancel();
+         $this->evict($Fiber, $Token);
 
          return false;
       }
 
-      if ($Fiber->isTerminated() || $value === self::DETACH) {
-         unset($this->Bindings[spl_object_id($Fiber)]);
+      // ? Rejected user code may have settled the captured token.
+      if ($Token?->check() === true) { // @phpstan-ignore identical.alwaysFalse
+         $this->evict($Fiber, $Token);
+
+         return false;
+      }
+      if ($Fiber->isTerminated()) {
+         $Token?->cancel();
+         $this->evict($Fiber, $Token);
+
+         return false;
+      }
+      if ($value === self::DETACH) {
+         $this->evict($Fiber, $Token);
 
          return false;
       }
 
       $queued = $this->queue($Fiber, $value);
+      // ? Selector signal callbacks may settle the captured token.
+      if ($Token?->check() === true) { // @phpstan-ignore identical.alwaysFalse
+         $this->evict($Fiber, $Token);
+
+         return false;
+      }
       if ($queued === true) {
          return true;
       }
@@ -988,7 +1288,8 @@ class Select implements Events, Loops, Scheduler, Contextualizing
          return true;
       }
 
-      unset($this->Bindings[spl_object_id($Fiber)]);
+      $Token?->cancel();
+      $this->evict($Fiber, $Token);
 
       return false;
    }
@@ -1002,6 +1303,13 @@ class Select implements Events, Loops, Scheduler, Contextualizing
    {
       $FiberID = spl_object_id($Fiber);
       $Binding = $this->Bindings[$FiberID] ?? null;
+      $Token = $Binding['Token'] ?? null;
+
+      if ($Token?->check() === true) {
+         $this->evict($Fiber, $Token);
+
+         return self::DETACH;
+      }
 
       if ($Binding === null) {
          return $Throwable === null
@@ -1012,6 +1320,11 @@ class Select implements Events, Loops, Scheduler, Contextualizing
       $failed = false;
       try {
          ($Binding['Enter'])();
+         // ? The context-enter callback may settle the captured token.
+         if ($Token?->check() === true) { // @phpstan-ignore identical.alwaysFalse
+            return self::DETACH;
+         }
+
          return $Throwable === null
             ? $Fiber->resume()
             : $Fiber->throw($Throwable);
@@ -1029,8 +1342,13 @@ class Select implements Events, Loops, Scheduler, Contextualizing
             throw $Throwable;
          }
          finally {
-            if ($failed || $Fiber->isTerminated()) {
-               unset($this->Bindings[$FiberID]);
+            if ($failed) {
+               $Token?->cancel();
+               $this->evict($Fiber, $Token);
+            }
+            // ? Executed user code may have settled the captured token.
+            else if ($Token?->check() === true) { // @phpstan-ignore identical.alwaysFalse
+               $this->evict($Fiber, $Token);
             }
          }
       }
@@ -1060,7 +1378,21 @@ class Select implements Events, Loops, Scheduler, Contextualizing
       $this->awaitingReadDeadlines = [];
       $this->awaitingWriteDeadlines = [];
       $this->Fibers = [];
+      $Bindings = $this->Bindings;
       $this->Bindings = [];
+      foreach ($Bindings as $Binding) {
+         $Token = $Binding['Token'];
+         if ($Token === null || $Token->check()) {
+            continue;
+         }
+
+         try {
+            $Token->cancel();
+         }
+         catch (Throwable) {
+            // Scheduler destruction must continue through every generation.
+         }
+      }
       $this->Timers = [];
       $this->MonotonicTimers = [];
 

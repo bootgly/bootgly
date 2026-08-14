@@ -11,8 +11,9 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares;
 
 
-use function constant;
+use const DEBUG_BACKTRACE_IGNORE_ARGS;
 use function chr;
+use function constant;
 use function debug_backtrace;
 use function defined;
 use function floor;

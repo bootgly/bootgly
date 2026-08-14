@@ -23,11 +23,13 @@ use function strlen;
 use function time;
 use function trim;
 use Closure;
+use Fiber;
 use Throwable;
 
 use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\WPI\Endpoints\Servers\Disconnecting;
+use Bootgly\WPI\Events\Cancellation;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
@@ -41,6 +43,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_HTTP2\Stream;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Streaming;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_HTTP2;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Exchange;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
 
@@ -85,6 +88,8 @@ class SSE extends Resource implements Disconnecting
    //   emits the END_STREAM tail or the stall deadline resets the stream
    private bool $draining = false;
    private null|Response $Response = null;
+   private null|Exchange $Exchange = null;
+   private null|Cancellation $Cancellation = null;
    private null|Connection $Connection = null;
    private string $protocol = '';
    private string $method = '';
@@ -117,6 +122,22 @@ class SSE extends Resource implements Disconnecting
    {
       // ! Transport
       $this->Connection = $Package?->Connection;
+      // ! Prefer the owning Response snapshot. Active Request aliases are
+      //   removed at terminal completion, while a retained Response must keep
+      //   enough tombstone state to reject a late SSE head on a reused socket.
+      $Response = $this->Response;
+      $this->Exchange = $Response === null
+         ? null
+         : Exchange::fetch($Response);
+      $this->Exchange ??= $Request === null ? null : Exchange::fetch($Request);
+      // @ Ordinary clones inside deferred work carry the exact scheduler
+      //   generation on the Response, not necessarily on their cloned Request.
+      $this->Cancellation = $Response === null
+         ? null
+         : Cancellation::fetch($Response);
+      $this->Cancellation ??= $Request === null
+         ? null
+         : Cancellation::fetch($Request);
 
       // ! Request context
       if ($Request !== null) {
@@ -157,6 +178,28 @@ class SSE extends Resource implements Disconnecting
       if ($Response === null || $Connection === null) {
          return $this;
       }
+      // ! A stale Response clone or a cancelled deferred generation cannot
+      //   emit a late head onto a reused keep-alive transport.
+      if ($this->Exchange?->check() || $this->Cancellation?->check()) {
+         return $this;
+      }
+      $Lease = $this->Exchange === null
+         ? null
+         : Cancellation::fetch($this->Exchange);
+      $Current = Fiber::getCurrent();
+      if (
+         $Lease !== null
+         && (
+            $Lease !== $this->Cancellation
+            || $Current === null
+            || Cancellation::fetch($Current) !== $Lease
+         )
+      ) {
+         // ! A pre-selection sibling clone may be invoked from inside the
+         //   active Fiber, while a correctly linked clone may be invoked from
+         //   outside it. Both Response and execution generation must match.
+         return $this;
+      }
       // ? Interim/unbounded streams are HTTP/1.1+
       if ($this->stream === 0 && $this->protocol === 'HTTP/1.0') {
          $Response->code(505);
@@ -173,6 +216,11 @@ class SSE extends Resource implements Disconnecting
             return $this;
          }
       }
+
+      // ! Every successful SSE head below is serialized as 200 for HTTP/1.1
+      //   and HTTP/2. Keep the Response model — and therefore the terminal
+      //   telemetry status — identical to the bytes selected for the wire.
+      $Response->code(200);
 
       // ! Head fields (user-set fields — e.g. CORS — are preserved).
       //   remove() is case-insensitive across every serialization source
@@ -221,6 +269,11 @@ class SSE extends Resource implements Disconnecting
          $this->closed = true;
          $Header->build();
 
+         // @ Select the final lifecycle before HTTP/2 Stream::close() can
+         //   notify transport ownership as a cancellation.
+         $this->Cancellation?->finish();
+         $this->Exchange?->finish($Response);
+
          if ($this->stream !== 0) {
             /**
              * @var Decoder_HTTP2 $H2
@@ -247,8 +300,9 @@ class SSE extends Resource implements Disconnecting
          }
          $Connection->writing($Connection->Socket, strlen($head), $head);
 
-         // @ Release the Response from the encode pipeline — the head is
-         //   already on the wire
+         // @ Release the Response from the encode pipeline. The request-
+         //   processing lifecycle ended when this final head was selected; it
+         //   does not span the stream lifetime.
          $Response->deferred = true;
 
          // :
@@ -304,6 +358,11 @@ class SSE extends Resource implements Disconnecting
       else {
          $head = "HTTP/1.1 200 OK\r\n{$Header->raw}\r\n\r\n";
       }
+      // @ SSE selected its out-of-band final head. Finish the exact child
+      //   generation first so the surrounding deferred loop suppresses its
+      //   ordinary encoder path, then close request telemetry as 200.
+      $this->Cancellation?->finish();
+      $this->Exchange?->finish($Response);
       $written = $Connection->writing($Connection->Socket, strlen($head), $head);
 
       // ? A failed head write closes the connection synchronously — the

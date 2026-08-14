@@ -16,6 +16,7 @@ use const STR_PAD_LEFT;
 use const ZLIB_ENCODING_DEFLATE;
 use const ZLIB_ENCODING_GZIP;
 use const ZLIB_ENCODING_RAW;
+use function array_key_exists;
 use function array_pop;
 use function clearstatcache;
 use function count;
@@ -59,9 +60,12 @@ use const Bootgly\WPI;
 use Bootgly\ABI\Code\__String\Path;
 use Bootgly\ABI\Data\Language;
 use Bootgly\ABI\IO\FS\File;
+use Bootgly\ACI\Events\Cancelling;
 use Bootgly\ACI\Events\Contextualizing;
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Events\Scheduler;
+use Bootgly\WPI\Endpoints\Servers\Ownership;
+use Bootgly\WPI\Events\Cancellation;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Modules\HTTP;
@@ -71,6 +75,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_HTTP2;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Catcher;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Challenge;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_HTTP2;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Exchange;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Body;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header;
@@ -110,6 +115,14 @@ class Response extends Server\Response
    private null|Request $Request;
    private null|Router $Router;
    private null|Route $Route;
+   private null|Exchange $Exchange;
+   private null|Cancellation $Cancellation;
+   /**
+    * Immediate clone source. A clone can promote the source response to a
+    * lifecycle without putting any registry lookup on requests that never
+    * clone, defer or mount SSE.
+    */
+   private self $Owner;
    private bool $capturing;
    /** @var array<int,array{Request:Request,Response:self,Router:Router,Route:Route}> */
    private array $Contexts;
@@ -207,6 +220,9 @@ class Response extends Server\Response
       $this->Request = null;
       $this->Router = null;
       $this->Route = null;
+      $this->Exchange = null;
+      $this->Cancellation = null;
+      $this->Owner = $this;
       $this->capturing = false;
       $this->Contexts = [];
 
@@ -264,18 +280,49 @@ class Response extends Server\Response
    }
    public function __clone ()
    {
+      $SourceResponse = $this->Owner;
+      $SourceRequest = $this->Request;
+      $Cancellation = $this->Cancellation;
+      $capturing = $this->capturing;
+      $Exchange = $SourceResponse->promote();
+
+      $this->Owner = $this;
+      $this->Exchange = $Exchange;
+
       $this->Header = clone $this->Header;
       $this->Body = clone $this->Body;
 
-      if ($this->capturing) {
+      if ($capturing) {
          if ($this->Request !== null) {
             $this->Request = $this->Request->capture();
          }
          $this->capturing = false;
+         // ! defer() assigns a fresh generation only after the clone and all
+         //   resource forks succeed. Inheriting the parent's token here would
+         //   let linking the child cancel its still-running parent.
+         $this->Cancellation = null;
       }
-      else if ($this->Request !== null) {
-         $this->Request = clone $this->Request;
+      else if ($SourceRequest !== null) {
+         $this->Request = clone $SourceRequest;
+         $SharedExchange = Exchange::share($SourceRequest, $this->Request);
+         if ($SharedExchange !== null) {
+            $Exchange = $SharedExchange;
+            $this->Exchange = $SharedExchange;
+         }
+         // ! Request::__clone() scrubs protocol stream state for cache
+         //   templates. A selected Response clone remains on the same stream.
+         $this->Request->stream = $SourceRequest->stream;
       }
+
+      // @ Ordinary application clones share an active scheduled generation.
+      if ($capturing === false && $Cancellation !== null) {
+         Cancellation::link($this, $Cancellation);
+      }
+
+      // ! Preserve the admitted exchange as a weak Response snapshot. Its
+      //   terminal tombstone lets resources mounted lazily on a retained clone
+      //   reject writes after the keep-alive connection moved to a new request.
+      Exchange::track($this, $Exchange);
 
       // # Deferred
       $this->Fibers = new SplObjectStorage;
@@ -354,11 +401,25 @@ class Response extends Server\Response
     *
     * @return void
     */
-   public function reset (Packages $Package, Request $Request): void
+   public function reset (
+      Packages $Package,
+      Request $Request,
+   ): void
    {
       $this->Package = $Package;
 
       $this->Request = $Request;
+      // ? No lifecycle lookup on the ordinary synchronous path. A pre-reset
+      //   observer/clone has already bound the current Exchange through
+      //   guard()/promote(); only a Response that still carries an older
+      //   lifecycle needs the registry comparison and tombstone reset.
+      $Exchange = $this->Exchange;
+      if ($Exchange !== null && Exchange::fetch($Request) !== $Exchange) {
+         $this->Exchange = null;
+         Exchange::track($this, null);
+      }
+      $this->Cancellation = null;
+      $this->Owner = $this;
 
       // * Data
       // # Content
@@ -416,7 +477,99 @@ class Response extends Server\Response
     */
    public function guard (): void
    {
+      // @ Received runs before reset() against the persistent Response. The
+      //   encoder binds the current transport/request generation explicitly so
+      //   an HTTP/2 listener cannot clone the previous stream or Cancellation.
+      //   Ordinary cache guards have no context and perform no lifecycle read.
+      $Context = Exchange::capture($this);
+      if ($Context !== null) {
+         $this->Package = $Context['Package'];
+         $this->Request = $Context['Request'];
+         $this->Exchange = $Context['Exchange'];
+         $this->Cancellation = null;
+         $this->Owner = $this;
+         Exchange::track($this, $Context['Exchange']);
+      }
+
       $this->cacheable = false;
+   }
+
+   /**
+    * Promote this response to a correlated lifecycle on first escape.
+    */
+   private function promote (): null|Exchange
+   {
+      // ! The escape marker belongs to the source even when an observed
+      //   Exchange already exists. A clone may defer while the persistent
+      //   source itself remains synchronous; the next Request must still
+      //   detach this generation's reusable alias.
+      $this->cacheable = false;
+
+      $Exchange = $this->Exchange;
+      if ($Exchange !== null) {
+         return $Exchange;
+      }
+
+      $Request = $this->Request;
+      if ($Request === null) {
+         return null;
+      }
+
+      $Exchange = Exchange::fetch($Request);
+      if ($Exchange === null) {
+         $Exchange = new Exchange;
+         Exchange::admit($Request, $Exchange);
+      }
+
+      $this->Exchange = $Exchange;
+      Exchange::track($this, $Exchange);
+
+      return $Exchange;
+   }
+
+   /**
+    * Bind a deferred exchange to both transport and HTTP/2 stream teardown.
+    */
+   private function retain (Cancellation $Cancellation): void
+   {
+      $Package = $this->Package;
+      $Connection = $Package?->Connection;
+      if ($Package === null || $Connection === null) {
+         return;
+      }
+
+      if ($Cancellation->observe(static function (
+         Cancellation $Cancellation,
+      ) use ($Connection): void {
+         Ownership::detach($Connection, $Cancellation);
+      }) === false) {
+         return;
+      }
+      Ownership::attach($Connection, $Cancellation);
+
+      $Request = $this->Request;
+      if ($Request === null || $Request->stream === 0) {
+         return;
+      }
+
+      $H2 = $Package->decoded;
+      if ($H2 instanceof Decoder_HTTP2 === false) {
+         return;
+      }
+
+      $Stream = $H2->Streams[$Request->stream] ?? null;
+      if ($Stream === null) {
+         return;
+      }
+
+      if ($Cancellation->observe(static function (
+         Cancellation $Cancellation,
+      ) use ($Stream): void {
+         Ownership::detach($Stream, $Cancellation);
+      }) === false) {
+         return;
+      }
+      Ownership::attach($Stream, $Cancellation);
    }
 
    /**
@@ -431,6 +584,9 @@ class Response extends Server\Response
       }
 
       if ($Resource instanceof SSEResource) {
+         // @ Mounting SSE is the first possible out-of-band escape. Promote
+         //   lazily here so ordinary responses never pay lifecycle setup.
+         $this->promote();
          $Resource->bind($this->Package, $this->Request);
       }
 
@@ -1295,13 +1451,20 @@ class Response extends Server\Response
     * into the pool and suspends with `Scheduler::DETACH` — the next defer()
     * resumes it with a fresh job instead of constructing a new Fiber.
     *
-    * @param array{0:Closure,1:self,2:Packages,3:string} $job
+    * @param array{
+    *    0:Closure,
+    *    1:self,
+    *    2:Packages,
+    *    3:string,
+    *    4:Cancellation,
+    *    5:null|Exchange
+    * } $job
     */
    private static function loop (array $job): void
    {
       // @@
       while (true) {
-         [$work, $Response, $Package, $locale] = $job;
+         [$work, $Response, $Package, $locale, $Cancellation, $Exchange] = $job;
 
          // ! Bind the scheduling request's locale to this Fiber — deferred
          //   work must not translate (or stash) under a locale negotiated by
@@ -1311,40 +1474,112 @@ class Response extends Server\Response
          // ! Drop the job container — only the locals hold the request now
          $job = null;
          $length = null;
-         $buffer = null;
+         $buffer = '';
+         $selected = false;
 
          try {
             // @ Execute user work (may call Fiber::suspend())
             $work($Response);
 
-            // ? Guard: socket may have been closed while the Fiber was suspended
-            if (is_resource($Package->Connection->Socket)) {
-               // @ Encode and send response after work completes
-               $buffer = $Response->encode($Package, $length);
+            // ? Nested defer/SSE/transport cancellation already selected or
+            //   abandoned this generation. The outer job must not serialize a
+            //   second response after that terminal handoff.
+            if ($Cancellation->check() === false) {
+               // ? Guard: socket may have closed while the Fiber was suspended.
+               if (is_resource($Package->Connection->Socket)) {
+                  $buffer = $Response->encode($Package, $length);
 
-               // ? Route response cache opt-in — store the built wire bytes
-               if ($Response->cache !== 0) {
-                  $Response->stash($buffer);
+                  if ($Response->cache !== 0) {
+                     $Response->stash($buffer);
+                  }
+
                }
 
-               // @ Write response to socket
-               $Package->writing($Package->Connection->Socket, length: $length, buffer: $buffer);
+               // @ Commit only after serialization/cache preparation succeeds.
+               //   If encode() throws, Catcher below can still select a 500
+               //   whose wire and telemetry status agree. Close the scheduler
+               //   generation before Exchange so its observer never cancels
+               //   the Fiber that just completed normally.
+               $Cancellation->finish();
+               $Exchange?->finish($Response);
+               $selected = true;
+
+               if (is_resource($Package->Connection->Socket)) {
+                  $Package->writing(
+                     $Package->Connection->Socket,
+                     length: $length,
+                     buffer: $buffer,
+                  );
+               }
             }
          }
          catch (Throwable $Throwable) {
-            // @ Environment-aware error response (also reports the throwable)
-            $Errored = Catcher::respond($Response->Request, $Response, $Throwable);
+            // ! An out-of-band child/SSE may have completed and user code may
+            //   then throw. Its terminal token wins; Catcher must not append a
+            //   second 500 to the same persistent connection.
+            if ($selected === false && $Cancellation->check() === false) {
+               try {
+                  $Errored = Catcher::respond($Response->Request, $Response, $Throwable);
+               }
+               catch (Throwable) {
+                  $Errored = new Response(code: 500, body: '');
+               }
 
-            // ? Guard: socket may have been closed
-            if (is_resource($Package->Connection->Socket)) {
-               // @ Encode and send response after work fails
-               $buffer = $Errored->encode($Package, $length);
+               // ! Catcher returns a fresh Response. Bind the suspended job's
+               //   exact transport/request generation before serialization;
+               //   the ambient Server::$Request may already belong to an
+               //   interleaved HTTP/2 stream. Passing this Cancellation into
+               //   Encoder_HTTP2 also distinguishes normal stream completion
+               //   from teardown before the 500 lifecycle is committed.
+               $Errored->Package = $Package;
+               $Errored->Request = $Response->Request;
+               $Errored->Exchange = $Exchange;
+               $Errored->Cancellation = $Cancellation;
 
-               // @ Write response to socket
-               $Package->writing($Package->Connection->Socket, length: $length, buffer: $buffer);
+               $encoded = is_resource($Package->Connection->Socket) === false;
+               if ($encoded === false) {
+                  try {
+                     $buffer = $Errored->encode($Package, $length);
+                     $encoded = true;
+                  }
+                  catch (Throwable) {
+                     // A second serialization failure has no trustworthy wire
+                     // status. Abandon this exchange and let transport cleanup
+                     // continue without escaping the reactor or writing twice.
+                  }
+               }
+
+               if ($encoded) {
+                  $selected = true;
+                  $Cancellation->finish();
+                  $Exchange?->finish($Errored);
+
+                  if (is_resource($Package->Connection->Socket)) {
+                     try {
+                        $Package->writing(
+                           $Package->Connection->Socket,
+                           length: $length,
+                           buffer: $buffer,
+                        );
+                     }
+                     catch (Throwable) {
+                        // Terminal response was already selected. A retry or
+                        // second error head could desynchronize keep-alive.
+                     }
+                  }
+               }
+               else {
+                  $Cancellation->cancel();
+                  $Exchange?->finish(null);
+               }
             }
          }
          finally {
+            // ! A path that neither selected nor handed off is abandonment.
+            //   cancel() is idempotent and its committed bridge closes the
+            //   Exchange without inventing a response status.
+            $Cancellation->cancel();
+
             // @ Deferred multipart ownership lives on this private Response
             //   clone. Reclaim it after work/encoding on success, exception,
             //   or once resumed work observes that its socket was closed.
@@ -1369,6 +1604,7 @@ class Response extends Server\Response
          // ! Clear request references before parking — a parked Fiber must
          //   not keep the previous Response/Package/buffer alive
          $work = $Response = $Package = $buffer = $length = null;
+         $Cancellation = $Exchange = null;
 
          $Self = Fiber::getCurrent();
 
@@ -1380,7 +1616,15 @@ class Response extends Server\Response
          // @ Park and wait for the next job (the scheduler drops DETACH)
          self::$Pool[] = $Self;
 
-         /** @var array{0:Closure,1:self,2:Packages,3:string} $job */
+         /** @var array{
+          *    0:Closure,
+          *    1:self,
+          *    2:Packages,
+          *    3:string,
+          *    4:Cancellation,
+          *    5:null|Exchange
+          * } $job
+          */
          $job = Fiber::suspend(Scheduler::DETACH);
       }
    }
@@ -1456,99 +1700,330 @@ class Response extends Server\Response
          );
       }
 
-      $this->deferred = true;
-
       $Request = $this->Request;
-      $this->capturing = true;
+      $Exchange = $this->promote();
+      if ($Exchange?->check()) {
+         // ! A retained stale clone cannot emit onto a keep-alive transport
+         //   after its admitted exchange already terminated.
+         $this->deferred = true;
+
+         return $this;
+      }
+      if (
+         $Exchange?->inspect()
+         && $Event instanceof Cancelling === false
+      ) {
+         // ! Fail before clone/capture and before upload ownership moves.
+         throw new LogicException(
+            'Observed HTTP deferred execution requires scheduler cancellation support.'
+         );
+      }
+      if ($this->deferred) {
+         return $this;
+      }
+
+      $Parent = $this->Cancellation;
+      $Lease = $Exchange === null ? null : Cancellation::fetch($Exchange);
+      $Current = Fiber::getCurrent();
+      if (
+         $Lease !== null
+         && (
+            $Lease !== $Parent
+            || $Current === null
+            || Cancellation::fetch($Current) !== $Lease
+         )
+      ) {
+         // ! Another Response generation already selected asynchronous output
+         //   for this request. The running Fiber's identity is insufficient:
+         //   user work can retain a sibling clone created before selection and
+         //   invoke it from that same Fiber. A legitimate nested handoff needs
+         //   both the target Response and the currently running Fiber to carry
+         //   the active generation; neither identity alone grants authority.
+         $this->deferred = true;
+
+         return $this;
+      }
+
+      $this->deferred = true;
+      $Response = null;
+      $DeferredRequest = null;
+      $Cancellation = null;
+      $Fiber = null;
+      $uploads = false;
+      $movedFiles = [];
+      $claimed = false;
+      $PreviousLease = null;
+      $State = new class {
+         public bool $terminal = false;
+         public bool $cancelled = false;
+      };
+
       try {
-         // ! The clone captures the admitted Request instead of following the
-         //   normal cache-template scrub. This avoids constructing and then
-         //   discarding an intermediate scrubbed Request clone.
-         $Response = clone $this;
-      }
-      finally {
-         $this->capturing = false;
-      }
+         $this->capturing = true;
+         try {
+            $Response = clone $this;
+         }
+         finally {
+            $this->capturing = false;
+         }
+         // ! The source flag denotes handoff to this job. The private work
+         //   clone starts clear so nested defer/SSE can signal a NEW handoff.
+         $Response->deferred = false;
+         $DeferredRequest = $Response->Request;
+         // ! capture() copied upload paths while the live Request still owns
+         //   them. Clear the clone before any further extension point can
+         //   throw; ownership is moved atomically only immediately pre-start.
+         if ($DeferredRequest !== null) {
+            $DeferredRequest->files = [];
+         }
 
-      // ! Snapshot the ambient Router route for resources such as View, and
-      //   independently snapshot a Route-bound work Closure. The two snapshots
-      //   are shared only when they originate from the same Route object.
-      $WPI = WPI;
-      $Router = $WPI->Router;
-      $RouterRoute = $Router->Route;
-      $Route = clone $RouterRoute;
-      $Response->Router = $Router;
-      $Response->Route = $Route;
+         // ! Snapshot Router context and Route-bound work after capture.
+         $WPI = WPI;
+         $Router = $WPI->Router;
+         $RouterRoute = $Router->Route;
+         $Route = clone $RouterRoute;
+         $Response->Router = $Router;
+         $Response->Route = $Route;
 
-      $Reflection = new ReflectionFunction($work);
-      $BoundRoute = $Reflection->getClosureThis();
-      if ($BoundRoute instanceof Route) {
-         $WorkRoute = $BoundRoute === $RouterRoute
-            ? $Route
-            : clone $BoundRoute;
-         $work = $work->bindTo($WorkRoute, $WorkRoute) ?? $work;
-      }
+         $Reflection = new ReflectionFunction($work);
+         $BoundRoute = $Reflection->getClosureThis();
+         if ($BoundRoute instanceof Route) {
+            $WorkRoute = $BoundRoute === $RouterRoute
+               ? $Route
+               : clone $BoundRoute;
+            $work = $work->bindTo($WorkRoute, $WorkRoute) ?? $work;
+         }
 
-      // @ Request::__clone() intentionally scrubs upload metadata for normal
-      //   request isolation. A deferred response is different: move the sole
-      //   ownership of completed temp files from the live Request into this
-      //   private clone so its Fiber can reclaim them after work finishes.
-      $DeferredRequest = $Response->Request;
-      if ($Request !== null && $DeferredRequest !== null && $Request->hasFiles) {
-         $DeferredRequest->files = $Request->files;
-         $Request->files = [];
-      }
+         $Fiber = array_pop(self::$Pool);
+         if ($Fiber === null) {
+            $Fiber = new Fiber(self::loop(...));
+            $fresh = true;
+         }
+         else {
+            $fresh = false;
+         }
 
-      // @ Reuse a parked pool Fiber — constructing one costs ~8.5µs/request,
-      //   resuming into the persistent job loop ~150ns
-      $Fiber = array_pop(self::$Pool);
-
-      if ($Fiber === null) {
-         $Fiber = new Fiber(self::loop(...));
-
-         // @ Register Fiber for wait() guard (must be set before start)
+         $Cancellation = Cancellation::open($Response);
+         $Response->Cancellation = $Cancellation;
+         Cancellation::link($Fiber, $Cancellation);
+         if ($DeferredRequest !== null) {
+            Cancellation::link($DeferredRequest, $Cancellation);
+         }
          $Response->Fibers->attach($Fiber);
 
-         // @ Start Fiber with its first job (resolve() also covers nested
-         //   defers — the child job inherits the parent Fiber's locale)
+         $Cancellation->observe(static function (
+            Cancellation $Observed,
+            bool $cancelled,
+         ) use ($Fiber, $Response, $State): void {
+            $State->terminal = true;
+            $State->cancelled = $cancelled;
+
+            // ! Every terminal transition revokes this generation's wait()
+            //   capability. In a nested handoff the parent finishes normally
+            //   while still RUNNING; allowing it to suspend again afterward
+            //   would abandon or cancel the selected child exchange.
+            if ($Response->Fibers->contains($Fiber)) {
+               $Response->Fibers->detach($Fiber);
+            }
+            if ($cancelled === false) {
+               return;
+            }
+            // ! Running work may still read its captured request. Its loop
+            //   finally cleans after return; suspended/not-started work can be
+            //   reclaimed immediately.
+            if ($Fiber->isRunning() === false) {
+               $Response->Request?->clean();
+            }
+         });
+
+         // @ Transport/RST teardown owns the generation before user work.
+         $Response->retain($Cancellation);
+         if ($Cancellation->check()) {
+            $Exchange?->finish(null);
+
+            return $this;
+         }
+
+         // ! Publish the child as the request-global selection lease BEFORE
+         //   user work starts. A sibling Response retained before defer() must
+         //   not launch a competing job or SSE head from inside this Fiber.
+         //   claim() does not terminalize the parent: a setup/scheduler failure
+         //   can still restore it and flow into Catcher.
+         if ($Exchange !== null) {
+            $ObservedLease = Cancellation::fetch($Exchange);
+            if ($ObservedLease !== null && $ObservedLease !== $Parent) {
+               $Cancellation->cancel();
+
+               return $this;
+            }
+
+            $PreviousLease = Cancellation::claim($Exchange, $Cancellation);
+            $claimed = Cancellation::fetch($Exchange) === $Cancellation;
+         }
+
+         // @ Move completed uploads only after every preflight and ownership
+         //   attachment succeeded, with no callback between the two writes.
+         if ($Request !== null && $DeferredRequest !== null && $Request->hasFiles) {
+            $movedFiles = $Request->files;
+            $DeferredRequest->files = $movedFiles;
+            $Request->files = [];
+            $uploads = true;
+         }
+
+         $job = [
+            $work,
+            $Response,
+            $Package,
+            Language::resolve(),
+            $Cancellation,
+            $Exchange,
+         ];
          $Response->bind();
          try {
-            $suspendedValue = $Fiber->start([$work, $Response, $Package, Language::resolve()]);
+            $suspendedValue = $fresh
+               ? $Fiber->start($job)
+               : $Fiber->resume($job);
          }
          finally {
             $Response->unbind();
          }
-      }
-      else {
-         // @ Register Fiber for wait() guard (must be set before resume)
-         $Response->Fibers->attach($Fiber);
 
-         // @ Resume the parked job loop with the new job
-         $Response->bind();
-         try {
-            $suspendedValue = $Fiber->resume([$work, $Response, $Package, Language::resolve()]);
+         if ($Fiber->isSuspended() && $suspendedValue !== Scheduler::DETACH) {
+            if ($Cancellation->check()) { // @phpstan-ignore if.alwaysFalse
+               $Exchange?->finish(null);
+
+               return $this;
+            }
+
+            $Enter = static function () use ($Response): void {
+               $Response->bind();
+            };
+            $Leave = static function () use (
+               $Cancellation,
+               $Fiber,
+               $Response,
+            ): void {
+               $Response->unbind();
+               // ! Cancellation can race a RUNNING segment that directly
+               //   suspends. Deterministically reclaim it at the boundary.
+               if (
+                  $Cancellation->check() // @phpstan-ignore booleanAnd.leftAlwaysFalse
+                  && $Fiber->isSuspended() // @phpstan-ignore booleanAnd.rightAlwaysTrue
+               ) {
+                  if ($Response->Fibers->contains($Fiber)) {
+                     $Response->Fibers->detach($Fiber);
+                  }
+                  $Response->Request?->clean();
+               }
+            };
+
+            $Event->bind($Fiber, $Enter, $Leave);
+            if ($Event->schedule($Fiber, $suspendedValue) === false) {
+               // ? Select may have delivered a rejection through the Fiber,
+               //   allowing Catcher to select a response before returning.
+               if ($Cancellation->check() === false) { // @phpstan-ignore identical.alwaysTrue
+                  throw new LogicException(
+                     'HTTP deferred execution was rejected by the scheduler.'
+                  );
+               }
+            }
          }
-         finally {
-            $Response->unbind();
+
+         // @ Commit the asynchronous selection only after inline completion
+         //   or successful scheduler admission. Cancellation before commit is
+         //   rollback; cancellation afterward closes the Exchange as no-status.
+         $Cancellation->observe(static function (
+            Cancellation $Observed,
+            bool $cancelled,
+         ) use ($Exchange): void {
+            if ($cancelled) {
+               $Exchange?->finish(null);
+            }
+         });
+         if ($Exchange !== null) {
+            $Exchange->observe(static function () use ($Cancellation): void {
+               if ($Cancellation->check() === false) { // @phpstan-ignore identical.alwaysTrue
+                  $Cancellation->cancel();
+               }
+            });
          }
+
+         // ! Finish the running parent generation before publishing the child
+         //   lease. Its loop sees a normal handoff and emits no stale wire.
+         $Parent?->finish();
+         $this->Cancellation = $Cancellation;
+
+         return $this;
       }
+      catch (Throwable $Throwable) {
+         // ? A synchronously completed child/SSE already selected the wire.
+         //   Orchestration errors after that boundary cannot append a 500.
+         if (
+            $State->terminal
+            && $State->cancelled === false
+            && ($Exchange?->check() ?? false)
+         ) {
+            $Parent?->finish();
 
-      // @ Schedule suspended Fiber in event loop — forwards the suspended
-      //   value for I/O-aware routing; DETACH (parked) and terminated
-      //   Fibers are dropped by the scheduler
-      if ($Fiber->isSuspended() && $suspendedValue !== Scheduler::DETACH) {
-         $Enter = static function () use ($Response): void {
-            $Response->bind();
-         };
-         $Leave = static function () use ($Response): void {
-            $Response->unbind();
-         };
+            return $this;
+         }
 
-         $Event->bind($Fiber, $Enter, $Leave);
-         $Event->schedule($Fiber, $suspendedValue);
+         $this->deferred = false;
+         // ! Roll back sole upload ownership before cancellation observers can
+         //   clean the rejected child. The caller/parent Request then resumes
+         //   its normal lifecycle and remains responsible for final cleanup.
+         if ($uploads && $Request !== null && $DeferredRequest !== null) {
+            $DeferredRequest->files = [];
+            $currentFiles = $Request->files;
+            if ($currentFiles === []) {
+               $Request->files = $movedFiles;
+            }
+            else {
+               // ! A custom scheduler may re-enter application code during
+               //   admission and add new uploads. Preserve both ownership
+               //   maps instead of overwriting either branch. Distinct top-
+               //   level keys retain their ordinary upload-record shape, and
+               //   clean() recursively reclaims every tmp_name.
+               $restoredFiles = $currentFiles;
+               foreach ($movedFiles as $name => $file) {
+                  $restoredName = $name;
+                  while (array_key_exists($restoredName, $restoredFiles)) {
+                     $restoredName = "deferred_{$restoredName}";
+                  }
+                  $restoredFiles[$restoredName] = $file;
+               }
+               $Request->files = $restoredFiles;
+            }
+            $uploads = false;
+         }
+         $Cancellation?->cancel();
+         if (
+            $claimed
+            && $Exchange?->check() === false
+            && $PreviousLease !== null
+            && $PreviousLease->check() === false
+            && Cancellation::fetch($Exchange) === null
+         ) {
+            Cancellation::claim($Exchange, $PreviousLease);
+         }
+         if ($DeferredRequest !== null) {
+            if ($uploads === false) {
+               // ! The live Request still owns these paths on pre-commit
+               //   rollback; release only the captured body reservation.
+               $DeferredRequest->files = [];
+            }
+            $DeferredRequest->clean();
+         }
+         if (
+            $Fiber !== null
+            && $Response !== null // @phpstan-ignore notIdentical.alwaysTrue
+            && $Response->Fibers->contains($Fiber)
+         ) {
+            $Response->Fibers->detach($Fiber);
+         }
+
+         throw $Throwable;
       }
-
-      return $this;
    }
    /**
     * Wait for the deferred work to complete and the response to be sent.

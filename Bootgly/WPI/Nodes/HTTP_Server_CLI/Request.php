@@ -758,6 +758,11 @@ class Request
    {
       $Captured = clone $this;
 
+      // @ Carry the admitted exchange into this private deferred snapshot.
+      //   The live per-connection Request may be reused while the captured
+      //   alias keeps the earlier exchange independently reachable.
+      Request\Exchange::share($this, $Captured);
+
       // @ This snapshot is the ONE body retainer a scrub cannot cover:
       //   `Encoder_::encode()` empties the live Request the moment the
       //   synchronous cycle ends, while the deferred work legitimately reads

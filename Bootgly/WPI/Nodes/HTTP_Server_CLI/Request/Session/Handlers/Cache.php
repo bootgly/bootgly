@@ -11,9 +11,9 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Handlers;
 
 
-use const DIRECTORY_SEPARATOR;
 use const BOOTGLY_STORAGE_DIR;
 use const BOOTGLY_WORKING_DIR;
+use const DIRECTORY_SEPARATOR;
 use function base64_decode;
 use function base64_encode;
 use function bin2hex;

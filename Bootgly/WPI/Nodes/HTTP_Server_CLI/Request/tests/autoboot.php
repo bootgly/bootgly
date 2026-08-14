@@ -19,5 +19,6 @@ return new Suite(
       '1.3-assume_scrub_parity',
       '1.4-reset_scrub_parity',
       '1.5-end_cycle_scrub',
+      '1.6-exchange_lifecycle',
    ]
 );

@@ -15,8 +15,10 @@ use function fclose;
 use function is_resource;
 use function is_string;
 use function strlen;
+use Throwable;
 
 use Bootgly\WPI\Endpoints\Servers\Disconnecting;
+use Bootgly\WPI\Endpoints\Servers\Ownership;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
 
 
@@ -84,6 +86,7 @@ class Stream
    // @ Long-lived local stream (e.g. SSE) — `drain()`/`pump()` never emit
    //   END_STREAM nor release the stream while set
    public bool $sustained;
+   private bool $closed;
    // @ Teardown owner of a sustained stream (e.g. the SSE resource) —
    //   notified exactly once by close(), on every release path (RST_STREAM,
    //   GOAWAY, connection teardown, graceful end)
@@ -123,11 +126,29 @@ class Stream
       $this->ended = false;
       $this->responded = false;
       $this->sustained = false;
+      $this->closed = false;
       $this->Owner = null;
    }
 
    public function close (): void
    {
+      if ($this->closed) {
+         return;
+      }
+
+      // ! Commit before callbacks: re-entrant close is a no-op and owners
+      //   attached from a teardown callback observe closure immediately.
+      $this->closed = true;
+
+      // ! Capture and clear the primary owner before invoking registry
+      //   callbacks. Re-entrant close cannot consume or replace this owner.
+      $Owner = $this->Owner;
+      $this->Owner = null;
+
+      // @ Additional stream-scoped work observes closure before any primary
+      //   owner callback can re-enter and attach more work.
+      Ownership::close($this);
+
       // @ Release actual request-head owners before their logical budget.
       //   Clearing matters when a sustained-stream resource still references
       //   this object after decoder removal.
@@ -158,9 +179,13 @@ class Stream
       $this->Buffers->release();
 
       // # Notify the owning unit exactly once (disconnect() is idempotent)
-      $Owner = $this->Owner;
-      $this->Owner = null;
-      $Owner?->disconnect();
+      try {
+         $Owner?->disconnect();
+      }
+      catch (Throwable) {
+         // One owner cannot suppress the remaining stream teardown.
+      }
+
    }
 
    /**

@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 
 use function is_string;
+use function spl_object_id;
 use Closure;
 use InvalidArgumentException;
 use RuntimeException;

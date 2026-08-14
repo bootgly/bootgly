@@ -21,16 +21,19 @@ use function stripos;
 use function strlen;
 use function strncmp;
 use function strpos;
+use function strtok;
 use function strtolower;
 use function substr;
 use Generator;
 use Throwable;
 
 use Bootgly\ABI\Data\Language;
+use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\API\Workables\Server\Middlewares;
 use Bootgly\WPI\Endpoints\Servers\Packages;
+use Bootgly\WPI\Events\Cancellation;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCPPackages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\ACME_Client\Challenges;
@@ -41,7 +44,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Challenge;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Check;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Events as RequestEvents;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Exchange;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Telemetry\Admissions;
 
 
 class Encoder_ extends Encoders
@@ -315,6 +320,41 @@ class Encoder_ extends Encoders
    }
 
    /**
+    * Resolve a lifecycle promoted by a Response clone, defer or SSE resource.
+    *
+    * Callers gate this helper on escape-only response state, keeping both the
+    * method frame and registry lookups out of the plain synchronous path.
+    *
+    * `$Injected` is the response the encoder handed to the onion, captured
+    * BEFORE a handler-returned replacement could be assigned. It cannot be read
+    * back from `Server::$Response`: the local is an alias of that static, so
+    * assigning the replacement also overwrote it. The escaping response is the
+    * injected one, and only its weak snapshot still names the exchange —
+    * `Exchange::finish()` drops the Request aliases but deliberately keeps the
+    * snapshot alive for exactly this kind of late lookup.
+    */
+   private static function resolve (
+      Response $Response,
+      Response $Injected,
+      Request $Request,
+   ): null|Exchange
+   {
+      $Exchange = Exchange::fetch($Response);
+      if ($Exchange !== null) {
+         return $Exchange;
+      }
+
+      if ($Injected !== $Response) {
+         $Exchange = Exchange::fetch($Injected);
+         if ($Exchange !== null) {
+            return $Exchange;
+         }
+      }
+
+      return Exchange::fetch($Request);
+   }
+
+   /**
     * @param int<0, max>|null $length
     * @param-out int<0, max>|null $length
     */
@@ -324,6 +364,11 @@ class Encoder_ extends Encoders
       // @ Get callbacks
       $Request  = Server::$Request;
       $Response = &Server::$Response;
+      // ! Identity of the response handed to the onion, held by value. A
+      //   handler-returned replacement is assigned through the alias above and
+      //   therefore replaces the static too, so `Server::$Response` can no
+      //   longer answer "did the escape happen on the injected response?".
+      $Injected = $Response;
 
       // ?: Do not route / run middleware while request body is incomplete.
       //   The decoder has already installed a per-connection body decoder;
@@ -344,7 +389,7 @@ class Encoder_ extends Encoders
             : Language::$source;
       }
 
-      // @ Events — request fully decoded (guarded: zero-alloc when no listeners)
+      // @ Public event — request fully decoded (no Emission when unobserved)
       // ! Direct Listeners read instead of check(): the call frame +
       //   Event&UnitEnum intersection-type check cost ~9% of worker CPU
       //   at 600k req/s. Enum-case object ids are stable per process.
@@ -354,22 +399,64 @@ class Encoder_ extends Encoders
 
       $Emitter = Emitter::$Instance;
       $receiving = isSet($Emitter->Listeners[$received]);
+
+      // ? A deferred capture owns its own Request alias. Detach the reusable
+      //   connection Request before deciding whether this new message needs a
+      //   lifecycle; the still-running capture remains independently owned.
+      if ($Response->deferred || $Response->cacheable === false) {
+         Exchange::release($Request);
+      }
+
+      // ! Core telemetry opens a lifecycle only when an observer is actually
+      //   registered. A public Received listener also needs one because it can
+      //   retain the pre-reset Response. Plain synchronous requests allocate
+      //   neither Exchange nor lifecycle WeakMaps.
+      $Exchange = null;
       if ($receiving) {
+         $Exchange = Admissions::open($Emitter, $Request);
+         if ($Exchange === null) {
+            $Exchange = new Exchange;
+            Exchange::admit($Request, $Exchange);
+         }
+         Exchange::bind($Response, $Packages, $Request, $Exchange);
+         try {
+            $Response->guard();
+         }
+         finally {
+            // An overriding guard may fail before consuming the one-shot
+            // context; never retain its transport/request in static state.
+            Exchange::capture($Response);
+         }
+
          // ! Received runs before reset(), and listeners can reach the
          //   worker-persistent Response singleton. Guard that pre-reset object
          //   and invalidate older wire before user code can clone/stash it or
          //   change a persistent Header preset from current-request input.
-         $Response->guard();
          if (self::$guarded === false) {
             Cache::flush();
             self::$guarded = true;
          }
 
-         $Emitter->emit(RequestEvents::Received, $Request);
+         try {
+            $Emitter->emit(RequestEvents::Received, $Request);
+         }
+         catch (Throwable $Throwable) {
+            // ! Received runs before Response::reset() and before the main
+            //   routing catcher. A listener failure must still close the
+            //   admitted observational token exactly once.
+            $Exchange->finish(null);
+            throw $Throwable;
+         }
       }
 
       // @ Reset Response state and bind per-request context.
-      $Response->reset($Packages, $Request);
+      try {
+         $Response->reset($Packages, $Request);
+      }
+      catch (Throwable $Throwable) {
+         $Exchange?->finish(null);
+         throw $Throwable;
+      }
       // ? Every path that writes replay/capture state leaves a reset root set;
       //   the catch below restores the same invariant on exceptions.
       if (
@@ -641,15 +728,83 @@ class Encoder_ extends Encoders
       //   separate op_array) and the `catch` is total — so control always
       //   arrives here exactly once, which is what `finally` guaranteed.
 
+      // ? clone/defer/SSE can lazily promote an otherwise unobserved request.
+      //   Their source Response is marked non-cacheable, so the ordinary
+      //   synchronous route avoids both this helper and every WeakMap lookup.
+      if (
+         $Exchange === null
+         && (
+            $Response->deferred
+            || $Response->cacheable === false
+            || $Injected->cacheable === false
+         )
+      ) {
+         $Exchange = self::resolve($Response, $Injected, $Request);
+      }
+
       // @ Persist the session before the response leaves the server —
       //   __destruct timing is GC-bound (reference cycles can defer it
       //   past subsequent requests), so save explicitly per request.
       if ($Request->sessioned) {
-         $Request->Session?->save();
+         try {
+            $Request->Session?->save();
+         }
+         catch (Throwable $Throwable) {
+            if ($Exchange?->check()) {
+               // ! Inline defer/SSE already selected its wire. Report the
+               //   persistence failure, but never kill the worker or append a
+               //   second response after that irreversible boundary.
+               Throwables::notify($Throwable, [
+                  'interface' => 'WPI',
+                  'phase' => 'Session',
+                  'method' => $Request->method,
+                  'URI' => strtok($Request->URI, '?'),
+                  'peer' => $Request->peer,
+               ]);
+               if ($Request->hasFiles) {
+                  $Request->clean();
+               }
+               $Request->scrub();
+
+               return '';
+            }
+            // ! Persistence is outside the routing catcher and can fail after
+            //   defer() transferred the token to a suspended clone. Close the
+            //   local admitted exchange; its terminal observer drops that job.
+            $Exchange?->finish(null);
+            throw $Throwable;
+         }
       }
 
-      // ?: Check if Response is deferred (async Fiber)
-      if ($Response->deferred) {
+      // ?: A cloned Response or SSE resource may have selected and emitted the
+      //   final wire inside routing. Persist the session first, then suppress
+      //   the stale synchronous representation.
+      if ($Exchange?->check()) {
+         if ($Request->hasFiles) {
+            $Request->clean();
+         }
+         $Request->scrub();
+
+         return '';
+      }
+
+      // ?: A deferred flag covers the selected Response; the generation lease
+      //   also covers sibling clones that handed output to asynchronous work.
+      $Cancellation = $Exchange === null ? null : Cancellation::fetch($Exchange);
+      if ($Response->deferred && $Cancellation === null) {
+         // ! With an admitted/promoted exchange, the public compatibility flag
+         //   is not proof that a scheduler owns completion. Unobserved unbound
+         //   responses have no accounting to close and keep legacy behaviour.
+         $Exchange?->finish(null);
+      }
+      if (
+         $Response->deferred
+         || ($Exchange?->check() ?? false)
+         || $Cancellation !== null
+      ) {
+         if ($Request->hasFiles) {
+            $Request->clean();
+         }
          // @ The Fiber works on the deep copy taken by `Request::capture()`
          //   (`Request::__clone` clones the Body), so the live payload is
          //   already redundant here — and it would otherwise sit on the
@@ -700,7 +855,42 @@ class Encoder_ extends Encoders
          //   Response and call stash() during the synchronous emission.
          $Response->guard();
          $before = self::capture($Response);
-         $Emitter->emit(RequestEvents::Handled, $Request, $Response);
+         try {
+            $Emitter->emit(RequestEvents::Handled, $Request, $Response);
+         }
+         catch (Throwable $Throwable) {
+            if (
+               $Exchange === null
+               && (
+                  $Response->deferred
+                  || $Response->cacheable === false
+                  || $Injected->cacheable === false
+               )
+            ) {
+               $Exchange = self::resolve($Response, $Injected, $Request);
+            }
+            $Cancellation = $Exchange === null ? null : Cancellation::fetch($Exchange);
+            if (
+               $Response->deferred
+               || ($Exchange?->check() ?? false)
+               || $Cancellation !== null
+            ) {
+               // ! A listener already selected out-of-band output. That wire
+               //   cannot be replaced with a 500; report the later failure and
+               //   continue into the shared async cleanup/return boundary.
+               Throwables::notify($Throwable, [
+                  'interface' => 'WPI',
+                  'phase' => 'Handled',
+                  'method' => $Request->method,
+                  'URI' => strtok($Request->URI, '?'),
+                  'peer' => $Request->peer,
+               ]);
+            }
+            else {
+               $Exchange?->finish(null);
+               throw $Throwable;
+            }
+         }
 
          // ! Handled runs after the middleware snapshot and has no cache-safe
          //   declaration contract. Its current-request output reaches this
@@ -708,6 +898,35 @@ class Encoder_ extends Encoders
          if ($before !== self::capture($Response)) {
             self::$mutated = true;
          }
+      }
+
+      // ?: Handled may itself select a deferred clone or emit SSE. Re-read the
+      //   generation after user callbacks and suppress the stale sync wire.
+      if (
+         $Exchange === null
+         && (
+            $Response->deferred
+            || $Response->cacheable === false
+            || $Injected->cacheable === false
+         )
+      ) {
+         $Exchange = self::resolve($Response, $Injected, $Request);
+      }
+      $Cancellation = $Exchange === null ? null : Cancellation::fetch($Exchange);
+      if ($Response->deferred && $Cancellation === null) {
+         $Exchange?->finish(null);
+      }
+      if (
+         $Response->deferred
+         || ($Exchange?->check() ?? false)
+         || $Cancellation !== null
+      ) {
+         if ($Request->hasFiles) {
+            $Request->clean();
+         }
+         $Request->scrub();
+
+         return '';
       }
 
       // @ End of the synchronous request cycle: every consumer allowed to read
@@ -756,6 +975,7 @@ class Encoder_ extends Encoders
             && $Response->encoded === self::$admittedEncoded
          ) {
             $length = strlen(self::$wire);
+            $Exchange?->finish($Response);
             return self::$wire;
          }
 
@@ -764,30 +984,48 @@ class Encoder_ extends Encoders
          //   admission path already did (see adopt()).
          // ! Same blind spot as `self::$wire` above: PHPStan cannot see the
          //   admission closure writing this flag.
-         if (self::$adopted === false) { // @phpstan-ignore identical.alwaysTrue
-            self::adopt($Response, self::$wire);
+         try {
+            if (self::$adopted === false) { // @phpstan-ignore identical.alwaysTrue
+               self::adopt($Response, self::$wire);
+            }
+         }
+         catch (Throwable $Throwable) {
+            $Exchange?->finish(null);
+            throw $Throwable;
          }
       }
 
-      // @ Encode HTTP Response
-      $buffer = $Response->encode($Packages, $length);
+      try {
+         // @ Encode HTTP Response
+         $buffer = $Response->encode($Packages, $length);
 
-      // ? Route response cache opt-in — store the built wire bytes
-      if ($Response->cache !== 0) {
-         // ! Any mediated lifecycle is per-request by policy. Raw final wire
-         //   cannot retain source/precedence ownership for Received listeners,
-         //   generic middleware or Handled output, so only an unmediated
-         //   handler representation may enter the shared route cache.
-         if (
-            self::$mediated === false // @phpstan-ignore identical.alwaysTrue, booleanAnd.alwaysFalse
-            && self::$mutated === false // @phpstan-ignore identical.alwaysTrue
-         ) {
-            $Response->stash($buffer);
-         }
-         else {
-            $Response->cache = 0;
+         // ? Route response cache opt-in — store the built wire bytes
+         if ($Response->cache !== 0) {
+            // ! Any mediated lifecycle is per-request by policy. Raw final wire
+            //   cannot retain source/precedence ownership for Received listeners,
+            //   generic middleware or Handled output, so only an unmediated
+            //   handler representation may enter the shared route cache.
+            if (
+               self::$mediated === false // @phpstan-ignore identical.alwaysTrue, booleanAnd.alwaysFalse
+               && self::$mutated === false // @phpstan-ignore identical.alwaysTrue
+            ) {
+               $Response->stash($buffer);
+            }
+            else {
+               $Response->cache = 0;
+            }
          }
       }
+      catch (Throwable $Throwable) {
+         // ! No final wire exists if adoption, serialization or cache
+         //   preparation fails. Close accounting without inventing a status
+         //   and preserve the caller-visible Throwable contract.
+         $Exchange?->finish(null);
+         throw $Throwable;
+      }
+
+      // @ Commit only after the final representation is serializable.
+      $Exchange?->finish($Response);
 
       // :
       return $buffer;

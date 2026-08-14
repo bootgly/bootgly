@@ -11,9 +11,9 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\ACME_Client\Exceptions;
 
 
-use function substr;
-use function strlen;
 use function preg_replace;
+use function strlen;
+use function substr;
 use Exception;
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\ACME_Client\Exceptioning;

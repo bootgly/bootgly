@@ -545,5 +545,108 @@ return new Suite(
       // A bracketed IPv6 Host must remain intact when its optional port is
       // removed; splitting at the first colon rejects a valid same-origin POST.
       '100.01-csrf_ipv6_literal_same_origin',
+      // # Deferred response Telemetry lifecycle (audit 2026-08-02 L4)
+      // A completed deferred response must emit the same terminal accounting
+      // as a synchronous response: total, in-flight, duration and status class.
+      '101.01-telemetry_deferred_lifecycle',
+      // # Deferred Telemetry correlation/error regressions (L4 remediation)
+      // Interleaved sync/deferred work and a Catcher 500 must each close the
+      // correct exchange exactly once without leaking the in-flight gauge.
+      '101.02-telemetry_deferred_interleaving_error',
+      // # Deferred disconnect/pooled-Fiber Telemetry regressions (L4)
+      // Peer teardown closes core accounting without a synthetic status; the
+      // later pooled-Fiber job must carry an independent exchange lifecycle.
+      '101.03-telemetry_deferred_disconnect_pool',
+      // # Inverse deferred completion Telemetry regression (L4 remediation)
+      // Two parked exchanges complete B-before-A and retain independent
+      // duration, total, gauge and status-class accounting.
+      '101.04-telemetry_deferred_inverse_completion',
+      // # Exceptional Telemetry terminal paths (L4 remediation)
+      // Received-listener, Response-resource reset and Session-save throws must
+      // close core accounting without changing their throw/no-wire semantics.
+      '101.05-telemetry_exceptional_lifecycle',
+      // # Fresh selected Response Telemetry paths (L4 remediation)
+      // A distinct handler Response(201) and Catcher Response(500) must each
+      // terminalize their sole admitted exchange before another request.
+      '101.06-telemetry_response_selection',
+      // # Deferred selection boundaries (L4 remediation)
+      // Cloned/deferred/SSE responses selected from handler, Handled or a
+      // deferred callback must own one lifecycle and emit one final head.
+      '101.07-telemetry_deferred_selection_boundaries',
+      // # HTTP/2 HEAD + SSE terminal status (L4 remediation)
+      // The SSE-selected 200 HEADERS+END_STREAM must be the only stream wire
+      // and the sole Telemetry status, even after a stale application 409.
+      '101.08-telemetry_http2_head_sse',
+      // # Nested defer / pooled Fiber generation (L4 remediation)
+      // A nested child is the sole selected response; its late completion
+      // cannot cancel a later job reusing the parked parent Fiber.
+      '101.09-telemetry_nested_defer_generation',
+      // # Legacy scheduler / upload rollback (L4 remediation)
+      // Contextualizing-only schedulers remain compatible when unobserved;
+      // observed rejection restores upload ownership before encoder cleanup.
+      '101.10-telemetry_legacy_scheduler_upload_rollback',
+      // # Retained stale Response clone / lazy SSE (L4 remediation)
+      // A completed clone cannot emit an SSE head after its HTTP/1.1 socket
+      // begins the next exchange; active and sibling deferred clones retain
+      // one scheduler generation and one selected wire.
+      '101.11-telemetry_stale_clone_sse',
+      // # Nested handoff parent wait (L4 remediation)
+      // After a suspended child becomes the selected generation, wait() on
+      // the still-running terminal parent is a no-op and cannot compete.
+      '101.12-telemetry_nested_handoff_wait',
+      // # Deferred encode failure (L4 remediation)
+      // Serialization must succeed before terminal selection; an encode throw
+      // produces one Catcher 500 wire and one matching 5xx lifecycle.
+      '101.13-telemetry_deferred_encode_error',
+      // # Deferred HTTP/2 HEAD + SSE ownership order (L4 remediation)
+      // The SSE-selected 200 lifecycle must finish before Stream teardown can
+      // cancel its attached deferred generation and erase the terminal status.
+      '101.14-telemetry_deferred_http2_head_sse',
+      // # Stoppable Received priority isolation (L4 remediation)
+      // A pre-boot maximum-priority application listener may stop the public
+      // event bus without blinding the admitted core Telemetry lifecycle.
+      '101.15-telemetry_received_priority_isolation',
+      // # Synchronous response serialization failure (L4 remediation)
+      // An encode() throw preserves its original no-wire Throwable boundary
+      // and closes total/duration/in-flight without selecting a status.
+      '101.16-telemetry_synchronous_encode_error',
+      // # Orphan deferred Response boundaries (L4 remediation)
+      // A raw deferred flag or fresh unbound replacement suppresses wire but
+      // still terminalizes its admitted exchange with no synthetic status.
+      '101.17-telemetry_orphan_deferred_response',
+      // # Nested scheduler rejection upload rollback (L4 remediation)
+      // A rejected child restores its upload to the running parent before the
+      // caught LogicException and sole 202 lifecycle clean it exactly once.
+      '101.18-telemetry_nested_scheduler_rejection_upload',
+      // # Handled post-selection Throwable containment (L4 remediation)
+      // Once deferred/SSE output selected a wire, a later listener cannot
+      // escape the reactor, revoke that lifecycle or append a stale response.
+      '101.19-telemetry_handled_post_selection_throw',
+      // # Received pre-reset Response clone tombstone (L4 remediation)
+      // A listener may retain the reusable Response after admission but before
+      // reset; that clone must carry the newly admitted Exchange through its
+      // completed request and reject late SSE on the reused connection.
+      '101.20-telemetry_received_clone_tombstone',
+      // # Reused Request active-Exchange isolation (L4 remediation)
+      // An unobserved request admitted while an older deferred exchange is
+      // active must own a fresh SSE lifecycle and cannot finish that exchange.
+      '101.21-telemetry_reused_request_exchange_isolation',
+      // # Lazy synchronous Exchange fast path (L4 performance remediation)
+      // A fresh unobserved emitter must keep both Exchange registries absent;
+      // an admission observer still receives one bound and terminal 201 token.
+      '101.22-lazy_synchronous_exchange_fast_path',
+      // # HTTP/2 pre-reset Response clone context (L4 remediation)
+      // A clone retained by Received for stream B must carry B's Package,
+      // Request/stream and Exchange without inheriting deferred A's Cancellation.
+      '101.23-http2_prereset_clone_context',
+      // # Deferred HTTP/2 interleaved Catcher context (L4 remediation)
+      // A fresh Catcher response after a deferred handler/encode throw must
+      // terminate A/1 with 500, not an ambient B/3 request or B's Exchange.
+      '101.24-deferred_http2_interleaved_catcher_context',
+      // # Escape-detection blindness on a returned replacement Response
+      // The encoder assigns a handler-returned Response through its
+      // `&Server::$Response` alias, so the gate's `Server::$Response`
+      // operand aliases the replacement and can never fire.
+      '101.25-escape_replacement_response_split',
    ],
 );

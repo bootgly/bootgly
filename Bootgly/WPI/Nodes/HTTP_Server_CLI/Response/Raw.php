@@ -135,7 +135,15 @@ trait Raw
             $this->stream = false;
          }
 
-         return Encoder_HTTP2::frame($this, $this->code, $Request, $files, $Package, $length);
+         return Encoder_HTTP2::frame(
+            $this,
+            $this->code,
+            $Request,
+            $files,
+            $Package,
+            $length,
+            $this->Cancellation,
+         );
       }
 
       // HTTP/1.0 backward compatibility (RFC 9110 §2.5)

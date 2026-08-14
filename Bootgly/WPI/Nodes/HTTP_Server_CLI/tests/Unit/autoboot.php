@@ -45,6 +45,12 @@ return new Suite(
       '1.27-request_input_keeps_streaming_fields',
       '1.28-decoder_empty_file_input',
       // # Ordered writer ownership of reject() bytes (TCP-3)
-      '1.29-reject_ordered_writer_drain'
+      '1.29-reject_ordered_writer_drain',
+      '1.30-connection_teardown_owners',
+      '1.31-http2_stream_teardown_owners',
+      '1.32-select_context_cancellation',
+      '1.33-cancellation_generation',
+      // # Pay-for-use teardown tombstones (L4 review finding 2)
+      '1.34-ownership_lean_tombstone',
    ]
 );
