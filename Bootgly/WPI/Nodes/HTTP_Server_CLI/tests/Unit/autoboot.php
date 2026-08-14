@@ -54,5 +54,6 @@ return new Suite(
       '1.34-ownership_lean_tombstone',
       // # Eviction through recorded locations (L4 review finding 3)
       '1.35-select_eviction_locations',
+      '1.36-select_parked_watermark',
    ]
 );

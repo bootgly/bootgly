@@ -13,21 +13,30 @@ namespace Benchmark\HTTP_Server_CLI\router;
 
 use const GET;
 use function count;
+use function fclose;
+use function feof;
+use function fread;
 use function getenv;
+use function getmypid;
 use function is_numeric;
 use function json_encode;
+use function stream_set_blocking;
+use function stream_socket_client;
+use function strlen;
 use function strtolower;
 use Generator;
 use Throwable;
 
+use Benchmark\HTTP_Server_CLI\Profiler;
 use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Databases\SQL\Config;
 use Bootgly\ADI\Databases\SQL\Operation;
+use Bootgly\WPI\Events\Select;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\RequestId;
-use Benchmark\HTTP_Server_CLI\Profiler;
 
 
 /*
@@ -337,6 +346,82 @@ return static function
             $Exception($Response, $Throwable);
          }
       });
+   };
+
+   // # Reactor probes (used by the deferred-fanout load and its regime gate).
+
+   $upstream = 'unix://' . $Env('BENCHMARK_UPSTREAM_SOCKET', '/tmp/bootgly-upstream.sock');
+
+   /*
+    * One deferred response per request, each holding its OWN upstream
+    * descriptor for as long as the upstream delays it.
+    *
+    * This is the canonical fan-out/proxy shape, and the only load in the suite
+    * whose parked population tracks concurrency instead of a pool ceiling: the
+    * database probes are bounded by `DB_POOL_MAX` (which TechEmpower parity
+    * pins to 1), and SSE parks no Fiber at all — it is timer-driven. The
+    * steady-state count settles near `upstream delay / per-request CPU`, so
+    * the delay is the knob that selects the regime.
+    */
+   $Fanout = function (Request $Request, Response $Response) use ($upstream) {
+      return $Response->defer(static function (Response $Response) use ($upstream): void {
+         $Socket = @stream_socket_client($upstream, $code, $error, 2);
+
+         if ($Socket === false) {
+            $Response(code: 503, body: 'upstream unavailable');
+
+            return;
+         }
+
+         stream_set_blocking($Socket, false);
+
+         $payload = '';
+         // @@ Bounded: a live upstream that never answers must not park a
+         //    generation forever, and a `wait()` outside a deferred Fiber
+         //    returns immediately — both would spin here without the cap.
+         for ($round = 0; $round < 8 && strlen($payload) < 8; $round++) {
+            $Response->wait($Socket);
+
+            $chunk = fread($Socket, 8);
+
+            if ($chunk === false || ($chunk === '' && feof($Socket))) {
+               break;
+            }
+
+            $payload .= $chunk;
+         }
+
+         fclose($Socket);
+
+         if (strlen($payload) < 8) {
+            $Response(code: 502, body: 'upstream truncated');
+
+            return;
+         }
+
+         $Response(code: 200, body: $payload);
+      });
+   };
+
+   /*
+    * The regime this worker's reactor actually reached.
+    *
+    * An async case that shows no difference between two reactor builds is
+    * only evidence if it ran with the queues full; sampled from inside a
+    * request the instantaneous count is always ~1. Report the high-water mark
+    * with the worker identity, so a probe can sweep every worker and state
+    * the peak the run reached instead of assuming one.
+    */
+   $Peak = static function (Request $Request, Response $Response) {
+      $Event = isSet(HTTP_Server_CLI::$Event) ? HTTP_Server_CLI::$Event : null;
+
+      return $Response(
+         code: 200,
+         body: json_encode([
+            'pid' => getmypid(),
+            'parked' => $Event instanceof Select ? $Event->parked : -1,
+         ]) ?: '{}'
+      );
    };
 
    // @ Static routes (10)
@@ -803,6 +888,10 @@ return static function
    yield $Router->route('/database/native/sleep', $NativeSleep, GET);
    yield $Router->route('/database/resource/sleep', $ResourceSleep, GET);
    yield $Router->route('/database/runner/sleep', $ResourceSleep, GET);
+
+   // @ Bootgly reactor probes
+   yield $Router->route('/deferred/fanout', $Fanout, GET);
+   yield $Router->route('/reactor/peak', $Peak, GET);
 
    // @ Catch-all 404
    yield $Router->route('/*', function (Request $Request, Response $Response) {

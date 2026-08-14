@@ -94,6 +94,17 @@ class Select implements Events, Loops, Scheduler, Cancelling
    private array $awaitingReadDeadlines = [];
    /** @var array<int,float> */
    private array $awaitingWriteDeadlines = [];
+   /**
+    * The most scheduled waiters this reactor has held at once — the tick
+    * queue plus one entry per awaited descriptor.
+    *
+    * Deferred work competes with client connections for the same selector
+    * budget, so this is the share of the 1000-descriptor cap the application
+    * takes, and the population every reactor-wide operation walks. An
+    * instantaneous count says nothing (a sample almost always lands between
+    * waits); only the peak states which regime a workload actually reached.
+    */
+   public private(set) int $parked = 0;
    /** @var array<int,array{deadline:float,Callback:Closure}> */
    private array $Timers = [];
    /** @var array<int,array{deadline:int,Callback:Closure}> */
@@ -774,6 +785,26 @@ class Select implements Events, Loops, Scheduler, Cancelling
       $indexes = $Ticks[$Fiber] ?? [];
       $indexes[array_key_last($this->Fibers)] = true;
       $Ticks[$Fiber] = $indexes;
+
+      $this->weigh();
+   }
+
+   /**
+    * Raise the scheduled-waiter high-water mark to the current occupancy.
+    *
+    * Three O(1) counts on the admission path only. A worker that defers
+    * nothing never reaches it — `schedule()` is the sole caller's caller —
+    * so the plaintext path pays nothing for it.
+    */
+   private function weigh (): void
+   {
+      $parked = count($this->Fibers)
+         + count($this->awaitingReads)
+         + count($this->awaitingWrites);
+
+      if ($parked > $this->parked) {
+         $this->parked = $parked;
+      }
    }
 
    /**
@@ -955,6 +986,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
          $this->mark($Fiber, $id);
          $this->track($this->awaitingWriteDeadlines, $id, $deadline);
          $this->writes[$id] = $Socket;
+         $this->weigh();
 
          return true;
       }
@@ -978,6 +1010,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
       $this->mark($Fiber, $id);
       $this->track($this->awaitingReadDeadlines, $id, $deadline);
       $this->reads[$id] = $Socket;
+      $this->weigh();
 
       return true;
    }
@@ -1443,6 +1476,9 @@ class Select implements Events, Loops, Scheduler, Cancelling
       $this->Fibers = [];
       $this->Waits = null;
       $this->Ticks = null;
+      // ! An observation of the drain that just ended, not a retained
+      //   reference: a reused reactor must report its own peak, not inherit one.
+      $this->parked = 0;
       $Bindings = $this->Bindings;
       $this->Bindings = [];
       foreach ($Bindings as $Binding) {
