@@ -52,5 +52,7 @@ return new Suite(
       '1.33-cancellation_generation',
       // # Pay-for-use teardown tombstones (L4 review finding 2)
       '1.34-ownership_lean_tombstone',
+      // # Eviction through recorded locations (L4 review finding 3)
+      '1.35-select_eviction_locations',
    ]
 );

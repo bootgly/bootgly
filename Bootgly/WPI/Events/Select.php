@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Events;
 
 
+use function array_key_last;
 use function count;
 use function get_debug_type;
 use function hrtime;
@@ -28,6 +29,7 @@ use Closure;
 use Fiber;
 use RuntimeException;
 use Throwable;
+use WeakMap;
 use WeakReference;
 
 use Bootgly\ACI\Events\Cancelling;
@@ -72,6 +74,17 @@ class Select implements Events, Loops, Scheduler, Cancelling
    private array $Fibers = [];
    /** @var array<int,array{Enter:Closure,Leave:Closure,Token:null|Cancellation}> */
    private array $Bindings = [];
+   // # Where each Fiber entered the queues below, so evicting one generation
+   //   costs its own entries instead of a sweep of every parked waiter.
+   //   Deliberately a SUPERSET: an entry consumed by readiness dispatch,
+   //   expiry or release leaves its location behind, which costs one lookup
+   //   and is dropped with the rest. It is never a subset — `queue()` and
+   //   `park()` are the only writers of the queues they describe. Weak keys
+   //   so a collected Fiber needs no bookkeeping and an id cannot be reused.
+   /** @var null|WeakMap<Fiber<mixed,mixed,mixed,mixed>,array<int,true>> */
+   private null|WeakMap $Waits = null;
+   /** @var null|WeakMap<Fiber<mixed,mixed,mixed,mixed>,array<int,true>> */
+   private null|WeakMap $Ticks = null;
    // I/O-bound (resumed when stream_select signals readiness)
    /** @var array<int,array<int,Fiber<mixed,mixed,mixed,mixed>>> */
    private array $awaitingReads = [];
@@ -458,7 +471,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
                   $microseconds = (int) (($remaining - $timeout) * 1_000_000);
                }
 
-               // Waiting for read / write / excepts events.
+               // Waits for read / write / excepts events.
                $streams = $microseconds === null
                   ? @stream_select($read, $write, $except, $timeout)
                   : @stream_select($read, $write, $except, $timeout, $microseconds);
@@ -689,7 +702,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
       }
 
       // @ Tick-based: resume every iteration
-      $this->Fibers[] = $Fiber;
+      $this->park($Fiber);
 
       // :
       return true;
@@ -734,6 +747,36 @@ class Select implements Events, Loops, Scheduler, Cancelling
    }
 
    /**
+    * Remember one awaiting-queue location for a Fiber's current generation.
+    *
+    * @param Fiber<mixed,mixed,mixed,mixed> $Fiber
+    */
+   private function mark (Fiber $Fiber, int $id): void
+   {
+      $Waits = $this->Waits ??= new WeakMap;
+
+      $locations = $Waits[$Fiber] ?? [];
+      $locations[$id] = true;
+      $Waits[$Fiber] = $locations;
+   }
+
+   /**
+    * Queue one Fiber for tick-based resumption, remembering where it landed.
+    *
+    * @param Fiber<mixed,mixed,mixed,mixed> $Fiber
+    */
+   private function park (Fiber $Fiber): void
+   {
+      $this->Fibers[] = $Fiber;
+
+      $Ticks = $this->Ticks ??= new WeakMap;
+
+      $indexes = $Ticks[$Fiber] ?? [];
+      $indexes[array_key_last($this->Fibers)] = true;
+      $Ticks[$Fiber] = $indexes;
+   }
+
+   /**
     * Evict one exact scheduled generation from every reactor queue.
     *
     * The token identity guard is essential for pooled Fibers: cancellation
@@ -773,44 +816,62 @@ class Select implements Events, Loops, Scheduler, Cancelling
          unset($this->Bindings[$FiberID]);
       }
 
-      foreach ($this->Fibers as $id => $Queued) {
-         if ($Queued === $Fiber) {
-            unset($this->Fibers[$id]);
-         }
-      }
-      foreach ($this->awaitingReads as $id => &$Fibers) {
-         foreach ($Fibers as $index => $Queued) {
-            if ($Queued === $Fiber) {
-               unset($Fibers[$index]);
-            }
-         }
-         if ($Fibers === []) {
-            unset($this->awaitingReads[$id]);
-            unset($this->awaitingReadDeadlines[$id]);
-            if (
-               isSet($this->reading[$id]) === false
-               && isSet($this->connecting[$id]) === false
-            ) {
-               unset($this->reads[$id]);
+      // @ Only the locations this Fiber actually entered, never a sweep of
+      //   every parked waiter. A location consumed by readiness dispatch,
+      //   expiry or release is stale — one lookup that matches nothing — and
+      //   the identity check keeps another generation's entry untouched.
+      $Ticks = $this->Ticks;
+      $indexes = $Ticks === null ? null : ($Ticks[$Fiber] ?? null);
+      if ($indexes !== null) {
+         unset($Ticks[$Fiber]);
+         foreach ($indexes as $index => $_) {
+            if (($this->Fibers[$index] ?? null) === $Fiber) {
+               unset($this->Fibers[$index]);
             }
          }
       }
-      unset($Fibers);
-      foreach ($this->awaitingWrites as $id => &$Fibers) {
-         foreach ($Fibers as $index => $Queued) {
-            if ($Queued === $Fiber) {
-               unset($Fibers[$index]);
+
+      $Waits = $this->Waits;
+      $locations = $Waits === null ? null : ($Waits[$Fiber] ?? null);
+      if ($locations === null) {
+         return true;
+      }
+      unset($Waits[$Fiber]);
+
+      foreach ($locations as $id => $_) {
+         if (isSet($this->awaitingReads[$id])) {
+            foreach ($this->awaitingReads[$id] as $index => $Queued) {
+               if ($Queued === $Fiber) {
+                  unset($this->awaitingReads[$id][$index]);
+               }
+            }
+            if ($this->awaitingReads[$id] === []) {
+               unset($this->awaitingReads[$id]);
+               unset($this->awaitingReadDeadlines[$id]);
+               if (
+                  isSet($this->reading[$id]) === false
+                  && isSet($this->connecting[$id]) === false
+               ) {
+                  unset($this->reads[$id]);
+               }
             }
          }
-         if ($Fibers === []) {
-            unset($this->awaitingWrites[$id]);
-            unset($this->awaitingWriteDeadlines[$id]);
-            if (isSet($this->writing[$id]) === false) {
-               unset($this->writes[$id]);
+
+         if (isSet($this->awaitingWrites[$id])) {
+            foreach ($this->awaitingWrites[$id] as $index => $Queued) {
+               if ($Queued === $Fiber) {
+                  unset($this->awaitingWrites[$id][$index]);
+               }
+            }
+            if ($this->awaitingWrites[$id] === []) {
+               unset($this->awaitingWrites[$id]);
+               unset($this->awaitingWriteDeadlines[$id]);
+               if (isSet($this->writing[$id]) === false) {
+                  unset($this->writes[$id]);
+               }
             }
          }
       }
-      unset($Fibers);
 
       return true;
    }
@@ -891,6 +952,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
          }
 
          $this->awaitingWrites[$id][] = $Fiber;
+         $this->mark($Fiber, $id);
          $this->track($this->awaitingWriteDeadlines, $id, $deadline);
          $this->writes[$id] = $Socket;
 
@@ -913,6 +975,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
       }
 
       $this->awaitingReads[$id][] = $Fiber;
+      $this->mark($Fiber, $id);
       $this->track($this->awaitingReadDeadlines, $id, $deadline);
       $this->reads[$id] = $Socket;
 
@@ -1110,7 +1173,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
          }
 
          if ($Fiber->isSuspended()) {
-            $this->Fibers[] = $Fiber;
+            $this->park($Fiber);
          }
       }
    }
@@ -1202,7 +1265,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
          return;
       }
       if ($queued === null) {
-         $this->Fibers[] = $Fiber;
+         $this->park($Fiber);
       }
       else if ($queued === false) {
          $this->reject($Fiber);
@@ -1283,7 +1346,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
          return true;
       }
       if ($queued === null) {
-         $this->Fibers[] = $Fiber;
+         $this->park($Fiber);
 
          return true;
       }
@@ -1378,6 +1441,8 @@ class Select implements Events, Loops, Scheduler, Cancelling
       $this->awaitingReadDeadlines = [];
       $this->awaitingWriteDeadlines = [];
       $this->Fibers = [];
+      $this->Waits = null;
+      $this->Ticks = null;
       $Bindings = $this->Bindings;
       $this->Bindings = [];
       foreach ($Bindings as $Binding) {
