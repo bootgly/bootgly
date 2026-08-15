@@ -50,6 +50,7 @@ use function get_resources;
 use function getcwd;
 use function getenv;
 use function getmypid;
+use function glob;
 use function hash;
 use function hash_equals;
 use function implode;
@@ -60,6 +61,7 @@ use function is_dir;
 use function is_file;
 use function is_link;
 use function is_resource;
+use function is_scalar;
 use function is_string;
 use function json_decode;
 use function json_encode;
@@ -77,6 +79,7 @@ use function pcntl_signal;
 use function pcntl_signal_get_handler;
 use function preg_match;
 use function preg_replace;
+use function printf;
 use function proc_close;
 use function proc_open;
 use function putenv;
@@ -119,6 +122,7 @@ use Bootgly\ACI\Tests\Benchmark\Configs;
 use Bootgly\ACI\Tests\Benchmark\Configs\Options;
 use Bootgly\ACI\Tests\Benchmark\Info;
 use Bootgly\ACI\Tests\Benchmark\Manifest;
+use Bootgly\ACI\Tests\Benchmark\Microbenchmark;
 use Bootgly\ACI\Tests\Benchmark\Outcome;
 use Bootgly\ACI\Tests\Benchmark\Provenance;
 use Bootgly\ACI\Tests\Benchmark\Report;
@@ -311,16 +315,30 @@ class TestCommand extends Command
 
       // !
       // arguments
+      // @@ Indices are 1-based — an explicit `0` (or any non-index) used to
+      //    fall through to the full sweep, so a typo silently cost every suite
+      foreach (['suite', 'case'] as $position => $label) {
+         // ? Omitted — the full run is the intended default
+         if ( isSet($arguments[$position]) === false ) {
+            continue;
+         }
+         // ? A real index
+         if ( (int) $arguments[$position] > 0 ) {
+            continue;
+         }
+
+         $Output = CLI->Terminal->Output;
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Test {$label} index is 1-based: {$arguments[$position]} given (omit it to run all).";
+         $Alert->render();
+
+         return false;
+      }
       // # suite index
       $suite_index = (int) ($arguments[0] ?? 0);
-      if ($suite_index < 1) {
-         $suite_index = 0;
-      }
       // # case index
       $case_index = (int) ($arguments[1] ?? 0);
-      if ($case_index < 1) {
-         $case_index = 0;
-      }
       // options
       // # coverage
       $coverageEnabled = isset($options['coverage']);
@@ -528,7 +546,7 @@ class TestCommand extends Command
 
       // # Arguments
       $arguments = [
-         '[suite]' => 'Suite index (1-based, tests/autoboot.php order); omitted or 0 = all suites',
+         '[suite]' => 'Suite index (1-based, tests/autoboot.php order); omit it to run all suites',
          '[case]' => 'Test case index inside the selected suite (1-based)',
          'benchmark' => 'Benchmark subcommand; see: bootgly test benchmark --help',
       ];
@@ -1015,6 +1033,145 @@ class TestCommand extends Command
 
    // # Benchmark
    /**
+    * Measure microbenchmark cases — the ns/op mode of `test benchmark`.
+    *
+    * A case file returns a `Microbenchmark`; this drives it. Storing results always goes
+    * through the multi-process sweep, because one process cannot be trusted:
+    * PHP's tracing JIT does not make the same compilation decisions on every
+    * run, so a case can be consistently fast in one process and consistently
+    * slow in the next.
+    *
+    * Usage:
+    *   bootgly test benchmark micro <case|dir> [--processes=5] [--<input>=<value>]
+    *   bootgly test benchmark micro <case> --once     (one process; used by the sweep)
+    *
+    * @param array<int,string> $arguments
+    * @param array<string,mixed> $options
+    */
+   public function gauge (array $arguments, array $options): bool
+   {
+      $Output = CLI->Terminal->Output;
+
+      // ? Help
+      if ( isSet($options['help']) || isSet($options['h']) ) {
+         $Fieldset = new Fieldset($Output);
+         $Fieldset->title = '@#Cyan: test benchmark micro @;';
+         $Fieldset->content = 'Measure microbenchmark cases (ns/op).@.;'
+            . 'Each case file returns a Microbenchmark and is named @#Cyan:<name>.Microbenchmark.php@;.@.;@.;'
+            . '@#Cyan:bootgly test benchmark micro <dir>@;   every case in the folder@.;'
+            . '@#Cyan:bootgly test benchmark micro <case>@;  one case file@.;@.;'
+            . '@#Cyan:--processes=N@;      fresh processes per case (default 5; more = more confidence)@.;'
+            . '@#Cyan:--render@;           rebuild results/RESULTS.md from stored runs, measuring nothing@.;'
+            . '@#Cyan:--once@;             single process (iterating only — never for stored numbers)@.;'
+            . '@#Cyan:--<input>=<value>@;  override an input the case declares, e.g. --sizes=8,1000';
+         $Fieldset->render();
+
+         return true;
+      }
+
+      // ? A target is required — there is no sensible "measure everything"
+      $target = $arguments[0] ?? '';
+      if ($target === '') {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = 'Usage: bootgly test benchmark micro <case|dir> [--processes=N]';
+         $Alert->render();
+
+         return false;
+      }
+
+      // ! Resolve the case files — a directory measures every case in it
+      $target = str_starts_with($target, '/') ? $target : BOOTGLY_WORKING_DIR . $target;
+
+      $files = is_dir($target)
+         ? (glob(rtrim($target, '/') . '/*.Microbenchmark.php') ?: [])
+         : [$target];
+
+      if ($files === [] || ($files === [$target] && is_file($target) === false)) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "No microbenchmark case found at: {$target}";
+         $Alert->render();
+
+         return false;
+      }
+
+      sort($files);
+
+      // ! Declared inputs are overridden by any option the case declares
+      $reserved = ['once' => true, 'processes' => true, 'format' => true];
+      $overrides = [];
+      foreach ($options as $name => $value) {
+         if ( isSet($reserved[$name]) === false ) {
+            $overrides[$name] = is_scalar($value) ? (string) $value : '';
+         }
+      }
+
+      $once = isSet($options['once']);
+      $processes = max(1, (int) (is_scalar($options['processes'] ?? null) ? $options['processes'] : 5));
+
+      // ? Re-render only — rebuild RESULTS.md from stored runs, measuring nothing
+      if ( isSet($options['render']) ) {
+         $directory = (is_dir($target) ? rtrim($target, '/') : dirname($target)) . '/results';
+
+         file_put_contents("{$directory}/RESULTS.md", Microbenchmark\Results::render($directory));
+
+         echo 'rendered -> ', str_replace(BOOTGLY_WORKING_DIR, '', $directory), '/RESULTS.md', PHP_EOL;
+
+         return true;
+      }
+
+      // @@
+      foreach ($files as $file) {
+         $directory = dirname($file) . '/results';
+
+         if ($once) {
+            Microbenchmark::sample($file, $directory, $overrides);
+
+            continue;
+         }
+
+         echo PHP_EOL, "=== ", basename($file, '.Microbenchmark.php'), " — {$processes} processes ===", PHP_EOL;
+
+         $Merged = Microbenchmark::sweep($file, $directory, $processes, $overrides);
+
+         // ? Every process failed
+         if ($Merged === null) {
+            $Alert = new Alert($Output);
+            $Alert->Type::Failure->set();
+            $Alert->message = 'No usable process — nothing stored.';
+            $Alert->render();
+
+            return false;
+         }
+
+         // @ Show the merged outcome — the child processes' own tables were
+         //   captured, so without this a sweep would print nothing
+         foreach ($Merged['sections'] as $Section) {
+            Microbenchmark::show($Section);
+         }
+
+         foreach ($Merged['sections'] as $Section) {
+            if ($Section['stable'] === false) {
+               printf(
+                  '  UNSTABLE across processes (%.2fx) in "%s" — treat its ratios as indicative only.%s',
+                  $Section['cross_process_spread'] ?? $Section['worst_spread'],
+                  $Section['section'],
+                  PHP_EOL
+               );
+            }
+         }
+
+         file_put_contents("{$directory}/RESULTS.md", Microbenchmark\Results::render($directory));
+
+         echo '  stored -> ', str_replace(BOOTGLY_WORKING_DIR, '', $directory), PHP_EOL;
+      }
+
+      // :
+      return true;
+   }
+
+   /**
     * Run a benchmark case.
     *
     * Usage: bootgly test benchmark <CASE> [--opponents=name1,name2] [--loads=set:selector]
@@ -1026,6 +1183,11 @@ class TestCommand extends Command
     */
    public function benchmark (array $arguments, array $options): bool
    {
+      // ? Subcommand: micro — the ns/op counterpart of the server benchmark
+      if (($arguments[0] ?? null) === 'micro') {
+         return $this->gauge(array_slice($arguments, 1), $options);
+      }
+
       $machine = strtolower((string) ($options['format'] ?? 'text')) === 'json';
       $supervised = $machine
          && getenv('BENCHMARK_JSON_INNER') === '1'
