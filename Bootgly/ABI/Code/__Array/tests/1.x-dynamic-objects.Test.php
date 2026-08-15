@@ -5,48 +5,22 @@ use Bootgly\ACI\Tests\Suite\Test;
 
 
 return new Test(
-   description: '',
+   description: 'It should return the boundary entries as {key, value} pairs',
    test: function () {
-      // ...
-
+      // ! List
       $__Array = new __Array(['a', 'b', 'c']);
 
-      // * Metadata
-      // @ Pointer
-      $Current = $__Array->Current;
-      $Next = $__Array->Next;
-      $Previous = $__Array->Previous;
-
-      $Last = $__Array->Last;
       $First = $__Array->First;
+      $Last = $__Array->Last;
 
       yield assert(
-         assertion: $Current->key === 0,
-         description: 'Current key is: ' . $Current->key
+         assertion: $First->key === 0,
+         description: 'First key is: ' . $First->key
       );
       yield assert(
-         assertion: $Current->value === 'a',
-         description: 'Current value is: ' . $Current->value
+         assertion: $First->value === 'a',
+         description: 'First value is: ' . $First->value
       );
-
-      yield assert(
-         assertion: $Next->key === 1,
-         description: 'Next key is: ' . $Next->key
-      );
-      yield assert(
-         assertion: $Next->value === 'b',
-         description: 'Next value is: ' . $Next->value
-      );
-
-      yield assert(
-         assertion: $Previous->key === 0,
-         description: 'Previous key is: ' . $Previous->key
-      );
-      yield assert(
-         assertion: $Previous->value === 'a',
-         description: 'Previous value is: ' . $Previous->value
-      );
-
       yield assert(
          assertion: $Last->key === 2,
          description: 'Last key is: ' . $Last->key
@@ -56,13 +30,30 @@ return new Test(
          description: 'Last value is: ' . $Last->value
       );
 
+      // ! Reading is idempotent — no internal cursor to move
       yield assert(
-         assertion: $First->key === 0,
-         description: 'First key is: ' . $First->key
+         assertion: $__Array->First->value === 'a' && $__Array->First->value === 'a',
+         description: 'Repeated First reads return the same entry'
+      );
+
+      // ! Associative — the key is preserved, not the position
+      $__Array = new __Array(['a' => 1, 'b' => 2]);
+
+      yield assert(
+         assertion: $__Array->First->key === 'a' && $__Array->Last->key === 'b',
+         description: 'Associative boundary keys are preserved'
+      );
+
+      // ! Empty
+      $__Array = new __Array([]);
+
+      yield assert(
+         assertion: $__Array->First->key === null && $__Array->First->value === null,
+         description: 'First of an empty array is {null, null}'
       );
       yield assert(
-         assertion: $First->value === 'a',
-         description: 'First value is: ' . $First->value
+         assertion: $__Array->Last->key === null && $__Array->Last->value === null,
+         description: 'Last of an empty array is {null, null}'
       );
    }
 );

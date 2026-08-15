@@ -16,10 +16,12 @@ return new Suite(
    suiteName: __NAMESPACE__,
    // * Data
    tests: [
-      '1.x-dynamic-list',
       '1.x-dynamic-multidimensional',
       '1.x-dynamic-objects',
       // Call static
-      '2.0-callstatic-search'
+      '2.0-callstatic-search',
+      '3.0-callstatic-bind',
+      // Chain
+      '4.0-chain-entry'
    ]
 );
