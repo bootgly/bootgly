@@ -20,6 +20,7 @@ use function getenv;
 use function getmypid;
 use function is_numeric;
 use function json_encode;
+use function str_repeat;
 use function stream_set_blocking;
 use function stream_socket_client;
 use function strlen;
@@ -53,6 +54,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\RequestId;
  *   - Catch-all 404
  *   - Bootgly-specific PostgreSQL probes:
  *       `/database/{native,resource,runner}/{ping,parameters,pool,sleep}`
+ *   - Bootgly reactor probes:
+ *       `/deferred/fanout`, `/database/pool/parked`, `/sse/stream`,
+ *       `/reactor/peak`
  *
  * The six canonical TechEmpower routes (`/plaintext`, `/json`, `/db`,
  * `/query`, `/fortunes`, `/updates`) live in `techempower-benchmark.SAPI.php`.
@@ -400,6 +404,116 @@ return static function
          }
 
          $Response(code: 200, body: $payload);
+      });
+   };
+
+   /*
+    * One pooled database connection parked per request.
+    *
+    * The fan-out probe above parks a descriptor per REQUEST; this one parks a
+    * descriptor per POOL SLOT, which is the only shape a real database
+    * workload can reach. The two knobs are therefore different: fan-out is
+    * selected by connections/workers, this one by `DB_POOL_MAX` alone —
+    * offered load past the ceiling queues on the pool instead of adding
+    * parked descriptors, so the reactor peak equals the ceiling exactly.
+    *
+    * It is deliberately NOT one of the `4.x` database loads. Those are pinned
+    * to a single connection per worker by the cross-framework parity contract,
+    * which is what makes them comparable and what makes them useless as a
+    * reactor probe.
+    *
+    * The pool occupancy travels in the body: a run that reports `created`
+    * below the ceiling never reached the regime it was configured for, and
+    * would otherwise look like a valid measurement.
+    */
+   $poolDelay = $Env('BENCHMARK_POOL_DELAY', '0.05');
+
+   $Parked = function (Request $Request, Response $Response) use (
+      $Connect,
+      $Exception,
+      $Native,
+      $Pool,
+      $poolDelay,
+   ) {
+      return $Response->defer(function (Response $Response) use (
+         $Connect,
+         $Exception,
+         $Native,
+         $Pool,
+         $poolDelay,
+      ): void {
+         try {
+            $Database = $Connect();
+            $Operation = $Native(
+               $Database,
+               $Response,
+               $Database->query(
+                  'SELECT pg_sleep($1::float8), $2::int AS value',
+                  [$poolDelay, 1],
+               ),
+            );
+
+            $Pool($Response, $Database, [$Operation]);
+         }
+         catch (Throwable $Throwable) {
+            $Exception($Response, $Throwable);
+         }
+      });
+   };
+
+   /*
+    * One sustained event stream per connection.
+    *
+    * Unlike every other probe here this one parks NOTHING in the reactor: an
+    * open stream is driven by a `Timer` supervisor, and `Select::$parked`
+    * counts deferred-generation waiters only. What it costs instead is one
+    * timer task per stream, and `Timer::tick()` buckets tasks by the absolute
+    * second they are due — so streams opened together are rescheduled
+    * together, forever, and fire as one burst inside a single SIGALRM
+    * handler rather than spreading over the cadence.
+    *
+    * The supervisor probe uses this route to hold N streams while sampling an
+    * unrelated route's latency, which is where a synchronized burst shows up.
+    *
+    * BENCHMARK_SSE_HEARTBEAT (seconds, default 15) selects the supervisor
+    * cadence: `open()` installs the timer at the tightest of 10s and the
+    * heartbeat, so lowering it below 10 tightens the burst period.
+    */
+   $sseHeartbeat = (int) $Env('BENCHMARK_SSE_HEARTBEAT', '15');
+   // # Events emitted per tick, per stream. The supervisor Timer is SIGALRM at
+   //   one-second granularity, so a tick that sent ONE event would cap every
+   //   stream at 1 event/s and measure the alarm clock instead of the server.
+   //   Bursting K per tick makes the offered rate `streams × K` and puts the
+   //   ceiling back where it belongs — in the transport.
+   $sseEvents = (int) $Env('BENCHMARK_SSE_EVENTS', '10');
+   $ssePayload = str_repeat('x', (int) $Env('BENCHMARK_SSE_PAYLOAD', '32'));
+
+   $Streaming = function (Request $Request, Response $Response) use (
+      $sseEvents,
+      $sseHeartbeat,
+      $ssePayload,
+   ) {
+      return $Response->defer(static function (Response $Response) use (
+         $sseEvents,
+         $sseHeartbeat,
+         $ssePayload,
+      ): void {
+         $SSE = $Response->SSE;
+         $SSE->heartbeat = $sseHeartbeat;
+
+         $SSE->open(
+            Tick: static function ($SSE) use ($sseEvents, $ssePayload): void {
+               // @@ Stop at the first refusal: `send()` returning false means
+               //    the payload was REJECTED (stream gone or a resource budget
+               //    breached), and continuing would spin against a dead unit.
+               for ($event = 0; $event < $sseEvents; $event++) {
+                  if ($SSE->send($ssePayload) === false) {
+                     return;
+                  }
+               }
+            },
+            interval: 1,
+         );
       });
    };
 
@@ -891,6 +1005,8 @@ return static function
 
    // @ Bootgly reactor probes
    yield $Router->route('/deferred/fanout', $Fanout, GET);
+   yield $Router->route('/database/pool/parked', $Parked, GET);
+   yield $Router->route('/sse/stream', $Streaming, GET);
    yield $Router->route('/reactor/peak', $Peak, GET);
 
    // @ Catch-all 404

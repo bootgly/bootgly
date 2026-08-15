@@ -54,6 +54,9 @@ return new Project(
       $router = match (strtolower(getenv('BENCHMARK_LOAD_SET') ?: '')) {
          'techempower' => 'techempower',
          'benchmark'   => 'bootgly',
+         // # The `sse` set is driven by its own runner but served by the same
+         //   Bootgly router — `/sse/stream` lives beside the reactor probes.
+         'sse'         => 'bootgly',
          default       => 'simple',
       };
       $routerFile = match ($router) {
