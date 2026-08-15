@@ -1126,7 +1126,15 @@ class TestCommand extends Command
          $directory = dirname($file) . '/results';
 
          if ($once) {
-            Microbenchmark::sample($file, $directory, $overrides);
+            // ! Only a sweep child stores. A `--once` the user typed is for
+            //   iterating on a case, and letting it persist would replace a
+            //   committed multi-process result with a single-process one —
+            //   silently, since the file name is the same.
+            Microbenchmark::sample(
+               $file,
+               Environment::get('BOOTGLY_MICROBENCHMARK_SWEEP') ? $directory : '',
+               $overrides
+            );
 
             continue;
          }

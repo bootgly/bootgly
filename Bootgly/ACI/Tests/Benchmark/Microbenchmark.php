@@ -26,11 +26,12 @@ use function date;
 use function escapeshellarg;
 use function exec;
 use function explode;
-use function filter_var;
 use function file_get_contents;
+use function filter_var;
 use function function_exists;
 use function glob;
 use function hrtime;
+use function implode;
 use function is_array;
 use function is_bool;
 use function is_callable;
@@ -261,8 +262,15 @@ class Microbenchmark
    }
 
    /**
-    * One process: load a case file, measure it, store the result.
+    * One process: load a case file and measure it.
     *
+    * Storing is opt-in. An empty `$directory` measures and returns without
+    * touching `results/` — one process cannot produce a number worth
+    * committing, so a lone run must never be able to overwrite a stored
+    * multi-process result with a single-process one. sweep() passes a real
+    * directory because reading the child's file back is how it collects.
+    *
+    * @param string $directory Where to store the result; empty stores nothing.
     * @param array<string,string> $overrides
     * @return Payload
     */
@@ -280,7 +288,10 @@ class Microbenchmark
       $case = basename($file, '.Microbenchmark.php');
       $Payload = $Micro->measure($case, $overrides);
 
-      Results::save($directory, $Payload);
+      // ?
+      if ($directory !== '') {
+         Results::save($directory, $Payload);
+      }
 
       // :
       return $Payload;
@@ -313,7 +324,9 @@ class Microbenchmark
       for ($process = 1; $process <= $processes; $process++) {
          exec(
             sprintf(
-               '%s -d opcache.enable_cli=1 %s test benchmark micro %s --once%s 2>&1',
+               // ! The marker is what tells the child it may store — a `--once`
+               //   the user typed measures without touching results/
+               'BOOTGLY_MICROBENCHMARK_SWEEP=1 %s -d opcache.enable_cli=1 %s test benchmark micro %s --once%s 2>&1',
                escapeshellarg(PHP_BINARY),
                escapeshellarg(BOOTGLY_ROOT_DIR . 'bootgly'),
                escapeshellarg($file),
