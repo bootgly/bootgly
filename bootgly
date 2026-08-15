@@ -9,10 +9,6 @@
  * --------------------------------------------------------------------------
  */
 
-#error_reporting(E_ALL); ini_set('display_errors', 'On');
-
-#phpinfo(); exit;
-
 define('BOOTGLY_WORKING_BASE', __DIR__);
 define('BOOTGLY_WORKING_DIR', BOOTGLY_WORKING_BASE . DIRECTORY_SEPARATOR);
 
