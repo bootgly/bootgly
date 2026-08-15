@@ -38,18 +38,18 @@ which mechanism wins a scenario without reading the numbers.
 | `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> first match, n = 100, hit at 50% | **Pipeline ->find() — it ties the hand-written loop and beats every native form** | 🏆 hand foreach + return | 86% faster | yes |
 | `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> any match, n = 100, hit at 50% | **Pipeline ->check() — never materialize an array to ask whether it would be empty** | 🏆 Pipeline ->map->filter->check() | 81% faster | yes |
 | `08-early-exit` | 8.4.23 | `sizes=100,1000` | single filter -> first match, n = 100, hit at 50% | **Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does** | 🏆 Pipeline ->filter->find() | 47% faster | yes |
-| `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> first match, n = 100, hit at miss | **Pipeline ->find() — it ties the hand-written loop and beats every native form** | 🏆 hand foreach + return | 72% faster | yes |
+| `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> first match, n = 100, hit at miss | **Pipeline ->find() — it ties the hand-written loop and beats every native form** | 🏆 hand foreach + return | 73% faster | yes |
 | `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> any match, n = 100, hit at miss | **Pipeline ->check() — never materialize an array to ask whether it would be empty** | 🏆 Pipeline ->map->filter->check() | 66% faster | yes |
 | `08-early-exit` | 8.4.23 | `sizes=100,1000` | single filter -> first match, n = 100, hit at miss | **Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does** | 🏆 Pipeline ->filter->find() | 50% faster | yes |
 | `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> first match, n = 1000, hit at 5% | **Pipeline ->find() — it ties the hand-written loop and beats every native form** | 🏆 hand foreach + return | 99% faster | yes |
 | `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> any match, n = 1000, hit at 5% | **Pipeline ->check() — never materialize an array to ask whether it would be empty** | 🏆 Pipeline ->map->filter->check() | 98% faster | yes |
-| `08-early-exit` | 8.4.23 | `sizes=100,1000` | single filter -> first match, n = 1000, hit at 5% | **Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does** | 🏆 Pipeline ->filter->find() | 48% faster | yes |
+| `08-early-exit` | 8.4.23 | `sizes=100,1000` | single filter -> first match, n = 1000, hit at 5% | **Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does** | 🏆 Pipeline ->filter->find() | 47% faster | yes |
 | `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> first match, n = 1000, hit at 50% | **Pipeline ->find() — it ties the hand-written loop and beats every native form** | 🏆 hand foreach + return | 86% faster | yes |
 | `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> any match, n = 1000, hit at 50% | **Pipeline ->check() — never materialize an array to ask whether it would be empty** | 🏆 Pipeline ->map->filter->check() | 85% faster | yes |
 | `08-early-exit` | 8.4.23 | `sizes=100,1000` | single filter -> first match, n = 1000, hit at 50% | **Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does** | 🏆 Pipeline ->filter->find() | 54% faster | yes |
 | `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> first match, n = 1000, hit at miss | **Pipeline ->find() — it ties the hand-written loop and beats every native form** | 🏆 hand foreach + return | 72% faster | yes |
 | `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> any match, n = 1000, hit at miss | **Pipeline ->check() — never materialize an array to ask whether it would be empty** | 🏆 Pipeline ->map->filter->check() | 70% faster | yes |
-| `08-early-exit` | 8.4.23 | `sizes=100,1000` | single filter -> first match, n = 1000, hit at miss | **Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does** | 🏆 Pipeline ->filter->find() | 55% faster | yes |
+| `08-early-exit` | 8.4.23 | `sizes=100,1000` | single filter -> first match, n = 1000, hit at miss | **Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does** | 🏆 Pipeline ->filter->find() | 54% faster | yes |
 | `09-pipeline-reuse` | 8.4.23 | `sizes=5,8,20,100` | n = 5 | **Pipeline built once + ->apply() — the only form that wins at hot-path sizes** | 🏆 hand-fused loop | 70% faster | yes |
 | `09-pipeline-reuse` | 8.4.23 | `sizes=5,8,20,100` | n = 8 | **Pipeline built once + ->apply() — the only form that wins at hot-path sizes** | 🏆 hand-fused loop | 71% faster | yes |
 | `09-pipeline-reuse` | 8.4.23 | `sizes=5,8,20,100` | n = 20 | **Pipeline built once + ->apply() — the only form that wins at hot-path sizes** | 🏆 hand-fused loop | 71% faster | yes |
@@ -359,7 +359,7 @@ which mechanism wins a scenario without reading the numbers.
 
 ### `08-early-exit`
 
-**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T17:14:40+00:00 · best-of-5 x 200,000 iterations, floor 11.2 ns
+**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T17:51:44+00:00 · best-of-5 x 200,000 iterations, floor 11.1 ns
 
 `inputs: sizes=100,1000`
 
@@ -367,10 +367,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain then [0] | 5773.8 | 1.00x |
-| native array_find(array_map()) | 2960.5 | 0.51x |
-| Pipeline ->map->filter->find() | 364.8 | 0.06x |
-| 🏆 **hand foreach + return** | 107.3 | 0.02x |
+| native chain then [0] | 5837.2 | 1.00x |
+| native array_find(array_map()) | 2971.9 | 0.51x |
+| Pipeline ->map->filter->find() | 370.0 | 0.06x |
+| 🏆 **hand foreach + return** | 107.5 | 0.02x |
 
 **Use:** Pipeline ->find() — it ties the hand-written loop and beats every native form
 
@@ -380,9 +380,9 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_filter !== [] | 5807.6 | 1.00x |
-| native array_any(array_map()) | 3041.2 | 0.52x |
-| 🏆 **Pipeline ->map->filter->check()** | 366.5 | 0.06x |
+| native array_filter !== [] | 5849.0 | 1.00x |
+| native array_any(array_map()) | 2984.4 | 0.51x |
+| 🏆 **Pipeline ->map->filter->check()** | 366.4 | 0.06x |
 
 **Use:** Pipeline ->check() — never materialize an array to ask whether it would be empty
 
@@ -392,8 +392,8 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| 🏆 **native array_find (PHP 8.4, C)** | 266.6 | 1.00x |
-| Pipeline ->filter->find() | 282.8 | 1.06x |
+| 🏆 **native array_find (PHP 8.4, C)** | 267.1 | 1.00x |
+| Pipeline ->filter->find() | 282.5 | 1.06x |
 
 **Use:** native array_find — with one filter and a hit near the front, C wins
 
@@ -403,10 +403,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain then [0] | 5764.6 | 1.00x |
-| native array_find(array_map()) | 4654.2 | 0.81x |
-| Pipeline ->map->filter->find() | 1131.4 | 0.20x |
-| 🏆 **hand foreach + return** | 830.5 | 0.14x |
+| native chain then [0] | 5906.4 | 1.00x |
+| native array_find(array_map()) | 4661.9 | 0.79x |
+| Pipeline ->map->filter->find() | 1132.6 | 0.19x |
+| 🏆 **hand foreach + return** | 833.1 | 0.14x |
 
 **Use:** Pipeline ->find() — it ties the hand-written loop and beats every native form
 
@@ -416,9 +416,9 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_filter !== [] | 5877.1 | 1.00x |
-| native array_any(array_map()) | 4688.0 | 0.80x |
-| 🏆 **Pipeline ->map->filter->check()** | 1135.5 | 0.19x |
+| native array_filter !== [] | 5843.5 | 1.00x |
+| native array_any(array_map()) | 4664.4 | 0.80x |
+| 🏆 **Pipeline ->map->filter->check()** | 1137.9 | 0.19x |
 
 **Use:** Pipeline ->check() — never materialize an array to ask whether it would be empty
 
@@ -428,8 +428,8 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_find (PHP 8.4, C) | 1960.9 | 1.00x |
-| 🏆 **Pipeline ->filter->find()** | 1045.6 | 0.53x |
+| native array_find (PHP 8.4, C) | 1960.8 | 1.00x |
+| 🏆 **Pipeline ->filter->find()** | 1044.2 | 0.53x |
 
 **Use:** Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does
 
@@ -439,10 +439,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain then [0] | 5705.4 | 1.00x |
-| native array_find(array_map()) | 6539.1 | 1.15x |
-| Pipeline ->map->filter->find() | 1950.2 | 0.34x |
-| 🏆 **hand foreach + return** | 1603.4 | 0.28x |
+| native chain then [0] | 5872.5 | 1.00x |
+| native array_find(array_map()) | 6459.5 | 1.10x |
+| Pipeline ->map->filter->find() | 1964.1 | 0.33x |
+| 🏆 **hand foreach + return** | 1610.7 | 0.27x |
 
 **Use:** Pipeline ->find() — it ties the hand-written loop and beats every native form
 
@@ -452,9 +452,9 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_filter !== [] | 5697.9 | 1.00x |
-| native array_any(array_map()) | 6584.4 | 1.16x |
-| 🏆 **Pipeline ->map->filter->check()** | 1951.8 | 0.34x |
+| native array_filter !== [] | 5838.4 | 1.00x |
+| native array_any(array_map()) | 6497.6 | 1.11x |
+| 🏆 **Pipeline ->map->filter->check()** | 1963.4 | 0.34x |
 
 **Use:** Pipeline ->check() — never materialize an array to ask whether it would be empty
 
@@ -464,8 +464,8 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_find (PHP 8.4, C) | 3745.1 | 1.00x |
-| 🏆 **Pipeline ->filter->find()** | 1865.9 | 0.50x |
+| native array_find (PHP 8.4, C) | 3754.9 | 1.00x |
+| 🏆 **Pipeline ->filter->find()** | 1872.7 | 0.50x |
 
 **Use:** Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does
 
@@ -475,10 +475,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain then [0] | 57269.7 | 1.00x |
-| native array_find(array_map()) | 29389.6 | 0.51x |
-| Pipeline ->map->filter->find() | 1117.2 | 0.02x |
-| 🏆 **hand foreach + return** | 822.9 | 0.01x |
+| native chain then [0] | 56896.7 | 1.00x |
+| native array_find(array_map()) | 28115.3 | 0.49x |
+| Pipeline ->map->filter->find() | 1126.4 | 0.02x |
+| 🏆 **hand foreach + return** | 829.3 | 0.01x |
 
 **Use:** Pipeline ->find() — it ties the hand-written loop and beats every native form
 
@@ -488,9 +488,9 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_filter !== [] | 57690.7 | 1.00x |
-| native array_any(array_map()) | 30078.5 | 0.52x |
-| 🏆 **Pipeline ->map->filter->check()** | 1123.5 | 0.02x |
+| native array_filter !== [] | 57802.5 | 1.00x |
+| native array_any(array_map()) | 28490.2 | 0.49x |
+| 🏆 **Pipeline ->map->filter->check()** | 1128.4 | 0.02x |
 
 **Use:** Pipeline ->check() — never materialize an array to ask whether it would be empty
 
@@ -500,8 +500,8 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_find (PHP 8.4, C) | 1945.0 | 1.00x |
-| 🏆 **Pipeline ->filter->find()** | 1020.1 | 0.52x |
+| native array_find (PHP 8.4, C) | 1938.4 | 1.00x |
+| 🏆 **Pipeline ->filter->find()** | 1030.4 | 0.53x |
 
 **Use:** Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does
 
@@ -511,10 +511,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain then [0] | 56575.0 | 1.00x |
-| native array_find(array_map()) | 45380.7 | 0.80x |
-| Pipeline ->map->filter->find() | 8629.3 | 0.15x |
-| 🏆 **hand foreach + return** | 7964.5 | 0.14x |
+| native chain then [0] | 57017.4 | 1.00x |
+| native array_find(array_map()) | 45398.9 | 0.80x |
+| Pipeline ->map->filter->find() | 8680.2 | 0.15x |
+| 🏆 **hand foreach + return** | 7942.0 | 0.14x |
 
 **Use:** Pipeline ->find() — it ties the hand-written loop and beats every native form
 
@@ -524,9 +524,9 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_filter !== [] | 57287.7 | 1.00x |
-| native array_any(array_map()) | 46168.6 | 0.81x |
-| 🏆 **Pipeline ->map->filter->check()** | 8634.9 | 0.15x |
+| native array_filter !== [] | 57747.2 | 1.00x |
+| native array_any(array_map()) | 45374.2 | 0.79x |
+| 🏆 **Pipeline ->map->filter->check()** | 8761.6 | 0.15x |
 
 **Use:** Pipeline ->check() — never materialize an array to ask whether it would be empty
 
@@ -536,8 +536,8 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_find (PHP 8.4, C) | 18818.9 | 1.00x |
-| 🏆 **Pipeline ->filter->find()** | 8641.9 | 0.46x |
+| native array_find (PHP 8.4, C) | 18941.0 | 1.00x |
+| 🏆 **Pipeline ->filter->find()** | 8677.8 | 0.46x |
 
 **Use:** Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does
 
@@ -547,10 +547,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain then [0] | 57629.9 | 1.00x |
-| native array_find(array_map()) | 64980.0 | 1.13x |
-| Pipeline ->map->filter->find() | 16953.0 | 0.29x |
-| 🏆 **hand foreach + return** | 15948.4 | 0.28x |
+| native chain then [0] | 57750.8 | 1.00x |
+| native array_find(array_map()) | 63878.5 | 1.11x |
+| Pipeline ->map->filter->find() | 17108.8 | 0.30x |
+| 🏆 **hand foreach + return** | 16005.0 | 0.28x |
 
 **Use:** Pipeline ->find() — it ties the hand-written loop and beats every native form
 
@@ -560,9 +560,9 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_filter !== [] | 57036.9 | 1.00x |
-| native array_any(array_map()) | 64304.3 | 1.13x |
-| 🏆 **Pipeline ->map->filter->check()** | 17083.6 | 0.30x |
+| native array_filter !== [] | 57054.4 | 1.00x |
+| native array_any(array_map()) | 63192.9 | 1.11x |
+| 🏆 **Pipeline ->map->filter->check()** | 17162.9 | 0.30x |
 
 **Use:** Pipeline ->check() — never materialize an array to ask whether it would be empty
 
@@ -572,8 +572,8 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_find (PHP 8.4, C) | 37373.7 | 1.00x |
-| 🏆 **Pipeline ->filter->find()** | 17002.9 | 0.45x |
+| native array_find (PHP 8.4, C) | 37289.0 | 1.00x |
+| 🏆 **Pipeline ->filter->find()** | 17089.5 | 0.46x |
 
 **Use:** Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does
 
