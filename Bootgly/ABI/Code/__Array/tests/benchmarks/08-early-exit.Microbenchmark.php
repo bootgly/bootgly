@@ -44,9 +44,9 @@ return new Microbenchmark(
       $Triple = static fn (int $value): int => $value * 3;
       $Hit = static fn (int $value): bool => $value === 21;
 
-      return (new Pipeline($array))->map($Triple)->filter($Hit)->find() === 21
-         && (new Pipeline($array))->map($Triple)->filter($Hit)->check() === true
-         && (new Pipeline($array))->map($Triple)->filter($Hit)->count() === 1;
+      return new Pipeline($array)->map($Triple)->filter($Hit)->find() === 21
+         && new Pipeline($array)->map($Triple)->filter($Hit)->check() === true
+         && new Pipeline($array)->map($Triple)->filter($Hit)->count() === 1;
    },
 
    Comparisons: static function (array $inputs): array {
@@ -82,7 +82,7 @@ return new Microbenchmark(
                      array_map($Triple, $array),
                      $Hit
                   ),
-                  'Pipeline ->map->filter->find()' => static fn () => (new Pipeline($array))
+                  'Pipeline ->map->filter->find()' => static fn () => new Pipeline($array)
                      ->map($Triple)
                      ->filter($Hit)
                      ->find(),
@@ -116,7 +116,7 @@ return new Microbenchmark(
                      array_map($Triple, $array),
                      $Hit
                   ),
-                  'Pipeline ->map->filter->check()' => static fn () => (new Pipeline($array))
+                  'Pipeline ->map->filter->check()' => static fn () => new Pipeline($array)
                      ->map($Triple)
                      ->filter($Hit)
                      ->check(),
@@ -133,7 +133,7 @@ return new Microbenchmark(
                name: "single filter -> first match, n = {$size}, hit at {$where}",
                Cases: [
                   'native array_find (PHP 8.4, C)' => static fn () => array_find($array, $HitRaw),
-                  'Pipeline ->filter->find()' => static fn () => (new Pipeline($array))
+                  'Pipeline ->filter->find()' => static fn () => new Pipeline($array)
                      ->filter($HitRaw)
                      ->find(),
                ],

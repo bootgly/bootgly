@@ -51,7 +51,7 @@ return new Microbenchmark(
                   return false;
                },
                '__Array ->multidimensional (reused)' => static fn () => $Nested->multidimensional,
-               '__Array ->multidimensional (per call)' => static fn () => (new __Array($nested))->multidimensional,
+               '__Array ->multidimensional (per call)' => static fn () => new __Array($nested)->multidimensional,
             ],
             baseline: 'inline foreach (no native equivalent)',
             recommendation: '__Array ->multidimensional when the intent matters; the inline foreach in hot paths',

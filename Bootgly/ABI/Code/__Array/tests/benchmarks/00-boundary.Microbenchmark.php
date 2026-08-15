@@ -41,7 +41,7 @@ return new Microbenchmark(
             },
             'native, value only' => static fn () => $array[array_key_last($array)],
             '__Array ->Last (instance reused)' => static fn () => $__Array->Last,
-            '__Array ->Last (constructed per call)' => static fn () => (new __Array($array))->Last,
+            '__Array ->Last (constructed per call)' => static fn () => new __Array($array)->Last,
             '__Array ->First (instance reused)' => static fn () => $__Array->First,
          ],
          baseline: 'native array_key_last + index',

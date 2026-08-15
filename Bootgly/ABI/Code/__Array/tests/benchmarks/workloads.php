@@ -161,15 +161,15 @@ final class Workloads
          'generate' => self::generate(...),
          'decorate' => self::decorate(...),
          'fix' => self::fix(...),
-         'Pipeline' => static fn (array $array): array => (new Pipeline($array))
+         'Pipeline' => static fn (array $array): array => new Pipeline($array)
             ->map(self::$Transform)
             ->filter(self::$Test)
             ->collect(),
-         'Pipeline (reused)' => static fn (array $array): array => (new Pipeline())
+         'Pipeline (reused)' => static fn (array $array): array => new Pipeline()
             ->map(self::$Transform)
             ->filter(self::$Test)
             ->apply($array),
-         'Generic' => static fn (array $array): array => (new Generic($array))
+         'Generic' => static fn (array $array): array => new Generic($array)
             ->map(self::$Transform)
             ->filter(self::$Test)
             ->collect(),

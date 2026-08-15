@@ -54,11 +54,11 @@ return new Microbenchmark(
             name: "n = {$size}",
             Cases: [
                'native chain' => static fn () => Workloads::chain($array),
-               'Generic (op-loop per element)' => static fn () => (new Generic($array))
+               'Generic (op-loop per element)' => static fn () => new Generic($array)
                   ->map($Transform)
                   ->filter($Predicate)
                   ->collect(),
-               'Pipeline (shape-dispatched)' => static fn () => (new Pipeline($array))
+               'Pipeline (shape-dispatched)' => static fn () => new Pipeline($array)
                   ->map($Transform)
                   ->filter($Predicate)
                   ->collect(),

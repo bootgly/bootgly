@@ -27,35 +27,35 @@ return new Test(
       // ! Every recorded shape, against the native expression it replaces
       $Shapes = [
          'no stages' => [
-            static fn (array $a): array => (new Pipeline($a))->collect(),
+            static fn (array $a): array => new Pipeline($a)->collect(),
             static fn (array $a): array => array_values($a)
          ],
          'map' => [
-            static fn (array $a): array => (new Pipeline($a))->map($Double)->collect(),
+            static fn (array $a): array => new Pipeline($a)->map($Double)->collect(),
             static fn (array $a): array => array_values(array_map($Double, $a))
          ],
          'filter' => [
-            static fn (array $a): array => (new Pipeline($a))->filter($Third)->collect(),
+            static fn (array $a): array => new Pipeline($a)->filter($Third)->collect(),
             static fn (array $a): array => array_values(array_filter($a, $Third))
          ],
          'map -> filter' => [
-            static fn (array $a): array => (new Pipeline($a))->map($Double)->filter($Third)->collect(),
+            static fn (array $a): array => new Pipeline($a)->map($Double)->filter($Third)->collect(),
             static fn (array $a): array => array_values(array_filter(array_map($Double, $a), $Third))
          ],
          'filter -> map' => [
-            static fn (array $a): array => (new Pipeline($a))->filter($Third)->map($Double)->collect(),
+            static fn (array $a): array => new Pipeline($a)->filter($Third)->map($Double)->collect(),
             static fn (array $a): array => array_values(array_map($Double, array_filter($a, $Third)))
          ],
          'map -> map' => [
-            static fn (array $a): array => (new Pipeline($a))->map($Double)->map($Increment)->collect(),
+            static fn (array $a): array => new Pipeline($a)->map($Double)->map($Increment)->collect(),
             static fn (array $a): array => array_values(array_map($Increment, array_map($Double, $a)))
          ],
          'filter -> filter' => [
-            static fn (array $a): array => (new Pipeline($a))->filter($Third)->filter($Positive)->collect(),
+            static fn (array $a): array => new Pipeline($a)->filter($Third)->filter($Positive)->collect(),
             static fn (array $a): array => array_values(array_filter(array_filter($a, $Third), $Positive))
          ],
          'map -> filter -> map -> filter' => [
-            static fn (array $a): array => (new Pipeline($a))
+            static fn (array $a): array => new Pipeline($a)
                ->map($Double)->filter($Third)->map($Increment)->filter($Positive)->collect(),
             static fn (array $a): array => array_values(array_filter(
                array_map($Increment, array_filter(array_map($Double, $a), $Third)),
@@ -91,29 +91,29 @@ return new Test(
       $source = range(1, 40);
 
       yield assert(
-         assertion: (new Pipeline($source))->map($Double)->filter($Third)->find()
+         assertion: new Pipeline($source)->map($Double)->filter($Third)->find()
             === array_find(array_map($Double, $source), $Third),
          description: 'find() matches native array_find() over the mapped array'
       );
 
       yield assert(
-         assertion: (new Pipeline($source))->map($Double)->filter($Third)->check()
+         assertion: new Pipeline($source)->map($Double)->filter($Third)->check()
             === array_any(array_map($Double, $source), $Third),
          description: 'check() matches native array_any() over the mapped array'
       );
 
       yield assert(
-         assertion: (new Pipeline($source))->map($Double)->filter($Third)->count()
+         assertion: new Pipeline($source)->map($Double)->filter($Third)->count()
             === count(array_filter(array_map($Double, $source), $Third)),
          description: 'count() matches count(array_filter(array_map(...)))'
       );
 
       // ! apply() agrees with collect() over the same array
-      $Pipeline = (new Pipeline())->map($Double)->filter($Third);
+      $Pipeline = new Pipeline()->map($Double)->filter($Third);
 
       $agreed = true;
       foreach ($Sources as $array) {
-         if ($Pipeline->apply($array) !== (new Pipeline($array))->map($Double)->filter($Third)->collect()) {
+         if ($Pipeline->apply($array) !== new Pipeline($array)->map($Double)->filter($Third)->collect()) {
             $agreed = false;
 
             break;

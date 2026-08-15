@@ -186,7 +186,7 @@ class __Array
    public function map (callable $Op): Pipeline
    {
       // :
-      return (new Pipeline($this->array))->map($Op);
+      return new Pipeline($this->array)->map($Op);
    }
    /**
     * Start a chain with a test every element must pass to survive.
@@ -202,7 +202,7 @@ class __Array
    public function filter (callable $Op): Pipeline
    {
       // :
-      return (new Pipeline($this->array))->filter($Op);
+      return new Pipeline($this->array)->filter($Op);
    }
 
    /**

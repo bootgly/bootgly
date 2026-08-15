@@ -11,7 +11,7 @@ return new Test(
       $Even = static fn (int $value): bool => $value % 2 === 0;
 
       // ! Built once, applied many times, with no cross-contamination
-      $Pipeline = (new Pipeline())->map($Double)->filter($Even);
+      $Pipeline = new Pipeline()->map($Double)->filter($Even);
 
       $first = $Pipeline->apply([1, 2, 3]);
       $second = $Pipeline->apply([10, 20]);
@@ -27,7 +27,7 @@ return new Test(
       );
 
       // ! A source given to the constructor is ignored by apply()
-      $Sourced = (new Pipeline([100, 200]))->map($Double);
+      $Sourced = new Pipeline([100, 200])->map($Double);
 
       yield assert(
          assertion: $Sourced->apply([1, 2]) === [2, 4] && $Sourced->collect() === [200, 400],
@@ -36,15 +36,15 @@ return new Test(
 
       // ! A source-less pipeline collects an empty list
       yield assert(
-         assertion: (new Pipeline())->map($Double)->collect() === [],
+         assertion: new Pipeline()->map($Double)->collect() === [],
          description: 'A pipeline built without a source collects nothing'
       );
 
       // ! Every shape is reachable through apply()
       yield assert(
-         assertion: (new Pipeline())->apply([1, 2]) === [1, 2]
-            && (new Pipeline())->filter($Even)->apply([1, 2, 3, 4]) === [2, 4]
-            && (new Pipeline())->filter($Even)->map($Double)->apply([1, 2, 3, 4]) === [4, 8],
+         assertion: new Pipeline()->apply([1, 2]) === [1, 2]
+            && new Pipeline()->filter($Even)->apply([1, 2, 3, 4]) === [2, 4]
+            && new Pipeline()->filter($Even)->map($Double)->apply([1, 2, 3, 4]) === [4, 8],
          description: 'apply() dispatches the same shapes collect() does'
       );
 

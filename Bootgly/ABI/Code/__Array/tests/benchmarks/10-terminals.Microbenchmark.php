@@ -43,8 +43,8 @@ return new Microbenchmark(
 
       $expected = array_values(array_filter(array_map($Transform, $array), $Test));
 
-      return (new Pipeline($array))->map($Transform)->filter($Test)->count() === count($expected)
-         && (new Pipeline($array))->map($Transform)->filter($Test)->reduce($Sum, 0) === array_sum($expected);
+      return new Pipeline($array)->map($Transform)->filter($Test)->count() === count($expected)
+         && new Pipeline($array)->map($Transform)->filter($Test)->reduce($Sum, 0) === array_sum($expected);
    },
 
    Comparisons: static function (array $inputs): array {
@@ -64,7 +64,7 @@ return new Microbenchmark(
                'native count(filter(map))' => static fn () => count(
                   array_filter(array_map($Transform, $array), $Predicate)
                ),
-               'Pipeline ->count()' => static fn () => (new Pipeline($array))
+               'Pipeline ->count()' => static fn () => new Pipeline($array)
                   ->map($Transform)
                   ->filter($Predicate)
                   ->count(),
@@ -84,7 +84,7 @@ return new Microbenchmark(
                   $Sum,
                   0
                ),
-               'Pipeline ->reduce()' => static fn () => (new Pipeline($array))
+               'Pipeline ->reduce()' => static fn () => new Pipeline($array)
                   ->map($Transform)
                   ->filter($Predicate)
                   ->reduce($Sum, 0),

@@ -15,7 +15,7 @@ return new Test(
       };
 
       // ! Recording runs nothing
-      $Pipeline = (new Pipeline([1, 2, 3]))->map($Double);
+      $Pipeline = new Pipeline([1, 2, 3])->map($Double);
 
       yield assert(
          assertion: $ran === 0,
@@ -39,20 +39,20 @@ return new Test(
       $Increment = static fn (int $value): int => $value + 1;
 
       yield assert(
-         assertion: (new Pipeline([1, 2, 3]))->map($Increment)->map(static fn (int $v): int => $v * 10)->collect()
+         assertion: new Pipeline([1, 2, 3])->map($Increment)->map(static fn (int $v): int => $v * 10)->collect()
             === [20, 30, 40],
          description: 'Recorded transforms apply in order'
       );
 
       // ! An empty source produces an empty result
       yield assert(
-         assertion: (new Pipeline([]))->map($Increment)->collect() === [],
+         assertion: new Pipeline([])->map($Increment)->collect() === [],
          description: 'Mapping an empty array yields an empty list'
       );
 
       // ! Keys are not carried — the result is always a list
       yield assert(
-         assertion: (new Pipeline(['a' => 1, 'b' => 2]))->map($Increment)->collect() === [2, 3],
+         assertion: new Pipeline(['a' => 1, 'b' => 2])->map($Increment)->collect() === [2, 3],
          description: 'A mapped result is re-indexed as a list'
       );
    }

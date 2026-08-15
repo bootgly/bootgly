@@ -51,13 +51,13 @@ return new Microbenchmark(
          $array = Arrays::build(Shapes::Sequence, $size);
 
          // ! Built once — this is the subject, so it must NOT be inside the case
-         $Reused = (new Pipeline())->map($Transform)->filter($Predicate);
+         $Reused = new Pipeline()->map($Transform)->filter($Predicate);
 
          $Comparisons[] = new Comparison(
             name: "n = {$size}",
             Cases: [
                'native chain' => static fn () => Workloads::chain($array),
-               'Pipeline (constructed per call)' => static fn () => (new Pipeline($array))
+               'Pipeline (constructed per call)' => static fn () => new Pipeline($array)
                   ->map($Transform)
                   ->filter($Predicate)
                   ->collect(),

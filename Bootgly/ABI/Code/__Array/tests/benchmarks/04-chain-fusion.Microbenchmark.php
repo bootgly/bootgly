@@ -58,14 +58,14 @@ return new Microbenchmark(
          $array = Arrays::build(Shapes::Sequence, $size);
 
          // ! Built once, outside the measured closure — that is the point of it
-         $Reused = (new Pipeline())->map($Transform)->filter($Predicate);
+         $Reused = new Pipeline()->map($Transform)->filter($Predicate);
 
          $Comparisons[] = new Comparison(
             name: "n = {$size}",
             Cases: [
                'native chain (2 intermediates)' => static fn () => Workloads::chain($array),
                'hand-fused loop (0 intermediates)' => static fn () => Workloads::fuse($array),
-               'Pipeline (constructed per call)' => static fn () => (new Pipeline($array))
+               'Pipeline (constructed per call)' => static fn () => new Pipeline($array)
                   ->map($Transform)
                   ->filter($Predicate)
                   ->collect(),

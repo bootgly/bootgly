@@ -14,30 +14,30 @@ return new Test(
       $source = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
       yield assert(
-         assertion: (new Pipeline($source))->map($Double)->filter($Over)->count() === 7,
+         assertion: new Pipeline($source)->map($Double)->filter($Over)->count() === 7,
          description: 'count() returns how many elements survive every stage'
       );
 
       yield assert(
-         assertion: (new Pipeline($source))->filter($Even)->count()
+         assertion: new Pipeline($source)->filter($Even)->count()
             === count(array_filter($source, $Even)),
          description: 'count() agrees with count(array_filter(...))'
       );
 
       yield assert(
-         assertion: (new Pipeline([1, 3, 5]))->filter($Even)->count() === 0,
+         assertion: new Pipeline([1, 3, 5])->filter($Even)->count() === 0,
          description: 'count() is zero when nothing survives'
       );
 
       yield assert(
-         assertion: (new Pipeline([]))->filter($Even)->count() === 0
-            && (new Pipeline([]))->count() === 0,
+         assertion: new Pipeline([])->filter($Even)->count() === 0
+            && new Pipeline([])->count() === 0,
          description: 'count() is zero for an empty source'
       );
 
       yield assert(
-         assertion: (new Pipeline($source))->count() === 10
-            && (new Pipeline(['a' => 1, 'b' => 2]))->count() === 2,
+         assertion: new Pipeline($source)->count() === 10
+            && new Pipeline(['a' => 1, 'b' => 2])->count() === 2,
          description: 'count() with no stages counts the source'
       );
 
@@ -50,7 +50,7 @@ return new Test(
       };
 
       yield assert(
-         assertion: (new Pipeline($source))->filter($Count)->count() === 10 && $seen === 10,
+         assertion: new Pipeline($source)->filter($Count)->count() === 10 && $seen === 10,
          description: 'count() tests every element'
       );
    }
