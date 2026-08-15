@@ -9,6 +9,7 @@ return new Suites(
       #'Bootgly/ABI/Configs/*', // ! Not testable (for now)
       // ? 2
       'Bootgly/ABI/Code/__Array/',
+      'Bootgly/ABI/Code/__Array/Pipeline/',
       'Bootgly/ABI/Code/__String/',
       'Bootgly/ABI/Code/__String/Bytes/',
       #'Bootgly/ABI/Code/__String/Escapeable/', // ! Not testable directly (traits)

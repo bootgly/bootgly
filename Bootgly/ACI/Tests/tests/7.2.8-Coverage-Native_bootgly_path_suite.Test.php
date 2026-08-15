@@ -26,7 +26,7 @@ return new Test(
             'opcache.enable_cli=0',
             BOOTGLY_ROOT_DIR . 'bootgly',
             'test',
-            '4',
+            '5',
             '--coverage-driver=native',
             '--coverage-report=text',
          ],

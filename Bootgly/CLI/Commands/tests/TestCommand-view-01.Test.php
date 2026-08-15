@@ -58,7 +58,7 @@ return new Test(
       $agent = $human;
       $agent['AI_AGENT'] = '1';
 
-      // ! Runner — targets suite 4 (Bootgly/ABI/Code/__String/Path/): small,
+      // ! Runner — targets suite 5 (Bootgly/ABI/Code/__String/Path/): small,
       //   subprocess-free and index-frozen by the root tests/autoboot.php
       $run = static function (array $arguments, array $environment): array {
          $descriptors = [
@@ -87,7 +87,7 @@ return new Test(
       };
 
       // @ --view=heatmap (human): card rendered, no per-case rows, footer kept
-      [$status, $output] = $run(['4', '--view=heatmap'], $human);
+      [$status, $output] = $run(['5', '--view=heatmap'], $human);
       yield assert(
          assertion: $status === 0,
          description: '--view=heatmap exits with success on a green suite'
@@ -108,7 +108,7 @@ return new Test(
       );
 
       // @ --view=list (human): current output, no cards
-      [$status, $output] = $run(['4', '--view=list'], $human);
+      [$status, $output] = $run(['5', '--view=list'], $human);
       yield assert(
          assertion: $status === 0 && str_contains($output, ' PASS ')
             && str_contains($output, '╭') === false,
@@ -116,7 +116,7 @@ return new Test(
       );
 
       // @ Default (human, targeted run): the list view for focused debugging
-      [$status, $output] = $run(['4'], $human);
+      [$status, $output] = $run(['5'], $human);
       yield assert(
          assertion: $status === 0 && str_contains($output, ' PASS ')
             && str_contains($output, '╭') === false,
@@ -124,7 +124,7 @@ return new Test(
       );
 
       // @ --view=heatmap (human, forced TTY): the card streams live
-      [$status, $output] = $run(['4', '--view=heatmap'], ['BOOTGLY_TTY' => '1'] + $human);
+      [$status, $output] = $run(['5', '--view=heatmap'], ['BOOTGLY_TTY' => '1'] + $human);
       yield assert(
          assertion: $status === 0 && str_contains($output, "\e[?25l")
             && str_contains($output, "\e[?25h"),
@@ -139,7 +139,7 @@ return new Test(
       );
 
       // @ --view=heatmap (agent): the wrapper owns stdout — pure JSON, no cards
-      [$status, $output] = $run(['4', '--view=heatmap'], $agent);
+      [$status, $output] = $run(['5', '--view=heatmap'], $agent);
       yield assert(
          assertion: $status === 0 && str_starts_with(ltrim($output), '{')
             && str_contains($output, '"result"')

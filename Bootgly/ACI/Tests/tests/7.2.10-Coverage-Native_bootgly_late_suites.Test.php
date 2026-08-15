@@ -14,7 +14,7 @@ return new Test(
          return;
       }
 
-      foreach ([14, 15, 16, 17, 18, 19, 20, 21] as $suite) {
+      foreach ([15, 16, 17, 18, 19, 20, 21, 22] as $suite) {
          $descriptors = [
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
