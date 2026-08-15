@@ -39,7 +39,15 @@ use function strtoupper;
 use function ucwords;
 
 
-class __String // Simple class (advanced methods coming soon)
+/**
+ * String vocabulary — encoding-aware length and case as read-only properties,
+ * plus the operations PHP has no single call for: multibyte-safe `pad()` and an
+ * ANSI-aware `wrap()` that measures display columns rather than bytes.
+ *
+ * It wraps native calls only where encoding handling or ANSI awareness is the
+ * point; for a plain byte-level operation, call PHP directly.
+ */
+class __String
 {
    public const ANSI_ESCAPE_SEQUENCE_REGEX = '/\x1b\[[0-9;?]*[ -\/]*[@-~]/';
 

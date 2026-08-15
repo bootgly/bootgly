@@ -12,8 +12,12 @@ return [
       // @ Replace Short Syntax to !empty(...)
       $conditional = preg_replace('/\$(.*?)\?/sx', '!empty(\$${1})', $conditional);
 
+      // ? preg_replace failed on the condition — emitting '' would silently drop
+      //   the whole @if block and produce a template that renders wrong output
       if (!is_string($conditional)) {
-         return ''; // TODO: use custom exception
+         throw new \Bootgly\ABI\Templates\Template\Exceptions\TemplateException(
+            "Invalid @if condition: {$matches[2]}"
+         );
       }
 
       return <<<PHP

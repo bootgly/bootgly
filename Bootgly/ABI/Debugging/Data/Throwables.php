@@ -206,7 +206,6 @@ abstract class Throwables implements Debugging
          $output .= "\n";
          // file content
          if ($contents !== false) {
-            // TODO file content filters
             if ($target === self::TARGET_CLI) {
                $Highlighter = new Highlighter(Highlighter::DEFAULT_THEME);
                $output .= $Highlighter->highlight($contents, $line);
@@ -222,7 +221,11 @@ abstract class Throwables implements Debugging
          // backtrace
          $backtrace = self::trace($Throwable);
          $traces = count($backtrace);
-         $limit = 3; // TODO dynamic with verbosity?
+         // ! Deeper verbosity buys more of the trace — 3 calls at the level that
+         //   enables it, three more per level above, uncapped from 6 up
+         $limit = self::$verbosity >= 6
+            ? $traces
+            : 3 * (self::$verbosity - 2);
 
          if ($traces > $limit) {
             $backtrace = array_slice($backtrace, -$limit);

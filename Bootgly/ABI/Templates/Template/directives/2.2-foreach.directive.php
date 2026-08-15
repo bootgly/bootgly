@@ -10,9 +10,12 @@ return [
 
       preg_match('/\$(.*) +as *(.*)$/is', $iterable, $_matches);
 
-      // ?
+      // ? Not an `<iterable> as <iteration>` expression — emitting '' would drop
+      //   the loop opener and leave its @foreach; closer dangling
       if (!isset($_matches[1], $_matches[2])) {
-         return ''; // TODO: use custom exception
+         throw new \Bootgly\ABI\Templates\Template\Exceptions\TemplateException(
+            "Invalid @foreach expression: {$iterable}"
+         );
       }
 
       // @

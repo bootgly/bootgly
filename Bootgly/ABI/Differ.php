@@ -76,8 +76,8 @@ final class Differ
    /**
     * Compose the internal diff array (`[content, code]` entries).
     *
-    * @param  list<string>|string $from
-    * @param  list<string>|string $to
+    * @param list<string>|string $from
+    * @param list<string>|string $to
     * @return array<int, array{0: string, 1: int}>
     */
    public function compose (array|string $from, array|string $to, ?Calculating $Calculator = null): array
