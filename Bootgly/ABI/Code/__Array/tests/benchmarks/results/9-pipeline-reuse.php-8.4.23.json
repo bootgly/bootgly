@@ -1,0 +1,205 @@
+{
+    "case": "9-pipeline-reuse",
+    "title": "REUSE \u2014 building the chain once instead of per call",
+    "measured": "2026-08-15T16:35:24+00:00",
+    "runtime": {
+        "php": "8.4.23",
+        "opcache": "on",
+        "jit": "on",
+        "os": "Linux"
+    },
+    "inputs": {
+        "sizes": [
+            5,
+            8,
+            20,
+            100
+        ]
+    },
+    "method": {
+        "iterations": 200000,
+        "rounds": 5,
+        "warmup": 2000,
+        "estimator": "best round across 5 processes, closure floor subtracted",
+        "floor_ns": 11.02,
+        "processes": 5
+    },
+    "sections": [
+        {
+            "section": "n = 5",
+            "baseline": "native chain",
+            "fastest": "hand-fused loop",
+            "recommendation": "Pipeline built once + ->apply() \u2014 the only form that wins at hot-path sizes",
+            "stable": true,
+            "worst_spread": 1.069,
+            "verdict": "Construction is a fixed cost, so it decides the small sizes and vanishes at the large ones. Hoisting it out of the call is what gives the abstraction a hot path at all.",
+            "rows": [
+                {
+                    "label": "native chain",
+                    "ns": 435.6,
+                    "ratio": 1,
+                    "spread": 1.027,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.016
+                },
+                {
+                    "label": "Pipeline (constructed per call)",
+                    "ns": 389.7,
+                    "ratio": 0.8946,
+                    "spread": 1.057,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.014
+                },
+                {
+                    "label": "Pipeline (built once, ->apply())",
+                    "ns": 169.4,
+                    "ratio": 0.3889,
+                    "spread": 1.069,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.015
+                },
+                {
+                    "label": "hand-fused loop",
+                    "ns": 135.1,
+                    "ratio": 0.3101,
+                    "spread": 1.039,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.017
+                }
+            ],
+            "cross_process_spread": 1.017
+        },
+        {
+            "section": "n = 8",
+            "baseline": "native chain",
+            "fastest": "hand-fused loop",
+            "recommendation": "Pipeline built once + ->apply() \u2014 the only form that wins at hot-path sizes",
+            "stable": true,
+            "worst_spread": 1.022,
+            "verdict": "Construction is a fixed cost, so it decides the small sizes and vanishes at the large ones. Hoisting it out of the call is what gives the abstraction a hot path at all.",
+            "rows": [
+                {
+                    "label": "native chain",
+                    "ns": 624.9,
+                    "ratio": 1,
+                    "spread": 1.01,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.016
+                },
+                {
+                    "label": "Pipeline (constructed per call)",
+                    "ns": 449.2,
+                    "ratio": 0.7188,
+                    "spread": 1.009,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.012
+                },
+                {
+                    "label": "Pipeline (built once, ->apply())",
+                    "ns": 224.4,
+                    "ratio": 0.3591,
+                    "spread": 1.022,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.012
+                },
+                {
+                    "label": "hand-fused loop",
+                    "ns": 187.4,
+                    "ratio": 0.2999,
+                    "spread": 1.014,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.022
+                }
+            ],
+            "cross_process_spread": 1.022
+        },
+        {
+            "section": "n = 20",
+            "baseline": "native chain",
+            "fastest": "hand-fused loop",
+            "recommendation": "Pipeline built once + ->apply() \u2014 the only form that wins at hot-path sizes",
+            "stable": true,
+            "worst_spread": 1.033,
+            "verdict": "Construction is a fixed cost, so it decides the small sizes and vanishes at the large ones. Hoisting it out of the call is what gives the abstraction a hot path at all.",
+            "rows": [
+                {
+                    "label": "native chain",
+                    "ns": 1411.4,
+                    "ratio": 1,
+                    "spread": 1.033,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.018
+                },
+                {
+                    "label": "Pipeline (constructed per call)",
+                    "ns": 669,
+                    "ratio": 0.474,
+                    "spread": 1.019,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.022
+                },
+                {
+                    "label": "Pipeline (built once, ->apply())",
+                    "ns": 443.6,
+                    "ratio": 0.3143,
+                    "spread": 1.023,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.011
+                },
+                {
+                    "label": "hand-fused loop",
+                    "ns": 408.2,
+                    "ratio": 0.2892,
+                    "spread": 1.023,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.016
+                }
+            ],
+            "cross_process_spread": 1.022
+        },
+        {
+            "section": "n = 100",
+            "baseline": "native chain",
+            "fastest": "hand-fused loop",
+            "recommendation": "Pipeline built once + ->apply() \u2014 the only form that wins at hot-path sizes",
+            "stable": true,
+            "worst_spread": 1.013,
+            "verdict": "Construction is a fixed cost, so it decides the small sizes and vanishes at the large ones. Hoisting it out of the call is what gives the abstraction a hot path at all.",
+            "rows": [
+                {
+                    "label": "native chain",
+                    "ns": 6405.6,
+                    "ratio": 1,
+                    "spread": 1.012,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.039
+                },
+                {
+                    "label": "Pipeline (constructed per call)",
+                    "ns": 2219.8,
+                    "ratio": 0.3465,
+                    "spread": 1.009,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.041
+                },
+                {
+                    "label": "Pipeline (built once, ->apply())",
+                    "ns": 2009.7,
+                    "ratio": 0.3137,
+                    "spread": 1.004,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.011
+                },
+                {
+                    "label": "hand-fused loop",
+                    "ns": 1940.5,
+                    "ratio": 0.3029,
+                    "spread": 1.013,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.01
+                }
+            ],
+            "cross_process_spread": 1.041
+        }
+    ]
+}

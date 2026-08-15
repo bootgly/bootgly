@@ -1,0 +1,220 @@
+{
+    "case": "10-terminals",
+    "title": "TERMINALS \u2014 count() and reduce(), the two that answer without materializing",
+    "measured": "2026-08-15T16:46:43+00:00",
+    "runtime": {
+        "php": "8.4.23",
+        "opcache": "on",
+        "jit": "on",
+        "os": "Linux"
+    },
+    "inputs": {
+        "sizes": [
+            20,
+            100,
+            1000
+        ]
+    },
+    "method": {
+        "iterations": 200000,
+        "rounds": 5,
+        "warmup": 2000,
+        "estimator": "best round across 5 processes, closure floor subtracted",
+        "floor_ns": 11.58,
+        "processes": 5
+    },
+    "sections": [
+        {
+            "section": "count, n = 20",
+            "baseline": "native count(filter(map))",
+            "fastest": "Pipeline ->count()",
+            "recommendation": "Pipeline ->count() \u2014 counting never needs the array it counts",
+            "stable": true,
+            "worst_spread": 1.091,
+            "verdict": "Two arrays are materialized to produce one integer. Counting as the pass goes needs neither.",
+            "rows": [
+                {
+                    "label": "native count(filter(map))",
+                    "ns": 1331,
+                    "ratio": 1,
+                    "spread": 1.017,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.054
+                },
+                {
+                    "label": "Pipeline ->count()",
+                    "ns": 631.1,
+                    "ratio": 0.4742,
+                    "spread": 1.091,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.039
+                }
+            ],
+            "cross_process_spread": 1.054
+        },
+        {
+            "section": "reduce, n = 20",
+            "baseline": "native array_reduce(filter(map))",
+            "fastest": "hand-fused fold",
+            "recommendation": "Pipeline ->reduce() \u2014 it folds inside the pass instead of after it",
+            "stable": true,
+            "worst_spread": 1.038,
+            "verdict": "array_reduce() cannot fold what has not been built yet, so the whole filtered array exists before the fold starts.",
+            "rows": [
+                {
+                    "label": "native array_reduce(filter(map))",
+                    "ns": 1563.2,
+                    "ratio": 1,
+                    "spread": 1.015,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.017
+                },
+                {
+                    "label": "Pipeline ->reduce()",
+                    "ns": 690.1,
+                    "ratio": 0.4415,
+                    "spread": 1.038,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.045
+                },
+                {
+                    "label": "hand-fused fold",
+                    "ns": 401.3,
+                    "ratio": 0.2567,
+                    "spread": 1.031,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.033
+                }
+            ],
+            "cross_process_spread": 1.045
+        },
+        {
+            "section": "count, n = 100",
+            "baseline": "native count(filter(map))",
+            "fastest": "Pipeline ->count()",
+            "recommendation": "Pipeline ->count() \u2014 counting never needs the array it counts",
+            "stable": true,
+            "worst_spread": 1.032,
+            "verdict": "Two arrays are materialized to produce one integer. Counting as the pass goes needs neither.",
+            "rows": [
+                {
+                    "label": "native count(filter(map))",
+                    "ns": 6186.4,
+                    "ratio": 1,
+                    "spread": 1.028,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.052
+                },
+                {
+                    "label": "Pipeline ->count()",
+                    "ns": 2006,
+                    "ratio": 0.3243,
+                    "spread": 1.032,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.014
+                }
+            ],
+            "cross_process_spread": 1.052
+        },
+        {
+            "section": "reduce, n = 100",
+            "baseline": "native array_reduce(filter(map))",
+            "fastest": "hand-fused fold",
+            "recommendation": "Pipeline ->reduce() \u2014 it folds inside the pass instead of after it",
+            "stable": true,
+            "worst_spread": 1.022,
+            "verdict": "array_reduce() cannot fold what has not been built yet, so the whole filtered array exists before the fold starts.",
+            "rows": [
+                {
+                    "label": "native array_reduce(filter(map))",
+                    "ns": 7199.8,
+                    "ratio": 1,
+                    "spread": 1.014,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.027
+                },
+                {
+                    "label": "Pipeline ->reduce()",
+                    "ns": 2268.2,
+                    "ratio": 0.315,
+                    "spread": 1.011,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.018
+                },
+                {
+                    "label": "hand-fused fold",
+                    "ns": 1944.8,
+                    "ratio": 0.2701,
+                    "spread": 1.022,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.016
+                }
+            ],
+            "cross_process_spread": 1.027
+        },
+        {
+            "section": "count, n = 1000",
+            "baseline": "native count(filter(map))",
+            "fastest": "Pipeline ->count()",
+            "recommendation": "Pipeline ->count() \u2014 counting never needs the array it counts",
+            "stable": true,
+            "worst_spread": 1.049,
+            "verdict": "Two arrays are materialized to produce one integer. Counting as the pass goes needs neither.",
+            "rows": [
+                {
+                    "label": "native count(filter(map))",
+                    "ns": 62400,
+                    "ratio": 1,
+                    "spread": 1.024,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.014
+                },
+                {
+                    "label": "Pipeline ->count()",
+                    "ns": 17473.8,
+                    "ratio": 0.28,
+                    "spread": 1.049,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.015
+                }
+            ],
+            "cross_process_spread": 1.015
+        },
+        {
+            "section": "reduce, n = 1000",
+            "baseline": "native array_reduce(filter(map))",
+            "fastest": "hand-fused fold",
+            "recommendation": "Pipeline ->reduce() \u2014 it folds inside the pass instead of after it",
+            "stable": true,
+            "worst_spread": 1.068,
+            "verdict": "array_reduce() cannot fold what has not been built yet, so the whole filtered array exists before the fold starts.",
+            "rows": [
+                {
+                    "label": "native array_reduce(filter(map))",
+                    "ns": 70909.8,
+                    "ratio": 1,
+                    "spread": 1.034,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.025
+                },
+                {
+                    "label": "Pipeline ->reduce()",
+                    "ns": 20101.2,
+                    "ratio": 0.2835,
+                    "spread": 1.04,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.04
+                },
+                {
+                    "label": "hand-fused fold",
+                    "ns": 19397.8,
+                    "ratio": 0.2736,
+                    "spread": 1.068,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.021
+                }
+            ],
+            "cross_process_spread": 1.04
+        }
+    ]
+}

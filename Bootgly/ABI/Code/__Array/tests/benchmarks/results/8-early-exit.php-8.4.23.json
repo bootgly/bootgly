@@ -1,0 +1,675 @@
+{
+    "case": "8-early-exit",
+    "title": "EARLY EXIT \u2014 the largest win __Array has",
+    "measured": "2026-08-15T16:38:55+00:00",
+    "runtime": {
+        "php": "8.4.23",
+        "opcache": "on",
+        "jit": "on",
+        "os": "Linux"
+    },
+    "inputs": {
+        "sizes": [
+            100,
+            1000
+        ]
+    },
+    "method": {
+        "iterations": 200000,
+        "rounds": 5,
+        "warmup": 2000,
+        "estimator": "best round across 5 processes, closure floor subtracted",
+        "floor_ns": 11.21,
+        "processes": 5
+    },
+    "sections": [
+        {
+            "section": "chain -> first match, n = 100, hit at 5%",
+            "baseline": "native chain then [0]",
+            "fastest": "hand foreach + return",
+            "recommendation": "Pipeline ->find() \u2014 it ties the hand-written loop and beats every native form",
+            "stable": true,
+            "worst_spread": 1.059,
+            "verdict": "Materializing to answer \"which one is first\" is the expensive part. Even array_find() over a mapped array pays for the map in full.",
+            "rows": [
+                {
+                    "label": "native chain then [0]",
+                    "ns": 5875.5,
+                    "ratio": 1,
+                    "spread": 1.007,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.019
+                },
+                {
+                    "label": "native array_find(array_map())",
+                    "ns": 2977.3,
+                    "ratio": 0.5067,
+                    "spread": 1.008,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.077
+                },
+                {
+                    "label": "Pipeline ->map->filter->find()",
+                    "ns": 361.8,
+                    "ratio": 0.0616,
+                    "spread": 1.059,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.017
+                },
+                {
+                    "label": "hand foreach + return",
+                    "ns": 107.7,
+                    "ratio": 0.0183,
+                    "spread": 1.015,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.079
+                }
+            ],
+            "cross_process_spread": 1.079
+        },
+        {
+            "section": "chain -> any match, n = 100, hit at 5%",
+            "baseline": "native array_filter !== []",
+            "fastest": "Pipeline ->map->filter->check()",
+            "recommendation": "Pipeline ->check() \u2014 never materialize an array to ask whether it would be empty",
+            "stable": true,
+            "worst_spread": 1.11,
+            "verdict": "Building a filtered array to test it against [] is the most expensive way to ask a yes/no question about an array.",
+            "rows": [
+                {
+                    "label": "native array_filter !== []",
+                    "ns": 5907.5,
+                    "ratio": 1,
+                    "spread": 1.03,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.039
+                },
+                {
+                    "label": "native array_any(array_map())",
+                    "ns": 3026.7,
+                    "ratio": 0.5123,
+                    "spread": 1.01,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.045
+                },
+                {
+                    "label": "Pipeline ->map->filter->check()",
+                    "ns": 361.4,
+                    "ratio": 0.0612,
+                    "spread": 1.11,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.097
+                }
+            ],
+            "cross_process_spread": 1.097
+        },
+        {
+            "section": "single filter -> first match, n = 100, hit at 5%",
+            "baseline": "native array_find (PHP 8.4, C)",
+            "fastest": "native array_find (PHP 8.4, C)",
+            "recommendation": "native array_find \u2014 with one filter and a hit near the front, C wins",
+            "stable": true,
+            "worst_spread": 1.022,
+            "verdict": "The only configuration the native call wins is a single filter whose hit is a handful of elements in; past that, per-element callback dispatch decides it, and userland wins that.",
+            "rows": [
+                {
+                    "label": "native array_find (PHP 8.4, C)",
+                    "ns": 267.5,
+                    "ratio": 1,
+                    "spread": 1.022,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.025
+                },
+                {
+                    "label": "Pipeline ->filter->find()",
+                    "ns": 291.3,
+                    "ratio": 1.089,
+                    "spread": 1.013,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.015
+                }
+            ],
+            "cross_process_spread": 1.025
+        },
+        {
+            "section": "chain -> first match, n = 100, hit at 50%",
+            "baseline": "native chain then [0]",
+            "fastest": "hand foreach + return",
+            "recommendation": "Pipeline ->find() \u2014 it ties the hand-written loop and beats every native form",
+            "stable": true,
+            "worst_spread": 1.042,
+            "verdict": "Materializing to answer \"which one is first\" is the expensive part. Even array_find() over a mapped array pays for the map in full.",
+            "rows": [
+                {
+                    "label": "native chain then [0]",
+                    "ns": 5869.7,
+                    "ratio": 1,
+                    "spread": 1.003,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.021
+                },
+                {
+                    "label": "native array_find(array_map())",
+                    "ns": 4747.9,
+                    "ratio": 0.8089,
+                    "spread": 1.02,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.045
+                },
+                {
+                    "label": "Pipeline ->map->filter->find()",
+                    "ns": 1132.1,
+                    "ratio": 0.1929,
+                    "spread": 1.042,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.009
+                },
+                {
+                    "label": "hand foreach + return",
+                    "ns": 836.8,
+                    "ratio": 0.1426,
+                    "spread": 1.038,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.142
+                }
+            ],
+            "cross_process_spread": 1.142
+        },
+        {
+            "section": "chain -> any match, n = 100, hit at 50%",
+            "baseline": "native array_filter !== []",
+            "fastest": "Pipeline ->map->filter->check()",
+            "recommendation": "Pipeline ->check() \u2014 never materialize an array to ask whether it would be empty",
+            "stable": true,
+            "worst_spread": 1.042,
+            "verdict": "Building a filtered array to test it against [] is the most expensive way to ask a yes/no question about an array.",
+            "rows": [
+                {
+                    "label": "native array_filter !== []",
+                    "ns": 5847.5,
+                    "ratio": 1,
+                    "spread": 1.015,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.072
+                },
+                {
+                    "label": "native array_any(array_map())",
+                    "ns": 4676.1,
+                    "ratio": 0.7997,
+                    "spread": 1.042,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.043
+                },
+                {
+                    "label": "Pipeline ->map->filter->check()",
+                    "ns": 1134.8,
+                    "ratio": 0.1941,
+                    "spread": 1.018,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.038
+                }
+            ],
+            "cross_process_spread": 1.072
+        },
+        {
+            "section": "single filter -> first match, n = 100, hit at 50%",
+            "baseline": "native array_find (PHP 8.4, C)",
+            "fastest": "Pipeline ->filter->find()",
+            "recommendation": "Pipeline ->find() \u2014 a JIT-compiled userland loop dispatches callbacks cheaper than C does",
+            "stable": true,
+            "worst_spread": 1.046,
+            "verdict": "The only configuration the native call wins is a single filter whose hit is a handful of elements in; past that, per-element callback dispatch decides it, and userland wins that.",
+            "rows": [
+                {
+                    "label": "native array_find (PHP 8.4, C)",
+                    "ns": 1956.8,
+                    "ratio": 1,
+                    "spread": 1.03,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.049
+                },
+                {
+                    "label": "Pipeline ->filter->find()",
+                    "ns": 1051,
+                    "ratio": 0.5371,
+                    "spread": 1.046,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.049
+                }
+            ],
+            "cross_process_spread": 1.049
+        },
+        {
+            "section": "chain -> first match, n = 100, hit at miss",
+            "baseline": "native chain then [0]",
+            "fastest": "hand foreach + return",
+            "recommendation": "Pipeline ->find() \u2014 it ties the hand-written loop and beats every native form",
+            "stable": true,
+            "worst_spread": 1.059,
+            "verdict": "Materializing to answer \"which one is first\" is the expensive part. Even array_find() over a mapped array pays for the map in full.",
+            "rows": [
+                {
+                    "label": "native chain then [0]",
+                    "ns": 5947.2,
+                    "ratio": 1,
+                    "spread": 1.047,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.018
+                },
+                {
+                    "label": "native array_find(array_map())",
+                    "ns": 6586,
+                    "ratio": 1.1074,
+                    "spread": 1.045,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.029
+                },
+                {
+                    "label": "Pipeline ->map->filter->find()",
+                    "ns": 1951.6,
+                    "ratio": 0.3282,
+                    "spread": 1.059,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.023
+                },
+                {
+                    "label": "hand foreach + return",
+                    "ns": 1605.9,
+                    "ratio": 0.27,
+                    "spread": 1.05,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.144
+                }
+            ],
+            "cross_process_spread": 1.144
+        },
+        {
+            "section": "chain -> any match, n = 100, hit at miss",
+            "baseline": "native array_filter !== []",
+            "fastest": "Pipeline ->map->filter->check()",
+            "recommendation": "Pipeline ->check() \u2014 never materialize an array to ask whether it would be empty",
+            "stable": true,
+            "worst_spread": 1.019,
+            "verdict": "Building a filtered array to test it against [] is the most expensive way to ask a yes/no question about an array.",
+            "rows": [
+                {
+                    "label": "native array_filter !== []",
+                    "ns": 5869.5,
+                    "ratio": 1,
+                    "spread": 1.004,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.017
+                },
+                {
+                    "label": "native array_any(array_map())",
+                    "ns": 6476.1,
+                    "ratio": 1.1033,
+                    "spread": 1.003,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.033
+                },
+                {
+                    "label": "Pipeline ->map->filter->check()",
+                    "ns": 1949.4,
+                    "ratio": 0.3321,
+                    "spread": 1.019,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.015
+                }
+            ],
+            "cross_process_spread": 1.033
+        },
+        {
+            "section": "single filter -> first match, n = 100, hit at miss",
+            "baseline": "native array_find (PHP 8.4, C)",
+            "fastest": "Pipeline ->filter->find()",
+            "recommendation": "Pipeline ->find() \u2014 a JIT-compiled userland loop dispatches callbacks cheaper than C does",
+            "stable": true,
+            "worst_spread": 1.029,
+            "verdict": "The only configuration the native call wins is a single filter whose hit is a handful of elements in; past that, per-element callback dispatch decides it, and userland wins that.",
+            "rows": [
+                {
+                    "label": "native array_find (PHP 8.4, C)",
+                    "ns": 3712.4,
+                    "ratio": 1,
+                    "spread": 1.005,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.007
+                },
+                {
+                    "label": "Pipeline ->filter->find()",
+                    "ns": 1877.4,
+                    "ratio": 0.5057,
+                    "spread": 1.029,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.009
+                }
+            ],
+            "cross_process_spread": 1.009
+        },
+        {
+            "section": "chain -> first match, n = 1000, hit at 5%",
+            "baseline": "native chain then [0]",
+            "fastest": "hand foreach + return",
+            "recommendation": "Pipeline ->find() \u2014 it ties the hand-written loop and beats every native form",
+            "stable": true,
+            "worst_spread": 1.084,
+            "verdict": "Materializing to answer \"which one is first\" is the expensive part. Even array_find() over a mapped array pays for the map in full.",
+            "rows": [
+                {
+                    "label": "native chain then [0]",
+                    "ns": 56936.5,
+                    "ratio": 1,
+                    "spread": 1.003,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.031
+                },
+                {
+                    "label": "native array_find(array_map())",
+                    "ns": 28849.2,
+                    "ratio": 0.5067,
+                    "spread": 1.024,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.049
+                },
+                {
+                    "label": "Pipeline ->map->filter->find()",
+                    "ns": 1126.2,
+                    "ratio": 0.0198,
+                    "spread": 1.084,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.01
+                },
+                {
+                    "label": "hand foreach + return",
+                    "ns": 826.7,
+                    "ratio": 0.0145,
+                    "spread": 1.03,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.153
+                }
+            ],
+            "cross_process_spread": 1.153
+        },
+        {
+            "section": "chain -> any match, n = 1000, hit at 5%",
+            "baseline": "native array_filter !== []",
+            "fastest": "Pipeline ->map->filter->check()",
+            "recommendation": "Pipeline ->check() \u2014 never materialize an array to ask whether it would be empty",
+            "stable": true,
+            "worst_spread": 1.067,
+            "verdict": "Building a filtered array to test it against [] is the most expensive way to ask a yes/no question about an array.",
+            "rows": [
+                {
+                    "label": "native array_filter !== []",
+                    "ns": 56918.3,
+                    "ratio": 1,
+                    "spread": 1.007,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.031
+                },
+                {
+                    "label": "native array_any(array_map())",
+                    "ns": 29970.1,
+                    "ratio": 0.5265,
+                    "spread": 1.009,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.011
+                },
+                {
+                    "label": "Pipeline ->map->filter->check()",
+                    "ns": 1127.1,
+                    "ratio": 0.0198,
+                    "spread": 1.067,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.027
+                }
+            ],
+            "cross_process_spread": 1.031
+        },
+        {
+            "section": "single filter -> first match, n = 1000, hit at 5%",
+            "baseline": "native array_find (PHP 8.4, C)",
+            "fastest": "Pipeline ->filter->find()",
+            "recommendation": "Pipeline ->find() \u2014 a JIT-compiled userland loop dispatches callbacks cheaper than C does",
+            "stable": true,
+            "worst_spread": 1.133,
+            "verdict": "The only configuration the native call wins is a single filter whose hit is a handful of elements in; past that, per-element callback dispatch decides it, and userland wins that.",
+            "rows": [
+                {
+                    "label": "native array_find (PHP 8.4, C)",
+                    "ns": 1953.2,
+                    "ratio": 1,
+                    "spread": 1.01,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.011
+                },
+                {
+                    "label": "Pipeline ->filter->find()",
+                    "ns": 1044.4,
+                    "ratio": 0.5347,
+                    "spread": 1.133,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.026
+                }
+            ],
+            "cross_process_spread": 1.026
+        },
+        {
+            "section": "chain -> first match, n = 1000, hit at 50%",
+            "baseline": "native chain then [0]",
+            "fastest": "hand foreach + return",
+            "recommendation": "Pipeline ->find() \u2014 it ties the hand-written loop and beats every native form",
+            "stable": true,
+            "worst_spread": 1.063,
+            "verdict": "Materializing to answer \"which one is first\" is the expensive part. Even array_find() over a mapped array pays for the map in full.",
+            "rows": [
+                {
+                    "label": "native chain then [0]",
+                    "ns": 57278.4,
+                    "ratio": 1,
+                    "spread": 1.019,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.025
+                },
+                {
+                    "label": "native array_find(array_map())",
+                    "ns": 45547.1,
+                    "ratio": 0.7952,
+                    "spread": 1.037,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.042
+                },
+                {
+                    "label": "Pipeline ->map->filter->find()",
+                    "ns": 8679.2,
+                    "ratio": 0.1515,
+                    "spread": 1.063,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.024
+                },
+                {
+                    "label": "hand foreach + return",
+                    "ns": 7963,
+                    "ratio": 0.139,
+                    "spread": 1.045,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.147
+                }
+            ],
+            "cross_process_spread": 1.147
+        },
+        {
+            "section": "chain -> any match, n = 1000, hit at 50%",
+            "baseline": "native array_filter !== []",
+            "fastest": "Pipeline ->map->filter->check()",
+            "recommendation": "Pipeline ->check() \u2014 never materialize an array to ask whether it would be empty",
+            "stable": true,
+            "worst_spread": 1.017,
+            "verdict": "Building a filtered array to test it against [] is the most expensive way to ask a yes/no question about an array.",
+            "rows": [
+                {
+                    "label": "native array_filter !== []",
+                    "ns": 57193.8,
+                    "ratio": 1,
+                    "spread": 1.007,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.029
+                },
+                {
+                    "label": "native array_any(array_map())",
+                    "ns": 46867.9,
+                    "ratio": 0.8195,
+                    "spread": 1.011,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.037
+                },
+                {
+                    "label": "Pipeline ->map->filter->check()",
+                    "ns": 8702.7,
+                    "ratio": 0.1522,
+                    "spread": 1.017,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.032
+                }
+            ],
+            "cross_process_spread": 1.037
+        },
+        {
+            "section": "single filter -> first match, n = 1000, hit at 50%",
+            "baseline": "native array_find (PHP 8.4, C)",
+            "fastest": "Pipeline ->filter->find()",
+            "recommendation": "Pipeline ->find() \u2014 a JIT-compiled userland loop dispatches callbacks cheaper than C does",
+            "stable": true,
+            "worst_spread": 1.04,
+            "verdict": "The only configuration the native call wins is a single filter whose hit is a handful of elements in; past that, per-element callback dispatch decides it, and userland wins that.",
+            "rows": [
+                {
+                    "label": "native array_find (PHP 8.4, C)",
+                    "ns": 18719.5,
+                    "ratio": 1,
+                    "spread": 1.04,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.031
+                },
+                {
+                    "label": "Pipeline ->filter->find()",
+                    "ns": 8658.8,
+                    "ratio": 0.4626,
+                    "spread": 1.013,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.025
+                }
+            ],
+            "cross_process_spread": 1.031
+        },
+        {
+            "section": "chain -> first match, n = 1000, hit at miss",
+            "baseline": "native chain then [0]",
+            "fastest": "hand foreach + return",
+            "recommendation": "Pipeline ->find() \u2014 it ties the hand-written loop and beats every native form",
+            "stable": true,
+            "worst_spread": 1.095,
+            "verdict": "Materializing to answer \"which one is first\" is the expensive part. Even array_find() over a mapped array pays for the map in full.",
+            "rows": [
+                {
+                    "label": "native chain then [0]",
+                    "ns": 58309.8,
+                    "ratio": 1,
+                    "spread": 1.025,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.009
+                },
+                {
+                    "label": "native array_find(array_map())",
+                    "ns": 65541.9,
+                    "ratio": 1.124,
+                    "spread": 1.095,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.021
+                },
+                {
+                    "label": "Pipeline ->map->filter->find()",
+                    "ns": 17101.7,
+                    "ratio": 0.2933,
+                    "spread": 1.02,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.034
+                },
+                {
+                    "label": "hand foreach + return",
+                    "ns": 16000.1,
+                    "ratio": 0.2744,
+                    "spread": 1.02,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.174
+                }
+            ],
+            "cross_process_spread": 1.174
+        },
+        {
+            "section": "chain -> any match, n = 1000, hit at miss",
+            "baseline": "native array_filter !== []",
+            "fastest": "Pipeline ->map->filter->check()",
+            "recommendation": "Pipeline ->check() \u2014 never materialize an array to ask whether it would be empty",
+            "stable": true,
+            "worst_spread": 1.015,
+            "verdict": "Building a filtered array to test it against [] is the most expensive way to ask a yes/no question about an array.",
+            "rows": [
+                {
+                    "label": "native array_filter !== []",
+                    "ns": 57031.7,
+                    "ratio": 1,
+                    "spread": 1.007,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.028
+                },
+                {
+                    "label": "native array_any(array_map())",
+                    "ns": 64843.6,
+                    "ratio": 1.137,
+                    "spread": 1.007,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.018
+                },
+                {
+                    "label": "Pipeline ->map->filter->check()",
+                    "ns": 17216.3,
+                    "ratio": 0.3019,
+                    "spread": 1.015,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.014
+                }
+            ],
+            "cross_process_spread": 1.028
+        },
+        {
+            "section": "single filter -> first match, n = 1000, hit at miss",
+            "baseline": "native array_find (PHP 8.4, C)",
+            "fastest": "Pipeline ->filter->find()",
+            "recommendation": "Pipeline ->find() \u2014 a JIT-compiled userland loop dispatches callbacks cheaper than C does",
+            "stable": true,
+            "worst_spread": 1.011,
+            "verdict": "The only configuration the native call wins is a single filter whose hit is a handful of elements in; past that, per-element callback dispatch decides it, and userland wins that.",
+            "rows": [
+                {
+                    "label": "native array_find (PHP 8.4, C)",
+                    "ns": 37011.3,
+                    "ratio": 1,
+                    "spread": 1.008,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.024
+                },
+                {
+                    "label": "Pipeline ->filter->find()",
+                    "ns": 17097.3,
+                    "ratio": 0.4619,
+                    "spread": 1.011,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.031
+                }
+            ],
+            "cross_process_spread": 1.031
+        }
+    ]
+}

@@ -1,0 +1,77 @@
+{
+    "case": "2-search",
+    "title": "__Array::search() vs array_search()",
+    "measured": "2026-08-15T16:31:39+00:00",
+    "runtime": {
+        "php": "8.4.23",
+        "opcache": "on",
+        "jit": "on",
+        "os": "Linux"
+    },
+    "inputs": {
+        "size": 40,
+        "hit": 30
+    },
+    "method": {
+        "iterations": 200000,
+        "rounds": 5,
+        "warmup": 2000,
+        "estimator": "best round across 5 processes, closure floor subtracted",
+        "floor_ns": 11.28,
+        "processes": 5
+    },
+    "sections": [
+        {
+            "section": "list of 40, hit at 30",
+            "baseline": "native array_search (hit)",
+            "fastest": "native array_search (hit)",
+            "recommendation": "native array_search for a key; __Array::search for a needle list or the full triple",
+            "stable": true,
+            "worst_spread": 1.082,
+            "verdict": "Native search is the floor. __Array::search earns its cost only when you want the {key, value, found} triple without writing it out, or when trying several needles in order \u2014 which native search cannot express at all.",
+            "rows": [
+                {
+                    "label": "native array_search (hit)",
+                    "ns": 115.7,
+                    "ratio": 1,
+                    "spread": 1.082,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.019
+                },
+                {
+                    "label": "native + build the pair (hit)",
+                    "ns": 156.6,
+                    "ratio": 1.3535,
+                    "spread": 1.028,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.011
+                },
+                {
+                    "label": "__Array::search (hit)",
+                    "ns": 241.9,
+                    "ratio": 2.0908,
+                    "spread": 1.016,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.003
+                },
+                {
+                    "label": "__Array::search (miss)",
+                    "ns": 247.6,
+                    "ratio": 2.14,
+                    "spread": 1.028,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.014
+                },
+                {
+                    "label": "__Array::search (needle list)",
+                    "ns": 410.5,
+                    "ratio": 3.548,
+                    "spread": 1.03,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.011
+                }
+            ],
+            "cross_process_spread": 1.019
+        }
+    ]
+}

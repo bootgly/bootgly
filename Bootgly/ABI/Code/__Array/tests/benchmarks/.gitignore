@@ -1,0 +1,8 @@
+# The repository-wide `*.md` rule would drop this folder's generated results,
+# and the accumulated evidence IS the point of these microbenchmarks: they are
+# study material meant to survive machines and PHP versions.
+#
+# Re-include them here (a negation works because no parent *directory* is
+# excluded — only the `*.md` files inside it).
+!README.md
+!results/RESULTS.md

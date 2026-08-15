@@ -1,0 +1,120 @@
+{
+    "case": "3-wrapper-forms",
+    "title": "STUDY \u2014 the cost of every wrapper form",
+    "measured": "2026-08-15T16:31:48+00:00",
+    "runtime": {
+        "php": "8.4.23",
+        "opcache": "on",
+        "jit": "on",
+        "os": "Linux"
+    },
+    "inputs": {
+        "size": 50
+    },
+    "method": {
+        "iterations": 200000,
+        "rounds": 5,
+        "warmup": 2000,
+        "estimator": "best round across 5 processes, closure floor subtracted",
+        "floor_ns": 11.22,
+        "processes": 5
+    },
+    "sections": [
+        {
+            "section": "HEAVY operation \u2014 array_keys() over 50 entries",
+            "baseline": "native array_keys($a)",
+            "fastest": "native array_keys($a)",
+            "recommendation": "native array_keys($a); if a wrapper is unavoidable, a static method \u2014 never magic __get",
+            "stable": true,
+            "worst_spread": 1.038,
+            "verdict": "Real work dilutes the overhead \u2014 the cheapest wrapper form (a static method) lands within ~10%, while magic __get roughly doubles the cost.",
+            "rows": [
+                {
+                    "label": "native array_keys($a)",
+                    "ns": 142.7,
+                    "ratio": 1,
+                    "spread": 1.038,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.025
+                },
+                {
+                    "label": "static method",
+                    "ns": 152.1,
+                    "ratio": 1.0659,
+                    "spread": 1.009,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.025
+                },
+                {
+                    "label": "property hook (instance reused)",
+                    "ns": 201.9,
+                    "ratio": 1.4149,
+                    "spread": 1.014,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.035
+                },
+                {
+                    "label": "magic __get (instance reused)",
+                    "ns": 206.3,
+                    "ratio": 1.4457,
+                    "spread": 1.02,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.036
+                },
+                {
+                    "label": "property hook + construction",
+                    "ns": 260.9,
+                    "ratio": 1.8283,
+                    "spread": 1.019,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.025
+                },
+                {
+                    "label": "magic __get + construction",
+                    "ns": 270.2,
+                    "ratio": 1.8935,
+                    "spread": 1.016,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.028
+                }
+            ],
+            "cross_process_spread": 1.036
+        },
+        {
+            "section": "CHEAP operation \u2014 the {key, value} boundary pair",
+            "baseline": "native array_key_last + index",
+            "fastest": "native array_key_last + index",
+            "recommendation": "native array_key_last + index \u2014 do not wrap cheap operations",
+            "stable": true,
+            "worst_spread": 1.053,
+            "verdict": "Same absolute overhead, far less work to hide it, so the ratio blows up. Framework arrays (headers, route params, query args) are all cheap operations, which is why routing them through a wrapper is the wrong trade.",
+            "rows": [
+                {
+                    "label": "native array_key_last + index",
+                    "ns": 50.4,
+                    "ratio": 1,
+                    "spread": 1.053,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.012
+                },
+                {
+                    "label": "__Array ->Last (instance reused)",
+                    "ns": 121.2,
+                    "ratio": 2.4048,
+                    "spread": 1.034,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.017
+                },
+                {
+                    "label": "__Array ->Last + construction",
+                    "ns": 146,
+                    "ratio": 2.8968,
+                    "spread": 1.027,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.04
+                }
+            ],
+            "cross_process_spread": 1.04
+        }
+    ]
+}

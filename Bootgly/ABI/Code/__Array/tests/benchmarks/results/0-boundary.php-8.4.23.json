@@ -1,0 +1,76 @@
+{
+    "case": "0-boundary",
+    "title": "__Array boundary \u2014 ->First / ->Last vs native",
+    "measured": "2026-08-15T16:31:31+00:00",
+    "runtime": {
+        "php": "8.4.23",
+        "opcache": "on",
+        "jit": "on",
+        "os": "Linux"
+    },
+    "inputs": {
+        "size": 20
+    },
+    "method": {
+        "iterations": 200000,
+        "rounds": 5,
+        "warmup": 2000,
+        "estimator": "best round across 5 processes, closure floor subtracted",
+        "floor_ns": 11.49,
+        "processes": 5
+    },
+    "sections": [
+        {
+            "section": "map of 20 entries",
+            "baseline": "native array_key_last + index",
+            "fastest": "native, value only",
+            "recommendation": "native array_key_last + index \u2014 reach for ->Last only for readability, outside hot paths",
+            "stable": true,
+            "worst_spread": 1.131,
+            "verdict": "The wrapper cannot beat the call it hides \u2014 its floor is that call plus the dispatch. ->Last earns its cost only where the {key, value} pair genuinely simplifies the caller; constructing one per call never pays.",
+            "rows": [
+                {
+                    "label": "native array_key_last + index",
+                    "ns": 43.9,
+                    "ratio": 1,
+                    "spread": 1.08,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.021
+                },
+                {
+                    "label": "native, value only",
+                    "ns": 12.4,
+                    "ratio": 0.2825,
+                    "spread": 1.131,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.056
+                },
+                {
+                    "label": "__Array ->Last (instance reused)",
+                    "ns": 123.7,
+                    "ratio": 2.8178,
+                    "spread": 1.052,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.016
+                },
+                {
+                    "label": "__Array ->Last (constructed per call)",
+                    "ns": 147.7,
+                    "ratio": 3.3645,
+                    "spread": 1.021,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.013
+                },
+                {
+                    "label": "__Array ->First (instance reused)",
+                    "ns": 122.3,
+                    "ratio": 2.7859,
+                    "spread": 1.018,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.013
+                }
+            ],
+            "cross_process_spread": 1.056
+        }
+    ]
+}

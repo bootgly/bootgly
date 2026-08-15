@@ -1,0 +1,184 @@
+{
+    "case": "5-native-classes",
+    "title": "STUDY \u2014 native classes & generators vs the function chain",
+    "measured": "2026-08-15T16:32:40+00:00",
+    "runtime": {
+        "php": "8.4.23",
+        "opcache": "on",
+        "jit": "on",
+        "os": "Linux"
+    },
+    "inputs": {
+        "sizes": [
+            5,
+            20,
+            100
+        ]
+    },
+    "method": {
+        "iterations": 200000,
+        "rounds": 5,
+        "warmup": 2000,
+        "estimator": "best round across 5 processes, closure floor subtracted",
+        "floor_ns": 10.86,
+        "processes": 5
+    },
+    "sections": [
+        {
+            "section": "n = 5",
+            "baseline": "function chain (array_map+array_filter)",
+            "fastest": "plain fused foreach",
+            "recommendation": "plain fused foreach in hot paths; a generator pipeline when the result is large or consumed lazily",
+            "stable": true,
+            "worst_spread": 1.035,
+            "verdict": "",
+            "rows": [
+                {
+                    "label": "function chain (array_map+array_filter)",
+                    "ns": 445.6,
+                    "ratio": 1,
+                    "spread": 1.021,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.009
+                },
+                {
+                    "label": "generator pipeline (C coroutine)",
+                    "ns": 425.9,
+                    "ratio": 0.9558,
+                    "spread": 1.028,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.043
+                },
+                {
+                    "label": "SPL CallbackFilterIterator",
+                    "ns": 1324.3,
+                    "ratio": 2.9719,
+                    "spread": 1.008,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.01
+                },
+                {
+                    "label": "SplFixedArray fused",
+                    "ns": 469.7,
+                    "ratio": 1.0541,
+                    "spread": 1.032,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.028
+                },
+                {
+                    "label": "plain fused foreach",
+                    "ns": 139,
+                    "ratio": 0.3119,
+                    "spread": 1.035,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.015
+                }
+            ],
+            "cross_process_spread": 1.043
+        },
+        {
+            "section": "n = 20",
+            "baseline": "function chain (array_map+array_filter)",
+            "fastest": "plain fused foreach",
+            "recommendation": "plain fused foreach in hot paths; a generator pipeline when the result is large or consumed lazily",
+            "stable": true,
+            "worst_spread": 1.061,
+            "verdict": "",
+            "rows": [
+                {
+                    "label": "function chain (array_map+array_filter)",
+                    "ns": 1397.1,
+                    "ratio": 1,
+                    "spread": 1.061,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.006
+                },
+                {
+                    "label": "generator pipeline (C coroutine)",
+                    "ns": 807.6,
+                    "ratio": 0.5781,
+                    "spread": 1.047,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.053
+                },
+                {
+                    "label": "SPL CallbackFilterIterator",
+                    "ns": 3549.1,
+                    "ratio": 2.5403,
+                    "spread": 1.042,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.015
+                },
+                {
+                    "label": "SplFixedArray fused",
+                    "ns": 1045,
+                    "ratio": 0.748,
+                    "spread": 1.052,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.014
+                },
+                {
+                    "label": "plain fused foreach",
+                    "ns": 415.3,
+                    "ratio": 0.2973,
+                    "spread": 1.053,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.013
+                }
+            ],
+            "cross_process_spread": 1.053
+        },
+        {
+            "section": "n = 100",
+            "baseline": "function chain (array_map+array_filter)",
+            "fastest": "plain fused foreach",
+            "recommendation": "plain fused foreach in hot paths; a generator pipeline when the result is large or consumed lazily",
+            "stable": true,
+            "worst_spread": 1.029,
+            "verdict": "",
+            "rows": [
+                {
+                    "label": "function chain (array_map+array_filter)",
+                    "ns": 6410.5,
+                    "ratio": 1,
+                    "spread": 1.021,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.015
+                },
+                {
+                    "label": "generator pipeline (C coroutine)",
+                    "ns": 2878,
+                    "ratio": 0.449,
+                    "spread": 1.022,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.009
+                },
+                {
+                    "label": "SPL CallbackFilterIterator",
+                    "ns": 15576.2,
+                    "ratio": 2.4298,
+                    "spread": 1.024,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.009
+                },
+                {
+                    "label": "SplFixedArray fused",
+                    "ns": 3985.9,
+                    "ratio": 0.6218,
+                    "spread": 1.029,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.03
+                },
+                {
+                    "label": "plain fused foreach",
+                    "ns": 1925.8,
+                    "ratio": 0.3004,
+                    "spread": 1.021,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.015
+                }
+            ],
+            "cross_process_spread": 1.03
+        }
+    ]
+}
