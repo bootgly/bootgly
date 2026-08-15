@@ -1,7 +1,7 @@
 {
-    "case": "1-shape",
+    "case": "01-shape",
     "title": "__Array shape \u2014 ->multidimensional vs the inline loop",
-    "measured": "2026-08-15T16:31:33+00:00",
+    "measured": "2026-08-15T17:11:08+00:00",
     "runtime": {
         "php": "8.4.23",
         "opcache": "on",
@@ -16,7 +16,7 @@
         "rounds": 5,
         "warmup": 2000,
         "estimator": "best round across 5 processes, closure floor subtracted",
-        "floor_ns": 11.37,
+        "floor_ns": 11.02,
         "processes": 5
     },
     "sections": [
@@ -26,35 +26,35 @@
             "fastest": "inline foreach (no native equivalent)",
             "recommendation": "__Array ->multidimensional when the intent matters; the inline foreach in hot paths",
             "stable": true,
-            "worst_spread": 1.066,
+            "worst_spread": 1.05,
             "verdict": "The closest call in the class: the work is a loop, so the dispatch is diluted rather than dominant. This is where __Array reads best \u2014 it names an intent PHP has no single call for.",
             "rows": [
                 {
                     "label": "inline foreach (no native equivalent)",
-                    "ns": 45.2,
+                    "ns": 45.1,
                     "ratio": 1,
-                    "spread": 1.066,
+                    "spread": 1.05,
                     "floor_bound": false,
-                    "cross_process_spread": 1.018
+                    "cross_process_spread": 1.013
                 },
                 {
                     "label": "__Array ->multidimensional (reused)",
-                    "ns": 78.6,
-                    "ratio": 1.7389,
-                    "spread": 1.019,
+                    "ns": 76.7,
+                    "ratio": 1.7007,
+                    "spread": 1.018,
                     "floor_bound": false,
-                    "cross_process_spread": 1.038
+                    "cross_process_spread": 1.02
                 },
                 {
                     "label": "__Array ->multidimensional (per call)",
-                    "ns": 156.9,
-                    "ratio": 3.4712,
-                    "spread": 1.031,
+                    "ns": 122.7,
+                    "ratio": 2.7206,
+                    "spread": 1.037,
                     "floor_bound": false,
-                    "cross_process_spread": 1.041
+                    "cross_process_spread": 1.013
                 }
             ],
-            "cross_process_spread": 1.041
+            "cross_process_spread": 1.02
         }
     ]
 }

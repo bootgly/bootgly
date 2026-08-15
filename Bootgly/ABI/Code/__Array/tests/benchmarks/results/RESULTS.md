@@ -13,59 +13,59 @@ which mechanism wins a scenario without reading the numbers.
 
 | Case | PHP | Inputs | Comparison | **Use this** | Fastest measured | Gain | Stable |
 |---|---|---|---|---|---|---|---|
-| `0-boundary` | 8.4.23 | `size=20` | map of 20 entries | **native array_key_last + index — reach for ->Last only for readability, outside hot paths** | 🏆 native, value only | 72% faster | yes |
-| `1-shape` | 8.4.23 | `size=20` | ->multidimensional | **__Array ->multidimensional when the intent matters; the inline foreach in hot paths** | 🏆 inline foreach (no native equivalent) | baseline is fastest | yes |
-| `10-terminals` | 8.4.23 | `sizes=20,100,1000` | count, n = 20 | **Pipeline ->count() — counting never needs the array it counts** | 🏆 Pipeline ->count() | 53% faster | yes |
-| `10-terminals` | 8.4.23 | `sizes=20,100,1000` | reduce, n = 20 | **Pipeline ->reduce() — it folds inside the pass instead of after it** | 🏆 hand-fused fold | 74% faster | yes |
+| `00-boundary` | 8.4.23 | `size=20` | map of 20 entries | **native array_key_last + index — reach for ->Last only for readability, outside hot paths** | 🏆 native, value only | 69% faster | **NO** (1.35x) |
+| `01-shape` | 8.4.23 | `size=20` | ->multidimensional | **__Array ->multidimensional when the intent matters; the inline foreach in hot paths** | 🏆 inline foreach (no native equivalent) | baseline is fastest | yes |
+| `02-search` | 8.4.23 | `size=40, hit=30` | list of 40, hit at 30 | **native array_search for a key; __Array::search for a needle list or the full triple** | 🏆 native array_search (hit) | baseline is fastest | yes |
+| `03-wrapper-forms` | 8.4.23 | `size=50` | HEAVY operation — array_keys() over 50 entries | **native array_keys($a); if a wrapper is unavoidable, a static method — never magic __get** | 🏆 native array_keys($a) | baseline is fastest | yes |
+| `03-wrapper-forms` | 8.4.23 | `size=50` | CHEAP operation — the {key, value} boundary pair | **native array_key_last + index — do not wrap cheap operations** | 🏆 native array_key_last + index | baseline is fastest | yes |
+| `04-chain-fusion` | 8.4.23 | `sizes=5,20,100,1000` | n = 5 | **Pipeline built once + ->apply(); a per-call Pipeline barely breaks even this small** | 🏆 hand-fused loop (0 intermediates) | 72% faster | yes |
+| `04-chain-fusion` | 8.4.23 | `sizes=5,20,100,1000` | n = 20 | **Pipeline — it ties the hand-written loop and reads as the chain it replaces** | 🏆 hand-fused loop (0 intermediates) | 72% faster | yes |
+| `04-chain-fusion` | 8.4.23 | `sizes=5,20,100,1000` | n = 100 | **Pipeline — it ties the hand-written loop and reads as the chain it replaces** | 🏆 hand-fused loop (0 intermediates) | 70% faster | yes |
+| `04-chain-fusion` | 8.4.23 | `sizes=5,20,100,1000` | n = 1000 | **Pipeline — it ties the hand-written loop and reads as the chain it replaces** | 🏆 hand-fused loop (0 intermediates) | 71% faster | yes |
+| `05-native-classes` | 8.4.23 | `sizes=5,20,100` | n = 5 | **plain fused foreach in hot paths; a generator pipeline when the result is large or consumed lazily** | 🏆 plain fused foreach | 67% faster | yes |
+| `05-native-classes` | 8.4.23 | `sizes=5,20,100` | n = 20 | **plain fused foreach in hot paths; a generator pipeline when the result is large or consumed lazily** | 🏆 plain fused foreach | 70% faster | yes |
+| `05-native-classes` | 8.4.23 | `sizes=5,20,100` | n = 100 | **plain fused foreach in hot paths; a generator pipeline when the result is large or consumed lazily** | 🏆 plain fused foreach | 70% faster | yes |
+| `06-array-interfaces` | 8.4.23 | `size=100` | iterate + sum | **native foreach — iterating an object is never cheaper than iterating the array it holds** | 🏆 native foreach | baseline is fastest | yes |
+| `06-array-interfaces` | 8.4.23 | `size=100` | random access $a[$k] | **native $array[$key]; if the array is behind an object, index the public property directly** | 🏆 native $array[$key] | baseline is fastest | yes |
+| `06-array-interfaces` | 8.4.23 | `size=100` | count | **native count($array) — Countable only relays the same call** | 🏆 native count($array) | baseline is fastest | yes |
+| `07-pipeline-shapes` | 8.4.23 | `sizes=5,20,100,1000` | n = 5 | **Pipeline — the shipped shape dispatch; Generic is the prototype it replaced** | 🏆 hand-fused loop | 70% faster | yes |
+| `07-pipeline-shapes` | 8.4.23 | `sizes=5,20,100,1000` | n = 20 | **Pipeline — the shipped shape dispatch; Generic is the prototype it replaced** | 🏆 hand-fused loop | 71% faster | yes |
+| `07-pipeline-shapes` | 8.4.23 | `sizes=5,20,100,1000` | n = 100 | **Pipeline — the shipped shape dispatch; Generic is the prototype it replaced** | 🏆 hand-fused loop | 70% faster | yes |
+| `07-pipeline-shapes` | 8.4.23 | `sizes=5,20,100,1000` | n = 1000 | **Pipeline — the shipped shape dispatch; Generic is the prototype it replaced** | 🏆 hand-fused loop | 71% faster | yes |
+| `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> first match, n = 100, hit at 5% | **Pipeline ->find() — it ties the hand-written loop and beats every native form** | 🏆 hand foreach + return | 98% faster | yes |
+| `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> any match, n = 100, hit at 5% | **Pipeline ->check() — never materialize an array to ask whether it would be empty** | 🏆 Pipeline ->map->filter->check() | 94% faster | yes |
+| `08-early-exit` | 8.4.23 | `sizes=100,1000` | single filter -> first match, n = 100, hit at 5% | **native array_find — with one filter and a hit near the front, C wins** | 🏆 native array_find (PHP 8.4, C) | baseline is fastest | yes |
+| `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> first match, n = 100, hit at 50% | **Pipeline ->find() — it ties the hand-written loop and beats every native form** | 🏆 hand foreach + return | 86% faster | yes |
+| `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> any match, n = 100, hit at 50% | **Pipeline ->check() — never materialize an array to ask whether it would be empty** | 🏆 Pipeline ->map->filter->check() | 81% faster | yes |
+| `08-early-exit` | 8.4.23 | `sizes=100,1000` | single filter -> first match, n = 100, hit at 50% | **Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does** | 🏆 Pipeline ->filter->find() | 47% faster | yes |
+| `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> first match, n = 100, hit at miss | **Pipeline ->find() — it ties the hand-written loop and beats every native form** | 🏆 hand foreach + return | 72% faster | yes |
+| `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> any match, n = 100, hit at miss | **Pipeline ->check() — never materialize an array to ask whether it would be empty** | 🏆 Pipeline ->map->filter->check() | 66% faster | yes |
+| `08-early-exit` | 8.4.23 | `sizes=100,1000` | single filter -> first match, n = 100, hit at miss | **Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does** | 🏆 Pipeline ->filter->find() | 50% faster | yes |
+| `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> first match, n = 1000, hit at 5% | **Pipeline ->find() — it ties the hand-written loop and beats every native form** | 🏆 hand foreach + return | 99% faster | yes |
+| `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> any match, n = 1000, hit at 5% | **Pipeline ->check() — never materialize an array to ask whether it would be empty** | 🏆 Pipeline ->map->filter->check() | 98% faster | yes |
+| `08-early-exit` | 8.4.23 | `sizes=100,1000` | single filter -> first match, n = 1000, hit at 5% | **Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does** | 🏆 Pipeline ->filter->find() | 48% faster | yes |
+| `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> first match, n = 1000, hit at 50% | **Pipeline ->find() — it ties the hand-written loop and beats every native form** | 🏆 hand foreach + return | 86% faster | yes |
+| `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> any match, n = 1000, hit at 50% | **Pipeline ->check() — never materialize an array to ask whether it would be empty** | 🏆 Pipeline ->map->filter->check() | 85% faster | yes |
+| `08-early-exit` | 8.4.23 | `sizes=100,1000` | single filter -> first match, n = 1000, hit at 50% | **Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does** | 🏆 Pipeline ->filter->find() | 54% faster | yes |
+| `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> first match, n = 1000, hit at miss | **Pipeline ->find() — it ties the hand-written loop and beats every native form** | 🏆 hand foreach + return | 72% faster | yes |
+| `08-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> any match, n = 1000, hit at miss | **Pipeline ->check() — never materialize an array to ask whether it would be empty** | 🏆 Pipeline ->map->filter->check() | 70% faster | yes |
+| `08-early-exit` | 8.4.23 | `sizes=100,1000` | single filter -> first match, n = 1000, hit at miss | **Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does** | 🏆 Pipeline ->filter->find() | 55% faster | yes |
+| `09-pipeline-reuse` | 8.4.23 | `sizes=5,8,20,100` | n = 5 | **Pipeline built once + ->apply() — the only form that wins at hot-path sizes** | 🏆 hand-fused loop | 70% faster | yes |
+| `09-pipeline-reuse` | 8.4.23 | `sizes=5,8,20,100` | n = 8 | **Pipeline built once + ->apply() — the only form that wins at hot-path sizes** | 🏆 hand-fused loop | 71% faster | yes |
+| `09-pipeline-reuse` | 8.4.23 | `sizes=5,8,20,100` | n = 20 | **Pipeline built once + ->apply() — the only form that wins at hot-path sizes** | 🏆 hand-fused loop | 71% faster | yes |
+| `09-pipeline-reuse` | 8.4.23 | `sizes=5,8,20,100` | n = 100 | **Pipeline built once + ->apply() — the only form that wins at hot-path sizes** | 🏆 hand-fused loop | 70% faster | yes |
+| `10-terminals` | 8.4.23 | `sizes=20,100,1000` | count, n = 20 | **Pipeline ->count() — counting never needs the array it counts** | 🏆 Pipeline ->count() | 54% faster | yes |
+| `10-terminals` | 8.4.23 | `sizes=20,100,1000` | reduce, n = 20 | **Pipeline ->reduce() — it folds inside the pass instead of after it** | 🏆 hand-fused fold | 73% faster | yes |
 | `10-terminals` | 8.4.23 | `sizes=20,100,1000` | count, n = 100 | **Pipeline ->count() — counting never needs the array it counts** | 🏆 Pipeline ->count() | 68% faster | yes |
-| `10-terminals` | 8.4.23 | `sizes=20,100,1000` | reduce, n = 100 | **Pipeline ->reduce() — it folds inside the pass instead of after it** | 🏆 hand-fused fold | 73% faster | yes |
+| `10-terminals` | 8.4.23 | `sizes=20,100,1000` | reduce, n = 100 | **Pipeline ->reduce() — it folds inside the pass instead of after it** | 🏆 hand-fused fold | 72% faster | yes |
 | `10-terminals` | 8.4.23 | `sizes=20,100,1000` | count, n = 1000 | **Pipeline ->count() — counting never needs the array it counts** | 🏆 Pipeline ->count() | 72% faster | yes |
-| `10-terminals` | 8.4.23 | `sizes=20,100,1000` | reduce, n = 1000 | **Pipeline ->reduce() — it folds inside the pass instead of after it** | 🏆 hand-fused fold | 73% faster | yes |
-| `2-search` | 8.4.23 | `size=40, hit=30` | list of 40, hit at 30 | **native array_search for a key; __Array::search for a needle list or the full triple** | 🏆 native array_search (hit) | baseline is fastest | yes |
-| `3-wrapper-forms` | 8.4.23 | `size=50` | HEAVY operation — array_keys() over 50 entries | **native array_keys($a); if a wrapper is unavoidable, a static method — never magic __get** | 🏆 native array_keys($a) | baseline is fastest | yes |
-| `3-wrapper-forms` | 8.4.23 | `size=50` | CHEAP operation — the {key, value} boundary pair | **native array_key_last + index — do not wrap cheap operations** | 🏆 native array_key_last + index | baseline is fastest | yes |
-| `4-chain-fusion` | 8.4.23 | `sizes=5,20,100,1000` | n = 5 | **Pipeline built once + ->apply(); a per-call Pipeline barely breaks even this small** | 🏆 hand-fused loop (0 intermediates) | 69% faster | yes |
-| `4-chain-fusion` | 8.4.23 | `sizes=5,20,100,1000` | n = 20 | **Pipeline — it ties the hand-written loop and reads as the chain it replaces** | 🏆 hand-fused loop (0 intermediates) | 71% faster | yes |
-| `4-chain-fusion` | 8.4.23 | `sizes=5,20,100,1000` | n = 100 | **Pipeline — it ties the hand-written loop and reads as the chain it replaces** | 🏆 hand-fused loop (0 intermediates) | 71% faster | yes |
-| `4-chain-fusion` | 8.4.23 | `sizes=5,20,100,1000` | n = 1000 | **Pipeline — it ties the hand-written loop and reads as the chain it replaces** | 🏆 hand-fused loop (0 intermediates) | 70% faster | yes |
-| `5-native-classes` | 8.4.23 | `sizes=5,20,100` | n = 5 | **plain fused foreach in hot paths; a generator pipeline when the result is large or consumed lazily** | 🏆 plain fused foreach | 69% faster | yes |
-| `5-native-classes` | 8.4.23 | `sizes=5,20,100` | n = 20 | **plain fused foreach in hot paths; a generator pipeline when the result is large or consumed lazily** | 🏆 plain fused foreach | 70% faster | yes |
-| `5-native-classes` | 8.4.23 | `sizes=5,20,100` | n = 100 | **plain fused foreach in hot paths; a generator pipeline when the result is large or consumed lazily** | 🏆 plain fused foreach | 70% faster | yes |
-| `6-array-interfaces` | 8.4.23 | `size=100` | iterate + sum | **native foreach — iterating an object is never cheaper than iterating the array it holds** | 🏆 native foreach | baseline is fastest | yes |
-| `6-array-interfaces` | 8.4.23 | `size=100` | random access $a[$k] | **native $array[$key]; if the array is behind an object, index the public property directly** | 🏆 native $array[$key] | baseline is fastest | yes |
-| `6-array-interfaces` | 8.4.23 | `size=100` | count | **native count($array) — Countable only relays the same call** | 🏆 native count($array) | baseline is fastest | yes |
-| `7-pipeline-shapes` | 8.4.23 | `sizes=5,20,100,1000` | n = 5 | **Pipeline — the shipped shape dispatch; Generic is the prototype it replaced** | 🏆 hand-fused loop | 71% faster | yes |
-| `7-pipeline-shapes` | 8.4.23 | `sizes=5,20,100,1000` | n = 20 | **Pipeline — the shipped shape dispatch; Generic is the prototype it replaced** | 🏆 hand-fused loop | 70% faster | yes |
-| `7-pipeline-shapes` | 8.4.23 | `sizes=5,20,100,1000` | n = 100 | **Pipeline — the shipped shape dispatch; Generic is the prototype it replaced** | 🏆 hand-fused loop | 69% faster | yes |
-| `7-pipeline-shapes` | 8.4.23 | `sizes=5,20,100,1000` | n = 1000 | **Pipeline — the shipped shape dispatch; Generic is the prototype it replaced** | 🏆 Pipeline (shape-dispatched) | 70% faster | yes |
-| `8-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> first match, n = 100, hit at 5% | **Pipeline ->find() — it ties the hand-written loop and beats every native form** | 🏆 hand foreach + return | 98% faster | yes |
-| `8-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> any match, n = 100, hit at 5% | **Pipeline ->check() — never materialize an array to ask whether it would be empty** | 🏆 Pipeline ->map->filter->check() | 94% faster | yes |
-| `8-early-exit` | 8.4.23 | `sizes=100,1000` | single filter -> first match, n = 100, hit at 5% | **native array_find — with one filter and a hit near the front, C wins** | 🏆 native array_find (PHP 8.4, C) | baseline is fastest | yes |
-| `8-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> first match, n = 100, hit at 50% | **Pipeline ->find() — it ties the hand-written loop and beats every native form** | 🏆 hand foreach + return | 86% faster | yes |
-| `8-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> any match, n = 100, hit at 50% | **Pipeline ->check() — never materialize an array to ask whether it would be empty** | 🏆 Pipeline ->map->filter->check() | 81% faster | yes |
-| `8-early-exit` | 8.4.23 | `sizes=100,1000` | single filter -> first match, n = 100, hit at 50% | **Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does** | 🏆 Pipeline ->filter->find() | 46% faster | yes |
-| `8-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> first match, n = 100, hit at miss | **Pipeline ->find() — it ties the hand-written loop and beats every native form** | 🏆 hand foreach + return | 73% faster | yes |
-| `8-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> any match, n = 100, hit at miss | **Pipeline ->check() — never materialize an array to ask whether it would be empty** | 🏆 Pipeline ->map->filter->check() | 67% faster | yes |
-| `8-early-exit` | 8.4.23 | `sizes=100,1000` | single filter -> first match, n = 100, hit at miss | **Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does** | 🏆 Pipeline ->filter->find() | 49% faster | yes |
-| `8-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> first match, n = 1000, hit at 5% | **Pipeline ->find() — it ties the hand-written loop and beats every native form** | 🏆 hand foreach + return | 99% faster | yes |
-| `8-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> any match, n = 1000, hit at 5% | **Pipeline ->check() — never materialize an array to ask whether it would be empty** | 🏆 Pipeline ->map->filter->check() | 98% faster | yes |
-| `8-early-exit` | 8.4.23 | `sizes=100,1000` | single filter -> first match, n = 1000, hit at 5% | **Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does** | 🏆 Pipeline ->filter->find() | 47% faster | yes |
-| `8-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> first match, n = 1000, hit at 50% | **Pipeline ->find() — it ties the hand-written loop and beats every native form** | 🏆 hand foreach + return | 86% faster | yes |
-| `8-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> any match, n = 1000, hit at 50% | **Pipeline ->check() — never materialize an array to ask whether it would be empty** | 🏆 Pipeline ->map->filter->check() | 85% faster | yes |
-| `8-early-exit` | 8.4.23 | `sizes=100,1000` | single filter -> first match, n = 1000, hit at 50% | **Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does** | 🏆 Pipeline ->filter->find() | 54% faster | yes |
-| `8-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> first match, n = 1000, hit at miss | **Pipeline ->find() — it ties the hand-written loop and beats every native form** | 🏆 hand foreach + return | 73% faster | yes |
-| `8-early-exit` | 8.4.23 | `sizes=100,1000` | chain -> any match, n = 1000, hit at miss | **Pipeline ->check() — never materialize an array to ask whether it would be empty** | 🏆 Pipeline ->map->filter->check() | 70% faster | yes |
-| `8-early-exit` | 8.4.23 | `sizes=100,1000` | single filter -> first match, n = 1000, hit at miss | **Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does** | 🏆 Pipeline ->filter->find() | 54% faster | yes |
-| `9-pipeline-reuse` | 8.4.23 | `sizes=5,8,20,100` | n = 5 | **Pipeline built once + ->apply() — the only form that wins at hot-path sizes** | 🏆 hand-fused loop | 69% faster | yes |
-| `9-pipeline-reuse` | 8.4.23 | `sizes=5,8,20,100` | n = 8 | **Pipeline built once + ->apply() — the only form that wins at hot-path sizes** | 🏆 hand-fused loop | 70% faster | yes |
-| `9-pipeline-reuse` | 8.4.23 | `sizes=5,8,20,100` | n = 20 | **Pipeline built once + ->apply() — the only form that wins at hot-path sizes** | 🏆 hand-fused loop | 71% faster | yes |
-| `9-pipeline-reuse` | 8.4.23 | `sizes=5,8,20,100` | n = 100 | **Pipeline built once + ->apply() — the only form that wins at hot-path sizes** | 🏆 hand-fused loop | 70% faster | yes |
+| `10-terminals` | 8.4.23 | `sizes=20,100,1000` | reduce, n = 1000 | **Pipeline ->reduce() — it folds inside the pass instead of after it** | 🏆 Pipeline ->reduce() | 74% faster | yes |
 
 ## Full measurements
 
-### `0-boundary`
+### `00-boundary`
 
-**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T16:31:31+00:00 · best-of-5 x 200,000 iterations, floor 11.5 ns
+**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T17:15:53+00:00 · best-of-5 x 200,000 iterations, floor 10.9 ns
 
 `inputs: size=20`
 
@@ -73,19 +73,19 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_key_last + index | 43.9 | 1.00x |
-| 🏆 **native, value only** | 12.4 | 0.28x |
-| __Array ->Last (instance reused) | 123.7 | 2.82x |
-| __Array ->Last (constructed per call) | 147.7 | 3.36x |
-| __Array ->First (instance reused) | 122.3 | 2.79x |
+| native array_key_last + index | 40.2 | 1.00x |
+| 🏆 **native, value only** | 12.4 | 0.31x |
+| __Array ->Last (instance reused) | 123.6 | 3.07x |
+| __Array ->Last (constructed per call) | 140.5 | 3.50x |
+| __Array ->First (instance reused) | 116.6 | 2.90x |
 
 **Use:** native array_key_last + index — reach for ->Last only for readability, outside hot paths
 
 > The wrapper cannot beat the call it hides — its floor is that call plus the dispatch. ->Last earns its cost only where the {key, value} pair genuinely simplifies the caller; constructing one per call never pays.
 
-### `1-shape`
+### `01-shape`
 
-**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T16:31:33+00:00 · best-of-5 x 200,000 iterations, floor 11.4 ns
+**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T17:11:08+00:00 · best-of-5 x 200,000 iterations, floor 11.0 ns
 
 `inputs: size=20`
 
@@ -93,92 +93,17 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| 🏆 **inline foreach (no native equivalent)** | 45.2 | 1.00x |
-| __Array ->multidimensional (reused) | 78.6 | 1.74x |
-| __Array ->multidimensional (per call) | 156.9 | 3.47x |
+| 🏆 **inline foreach (no native equivalent)** | 45.1 | 1.00x |
+| __Array ->multidimensional (reused) | 76.7 | 1.70x |
+| __Array ->multidimensional (per call) | 122.7 | 2.72x |
 
 **Use:** __Array ->multidimensional when the intent matters; the inline foreach in hot paths
 
 > The closest call in the class: the work is a loop, so the dispatch is diluted rather than dominant. This is where __Array reads best — it names an intent PHP has no single call for.
 
-### `10-terminals`
+### `02-search`
 
-**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T16:46:43+00:00 · best-of-5 x 200,000 iterations, floor 11.6 ns
-
-`inputs: sizes=20,100,1000`
-
-*count, n = 20*
-
-| Measurement | ns/op | vs baseline |
-|---|---:|---:|
-| native count(filter(map)) | 1331.0 | 1.00x |
-| 🏆 **Pipeline ->count()** | 631.1 | 0.47x |
-
-**Use:** Pipeline ->count() — counting never needs the array it counts
-
-> Two arrays are materialized to produce one integer. Counting as the pass goes needs neither.
-
-*reduce, n = 20*
-
-| Measurement | ns/op | vs baseline |
-|---|---:|---:|
-| native array_reduce(filter(map)) | 1563.2 | 1.00x |
-| Pipeline ->reduce() | 690.1 | 0.44x |
-| 🏆 **hand-fused fold** | 401.3 | 0.26x |
-
-**Use:** Pipeline ->reduce() — it folds inside the pass instead of after it
-
-> array_reduce() cannot fold what has not been built yet, so the whole filtered array exists before the fold starts.
-
-*count, n = 100*
-
-| Measurement | ns/op | vs baseline |
-|---|---:|---:|
-| native count(filter(map)) | 6186.4 | 1.00x |
-| 🏆 **Pipeline ->count()** | 2006.0 | 0.32x |
-
-**Use:** Pipeline ->count() — counting never needs the array it counts
-
-> Two arrays are materialized to produce one integer. Counting as the pass goes needs neither.
-
-*reduce, n = 100*
-
-| Measurement | ns/op | vs baseline |
-|---|---:|---:|
-| native array_reduce(filter(map)) | 7199.8 | 1.00x |
-| Pipeline ->reduce() | 2268.2 | 0.32x |
-| 🏆 **hand-fused fold** | 1944.8 | 0.27x |
-
-**Use:** Pipeline ->reduce() — it folds inside the pass instead of after it
-
-> array_reduce() cannot fold what has not been built yet, so the whole filtered array exists before the fold starts.
-
-*count, n = 1000*
-
-| Measurement | ns/op | vs baseline |
-|---|---:|---:|
-| native count(filter(map)) | 62400.0 | 1.00x |
-| 🏆 **Pipeline ->count()** | 17473.8 | 0.28x |
-
-**Use:** Pipeline ->count() — counting never needs the array it counts
-
-> Two arrays are materialized to produce one integer. Counting as the pass goes needs neither.
-
-*reduce, n = 1000*
-
-| Measurement | ns/op | vs baseline |
-|---|---:|---:|
-| native array_reduce(filter(map)) | 70909.8 | 1.00x |
-| Pipeline ->reduce() | 20101.2 | 0.28x |
-| 🏆 **hand-fused fold** | 19397.8 | 0.27x |
-
-**Use:** Pipeline ->reduce() — it folds inside the pass instead of after it
-
-> array_reduce() cannot fold what has not been built yet, so the whole filtered array exists before the fold starts.
-
-### `2-search`
-
-**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T16:31:39+00:00 · best-of-5 x 200,000 iterations, floor 11.3 ns
+**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T17:11:14+00:00 · best-of-5 x 200,000 iterations, floor 11.0 ns
 
 `inputs: size=40, hit=30`
 
@@ -186,19 +111,19 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| 🏆 **native array_search (hit)** | 115.7 | 1.00x |
-| native + build the pair (hit) | 156.6 | 1.35x |
-| __Array::search (hit) | 241.9 | 2.09x |
-| __Array::search (miss) | 247.6 | 2.14x |
-| __Array::search (needle list) | 410.5 | 3.55x |
+| 🏆 **native array_search (hit)** | 113.4 | 1.00x |
+| native + build the pair (hit) | 154.2 | 1.36x |
+| __Array::search (hit) | 235.0 | 2.07x |
+| __Array::search (miss) | 243.5 | 2.15x |
+| __Array::search (needle list) | 406.7 | 3.59x |
 
 **Use:** native array_search for a key; __Array::search for a needle list or the full triple
 
 > Native search is the floor. __Array::search earns its cost only when you want the {key, value, found} triple without writing it out, or when trying several needles in order — which native search cannot express at all.
 
-### `3-wrapper-forms`
+### `03-wrapper-forms`
 
-**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T16:31:48+00:00 · best-of-5 x 200,000 iterations, floor 11.2 ns
+**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T17:11:23+00:00 · best-of-5 x 200,000 iterations, floor 11.4 ns
 
 `inputs: size=50`
 
@@ -206,12 +131,12 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| 🏆 **native array_keys($a)** | 142.7 | 1.00x |
-| static method | 152.1 | 1.07x |
-| property hook (instance reused) | 201.9 | 1.41x |
-| magic __get (instance reused) | 206.3 | 1.45x |
-| property hook + construction | 260.9 | 1.83x |
-| magic __get + construction | 270.2 | 1.89x |
+| 🏆 **native array_keys($a)** | 138.9 | 1.00x |
+| static method | 149.8 | 1.08x |
+| property hook (instance reused) | 201.3 | 1.45x |
+| magic __get (instance reused) | 208.5 | 1.50x |
+| property hook + construction | 258.9 | 1.86x |
+| magic __get + construction | 274.5 | 1.98x |
 
 **Use:** native array_keys($a); if a wrapper is unavoidable, a static method — never magic __get
 
@@ -221,17 +146,17 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| 🏆 **native array_key_last + index** | 50.4 | 1.00x |
-| __Array ->Last (instance reused) | 121.2 | 2.40x |
-| __Array ->Last + construction | 146.0 | 2.90x |
+| 🏆 **native array_key_last + index** | 49.7 | 1.00x |
+| __Array ->Last (instance reused) | 120.0 | 2.41x |
+| __Array ->Last + construction | 173.5 | 3.49x |
 
 **Use:** native array_key_last + index — do not wrap cheap operations
 
 > Same absolute overhead, far less work to hide it, so the ratio blows up. Framework arrays (headers, route params, query args) are all cheap operations, which is why routing them through a wrapper is the wrong trade.
 
-### `4-chain-fusion`
+### `04-chain-fusion`
 
-**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T16:32:11+00:00 · best-of-5 x 200,000 iterations, floor 10.7 ns
+**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T17:11:45+00:00 · best-of-5 x 200,000 iterations, floor 11.2 ns
 
 `inputs: sizes=5,20,100,1000`
 
@@ -239,10 +164,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain (2 intermediates) | 443.6 | 1.00x |
-| 🏆 **hand-fused loop (0 intermediates)** | 139.7 | 0.31x |
-| Pipeline (constructed per call) | 396.6 | 0.89x |
-| Pipeline (built once, ->apply()) | 164.3 | 0.37x |
+| native chain (2 intermediates) | 439.0 | 1.00x |
+| 🏆 **hand-fused loop (0 intermediates)** | 120.9 | 0.28x |
+| Pipeline (constructed per call) | 401.8 | 0.92x |
+| Pipeline (built once, ->apply()) | 163.8 | 0.37x |
 
 **Use:** Pipeline built once + ->apply(); a per-call Pipeline barely breaks even this small
 
@@ -252,10 +177,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain (2 intermediates) | 1435.6 | 1.00x |
-| 🏆 **hand-fused loop (0 intermediates)** | 411.0 | 0.29x |
-| Pipeline (constructed per call) | 680.7 | 0.47x |
-| Pipeline (built once, ->apply()) | 445.5 | 0.31x |
+| native chain (2 intermediates) | 1398.1 | 1.00x |
+| 🏆 **hand-fused loop (0 intermediates)** | 390.4 | 0.28x |
+| Pipeline (constructed per call) | 686.4 | 0.49x |
+| Pipeline (built once, ->apply()) | 445.1 | 0.32x |
 
 **Use:** Pipeline — it ties the hand-written loop and reads as the chain it replaces
 
@@ -265,10 +190,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain (2 intermediates) | 6507.6 | 1.00x |
-| 🏆 **hand-fused loop (0 intermediates)** | 1905.8 | 0.29x |
-| Pipeline (constructed per call) | 2195.4 | 0.34x |
-| Pipeline (built once, ->apply()) | 1966.0 | 0.30x |
+| native chain (2 intermediates) | 6247.6 | 1.00x |
+| 🏆 **hand-fused loop (0 intermediates)** | 1871.4 | 0.30x |
+| Pipeline (constructed per call) | 2247.9 | 0.36x |
+| Pipeline (built once, ->apply()) | 2000.4 | 0.32x |
 
 **Use:** Pipeline — it ties the hand-written loop and reads as the chain it replaces
 
@@ -278,18 +203,18 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain (2 intermediates) | 62266.3 | 1.00x |
-| 🏆 **hand-fused loop (0 intermediates)** | 18598.8 | 0.30x |
-| Pipeline (constructed per call) | 19116.6 | 0.31x |
-| Pipeline (built once, ->apply()) | 19048.9 | 0.31x |
+| native chain (2 intermediates) | 61904.0 | 1.00x |
+| 🏆 **hand-fused loop (0 intermediates)** | 17828.0 | 0.29x |
+| Pipeline (constructed per call) | 18929.4 | 0.31x |
+| Pipeline (built once, ->apply()) | 18629.6 | 0.30x |
 
 **Use:** Pipeline — it ties the hand-written loop and reads as the chain it replaces
 
 > The intermediates and the C-level callback dispatch are what the native chain pays for; one pass with a userland callback pays neither. Only hand-inlining the transform so no callable is invoked at all goes faster, and no API can express that.
 
-### `5-native-classes`
+### `05-native-classes`
 
-**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T16:32:40+00:00 · best-of-5 x 200,000 iterations, floor 10.9 ns
+**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T17:12:14+00:00 · best-of-5 x 200,000 iterations, floor 11.0 ns
 
 `inputs: sizes=5,20,100`
 
@@ -297,11 +222,11 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| function chain (array_map+array_filter) | 445.6 | 1.00x |
-| generator pipeline (C coroutine) | 425.9 | 0.96x |
-| SPL CallbackFilterIterator | 1324.3 | 2.97x |
-| SplFixedArray fused | 469.7 | 1.05x |
-| 🏆 **plain fused foreach** | 139.0 | 0.31x |
+| function chain (array_map+array_filter) | 439.9 | 1.00x |
+| generator pipeline (C coroutine) | 414.8 | 0.94x |
+| SPL CallbackFilterIterator | 1313.7 | 2.99x |
+| SplFixedArray fused | 472.4 | 1.07x |
+| 🏆 **plain fused foreach** | 143.6 | 0.33x |
 
 **Use:** plain fused foreach in hot paths; a generator pipeline when the result is large or consumed lazily
 
@@ -309,11 +234,11 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| function chain (array_map+array_filter) | 1397.1 | 1.00x |
-| generator pipeline (C coroutine) | 807.6 | 0.58x |
-| SPL CallbackFilterIterator | 3549.1 | 2.54x |
-| SplFixedArray fused | 1045.0 | 0.75x |
-| 🏆 **plain fused foreach** | 415.3 | 0.30x |
+| function chain (array_map+array_filter) | 1382.6 | 1.00x |
+| generator pipeline (C coroutine) | 806.9 | 0.58x |
+| SPL CallbackFilterIterator | 3507.8 | 2.54x |
+| SplFixedArray fused | 1050.8 | 0.76x |
+| 🏆 **plain fused foreach** | 417.3 | 0.30x |
 
 **Use:** plain fused foreach in hot paths; a generator pipeline when the result is large or consumed lazily
 
@@ -321,17 +246,17 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| function chain (array_map+array_filter) | 6410.5 | 1.00x |
-| generator pipeline (C coroutine) | 2878.0 | 0.45x |
-| SPL CallbackFilterIterator | 15576.2 | 2.43x |
-| SplFixedArray fused | 3985.9 | 0.62x |
-| 🏆 **plain fused foreach** | 1925.8 | 0.30x |
+| function chain (array_map+array_filter) | 6354.0 | 1.00x |
+| generator pipeline (C coroutine) | 2857.9 | 0.45x |
+| SPL CallbackFilterIterator | 15317.2 | 2.41x |
+| SplFixedArray fused | 4083.5 | 0.64x |
+| 🏆 **plain fused foreach** | 1919.4 | 0.30x |
 
 **Use:** plain fused foreach in hot paths; a generator pipeline when the result is large or consumed lazily
 
-### `6-array-interfaces`
+### `06-array-interfaces`
 
-**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T16:32:50+00:00 · best-of-5 x 200,000 iterations, floor 11.3 ns
+**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T17:12:24+00:00 · best-of-5 x 200,000 iterations, floor 11.1 ns
 
 `inputs: size=100`
 
@@ -339,11 +264,11 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| 🏆 **native foreach** | 247.5 | 1.00x |
-| IteratorAggregate (yield from) | 1845.2 | 7.46x |
-| Iterator (hand-rolled cursor) | 9231.3 | 37.30x |
-| ArrayObject (built-in) | 2987.0 | 12.07x |
-| SplFixedArray (built-in) | 1261.5 | 5.10x |
+| 🏆 **native foreach** | 248.0 | 1.00x |
+| IteratorAggregate (yield from) | 1833.9 | 7.39x |
+| Iterator (hand-rolled cursor) | 9316.5 | 37.57x |
+| ArrayObject (built-in) | 2978.1 | 12.01x |
+| SplFixedArray (built-in) | 1248.9 | 5.04x |
 
 **Use:** native foreach — iterating an object is never cheaper than iterating the array it holds
 
@@ -353,10 +278,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| 🏆 **native $array[$key]** | 6.1 | 1.00x |
-| ArrayAccess (userland) | 46.2 | 7.57x |
-| ArrayObject (built-in) | 24.9 | 4.08x |
-| public property + index | 6.8 | 1.11x |
+| 🏆 **native $array[$key]** | 6.2 | 1.00x |
+| ArrayAccess (userland) | 44.3 | 7.15x |
+| ArrayObject (built-in) | 23.7 | 3.82x |
+| public property + index | 6.7 | 1.08x |
 
 **Use:** native $array[$key]; if the array is behind an object, index the public property directly
 
@@ -367,16 +292,16 @@ which mechanism wins a scenario without reading the numbers.
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
 | 🏆 **native count($array)** | 3.5 | 1.00x |
-| Countable (userland) | 35.0 | 10.00x |
-| ArrayObject (built-in) | 11.9 | 3.40x |
+| Countable (userland) | 34.4 | 9.83x |
+| ArrayObject (built-in) | 10.5 | 3.00x |
 
 **Use:** native count($array) — Countable only relays the same call
 
 > count() on a Countable dispatches into userland to run the very count() it was asked to replace.
 
-### `7-pipeline-shapes`
+### `07-pipeline-shapes`
 
-**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T16:33:16+00:00 · best-of-5 x 200,000 iterations, floor 11.1 ns
+**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T17:12:49+00:00 · best-of-5 x 200,000 iterations, floor 11.1 ns
 
 `inputs: sizes=5,20,100,1000`
 
@@ -384,10 +309,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain | 441.6 | 1.00x |
-| Generic (op-loop per element) | 449.3 | 1.02x |
-| Pipeline (shape-dispatched) | 388.7 | 0.88x |
-| 🏆 **hand-fused loop** | 126.7 | 0.29x |
+| native chain | 439.4 | 1.00x |
+| Generic (op-loop per element) | 434.2 | 0.99x |
+| Pipeline (shape-dispatched) | 393.9 | 0.90x |
+| 🏆 **hand-fused loop** | 131.2 | 0.30x |
 
 **Use:** Pipeline — the shipped shape dispatch; Generic is the prototype it replaced
 
@@ -397,10 +322,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain | 1399.0 | 1.00x |
-| Generic (op-loop per element) | 961.2 | 0.69x |
-| Pipeline (shape-dispatched) | 670.6 | 0.48x |
-| 🏆 **hand-fused loop** | 414.5 | 0.30x |
+| native chain | 1382.9 | 1.00x |
+| Generic (op-loop per element) | 949.6 | 0.69x |
+| Pipeline (shape-dispatched) | 683.7 | 0.49x |
+| 🏆 **hand-fused loop** | 406.7 | 0.29x |
 
 **Use:** Pipeline — the shipped shape dispatch; Generic is the prototype it replaced
 
@@ -410,10 +335,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain | 6395.5 | 1.00x |
-| Generic (op-loop per element) | 3644.6 | 0.57x |
-| Pipeline (shape-dispatched) | 2204.2 | 0.34x |
-| 🏆 **hand-fused loop** | 2000.5 | 0.31x |
+| native chain | 6335.3 | 1.00x |
+| Generic (op-loop per element) | 3624.8 | 0.57x |
+| Pipeline (shape-dispatched) | 2199.5 | 0.35x |
+| 🏆 **hand-fused loop** | 1896.2 | 0.30x |
 
 **Use:** Pipeline — the shipped shape dispatch; Generic is the prototype it replaced
 
@@ -423,18 +348,18 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain | 62215.8 | 1.00x |
-| Generic (op-loop per element) | 33160.3 | 0.53x |
-| 🏆 **Pipeline (shape-dispatched)** | 18654.1 | 0.30x |
-| hand-fused loop | 19022.5 | 0.31x |
+| native chain | 60693.5 | 1.00x |
+| Generic (op-loop per element) | 32980.1 | 0.54x |
+| Pipeline (shape-dispatched) | 18677.7 | 0.31x |
+| 🏆 **hand-fused loop** | 17835.9 | 0.29x |
 
 **Use:** Pipeline — the shipped shape dispatch; Generic is the prototype it replaced
 
 > Dispatching once per chain rather than once per element is the entire margin. Nothing else about the two implementations differs.
 
-### `8-early-exit`
+### `08-early-exit`
 
-**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T16:38:55+00:00 · best-of-5 x 200,000 iterations, floor 11.2 ns
+**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T17:14:40+00:00 · best-of-5 x 200,000 iterations, floor 11.2 ns
 
 `inputs: sizes=100,1000`
 
@@ -442,10 +367,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain then [0] | 5875.5 | 1.00x |
-| native array_find(array_map()) | 2977.3 | 0.51x |
-| Pipeline ->map->filter->find() | 361.8 | 0.06x |
-| 🏆 **hand foreach + return** | 107.7 | 0.02x |
+| native chain then [0] | 5773.8 | 1.00x |
+| native array_find(array_map()) | 2960.5 | 0.51x |
+| Pipeline ->map->filter->find() | 364.8 | 0.06x |
+| 🏆 **hand foreach + return** | 107.3 | 0.02x |
 
 **Use:** Pipeline ->find() — it ties the hand-written loop and beats every native form
 
@@ -455,9 +380,9 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_filter !== [] | 5907.5 | 1.00x |
-| native array_any(array_map()) | 3026.7 | 0.51x |
-| 🏆 **Pipeline ->map->filter->check()** | 361.4 | 0.06x |
+| native array_filter !== [] | 5807.6 | 1.00x |
+| native array_any(array_map()) | 3041.2 | 0.52x |
+| 🏆 **Pipeline ->map->filter->check()** | 366.5 | 0.06x |
 
 **Use:** Pipeline ->check() — never materialize an array to ask whether it would be empty
 
@@ -467,8 +392,8 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| 🏆 **native array_find (PHP 8.4, C)** | 267.5 | 1.00x |
-| Pipeline ->filter->find() | 291.3 | 1.09x |
+| 🏆 **native array_find (PHP 8.4, C)** | 266.6 | 1.00x |
+| Pipeline ->filter->find() | 282.8 | 1.06x |
 
 **Use:** native array_find — with one filter and a hit near the front, C wins
 
@@ -478,10 +403,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain then [0] | 5869.7 | 1.00x |
-| native array_find(array_map()) | 4747.9 | 0.81x |
-| Pipeline ->map->filter->find() | 1132.1 | 0.19x |
-| 🏆 **hand foreach + return** | 836.8 | 0.14x |
+| native chain then [0] | 5764.6 | 1.00x |
+| native array_find(array_map()) | 4654.2 | 0.81x |
+| Pipeline ->map->filter->find() | 1131.4 | 0.20x |
+| 🏆 **hand foreach + return** | 830.5 | 0.14x |
 
 **Use:** Pipeline ->find() — it ties the hand-written loop and beats every native form
 
@@ -491,9 +416,9 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_filter !== [] | 5847.5 | 1.00x |
-| native array_any(array_map()) | 4676.1 | 0.80x |
-| 🏆 **Pipeline ->map->filter->check()** | 1134.8 | 0.19x |
+| native array_filter !== [] | 5877.1 | 1.00x |
+| native array_any(array_map()) | 4688.0 | 0.80x |
+| 🏆 **Pipeline ->map->filter->check()** | 1135.5 | 0.19x |
 
 **Use:** Pipeline ->check() — never materialize an array to ask whether it would be empty
 
@@ -503,8 +428,8 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_find (PHP 8.4, C) | 1956.8 | 1.00x |
-| 🏆 **Pipeline ->filter->find()** | 1051.0 | 0.54x |
+| native array_find (PHP 8.4, C) | 1960.9 | 1.00x |
+| 🏆 **Pipeline ->filter->find()** | 1045.6 | 0.53x |
 
 **Use:** Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does
 
@@ -514,10 +439,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain then [0] | 5947.2 | 1.00x |
-| native array_find(array_map()) | 6586.0 | 1.11x |
-| Pipeline ->map->filter->find() | 1951.6 | 0.33x |
-| 🏆 **hand foreach + return** | 1605.9 | 0.27x |
+| native chain then [0] | 5705.4 | 1.00x |
+| native array_find(array_map()) | 6539.1 | 1.15x |
+| Pipeline ->map->filter->find() | 1950.2 | 0.34x |
+| 🏆 **hand foreach + return** | 1603.4 | 0.28x |
 
 **Use:** Pipeline ->find() — it ties the hand-written loop and beats every native form
 
@@ -527,9 +452,9 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_filter !== [] | 5869.5 | 1.00x |
-| native array_any(array_map()) | 6476.1 | 1.10x |
-| 🏆 **Pipeline ->map->filter->check()** | 1949.4 | 0.33x |
+| native array_filter !== [] | 5697.9 | 1.00x |
+| native array_any(array_map()) | 6584.4 | 1.16x |
+| 🏆 **Pipeline ->map->filter->check()** | 1951.8 | 0.34x |
 
 **Use:** Pipeline ->check() — never materialize an array to ask whether it would be empty
 
@@ -539,8 +464,8 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_find (PHP 8.4, C) | 3712.4 | 1.00x |
-| 🏆 **Pipeline ->filter->find()** | 1877.4 | 0.51x |
+| native array_find (PHP 8.4, C) | 3745.1 | 1.00x |
+| 🏆 **Pipeline ->filter->find()** | 1865.9 | 0.50x |
 
 **Use:** Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does
 
@@ -550,10 +475,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain then [0] | 56936.5 | 1.00x |
-| native array_find(array_map()) | 28849.2 | 0.51x |
-| Pipeline ->map->filter->find() | 1126.2 | 0.02x |
-| 🏆 **hand foreach + return** | 826.7 | 0.01x |
+| native chain then [0] | 57269.7 | 1.00x |
+| native array_find(array_map()) | 29389.6 | 0.51x |
+| Pipeline ->map->filter->find() | 1117.2 | 0.02x |
+| 🏆 **hand foreach + return** | 822.9 | 0.01x |
 
 **Use:** Pipeline ->find() — it ties the hand-written loop and beats every native form
 
@@ -563,9 +488,9 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_filter !== [] | 56918.3 | 1.00x |
-| native array_any(array_map()) | 29970.1 | 0.53x |
-| 🏆 **Pipeline ->map->filter->check()** | 1127.1 | 0.02x |
+| native array_filter !== [] | 57690.7 | 1.00x |
+| native array_any(array_map()) | 30078.5 | 0.52x |
+| 🏆 **Pipeline ->map->filter->check()** | 1123.5 | 0.02x |
 
 **Use:** Pipeline ->check() — never materialize an array to ask whether it would be empty
 
@@ -575,8 +500,8 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_find (PHP 8.4, C) | 1953.2 | 1.00x |
-| 🏆 **Pipeline ->filter->find()** | 1044.4 | 0.53x |
+| native array_find (PHP 8.4, C) | 1945.0 | 1.00x |
+| 🏆 **Pipeline ->filter->find()** | 1020.1 | 0.52x |
 
 **Use:** Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does
 
@@ -586,10 +511,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain then [0] | 57278.4 | 1.00x |
-| native array_find(array_map()) | 45547.1 | 0.80x |
-| Pipeline ->map->filter->find() | 8679.2 | 0.15x |
-| 🏆 **hand foreach + return** | 7963.0 | 0.14x |
+| native chain then [0] | 56575.0 | 1.00x |
+| native array_find(array_map()) | 45380.7 | 0.80x |
+| Pipeline ->map->filter->find() | 8629.3 | 0.15x |
+| 🏆 **hand foreach + return** | 7964.5 | 0.14x |
 
 **Use:** Pipeline ->find() — it ties the hand-written loop and beats every native form
 
@@ -599,9 +524,9 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_filter !== [] | 57193.8 | 1.00x |
-| native array_any(array_map()) | 46867.9 | 0.82x |
-| 🏆 **Pipeline ->map->filter->check()** | 8702.7 | 0.15x |
+| native array_filter !== [] | 57287.7 | 1.00x |
+| native array_any(array_map()) | 46168.6 | 0.81x |
+| 🏆 **Pipeline ->map->filter->check()** | 8634.9 | 0.15x |
 
 **Use:** Pipeline ->check() — never materialize an array to ask whether it would be empty
 
@@ -611,8 +536,8 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_find (PHP 8.4, C) | 18719.5 | 1.00x |
-| 🏆 **Pipeline ->filter->find()** | 8658.8 | 0.46x |
+| native array_find (PHP 8.4, C) | 18818.9 | 1.00x |
+| 🏆 **Pipeline ->filter->find()** | 8641.9 | 0.46x |
 
 **Use:** Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does
 
@@ -622,10 +547,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain then [0] | 58309.8 | 1.00x |
-| native array_find(array_map()) | 65541.9 | 1.12x |
-| Pipeline ->map->filter->find() | 17101.7 | 0.29x |
-| 🏆 **hand foreach + return** | 16000.1 | 0.27x |
+| native chain then [0] | 57629.9 | 1.00x |
+| native array_find(array_map()) | 64980.0 | 1.13x |
+| Pipeline ->map->filter->find() | 16953.0 | 0.29x |
+| 🏆 **hand foreach + return** | 15948.4 | 0.28x |
 
 **Use:** Pipeline ->find() — it ties the hand-written loop and beats every native form
 
@@ -635,9 +560,9 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_filter !== [] | 57031.7 | 1.00x |
-| native array_any(array_map()) | 64843.6 | 1.14x |
-| 🏆 **Pipeline ->map->filter->check()** | 17216.3 | 0.30x |
+| native array_filter !== [] | 57036.9 | 1.00x |
+| native array_any(array_map()) | 64304.3 | 1.13x |
+| 🏆 **Pipeline ->map->filter->check()** | 17083.6 | 0.30x |
 
 **Use:** Pipeline ->check() — never materialize an array to ask whether it would be empty
 
@@ -647,16 +572,16 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native array_find (PHP 8.4, C) | 37011.3 | 1.00x |
-| 🏆 **Pipeline ->filter->find()** | 17097.3 | 0.46x |
+| native array_find (PHP 8.4, C) | 37373.7 | 1.00x |
+| 🏆 **Pipeline ->filter->find()** | 17002.9 | 0.45x |
 
 **Use:** Pipeline ->find() — a JIT-compiled userland loop dispatches callbacks cheaper than C does
 
 > The only configuration the native call wins is a single filter whose hit is a handful of elements in; past that, per-element callback dispatch decides it, and userland wins that.
 
-### `9-pipeline-reuse`
+### `09-pipeline-reuse`
 
-**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T16:35:24+00:00 · best-of-5 x 200,000 iterations, floor 11.0 ns
+**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T17:14:54+00:00 · best-of-5 x 200,000 iterations, floor 11.1 ns
 
 `inputs: sizes=5,8,20,100`
 
@@ -664,10 +589,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain | 435.6 | 1.00x |
-| Pipeline (constructed per call) | 389.7 | 0.89x |
-| Pipeline (built once, ->apply()) | 169.4 | 0.39x |
-| 🏆 **hand-fused loop** | 135.1 | 0.31x |
+| native chain | 438.6 | 1.00x |
+| Pipeline (constructed per call) | 382.6 | 0.87x |
+| Pipeline (built once, ->apply()) | 152.2 | 0.35x |
+| 🏆 **hand-fused loop** | 132.5 | 0.30x |
 
 **Use:** Pipeline built once + ->apply() — the only form that wins at hot-path sizes
 
@@ -677,10 +602,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain | 624.9 | 1.00x |
-| Pipeline (constructed per call) | 449.2 | 0.72x |
-| Pipeline (built once, ->apply()) | 224.4 | 0.36x |
-| 🏆 **hand-fused loop** | 187.4 | 0.30x |
+| native chain | 628.8 | 1.00x |
+| Pipeline (constructed per call) | 441.2 | 0.70x |
+| Pipeline (built once, ->apply()) | 205.8 | 0.33x |
+| 🏆 **hand-fused loop** | 184.2 | 0.29x |
 
 **Use:** Pipeline built once + ->apply() — the only form that wins at hot-path sizes
 
@@ -690,10 +615,10 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain | 1411.4 | 1.00x |
-| Pipeline (constructed per call) | 669.0 | 0.47x |
-| Pipeline (built once, ->apply()) | 443.6 | 0.31x |
-| 🏆 **hand-fused loop** | 408.2 | 0.29x |
+| native chain | 1377.2 | 1.00x |
+| Pipeline (constructed per call) | 667.8 | 0.48x |
+| Pipeline (built once, ->apply()) | 434.2 | 0.32x |
+| 🏆 **hand-fused loop** | 405.4 | 0.29x |
 
 **Use:** Pipeline built once + ->apply() — the only form that wins at hot-path sizes
 
@@ -703,11 +628,86 @@ which mechanism wins a scenario without reading the numbers.
 
 | Measurement | ns/op | vs baseline |
 |---|---:|---:|
-| native chain | 6405.6 | 1.00x |
-| Pipeline (constructed per call) | 2219.8 | 0.35x |
-| Pipeline (built once, ->apply()) | 2009.7 | 0.31x |
-| 🏆 **hand-fused loop** | 1940.5 | 0.30x |
+| native chain | 6333.0 | 1.00x |
+| Pipeline (constructed per call) | 2186.6 | 0.35x |
+| Pipeline (built once, ->apply()) | 1956.6 | 0.31x |
+| 🏆 **hand-fused loop** | 1893.4 | 0.30x |
 
 **Use:** Pipeline built once + ->apply() — the only form that wins at hot-path sizes
 
 > Construction is a fixed cost, so it decides the small sizes and vanishes at the large ones. Hoisting it out of the call is what gives the abstraction a hot path at all.
+
+### `10-terminals`
+
+**PHP 8.4.23** — opcache on, JIT on, Linux · 2026-08-15T17:15:23+00:00 · best-of-5 x 200,000 iterations, floor 11.2 ns
+
+`inputs: sizes=20,100,1000`
+
+*count, n = 20*
+
+| Measurement | ns/op | vs baseline |
+|---|---:|---:|
+| native count(filter(map)) | 1352.3 | 1.00x |
+| 🏆 **Pipeline ->count()** | 618.9 | 0.46x |
+
+**Use:** Pipeline ->count() — counting never needs the array it counts
+
+> Two arrays are materialized to produce one integer. Counting as the pass goes needs neither.
+
+*reduce, n = 20*
+
+| Measurement | ns/op | vs baseline |
+|---|---:|---:|
+| native array_reduce(filter(map)) | 1538.4 | 1.00x |
+| Pipeline ->reduce() | 653.2 | 0.42x |
+| 🏆 **hand-fused fold** | 408.6 | 0.27x |
+
+**Use:** Pipeline ->reduce() — it folds inside the pass instead of after it
+
+> array_reduce() cannot fold what has not been built yet, so the whole filtered array exists before the fold starts.
+
+*count, n = 100*
+
+| Measurement | ns/op | vs baseline |
+|---|---:|---:|
+| native count(filter(map)) | 6181.8 | 1.00x |
+| 🏆 **Pipeline ->count()** | 1979.3 | 0.32x |
+
+**Use:** Pipeline ->count() — counting never needs the array it counts
+
+> Two arrays are materialized to produce one integer. Counting as the pass goes needs neither.
+
+*reduce, n = 100*
+
+| Measurement | ns/op | vs baseline |
+|---|---:|---:|
+| native array_reduce(filter(map)) | 7135.8 | 1.00x |
+| Pipeline ->reduce() | 2098.4 | 0.29x |
+| 🏆 **hand-fused fold** | 1968.2 | 0.28x |
+
+**Use:** Pipeline ->reduce() — it folds inside the pass instead of after it
+
+> array_reduce() cannot fold what has not been built yet, so the whole filtered array exists before the fold starts.
+
+*count, n = 1000*
+
+| Measurement | ns/op | vs baseline |
+|---|---:|---:|
+| native count(filter(map)) | 61828.4 | 1.00x |
+| 🏆 **Pipeline ->count()** | 17299.0 | 0.28x |
+
+**Use:** Pipeline ->count() — counting never needs the array it counts
+
+> Two arrays are materialized to produce one integer. Counting as the pass goes needs neither.
+
+*reduce, n = 1000*
+
+| Measurement | ns/op | vs baseline |
+|---|---:|---:|
+| native array_reduce(filter(map)) | 71011.9 | 1.00x |
+| 🏆 **Pipeline ->reduce()** | 18427.8 | 0.26x |
+| hand-fused fold | 19664.1 | 0.28x |
+
+**Use:** Pipeline ->reduce() — it folds inside the pass instead of after it
+
+> array_reduce() cannot fold what has not been built yet, so the whole filtered array exists before the fold starts.

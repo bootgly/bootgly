@@ -1,7 +1,7 @@
 {
-    "case": "4-chain-fusion",
+    "case": "04-chain-fusion",
     "title": "CHAIN FUSION \u2014 the case __Array exists for",
-    "measured": "2026-08-15T16:32:11+00:00",
+    "measured": "2026-08-15T17:11:45+00:00",
     "runtime": {
         "php": "8.4.23",
         "opcache": "on",
@@ -21,7 +21,7 @@
         "rounds": 5,
         "warmup": 2000,
         "estimator": "best round across 5 processes, closure floor subtracted",
-        "floor_ns": 10.72,
+        "floor_ns": 11.16,
         "processes": 5
     },
     "sections": [
@@ -31,43 +31,43 @@
             "fastest": "hand-fused loop (0 intermediates)",
             "recommendation": "Pipeline built once + ->apply(); a per-call Pipeline barely breaks even this small",
             "stable": true,
-            "worst_spread": 1.084,
+            "worst_spread": 1.043,
             "verdict": "The intermediates and the C-level callback dispatch are what the native chain pays for; one pass with a userland callback pays neither. Only hand-inlining the transform so no callable is invoked at all goes faster, and no API can express that.",
             "rows": [
                 {
                     "label": "native chain (2 intermediates)",
-                    "ns": 443.6,
+                    "ns": 439,
                     "ratio": 1,
-                    "spread": 1.035,
+                    "spread": 1.043,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.05
+                },
+                {
+                    "label": "hand-fused loop (0 intermediates)",
+                    "ns": 120.9,
+                    "ratio": 0.2754,
+                    "spread": 1.037,
                     "floor_bound": false,
                     "cross_process_spread": 1.016
                 },
                 {
-                    "label": "hand-fused loop (0 intermediates)",
-                    "ns": 139.7,
-                    "ratio": 0.3149,
-                    "spread": 1.084,
-                    "floor_bound": false,
-                    "cross_process_spread": 1.011
-                },
-                {
                     "label": "Pipeline (constructed per call)",
-                    "ns": 396.6,
-                    "ratio": 0.894,
-                    "spread": 1.018,
+                    "ns": 401.8,
+                    "ratio": 0.9153,
+                    "spread": 1.023,
                     "floor_bound": false,
-                    "cross_process_spread": 1.02
+                    "cross_process_spread": 1.021
                 },
                 {
                     "label": "Pipeline (built once, ->apply())",
-                    "ns": 164.3,
-                    "ratio": 0.3704,
-                    "spread": 1.04,
+                    "ns": 163.8,
+                    "ratio": 0.3731,
+                    "spread": 1.031,
                     "floor_bound": false,
-                    "cross_process_spread": 1.01
+                    "cross_process_spread": 1.009
                 }
             ],
-            "cross_process_spread": 1.02
+            "cross_process_spread": 1.05
         },
         {
             "section": "n = 20",
@@ -75,43 +75,43 @@
             "fastest": "hand-fused loop (0 intermediates)",
             "recommendation": "Pipeline \u2014 it ties the hand-written loop and reads as the chain it replaces",
             "stable": true,
-            "worst_spread": 1.034,
+            "worst_spread": 1.021,
             "verdict": "The intermediates and the C-level callback dispatch are what the native chain pays for; one pass with a userland callback pays neither. Only hand-inlining the transform so no callable is invoked at all goes faster, and no API can express that.",
             "rows": [
                 {
                     "label": "native chain (2 intermediates)",
-                    "ns": 1435.6,
+                    "ns": 1398.1,
                     "ratio": 1,
-                    "spread": 1.012,
+                    "spread": 1.021,
                     "floor_bound": false,
-                    "cross_process_spread": 1.012
+                    "cross_process_spread": 1.008
                 },
                 {
                     "label": "hand-fused loop (0 intermediates)",
-                    "ns": 411,
-                    "ratio": 0.2863,
-                    "spread": 1.034,
+                    "ns": 390.4,
+                    "ratio": 0.2792,
+                    "spread": 1.006,
                     "floor_bound": false,
-                    "cross_process_spread": 1.019
+                    "cross_process_spread": 1.007
                 },
                 {
                     "label": "Pipeline (constructed per call)",
-                    "ns": 680.7,
-                    "ratio": 0.4742,
-                    "spread": 1.03,
+                    "ns": 686.4,
+                    "ratio": 0.491,
+                    "spread": 1.007,
                     "floor_bound": false,
-                    "cross_process_spread": 1.02
+                    "cross_process_spread": 1.016
                 },
                 {
                     "label": "Pipeline (built once, ->apply())",
-                    "ns": 445.5,
-                    "ratio": 0.3103,
-                    "spread": 1.032,
+                    "ns": 445.1,
+                    "ratio": 0.3184,
+                    "spread": 1.008,
                     "floor_bound": false,
-                    "cross_process_spread": 1.013
+                    "cross_process_spread": 1.015
                 }
             ],
-            "cross_process_spread": 1.02
+            "cross_process_spread": 1.016
         },
         {
             "section": "n = 100",
@@ -119,43 +119,43 @@
             "fastest": "hand-fused loop (0 intermediates)",
             "recommendation": "Pipeline \u2014 it ties the hand-written loop and reads as the chain it replaces",
             "stable": true,
-            "worst_spread": 1.048,
+            "worst_spread": 1.025,
             "verdict": "The intermediates and the C-level callback dispatch are what the native chain pays for; one pass with a userland callback pays neither. Only hand-inlining the transform so no callable is invoked at all goes faster, and no API can express that.",
             "rows": [
                 {
                     "label": "native chain (2 intermediates)",
-                    "ns": 6507.6,
+                    "ns": 6247.6,
                     "ratio": 1,
-                    "spread": 1.035,
+                    "spread": 1.025,
                     "floor_bound": false,
-                    "cross_process_spread": 1.024
+                    "cross_process_spread": 1.03
                 },
                 {
                     "label": "hand-fused loop (0 intermediates)",
-                    "ns": 1905.8,
-                    "ratio": 0.2929,
-                    "spread": 1.048,
+                    "ns": 1871.4,
+                    "ratio": 0.2995,
+                    "spread": 1.005,
                     "floor_bound": false,
-                    "cross_process_spread": 1.012
+                    "cross_process_spread": 1.002
                 },
                 {
                     "label": "Pipeline (constructed per call)",
-                    "ns": 2195.4,
-                    "ratio": 0.3374,
-                    "spread": 1.025,
+                    "ns": 2247.9,
+                    "ratio": 0.3598,
+                    "spread": 1.005,
                     "floor_bound": false,
-                    "cross_process_spread": 1.024
+                    "cross_process_spread": 1.004
                 },
                 {
                     "label": "Pipeline (built once, ->apply())",
-                    "ns": 1966,
-                    "ratio": 0.3021,
-                    "spread": 1.035,
+                    "ns": 2000.4,
+                    "ratio": 0.3202,
+                    "spread": 1.014,
                     "floor_bound": false,
-                    "cross_process_spread": 1.022
+                    "cross_process_spread": 1.002
                 }
             ],
-            "cross_process_spread": 1.024
+            "cross_process_spread": 1.03
         },
         {
             "section": "n = 1000",
@@ -163,43 +163,43 @@
             "fastest": "hand-fused loop (0 intermediates)",
             "recommendation": "Pipeline \u2014 it ties the hand-written loop and reads as the chain it replaces",
             "stable": true,
-            "worst_spread": 1.012,
+            "worst_spread": 1.011,
             "verdict": "The intermediates and the C-level callback dispatch are what the native chain pays for; one pass with a userland callback pays neither. Only hand-inlining the transform so no callable is invoked at all goes faster, and no API can express that.",
             "rows": [
                 {
                     "label": "native chain (2 intermediates)",
-                    "ns": 62266.3,
+                    "ns": 61904,
                     "ratio": 1,
-                    "spread": 1.012,
+                    "spread": 1.011,
                     "floor_bound": false,
-                    "cross_process_spread": 1.022
+                    "cross_process_spread": 1.014
                 },
                 {
                     "label": "hand-fused loop (0 intermediates)",
-                    "ns": 18598.8,
-                    "ratio": 0.2987,
-                    "spread": 1.01,
+                    "ns": 17828,
+                    "ratio": 0.288,
+                    "spread": 1.004,
                     "floor_bound": false,
                     "cross_process_spread": 1.011
                 },
                 {
                     "label": "Pipeline (constructed per call)",
-                    "ns": 19116.6,
-                    "ratio": 0.307,
-                    "spread": 1.006,
+                    "ns": 18929.4,
+                    "ratio": 0.3058,
+                    "spread": 1.007,
                     "floor_bound": false,
-                    "cross_process_spread": 1.009
+                    "cross_process_spread": 1.006
                 },
                 {
                     "label": "Pipeline (built once, ->apply())",
-                    "ns": 19048.9,
-                    "ratio": 0.3059,
-                    "spread": 1.011,
+                    "ns": 18629.6,
+                    "ratio": 0.3009,
+                    "spread": 1.007,
                     "floor_bound": false,
-                    "cross_process_spread": 1.004
+                    "cross_process_spread": 1.011
                 }
             ],
-            "cross_process_spread": 1.022
+            "cross_process_spread": 1.014
         }
     ]
 }

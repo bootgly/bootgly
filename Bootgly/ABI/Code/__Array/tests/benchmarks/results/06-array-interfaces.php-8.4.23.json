@@ -1,7 +1,7 @@
 {
-    "case": "6-array-interfaces",
+    "case": "06-array-interfaces",
     "title": "STUDY \u2014 PHP array interfaces on an object vs the native array",
-    "measured": "2026-08-15T16:32:50+00:00",
+    "measured": "2026-08-15T17:12:24+00:00",
     "runtime": {
         "php": "8.4.23",
         "opcache": "on",
@@ -16,7 +16,7 @@
         "rounds": 5,
         "warmup": 2000,
         "estimator": "best round across 5 processes, closure floor subtracted",
-        "floor_ns": 11.28,
+        "floor_ns": 11.1,
         "processes": 5
     },
     "sections": [
@@ -26,51 +26,51 @@
             "fastest": "native foreach",
             "recommendation": "native foreach \u2014 iterating an object is never cheaper than iterating the array it holds",
             "stable": true,
-            "worst_spread": 1.086,
+            "worst_spread": 1.065,
             "verdict": "Every object shape pays dispatch per element that a native foreach does not. yield from is the cheapest of them, which makes IteratorAggregate the right choice IF the interface is wanted for ergonomics \u2014 never for speed.",
             "rows": [
                 {
                     "label": "native foreach",
-                    "ns": 247.5,
+                    "ns": 248,
                     "ratio": 1,
-                    "spread": 1.086,
+                    "spread": 1.065,
                     "floor_bound": false,
-                    "cross_process_spread": 1.011
+                    "cross_process_spread": 1.008
                 },
                 {
                     "label": "IteratorAggregate (yield from)",
-                    "ns": 1845.2,
-                    "ratio": 7.4554,
-                    "spread": 1.021,
-                    "floor_bound": false,
-                    "cross_process_spread": 1.012
-                },
-                {
-                    "label": "Iterator (hand-rolled cursor)",
-                    "ns": 9231.3,
-                    "ratio": 37.2982,
-                    "spread": 1.012,
-                    "floor_bound": false,
-                    "cross_process_spread": 1.019
-                },
-                {
-                    "label": "ArrayObject (built-in)",
-                    "ns": 2987,
-                    "ratio": 12.0687,
-                    "spread": 1.012,
+                    "ns": 1833.9,
+                    "ratio": 7.3948,
+                    "spread": 1.018,
                     "floor_bound": false,
                     "cross_process_spread": 1.023
                 },
                 {
-                    "label": "SplFixedArray (built-in)",
-                    "ns": 1261.5,
-                    "ratio": 5.097,
-                    "spread": 1.012,
+                    "label": "Iterator (hand-rolled cursor)",
+                    "ns": 9316.5,
+                    "ratio": 37.5665,
+                    "spread": 1.014,
                     "floor_bound": false,
-                    "cross_process_spread": 1.01
+                    "cross_process_spread": 1.035
+                },
+                {
+                    "label": "ArrayObject (built-in)",
+                    "ns": 2978.1,
+                    "ratio": 12.0085,
+                    "spread": 1.004,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.022
+                },
+                {
+                    "label": "SplFixedArray (built-in)",
+                    "ns": 1248.9,
+                    "ratio": 5.0359,
+                    "spread": 1.006,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.008
                 }
             ],
-            "cross_process_spread": 1.023
+            "cross_process_spread": 1.035
         },
         {
             "section": "random access $a[$k]",
@@ -78,43 +78,43 @@
             "fastest": "native $array[$key]",
             "recommendation": "native $array[$key]; if the array is behind an object, index the public property directly",
             "stable": true,
-            "worst_spread": 1.115,
+            "worst_spread": 1.132,
             "verdict": "ArrayAccess routes a native opcode through a method call. Exposing the array as a public property and indexing it stays far closer to native than implementing the interface does.",
             "rows": [
                 {
                     "label": "native $array[$key]",
-                    "ns": 6.1,
+                    "ns": 6.2,
                     "ratio": 1,
-                    "spread": 1.115,
+                    "spread": 1.132,
                     "floor_bound": true,
-                    "cross_process_spread": 1.066
+                    "cross_process_spread": 1.048
                 },
                 {
                     "label": "ArrayAccess (userland)",
-                    "ns": 46.2,
-                    "ratio": 7.5738,
-                    "spread": 1.015,
+                    "ns": 44.3,
+                    "ratio": 7.1452,
+                    "spread": 1.012,
                     "floor_bound": false,
-                    "cross_process_spread": 1.017
+                    "cross_process_spread": 1.009
                 },
                 {
                     "label": "ArrayObject (built-in)",
-                    "ns": 24.9,
-                    "ratio": 4.082,
-                    "spread": 1.025,
+                    "ns": 23.7,
+                    "ratio": 3.8226,
+                    "spread": 1.03,
                     "floor_bound": false,
-                    "cross_process_spread": 1.056
+                    "cross_process_spread": 1.072
                 },
                 {
                     "label": "public property + index",
-                    "ns": 6.8,
-                    "ratio": 1.1148,
-                    "spread": 1.031,
+                    "ns": 6.7,
+                    "ratio": 1.0806,
+                    "spread": 1.047,
                     "floor_bound": true,
-                    "cross_process_spread": 1.059
+                    "cross_process_spread": 1.03
                 }
             ],
-            "cross_process_spread": 1.056
+            "cross_process_spread": 1.072
         },
         {
             "section": "count",
@@ -122,35 +122,35 @@
             "fastest": "native count($array)",
             "recommendation": "native count($array) \u2014 Countable only relays the same call",
             "stable": true,
-            "worst_spread": 1.028,
+            "worst_spread": 1.029,
             "verdict": "count() on a Countable dispatches into userland to run the very count() it was asked to replace.",
             "rows": [
                 {
                     "label": "native count($array)",
                     "ns": 3.5,
                     "ratio": 1,
-                    "spread": 1.023,
+                    "spread": 1.028,
                     "floor_bound": true,
-                    "cross_process_spread": 1.114
+                    "cross_process_spread": 1.143
                 },
                 {
                     "label": "Countable (userland)",
-                    "ns": 35,
-                    "ratio": 10,
-                    "spread": 1.009,
+                    "ns": 34.4,
+                    "ratio": 9.8286,
+                    "spread": 1.014,
                     "floor_bound": false,
-                    "cross_process_spread": 1.043
+                    "cross_process_spread": 1.026
                 },
                 {
                     "label": "ArrayObject (built-in)",
-                    "ns": 11.9,
-                    "ratio": 3.4,
-                    "spread": 1.028,
-                    "floor_bound": false,
-                    "cross_process_spread": 1.059
+                    "ns": 10.5,
+                    "ratio": 3,
+                    "spread": 1.029,
+                    "floor_bound": true,
+                    "cross_process_spread": 1.067
                 }
             ],
-            "cross_process_spread": 1.059
+            "cross_process_spread": 1.026
         }
     ]
 }

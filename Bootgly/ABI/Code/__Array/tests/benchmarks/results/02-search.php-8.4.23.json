@@ -1,7 +1,7 @@
 {
-    "case": "2-search",
+    "case": "02-search",
     "title": "__Array::search() vs array_search()",
-    "measured": "2026-08-15T16:31:39+00:00",
+    "measured": "2026-08-15T17:11:14+00:00",
     "runtime": {
         "php": "8.4.23",
         "opcache": "on",
@@ -17,7 +17,7 @@
         "rounds": 5,
         "warmup": 2000,
         "estimator": "best round across 5 processes, closure floor subtracted",
-        "floor_ns": 11.28,
+        "floor_ns": 11.02,
         "processes": 5
     },
     "sections": [
@@ -27,51 +27,51 @@
             "fastest": "native array_search (hit)",
             "recommendation": "native array_search for a key; __Array::search for a needle list or the full triple",
             "stable": true,
-            "worst_spread": 1.082,
+            "worst_spread": 1.02,
             "verdict": "Native search is the floor. __Array::search earns its cost only when you want the {key, value, found} triple without writing it out, or when trying several needles in order \u2014 which native search cannot express at all.",
             "rows": [
                 {
                     "label": "native array_search (hit)",
-                    "ns": 115.7,
+                    "ns": 113.4,
                     "ratio": 1,
-                    "spread": 1.082,
+                    "spread": 1.02,
                     "floor_bound": false,
-                    "cross_process_spread": 1.019
+                    "cross_process_spread": 1.02
                 },
                 {
                     "label": "native + build the pair (hit)",
-                    "ns": 156.6,
-                    "ratio": 1.3535,
-                    "spread": 1.028,
+                    "ns": 154.2,
+                    "ratio": 1.3598,
+                    "spread": 1.015,
                     "floor_bound": false,
                     "cross_process_spread": 1.011
                 },
                 {
                     "label": "__Array::search (hit)",
-                    "ns": 241.9,
-                    "ratio": 2.0908,
+                    "ns": 235,
+                    "ratio": 2.0723,
                     "spread": 1.016,
                     "floor_bound": false,
-                    "cross_process_spread": 1.003
+                    "cross_process_spread": 1.012
                 },
                 {
                     "label": "__Array::search (miss)",
-                    "ns": 247.6,
-                    "ratio": 2.14,
-                    "spread": 1.028,
+                    "ns": 243.5,
+                    "ratio": 2.1473,
+                    "spread": 1.012,
                     "floor_bound": false,
-                    "cross_process_spread": 1.014
+                    "cross_process_spread": 1.094
                 },
                 {
                     "label": "__Array::search (needle list)",
-                    "ns": 410.5,
-                    "ratio": 3.548,
-                    "spread": 1.03,
+                    "ns": 406.7,
+                    "ratio": 3.5864,
+                    "spread": 1.008,
                     "floor_bound": false,
-                    "cross_process_spread": 1.011
+                    "cross_process_spread": 1.034
                 }
             ],
-            "cross_process_spread": 1.019
+            "cross_process_spread": 1.094
         }
     ]
 }

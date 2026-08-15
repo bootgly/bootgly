@@ -1,7 +1,7 @@
 {
-    "case": "7-pipeline-shapes",
+    "case": "07-pipeline-shapes",
     "title": "SHAPE DISPATCH \u2014 what deciding once instead of per element buys",
-    "measured": "2026-08-15T16:33:16+00:00",
+    "measured": "2026-08-15T17:12:49+00:00",
     "runtime": {
         "php": "8.4.23",
         "opcache": "on",
@@ -21,7 +21,7 @@
         "rounds": 5,
         "warmup": 2000,
         "estimator": "best round across 5 processes, closure floor subtracted",
-        "floor_ns": 11.07,
+        "floor_ns": 11.1,
         "processes": 5
     },
     "sections": [
@@ -31,46 +31,90 @@
             "fastest": "hand-fused loop",
             "recommendation": "Pipeline \u2014 the shipped shape dispatch; Generic is the prototype it replaced",
             "stable": true,
-            "worst_spread": 1.088,
+            "worst_spread": 1.049,
             "verdict": "Dispatching once per chain rather than once per element is the entire margin. Nothing else about the two implementations differs.",
             "rows": [
                 {
                     "label": "native chain",
-                    "ns": 441.6,
+                    "ns": 439.4,
                     "ratio": 1,
-                    "spread": 1.038,
+                    "spread": 1.021,
                     "floor_bound": false,
-                    "cross_process_spread": 1.011
+                    "cross_process_spread": 1.052
                 },
                 {
                     "label": "Generic (op-loop per element)",
-                    "ns": 449.3,
-                    "ratio": 1.0174,
-                    "spread": 1.02,
+                    "ns": 434.2,
+                    "ratio": 0.9882,
+                    "spread": 1.021,
                     "floor_bound": false,
-                    "cross_process_spread": 1.023
+                    "cross_process_spread": 1.038
                 },
                 {
                     "label": "Pipeline (shape-dispatched)",
-                    "ns": 388.7,
-                    "ratio": 0.8802,
-                    "spread": 1.025,
+                    "ns": 393.9,
+                    "ratio": 0.8964,
+                    "spread": 1.028,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.049
+                },
+                {
+                    "label": "hand-fused loop",
+                    "ns": 131.2,
+                    "ratio": 0.2986,
+                    "spread": 1.049,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.108
+                }
+            ],
+            "cross_process_spread": 1.108
+        },
+        {
+            "section": "n = 20",
+            "baseline": "native chain",
+            "fastest": "hand-fused loop",
+            "recommendation": "Pipeline \u2014 the shipped shape dispatch; Generic is the prototype it replaced",
+            "stable": true,
+            "worst_spread": 1.016,
+            "verdict": "Dispatching once per chain rather than once per element is the entire margin. Nothing else about the two implementations differs.",
+            "rows": [
+                {
+                    "label": "native chain",
+                    "ns": 1382.9,
+                    "ratio": 1,
+                    "spread": 1.009,
                     "floor_bound": false,
                     "cross_process_spread": 1.02
                 },
                 {
-                    "label": "hand-fused loop",
-                    "ns": 126.7,
-                    "ratio": 0.2869,
-                    "spread": 1.088,
+                    "label": "Generic (op-loop per element)",
+                    "ns": 949.6,
+                    "ratio": 0.6867,
+                    "spread": 1.012,
                     "floor_bound": false,
-                    "cross_process_spread": 1.01
+                    "cross_process_spread": 1.022
+                },
+                {
+                    "label": "Pipeline (shape-dispatched)",
+                    "ns": 683.7,
+                    "ratio": 0.4944,
+                    "spread": 1.016,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.028
+                },
+                {
+                    "label": "hand-fused loop",
+                    "ns": 406.7,
+                    "ratio": 0.2941,
+                    "spread": 1.012,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.028
                 }
             ],
-            "cross_process_spread": 1.023
+            "cross_process_spread": 1.028
         },
         {
-            "section": "n = 20",
+            "section": "n = 100",
             "baseline": "native chain",
             "fastest": "hand-fused loop",
             "recommendation": "Pipeline \u2014 the shipped shape dispatch; Generic is the prototype it replaced",
@@ -80,126 +124,82 @@
             "rows": [
                 {
                     "label": "native chain",
-                    "ns": 1399,
+                    "ns": 6335.3,
                     "ratio": 1,
-                    "spread": 1.01,
-                    "floor_bound": false,
-                    "cross_process_spread": 1.017
-                },
-                {
-                    "label": "Generic (op-loop per element)",
-                    "ns": 961.2,
-                    "ratio": 0.6871,
-                    "spread": 1.006,
-                    "floor_bound": false,
-                    "cross_process_spread": 1.02
-                },
-                {
-                    "label": "Pipeline (shape-dispatched)",
-                    "ns": 670.6,
-                    "ratio": 0.4793,
-                    "spread": 1.009,
-                    "floor_bound": false,
-                    "cross_process_spread": 1.011
-                },
-                {
-                    "label": "hand-fused loop",
-                    "ns": 414.5,
-                    "ratio": 0.2963,
                     "spread": 1.021,
                     "floor_bound": false,
-                    "cross_process_spread": 1.008
-                }
-            ],
-            "cross_process_spread": 1.02
-        },
-        {
-            "section": "n = 100",
-            "baseline": "native chain",
-            "fastest": "hand-fused loop",
-            "recommendation": "Pipeline \u2014 the shipped shape dispatch; Generic is the prototype it replaced",
-            "stable": true,
-            "worst_spread": 1.014,
-            "verdict": "Dispatching once per chain rather than once per element is the entire margin. Nothing else about the two implementations differs.",
-            "rows": [
-                {
-                    "label": "native chain",
-                    "ns": 6395.5,
-                    "ratio": 1,
-                    "spread": 1.014,
-                    "floor_bound": false,
-                    "cross_process_spread": 1.048
+                    "cross_process_spread": 1.03
                 },
                 {
                     "label": "Generic (op-loop per element)",
-                    "ns": 3644.6,
-                    "ratio": 0.5699,
-                    "spread": 1.014,
+                    "ns": 3624.8,
+                    "ratio": 0.5722,
+                    "spread": 1.01,
                     "floor_bound": false,
-                    "cross_process_spread": 1.028
+                    "cross_process_spread": 1.009
                 },
                 {
                     "label": "Pipeline (shape-dispatched)",
-                    "ns": 2204.2,
-                    "ratio": 0.3446,
-                    "spread": 1.012,
+                    "ns": 2199.5,
+                    "ratio": 0.3472,
+                    "spread": 1.019,
                     "floor_bound": false,
-                    "cross_process_spread": 1.02
+                    "cross_process_spread": 1.026
                 },
                 {
                     "label": "hand-fused loop",
-                    "ns": 2000.5,
-                    "ratio": 0.3128,
-                    "spread": 1.006,
+                    "ns": 1896.2,
+                    "ratio": 0.2993,
+                    "spread": 1.01,
                     "floor_bound": false,
-                    "cross_process_spread": 1.024
+                    "cross_process_spread": 1.011
                 }
             ],
-            "cross_process_spread": 1.048
+            "cross_process_spread": 1.03
         },
         {
             "section": "n = 1000",
             "baseline": "native chain",
-            "fastest": "Pipeline (shape-dispatched)",
+            "fastest": "hand-fused loop",
             "recommendation": "Pipeline \u2014 the shipped shape dispatch; Generic is the prototype it replaced",
             "stable": true,
-            "worst_spread": 1.012,
+            "worst_spread": 1.021,
             "verdict": "Dispatching once per chain rather than once per element is the entire margin. Nothing else about the two implementations differs.",
             "rows": [
                 {
                     "label": "native chain",
-                    "ns": 62215.8,
+                    "ns": 60693.5,
                     "ratio": 1,
-                    "spread": 1.007,
+                    "spread": 1.006,
                     "floor_bound": false,
-                    "cross_process_spread": 1.018
+                    "cross_process_spread": 1.032
                 },
                 {
                     "label": "Generic (op-loop per element)",
-                    "ns": 33160.3,
-                    "ratio": 0.533,
-                    "spread": 1.004,
+                    "ns": 32980.1,
+                    "ratio": 0.5434,
+                    "spread": 1.021,
                     "floor_bound": false,
                     "cross_process_spread": 1.012
                 },
                 {
                     "label": "Pipeline (shape-dispatched)",
-                    "ns": 18654.1,
-                    "ratio": 0.2998,
-                    "spread": 1.012,
+                    "ns": 18677.7,
+                    "ratio": 0.3077,
+                    "spread": 1.016,
                     "floor_bound": false,
-                    "cross_process_spread": 1.011
+                    "cross_process_spread": 1.022
                 },
                 {
                     "label": "hand-fused loop",
-                    "ns": 19022.5,
-                    "ratio": 0.3058,
-                    "spread": 1.009,
+                    "ns": 17835.9,
+                    "ratio": 0.2939,
+                    "spread": 1.012,
                     "floor_bound": false,
-                    "cross_process_spread": 1.009
+                    "cross_process_spread": 1.012
                 }
             ],
-            "cross_process_spread": 1.018
+            "cross_process_spread": 1.032
         }
     ]
 }
