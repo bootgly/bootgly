@@ -166,9 +166,15 @@ jobs:
 
       # The bootgly_benchmarks images bake FROM the framework full image — now
       # that it is on Hub, tell that repo to rebuild every opponent against it.
-      # No token configured yet → warn and stay green (set BENCHMARKS_DISPATCH_TOKEN
-      # to a fine-grained PAT with "contents:read" + "metadata:read" and the
-      # bootgly_benchmarks "Actions: write" permission to enable auto-rebuild).
+      # No token configured yet → warn and stay green. To enable auto-rebuild,
+      # set BENCHMARKS_DISPATCH_TOKEN on THIS repo to a fine-grained PAT whose
+      # resource owner is the `bootgly` org, scoped to the `bootgly_benchmarks`
+      # repository ONLY, with "Contents" repository permission set to WRITE.
+      #
+      # ! Contents:write, not Actions:write — POST /repos/{owner}/{repo}/dispatches
+      #   is documented under the Contents permission. A token built with
+      #   Actions:write authenticates and then 403s on the dispatch.
+      #   https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens
       #
       # ! The base is the EXACT version tag, never the `full` alias. `full` only
       #   moves on a stable release, so dispatching `bootgly/bootgly:full` from a
