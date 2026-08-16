@@ -73,16 +73,22 @@ jobs:
           #   from being confused the way a bare `latest` + `slim` + `full`
           #   trio does, and it makes a Bootgly version pinnable at all.
           #
-          #     stable 1.2.3 → 1.2.3  1.2  1  slim  latest
+          #     stable 1.2.3 → 1.2.3  1.2  1  slim
           #                    1.2.3-full  1.2-full  1-full  full
           #     pre-release  → 1.0.0-beta.1  beta
           #                    1.0.0-beta.1-full  beta-full
           #
-          # ? A pre-release must NEVER move `latest`, `slim`, `full` or the
-          #   major/minor aliases: `docker pull bootgly/bootgly` would hand
-          #   unreleased code to every user. Pre-releases publish their exact
-          #   version plus a moving channel alias (`beta`, `rc`) that people
-          #   opt into deliberately.
+          # ! `latest` is RETIRED and never published again. It duplicated
+          #   `slim` digest-for-digest, and a redundant alias is exactly what
+          #   the one-way policy forbids — plus "latest" reads as "newest",
+          #   which is never what a Docker tag actually promises. The default
+          #   stable variant is `slim`; say so explicitly.
+          #
+          # ? A pre-release must NEVER move `slim`, `full` or the major/minor
+          #   aliases: `docker pull bootgly/bootgly:slim` would hand unreleased
+          #   code to every user. Pre-releases publish their exact version plus
+          #   a moving channel alias (`beta`, `rc`) that people opt into
+          #   deliberately.
           PRERELEASE="${{ github.event.release.prerelease }}"
           case "$V" in *-*) PRERELEASE=true ;; esac
 
@@ -95,7 +101,7 @@ jobs:
           else
             MAJOR="${V%%.*}"
             MINOR="${V%.*}"
-            SLIM_TAGS="$REPO:$V"$'\n'"$REPO:$MINOR"$'\n'"$REPO:$MAJOR"$'\n'"$REPO:slim"$'\n'"$REPO:latest"
+            SLIM_TAGS="$REPO:$V"$'\n'"$REPO:$MINOR"$'\n'"$REPO:$MAJOR"$'\n'"$REPO:slim"
             FULL_TAGS="$REPO:$V-full"$'\n'"$REPO:$MINOR-full"$'\n'"$REPO:$MAJOR-full"$'\n'"$REPO:full"
           fi
 
@@ -158,11 +164,17 @@ jobs:
             BOOTGLY_BENCHMARKS_UNTRACKED_MANIFEST_SHA256=${{ steps.source.outputs.benchmarks_untracked_manifest_sha256 }}
           tags: ${{ steps.version.outputs.full_tags }}
 
-      # The bootgly_benchmarks images bake FROM bootgly/bootgly:full — now that
-      # it is on Hub, tell that repo to rebuild every opponent against it. No
-      # token configured yet → warn and stay green (set BENCHMARKS_DISPATCH_TOKEN
+      # The bootgly_benchmarks images bake FROM the framework full image — now
+      # that it is on Hub, tell that repo to rebuild every opponent against it.
+      # No token configured yet → warn and stay green (set BENCHMARKS_DISPATCH_TOKEN
       # to a fine-grained PAT with "contents:read" + "metadata:read" and the
       # bootgly_benchmarks "Actions: write" permission to enable auto-rebuild).
+      #
+      # ! The base is the EXACT version tag, never the `full` alias. `full` only
+      #   moves on a stable release, so dispatching `bootgly/bootgly:full` from a
+      #   pre-release would silently build every opponent against the PREVIOUS
+      #   stable framework while reporting success. `$V-full` always exists and
+      #   always names the image this very run just pushed.
       - name: Trigger bootgly_benchmarks rebuild
         env:
           GH_TOKEN: ${{ secrets.BENCHMARKS_DISPATCH_TOKEN }}
@@ -172,5 +184,5 @@ jobs:
             echo "::warning::BENCHMARKS_DISPATCH_TOKEN not set — skipping bootgly_benchmarks dispatch."
             exit 0
           fi
-          printf '{"event_type":"framework-release","client_payload":{"version":"%s","base":"bootgly/bootgly:full"}}' "$VERSION" > payload.json
+          printf '{"event_type":"framework-release","client_payload":{"version":"%s","base":"bootgly/bootgly:%s-full"}}' "$VERSION" "$VERSION" > payload.json
           gh api repos/bootgly/bootgly_benchmarks/dispatches --method POST --input payload.json

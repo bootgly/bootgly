@@ -2,9 +2,11 @@
 # ----------------------------------------------------------------------------
 # Bootgly Docker entrypoint
 #
-# A bare `docker run -it bootgly/bootgly` opens the canonical project
+# A bare `docker run -it bootgly/bootgly:slim` opens the canonical project
 # installer (Wizard) on the first interactive run — explicit commands
-# (`docker run bootgly/bootgly test`, `... project X start`) always bypass.
+# (`docker run bootgly/bootgly:slim test`, `... project X start`) always bypass.
+# The image must be named with a tag: `latest` is retired on purpose (it only
+# ever duplicated `slim`), so an untagged `bootgly/bootgly` does not resolve.
 # The marker lives in projects/, so mounting it as a volume scopes the
 # "first run" to the volume; without a volume every fresh container is a
 # first run.
