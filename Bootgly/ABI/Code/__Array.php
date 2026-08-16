@@ -11,7 +11,6 @@
 namespace Bootgly\ABI\Code;
 
 
-use function array_is_list;
 use function array_key_first;
 use function array_key_last;
 use function array_search;
