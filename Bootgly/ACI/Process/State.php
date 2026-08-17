@@ -421,6 +421,11 @@ class State
     * `fdinfo`; an unrelated or PID-reused process cannot satisfy it merely by
     * copying fields into the mutable JSON document.
     *
+    * When the kernel hides those two directories — every Bootgly server is
+    * non-dumpable once the documented `setcap cap_net_bind_service=+ep` is
+    * applied to the PHP binary — the proof falls back to `confirm()`, which
+    * reads the same bookkeeping from the system-wide `/proc/locks` table.
+    *
     * @param int $PID Process to authenticate.
     * @param null|int $parent Required direct parent PID for worker checks.
     */
@@ -485,55 +490,67 @@ class State
          }
       }
 
-      $Directory = @opendir("/proc/{$PID}/fd");
-      if ($Directory === false) {
-         return false;
-      }
-
       $bound = false;
-      $inspected = 0;
-      try {
-         while (($descriptor = readdir($Directory)) !== false) {
-            if (ctype_digit($descriptor) === false) {
-               continue;
-            }
-            if (++$inspected > 65536) {
-               break;
-            }
 
-            $FD = "/proc/{$PID}/fd/{$descriptor}";
-            $opened = @stat($FD);
-            if (
-               is_array($opened) === false
-               || $opened['dev'] !== $before['dev']
-               || $opened['ino'] !== $before['ino']
-               || ((int) $opened['mode'] & 0170000) !== 0100000
-            ) {
-               continue;
-            }
+      // ---
 
-            $info = @file_get_contents("/proc/{$PID}/fdinfo/{$descriptor}");
-            $confirmed = @stat($FD);
-            if (
-               is_string($info)
-               && preg_match(
-                  '/^lock:\s+\d+:\s+FLOCK\s+ADVISORY\s+WRITE\s+(\d+)\s+[0-9a-f]+:[0-9a-f]+:'
-                     . (string) $before['ino'] . '\s+0\s+EOF\s*$/mi',
-                  $info,
-                  $locks,
-               ) === 1
-               && (int) $locks[1] === ($parent ?? $PID)
-               && is_array($confirmed)
-               && $confirmed['dev'] === $before['dev']
-               && $confirmed['ino'] === $before['ino']
-            ) {
-               $bound = true;
-               break;
+      // @ Per-descriptor evidence: the strongest proof, because it shows THIS
+      //   process holds the locked open-file-description.
+      $Directory = @opendir("/proc/{$PID}/fd");
+
+      // ? Gaining privileges at exec marks a process non-dumpable, so the
+      //   kernel hands its `fd/` and `fdinfo/` to root and even its own owner
+      //   cannot enumerate them. Bootgly documents
+      //   `setcap cap_net_bind_service=+ep` on the PHP binary to bind :80/:443
+      //   without root, which puts every server on that path.
+      if ($Directory === false) {
+         $bound = $this->confirm($parent ?? $PID, (int) $before['ino']);
+      }
+      else {
+         $inspected = 0;
+         try {
+            while (($descriptor = readdir($Directory)) !== false) {
+               if (ctype_digit($descriptor) === false) {
+                  continue;
+               }
+               if (++$inspected > 65536) {
+                  break;
+               }
+
+               $FD = "/proc/{$PID}/fd/{$descriptor}";
+               $opened = @stat($FD);
+               if (
+                  is_array($opened) === false
+                  || $opened['dev'] !== $before['dev']
+                  || $opened['ino'] !== $before['ino']
+                  || ((int) $opened['mode'] & 0170000) !== 0100000
+               ) {
+                  continue;
+               }
+
+               $info = @file_get_contents("/proc/{$PID}/fdinfo/{$descriptor}");
+               $confirmed = @stat($FD);
+               if (
+                  is_string($info)
+                  && preg_match(
+                     '/^lock:\s+\d+:\s+FLOCK\s+ADVISORY\s+WRITE\s+(\d+)\s+[0-9a-f]+:[0-9a-f]+:'
+                        . (string) $before['ino'] . '\s+0\s+EOF\s*$/mi',
+                     $info,
+                     $locks,
+                  ) === 1
+                  && (int) $locks[1] === ($parent ?? $PID)
+                  && is_array($confirmed)
+                  && $confirmed['dev'] === $before['dev']
+                  && $confirmed['ino'] === $before['ino']
+               ) {
+                  $bound = true;
+                  break;
+               }
             }
          }
-      }
-      finally {
-         closedir($Directory);
+         finally {
+            closedir($Directory);
+         }
       }
 
       $after = @lstat($this->pidLockFile);
@@ -545,6 +562,43 @@ class State
          && ((int) $after['mode'] & 0170000) === 0100000
          && ((int) $after['mode'] & 0777) === 0600
          && $after['uid'] === $before['uid'];
+   }
+
+   /**
+    * Confirm through the kernel's system-wide lock table that a PID holds the
+    * exclusive `flock` covering an inode.
+    *
+    * This is the fallback for `authenticate()` when `/proc/<pid>/fd` is
+    * unreadable. `/proc/locks` publishes the same kernel bookkeeping as
+    * `fdinfo` without the dumpability restriction, so a non-dumpable server
+    * stays verifiable — and therefore stoppable — by its own owner.
+    *
+    * It proves the lock exists and names its holder, but cannot prove the
+    * inspected PID inherited the descriptor. Workers are consequently only ever
+    * accepted alongside the caller's `PPid`/UID checks, which already bind them
+    * to the very master named here.
+    *
+    * The device columns are deliberately not compared: filesystems such as
+    * btrfs report anonymous devices that never match `stat()`, which is why the
+    * per-descriptor path re-verifies identity through `stat()` instead.
+    *
+    * @param int $holder PID that must hold the lock.
+    * @param int $inode Inode the lock must cover.
+    */
+   private function confirm (int $holder, int $inode): bool
+   {
+      $locks = @file_get_contents('/proc/locks');
+      if (is_string($locks) === false) {
+         return false;
+      }
+
+      // : Blocked waiters are printed as `<id>: -> FLOCK ...`, so requiring
+      //   `FLOCK` immediately after the entry id never counts a pending lock.
+      return preg_match(
+         '/^\d+:\s+FLOCK\s+ADVISORY\s+WRITE\s+' . $holder
+            . '\s+[0-9a-f]+:[0-9a-f]+:' . $inode . '\s+0\s+EOF\s*$/mi',
+         $locks,
+      ) === 1;
    }
 
    /**

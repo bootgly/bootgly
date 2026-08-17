@@ -24,5 +24,6 @@ return new Suite(
       '1.8-state-process-identity',
       '1.9-state-clean-ownership',
       '1.10-process-ownership',
+      '1.11-state-lock-table',
    ]
 );
