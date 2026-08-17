@@ -21,13 +21,24 @@ return new Test(
       $Path->real = true;
 
       $Path2 = clone $Path;
+
+      // ! Own fixture — `real` needs an existing directory, and system paths
+      //   are distro-specific (/etc/php only exists on Debian). The fixture
+      //   name is lowercase because `lowercase` runs before `real` resolves.
+      $temp = sys_get_temp_dir();
+      $name = 'bootgly-path-combined-' . getmypid();
+      mkdir("$temp/$name/8.2", recursive: true);
+
       // @
-      // Valid
-      $Path->construct('\\ETC\/php\\8.2/..');
+      // Valid — mixed separators, uppercase and a `..` segment
+      $Path->construct(str_replace('/', '\\', strtoupper($temp)) . "\\/$name\\8.2/..");
       yield assert(
-         assertion: (string) $Path === '/etc/php',
+         assertion: (string) $Path === "$temp/$name",
          description: 'Combined path is not valid!'
       );
+
+      rmdir("$temp/$name/8.2");
+      rmdir("$temp/$name");
       // Invalid
       $Path2->construct('/usr/bin/fakebootgly');
       yield assert(

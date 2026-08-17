@@ -7,12 +7,22 @@ use Bootgly\ACI\Tests\Suite\Test;
 return new Test(
    description: '',
    test: function () {
+      // ! Own fixture — a symlink the test creates. System symlinks are
+      //   distro-specific (/bin/sh points to dash on Debian, bash on Fedora).
+      $target = sys_get_temp_dir() . '/bootgly-file-link-target-' . getmypid();
+      $link = sys_get_temp_dir() . '/bootgly-file-link-' . getmypid();
+      touch($target);
+      symlink($target, $link);
+
       // @ Valid
-      $File1 = new File('/bin/sh');
+      $File1 = new File($link);
       yield assert(
-         assertion: $File1->link === 'dash',
+         assertion: $File1->link === $target,
          description: 'File #1 - should have link value!' . $File1->link
       );
+
+      unlink($link);
+      unlink($target);
 
       // @ Neutral
       $File2 = new File('');
