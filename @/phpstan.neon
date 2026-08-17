@@ -1,4 +1,8 @@
 parameters:
+   # Pin the analysis to the framework's target runtime (composer.json: php ^8.4).
+   # Without it PHPStan follows the host runtime, so a machine running PHP 8.5
+   # reports errors the CI (8.4) never sees.
+   phpVersion: 80400
    level: 9
    excludePaths:
       analyse:
