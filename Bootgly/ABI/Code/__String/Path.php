@@ -301,7 +301,10 @@ class Path // support to FileSystem Paths only (Linux only)
          return false;
       }
 
-      if (isSet($this->path) && $path[0] === '/') {
+      // ? An absolute path is only rejected when a path was already
+      //   constructed — `$path` is always initialized (defaults to ''),
+      //   so `isSet()` here would reject every absolute path.
+      if ($this->path !== '' && $path[0] === '/') {
          return false;
       }
 
