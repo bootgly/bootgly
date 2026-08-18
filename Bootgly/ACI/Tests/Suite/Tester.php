@@ -121,7 +121,12 @@ class Tester
       $this->results = [];
 
       // * Metadata
-      $this->filename = current($this->Suite->tests) ?: '';
+      // ! The name recorded on the case when the Suite resolved its file. The
+      //   array pointer below is only the fallback for runners that index a
+      //   Test themselves without a file (the WPI SAPI runner), and it is the
+      //   very thing that made a targeted run report a passing spec's name for
+      //   a failing case.
+      $this->filename = $this->Test->file ?? (current($this->Suite->tests) ?: '');
       // # Output
       $this->debugged = false;
       // # Profiling

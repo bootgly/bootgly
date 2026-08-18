@@ -215,6 +215,18 @@ class Suite
          if ( is_file($file) === false ) {
             // ? Private test case (`_*.Test.php` is not versioned)
             if ($test[0] === '_') {
+               // ! A placeholder, not a `continue`: dropping the entry made the
+               //   case vanish from every counter AND handed its name to the
+               //   next case that ran, which then reported a pass under a file
+               //   that does not exist. It is listed, so it is skipped.
+               $Placeholder = new Test(
+                  test: static fn (): bool => true,
+                  skip: true
+               );
+               $Placeholder->index(case: $case_index, file: $test);
+
+               $this->Tests[] = $Placeholder;
+
                continue;
             }
 
@@ -233,7 +245,8 @@ class Suite
          $this->case = $case_index;
          $Test->index(
             case: $case_index,
-            last: $this->assertions === $case_index ? true : null
+            last: $this->assertions === $case_index ? true : null,
+            file: $test
          );
 
          $this->Tests[] = $Test;
@@ -248,22 +261,30 @@ class Suite
    {
       if ($instance === true) {
          foreach ($this->Tests as $Test) {
-            // !
-            $file = current($this->tests);
-            // @ Ignore
-            if ($file === false) {
-               break;
-            }
+            // ! The case being run — skip() stamps its records with it, the same
+            //   channel the WPI runners already write before each case. Without it
+            //   a skipped case inherits whatever index autoboot() left behind.
+            $this->case = $Test->case ?? $this->case;
+            // ! The name travels with the case. The array pointer cannot be the
+            //   cursor here: autoboot() walks past every non-target case without
+            //   advancing it, so a targeted run read the FIRST entry's name for
+            //   whatever case it actually ran.
+            $file = $Test->file ?? (current($this->tests) ?: '');
             // @ Skip test
-            // ? Private files
-            if ($file[0] === '_' && Environment::match(Environment::CI_CD) === true) {
-               $this->skip('(@private)');
+            // ? Private files — `_*.Test.php` is not versioned, so it is absent
+            //   on any checkout but its author's (skip already set by autoboot)
+            if (
+               $file !== ''
+               && $file[0] === '_'
+               && ($Test->skip === true || Environment::match(Environment::CI_CD) === true)
+            ) {
+               $this->skip('(@private)', $file);
 
                continue;
             }
             // ? Skip
             if ($Test->skip === true && $Test->ignore === false) {
-               $this->skip();
+               $this->skip(file: $file);
 
                continue;
             }
@@ -369,12 +390,15 @@ class Suite
    /**
     * Skip a Test Case.
     * 
-    * @param null|string $info 
-    * @return void 
+    * @param null|string $info
+    * @param null|string $file The case's file name. Falls back to the internal
+    *        array pointer for runners that walk the list themselves (the WPI
+    *        SAPI runner, the Mail E2E autoboot), which keep it in sync.
+    * @return void
     */
-   public function skip (null|string $info = null): void
+   public function skip (null|string $info = null, null|string $file = null): void
    {
-      $file = current($this->tests);
+      $file ??= current($this->tests);
 
       $this->skipped++;
 

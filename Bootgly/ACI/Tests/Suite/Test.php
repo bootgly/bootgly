@@ -67,6 +67,14 @@ class Test
     * Indicates if the test case is the last one.
     */
    public private(set) null|true $last = null;
+   /**
+    * The base name of the file this test case was resolved from.
+    *
+    * The runner used to take it from the internal array pointer of the Suite's
+    * test list, which desynchronises from the executed cases as soon as one is
+    * skipped — so the name travels with the case instead.
+    */
+   public private(set) null|string $file = null;
 
 
    public function __construct (
@@ -98,12 +106,14 @@ class Test
     *
     * @param int $case The test case index.
     * @param null|true $last Whether this is the last test case.
+    * @param null|string $file The base name of the file it was resolved from.
     */
-   public function index (int $case, null|true $last = null): void
+   public function index (int $case, null|true $last = null, null|string $file = null): void
    {
       // * Metadata
       $this->case = $case;
       $this->last = $last ?? $this->last;
+      $this->file = $file ?? $this->file;
    }
 }
 

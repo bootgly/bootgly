@@ -114,5 +114,6 @@ return new Suite(
       // ! Appended last on purpose — the coverage probes above hardcode case
       //   indices, so a new case only ever goes at the end.
       '1.7.2-Advanced_API-expectations-waiters-runaway',
+      '1.0.3-Suite-case_attribution',
    ]
 );
