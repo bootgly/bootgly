@@ -12,7 +12,6 @@ namespace Bootgly\ACI;
 
 
 use const WNOHANG;
-use function array_search;
 use function cli_get_process_title;
 use function cli_set_process_title;
 use function pcntl_fork;

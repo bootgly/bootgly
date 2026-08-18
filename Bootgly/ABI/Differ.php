@@ -22,7 +22,6 @@ use function current;
 use function end;
 use function is_string;
 use function key;
-use function min;
 use function preg_split;
 use function prev;
 use function reset;

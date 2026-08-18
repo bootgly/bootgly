@@ -54,8 +54,24 @@ class Formatter
          }
       }
 
-      // @ Collect all imports (existing + missing from issues)
-      $allImports = $result->imports;
+      // ! Drop what nothing in the body names — keyed by kind + symbol, so an
+      //   alias that repeats across kinds never removes the wrong statement
+      $unused = [];
+      foreach ($result->issues as $Issue) {
+         if ($Issue->type === 'unused_import') {
+            $unused[$Issue->kind . ':' . $Issue->symbol] = true;
+         }
+      }
+
+      // @ Collect all imports (existing minus unused, plus missing from issues)
+      $allImports = [];
+      foreach ($result->imports as $import) {
+         if (isset($unused[$import['kind'] . ':' . $import['symbol']])) {
+            continue;
+         }
+
+         $allImports[] = $import;
+      }
 
       // @ Add missing imports from issues
       foreach ($result->issues as $Issue) {
@@ -187,8 +203,20 @@ class Formatter
          $before = substr($source, 0, $start);
          $after = substr($source, $end);
 
+         // ?: Every import was unused — the file now carries none, so it takes
+         //    the shape of one that never had any: 2 blank lines, then the code
+         if ($importBlock === '') {
+            return $before . "\n\n" . $after;
+         }
+
          // @ 2 blank lines after namespace, 2 blank lines after imports
          return $before . "\n\n" . $importBlock . "\n\n\n" . $after;
+      }
+
+      // ? Nothing to insert — never rewrite the namespace spacing for an empty
+      //   block (reachable when the only issues are outside the import block)
+      if ($importBlock === '') {
+         return $source;
       }
 
       // @ No existing imports: insert after namespace declaration

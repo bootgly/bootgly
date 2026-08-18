@@ -14,7 +14,6 @@ namespace Bootgly\CLI\UI\Components\Chart;
 use function count;
 use function getenv;
 use function hexdec;
-use function intdiv;
 use function round;
 use function str_contains;
 use function strlen;

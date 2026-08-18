@@ -66,7 +66,6 @@ use function pcntl_signal_dispatch;
 use function pcntl_wait;
 use function pcntl_waitpid;
 use function posix_getgrnam;
-use function posix_getpid;
 use function posix_getppid;
 use function posix_getpwnam;
 use function posix_getuid;

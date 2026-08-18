@@ -16,5 +16,6 @@ return new Suite(
    tests: [
       '1.1-analyzer-grouped-use',
       '1.2-formatter-comments',
+      '1.3-analyzer-unused-imports',
    ]
 );

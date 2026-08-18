@@ -14,7 +14,6 @@ namespace Bootgly\ACI\Tests;
 use function basename;
 use function bin2hex;
 use function filemtime;
-use function fileperms;
 use function function_exists;
 use function getmypid;
 use function glob;

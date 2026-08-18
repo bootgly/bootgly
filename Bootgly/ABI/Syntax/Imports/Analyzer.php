@@ -536,6 +536,13 @@ class Analyzer
       // ---
       $this->survey($Tokens, $tokens, $count, $source, $importRange, $issues);
 
+      // ---
+      // Phase 5: Report imports the body never names
+      // ---
+      if ($imports !== []) {
+         $this->prune($imports, $this->sweep($tokens, $count, $importRange), $issues);
+      }
+
       return new Result(
          file: $file,
          source: $source,
@@ -826,6 +833,131 @@ class Analyzer
 
          // : One report per block is enough to explain why nothing was rewritten
          return;
+      }
+   }
+
+   /**
+    * Collect every identifier the file body could be naming.
+    *
+    * Deliberately over-inclusive. It records identifiers in ANY context, plus
+    * every word inside comments and docblocks, instead of enumerating the
+    * syntactic positions a name may legally appear in. Enumerating is the
+    * fragile direction: the set this class already keeps for the missing-import
+    * direction (`$usedSymbols`) covers calls, constants, `new`/`extends`/
+    * `implements`/`instanceof` and static access — so it misses parameter and
+    * return types, property types, `catch` clauses, attributes, trait `use` and
+    * docblocks, and inverting it would report 2,310 live imports as unused out
+    * of 2,334 candidates. Over-collecting fails the other way: it can only keep
+    * an import that could have gone, which costs a missed cleanup rather than a
+    * deletion of working code — and `--fix` writes the file.
+    *
+    * @param array<int,mixed> $tokens
+    * @param array{start:int,end:int} $range
+    *
+    * @return array{names:array<string,bool>,exact:array<string,bool>}
+    */
+   private function sweep (array $tokens, int $count, array $range): array
+   {
+      $names = [];
+      $exact = [];
+
+      // ! Offsets are tracked inline — Tokens::locate() rescans from the start,
+      //   which would make a whole-file walk quadratic
+      $offset = 0;
+
+      // @
+      for ($i = 0; $i < $count; $i++) {
+         $token = $tokens[$i];
+
+         if (is_array($token) === false) {
+            /** @var string $token */
+            $offset += strlen($token);
+            continue;
+         }
+
+         /** @var string $content */
+         $content = $token[1];
+         $at = $offset;
+         $offset += strlen($content);
+
+         // ? The import statements are not uses of themselves
+         if ($range['start'] !== -1 && $at >= $range['start'] && $at < $range['end']) {
+            continue;
+         }
+
+         // @ Comments and docblocks: every word counts. A type named only in a
+         //   `@param`/`@var`/`@return` line is read by static analysis, so
+         //   dropping its import breaks phpstan, not just the reader.
+         if ($token[0] === T_COMMENT || $token[0] === T_DOC_COMMENT) {
+            if (preg_match_all('/[A-Za-z_][A-Za-z0-9_]*/', $content, $matches) > 0) {
+               foreach ($matches[0] as $word) {
+                  $names[strtolower($word)] = true;
+                  $exact[$word] = true;
+               }
+            }
+
+            continue;
+         }
+
+         // @ A qualified name reaches its import through the FIRST segment:
+         //   `extends Heading\Cookies` is a single token, so reading only
+         //   T_STRING would report `Heading` as unused.
+         if ($token[0] === T_NAME_QUALIFIED) {
+            $head = explode('\\', $content)[0];
+            $names[strtolower($head)] = true;
+            $exact[$head] = true;
+
+            continue;
+         }
+
+         // ? A fully qualified name (`\Foo\Bar`) resolves without consulting an
+         //   import, and a relative one (`namespace\Foo`) never does either
+         if ($token[0] !== T_STRING) {
+            continue;
+         }
+
+         $names[strtolower($content)] = true;
+         $exact[$content] = true;
+      }
+
+      // :
+      return ['names' => $names, 'exact' => $exact];
+   }
+
+   /**
+    * Report every import the body never names.
+    *
+    * @param array<int,array{symbol:string,kind:string,global:bool,line:int,alias:string}> $imports
+    * @param array{names:array<string,bool>,exact:array<string,bool>} $references
+    * @param array<int,Issue> $issues
+    */
+   private function prune (array $imports, array $references, array &$issues): void
+   {
+      foreach ($imports as $import) {
+         $alias = $import['alias'];
+
+         // ? Constants are the one kind PHP resolves case-sensitively
+         $referenced = $import['kind'] === 'const'
+            ? isset($references['exact'][$alias])
+            : isset($references['names'][strtolower($alias)]);
+
+         if ($referenced === true) {
+            continue;
+         }
+
+         $label = match ($import['kind']) {
+            'function' => "use function {$import['symbol']};",
+            'const'    => "use const {$import['symbol']};",
+            default    => "use {$import['symbol']};",
+         };
+
+         $issues[] = new Issue(
+            type: 'unused_import',
+            symbol: $import['symbol'],
+            kind: $import['kind'],
+            line: $import['line'],
+            message: "Unused import: {$label}"
+         );
       }
    }
 

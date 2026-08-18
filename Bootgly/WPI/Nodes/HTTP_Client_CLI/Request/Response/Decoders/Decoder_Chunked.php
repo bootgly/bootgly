@@ -18,7 +18,6 @@ use function rtrim;
 use function strlen;
 use function strpos;
 use function substr;
-use function trim;
 
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response\Decoder;
 

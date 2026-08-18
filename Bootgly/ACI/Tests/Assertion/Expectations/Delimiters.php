@@ -11,8 +11,6 @@
 namespace Bootgly\ACI\Tests\Assertion\Expectations;
 
 
-use AssertionError;
-
 use DateTime;
 
 use Bootgly\ACI\Tests\Assertion\Auxiliaries\Interval;
