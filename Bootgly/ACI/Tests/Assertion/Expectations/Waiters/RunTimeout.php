@@ -1,4 +1,12 @@
 <?php
+/*
+ * --------------------------------------------------------------------------
+ * Bootgly PHP Framework
+ * Developed by Rodrigo Vieira (@rodrigoslayertech)
+ * Copyright (c) 2023-present Bootgly and contributors
+ * Licensed under MIT
+ * --------------------------------------------------------------------------
+ */
 
 namespace Bootgly\ACI\Tests\Assertion\Expectations\Waiters;
 
@@ -10,18 +18,42 @@ use function is_callable;
 use function microtime;
 use function pcntl_fork;
 use function pcntl_waitpid;
+use function pcntl_wexitstatus;
+use function pcntl_wifexited;
 use function posix_kill;
-use ArgumentCountError;
+use function substr;
 use AssertionError;
 use Exception;
 use Throwable;
 
+use Bootgly\ABI\IO\IPC\Pipe;
 use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Waiter;
 
 
 class RunTimeout extends Waiter
 {
+   // * Metadata
+   // # Child
+   /**
+    * Exit code the child uses to report that the waited callable threw.
+    *
+    * The child is a forked copy of the whole test run, so it can NEVER report a
+    * failure by throwing: an escaping Throwable does not fail the assertion, it
+    * makes that second process continue running every remaining case and suite.
+    * Its exit code is the only verdict the parent can read.
+    */
+   private const int EXIT_THROWN = 2;
+   /**
+    * Maximum bytes of the reason the child hands over the pipe.
+    */
+   private const int REASON_LENGTH = 4096;
+   /**
+    * How the child died, when it died from a Throwable.
+    */
+   private string $thrown = '';
+
+
    public function assert (mixed &$actual, mixed &$expected): bool
    {
       // ?
@@ -42,6 +74,12 @@ class RunTimeout extends Waiter
          throw new AssertionError('The posix extension is required to use the RunTimeout.');
       }
 
+      // ! The channel carrying the child's reason back — the exit code says that
+      //   it failed, this says why. A pipe that cannot open costs the reason,
+      //   never the verdict.
+      $Pipe = new Pipe;
+      $piped = $Pipe->open();
+
       $PID = pcntl_fork();
       if ($PID == -1) { // Error
          throw new Exception('Could not fork process');
@@ -49,9 +87,10 @@ class RunTimeout extends Waiter
       else if ($PID) { // Parent process
          $initial = microtime(true);
          $duration = 0;
+         $status = 0;
+         $PID_child = 0;
 
          while (true) {
-            $status = null;
             $PID_child = pcntl_waitpid(
                $PID,
                $status,
@@ -72,13 +111,42 @@ class RunTimeout extends Waiter
                posix_kill($PID, SIGKILL);
                pcntl_waitpid($PID, $status);
 
+               $Pipe->close();
+
                return false;
             }
          }
 
          $this->duration = $duration;
 
-         return true;
+         // ---
+
+         // ! Whatever the child managed to report before dying
+         $reason = $piped
+            ? $Pipe->read(self::REASON_LENGTH)
+            : false;
+         $Pipe->close();
+
+         // ? pcntl_waitpid() failed, so $status describes nothing
+         if ($PID_child === -1) {
+            return false;
+         }
+         // ? Killed by a signal — never a clean run
+         if (pcntl_wifexited($status) === false) {
+            return false;
+         }
+
+         $code = pcntl_wexitstatus($status);
+
+         if ($code === self::EXIT_THROWN) {
+            $this->thrown = ($reason === false || $reason === '')
+               ? 'the waited callable threw'
+               : $reason;
+         }
+
+         // : The exit code IS the verdict — ignoring it is what let a child that
+         //   died on a Throwable be reported as a passing assertion
+         return $code === 0;
       }
       else { // Child process
          $initial = microtime(true);
@@ -87,22 +155,52 @@ class RunTimeout extends Waiter
             // @ Execute the actual callable
             $actual(...$arguments);
          }
-         catch (ArgumentCountError $Error) {
-            throw new AssertionError($Error->getMessage());
-         }
          catch (Throwable $Throwable) {
-            throw new AssertionError($Throwable->getMessage());
+            // ! Report and die. Rethrowing here would leave this forked copy of
+            //   the run alive, executing the rest of the suite a second time.
+            if ($piped) {
+               $origin = $Throwable::class;
+               $file = $Throwable->getFile();
+               $line = $Throwable->getLine();
+
+               $Pipe->write(
+                  substr(
+                     "{$origin}: {$Throwable->getMessage()} in {$file}:{$line}",
+                     0,
+                     self::REASON_LENGTH
+                  )
+               );
+            }
+
+            exit(self::EXIT_THROWN);
          }
 
          $final = microtime(true);
          $duration = $final - $initial;
 
-         exit($duration <= $timeout ? 0 : 1);
+         // : Same convention as the parent's guard above — a timeout of 0 means
+         //   there is no budget to blow (`wait(<Closure>)` stores 0 and routes
+         //   its verdict to the subassertion instead), so only a real budget can
+         //   fail here. The parent used to discard this code, which is why the
+         //   child answering `1` to every subassertion form went unnoticed.
+         exit($timeout > 0 && $duration > $timeout ? 1 : 0);
       }
    }
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
+      // ?: The callable never ran out of time — it died. Reporting the budget
+      //    here would point the reader at a limit the run never reached.
+      if ($this->thrown !== '') {
+         return new Fallback(
+            'Failed asserting that the callable ran without throwing: %s.',
+            [
+               'thrown' => $this->thrown
+            ],
+            $verbosity
+         );
+      }
+
       $timeout = $this->expected ?? $expected;
 
       return new Fallback(
