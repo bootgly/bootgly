@@ -130,11 +130,9 @@ chmod($base, 0755);
 
 $Reflection = new ReflectionClass(Bootgly\WPI\Nodes\HTTP_Server_CLI::class);
 $own = $Reflection->getMethod('own');
-$own->setAccessible(true);
 $build = static function () use ($Reflection): object {
    $Server = $Reflection->newInstanceWithoutConstructor();
    $user = $Reflection->getProperty('user');
-   $user->setAccessible(true);
    $user->setValue($Server, 'daemon');
    return $Server;
 };

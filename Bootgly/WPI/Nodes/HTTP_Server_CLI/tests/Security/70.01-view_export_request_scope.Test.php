@@ -40,7 +40,6 @@ return new Test(
       $Uses = static function (Response $Response): array {
          $View = $Response->View;
          $Property = new ReflectionProperty($View, 'uses');
-         $Property->setAccessible(true);
 
          /** @var array<string,mixed> $uses */
          $uses = $Property->getValue($View);

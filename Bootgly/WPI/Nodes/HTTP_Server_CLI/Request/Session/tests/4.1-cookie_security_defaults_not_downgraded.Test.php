@@ -40,12 +40,10 @@ return new Test(
       Session::$httpOnly = true;
 
       $Initialized = new ReflectionProperty(Session::class, 'initialized');
-      $Initialized->setAccessible(true);
       $Initialized->setValue(null, false);
 
       // @ Re-run the protected static initializer.
       $Init = new ReflectionMethod(Session::class, 'init');
-      $Init->setAccessible(true);
       $Init->invoke(null);
 
       // ? Secure must survive a stock `session.cookie_secure = 0`.

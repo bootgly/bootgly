@@ -35,14 +35,12 @@ return new Test(
          $Reflection = new ReflectionClass(HTTP_Server_CLI::class);
          $Server = $Reflection->newInstanceWithoutConstructor();
          $answer = $Reflection->getMethod('answer');
-         $answer->setAccessible(true);
 
          // ! Typed properties the helper reads; the socket loop would have
          //   filled them. Nothing else in answer() touches instance state.
          foreach (['port' => 443, 'domain' => 'victim.test'] as $name => $value) {
             if ($Reflection->hasProperty($name)) {
                $Property = $Reflection->getProperty($name);
-               $Property->setAccessible(true);
                $Property->setValue($Server, $value);
             }
          }

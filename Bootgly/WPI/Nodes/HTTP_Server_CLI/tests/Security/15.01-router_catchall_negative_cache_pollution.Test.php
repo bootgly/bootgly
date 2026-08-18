@@ -76,11 +76,9 @@ return new Test(
          // @ Reflection access to private cache state and to Request::$_URL
          $rRouter = new ReflectionObject($Router);
          $propStatic = $rRouter->getProperty('staticCache');
-         $propStatic->setAccessible(true);
 
          $rReq = new ReflectionObject($Request);
          $propUrl = $rReq->getProperty('_URL');
-         $propUrl->setAccessible(true);
 
          // @ Drive the catch-all promotion path with unique synthetic URLs.
          //   Each call re-enters Router::resolve(), hits the catch-all

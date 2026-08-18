@@ -88,7 +88,6 @@ return new Test(
 
          $Reflection = new ReflectionClass(Frame::class);
          $scans = $Reflection->getProperty('scans');
-         $scans->setAccessible(true);
          $scans->setValue(null, []);
 
          // ! The memo is disabled under Environments::Test — the very state this

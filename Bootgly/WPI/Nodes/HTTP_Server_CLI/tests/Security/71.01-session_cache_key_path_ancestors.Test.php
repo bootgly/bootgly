@@ -36,7 +36,6 @@ return new Test(
       try {
          $Reflection = new ReflectionClass(Cache::class);
          $secure = $Reflection->getMethod('secure');
-         $secure->setAccessible(true);
 
          // @ Drive the real validator and report whether it accepted the tree.
          $Accepts = static function (string $directory) use ($secure): bool {

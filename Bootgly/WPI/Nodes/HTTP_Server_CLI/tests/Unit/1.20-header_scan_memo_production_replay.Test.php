@@ -50,7 +50,6 @@ return new Test(
       // @ Drive the real static memo, with a clean slate either side.
       $Reflection = new ReflectionClass(Frame::class);
       $scans = $Reflection->getProperty('scans');
-      $scans->setAccessible(true);
       $scans->setValue(null, []);
 
       $Parse = static function (string $head) use ($Package): array {

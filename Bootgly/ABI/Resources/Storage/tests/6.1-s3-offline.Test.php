@@ -17,7 +17,6 @@ return new Test(
 
       // # SigV4 — deterministic signature at a fixed date (2013-05-24T00:00:00Z)
       $sign = new ReflectionMethod($S3, 'sign');
-      $sign->setAccessible(true);
       /** @var array{0:string,1:array<string,string>} $signed */
       $signed = $sign->invoke($S3, 'GET', '/test.txt', [], '', [], 1369353600);
       [, $headers] = $signed;
@@ -61,7 +60,6 @@ return new Test(
 
       // # Chunked transfer decoding
       $dechunk = new ReflectionMethod($S3, 'dechunk');
-      $dechunk->setAccessible(true);
       yield assert(
          assertion: $dechunk->invoke($S3, "5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n") === 'hello world',
          description: 'dechunk() decodes a chunked body'
@@ -69,7 +67,6 @@ return new Test(
 
       // # Response parsing (status, headers, body)
       $parse = new ReflectionMethod($S3, 'parse');
-      $parse->setAccessible(true);
       /** @var array{0:int,1:array<string,string|array<int,string>>,2:string} $parsed */
       $parsed = $parse->invoke($S3, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nETag: \"abc\"\r\n\r\nbody-bytes");
       yield assert(

@@ -143,7 +143,6 @@ return new Test(
 
       $Retains = static function (Select $Selector, string $property, int $id): bool {
          $Reflection = new ReflectionProperty(Select::class, $property);
-         $Reflection->setAccessible(true);
          $values = $Reflection->getValue($Selector);
 
          return is_array($values) && array_key_exists($id, $values);
