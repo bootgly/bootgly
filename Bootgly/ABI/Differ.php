@@ -164,7 +164,7 @@ final class Differ
       // Footprint estimate for the time-efficient matrix:
       // ~76 bytes/cell on 32-bit, ~144 bytes/cell on 64-bit PHP.
       $itemSize  = PHP_INT_SIZE === 4 ? 76 : 144;
-      $footprint = $itemSize * min(count($from), count($to)) ** 2;
+      $footprint = $itemSize * (count($from) + 1) * (count($to) + 1);
 
       if ($footprint > self::MEMORY_LIMIT) {
          return new Memory;

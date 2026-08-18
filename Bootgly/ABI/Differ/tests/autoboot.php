@@ -28,5 +28,7 @@ return new Suite(
       '3.x-differ-side-by-side',
       '4.x-parser',
       '5.x-input-git-diff',
+      // @ Appended to preserve every existing selected-case index.
+      '2.x-calculator-selection',
    ]
 );
