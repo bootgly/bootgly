@@ -44,18 +44,21 @@ class Iterators
 
       return $Iterator;
    }
-   public static function dequeue (): Iterator|string
+   public static function dequeue (): null|Iterator
    {
       self::$depth--;
 
       array_pop(self::$Iterators);
 
       $iterators = count(self::$Iterators);
+      // ?: The enclosing loop takes the metavar back
       if ($iterators > 0) {
          return self::$Iterators[$iterators - 1];
       }
 
-      return static::class;
+      // : No loop is running anymore — null is what makes the `$_?->next();`
+      //   a later `@continue` emits short-circuit instead of fataling
+      return null;
    }
    /**
     * Discard the loop stack — used when a render fails mid-loop.

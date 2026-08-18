@@ -52,5 +52,6 @@ return new Suite(
       '9.1.3-render-exceptions-nested_line',
       '9.1.4-render-exceptions-engine_location',
       '1.1.4-render-outputs-translate',
+      '2.3.1.4-render-loops-foreach-continue_after_close',
    ]
 );
