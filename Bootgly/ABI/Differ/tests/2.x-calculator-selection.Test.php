@@ -10,7 +10,8 @@ return new Test(
       // ! A 100 × 100,000 line diff: the Time calculator's DP matrix needs ~268 MB,
       //   so under a 128 MB limit the guard must select the Memory calculator (DIFF-1).
       //   A child process keeps the probe hermetic — an OOM there cannot kill the suite.
-      $autoload = BOOTGLY_ROOT_DIR . 'vendor/autoload.php';
+      //   It boots through the framework's own entry: a CI checkout has no vendor/ at all.
+      $autoboot = BOOTGLY_ROOT_DIR . 'autoboot.php';
       $code = sprintf(<<<'PHP'
       require %s;
       $from = '';
@@ -22,7 +23,7 @@ return new Test(
          'toFile' => 'b.txt'
       ]));
       echo 'OK:', strlen($Differ->diff($from, $to));
-      PHP, var_export($autoload, true));
+      PHP, var_export($autoboot, true));
 
       // @
       $lines = [];
