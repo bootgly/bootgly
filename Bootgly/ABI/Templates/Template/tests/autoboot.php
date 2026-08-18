@@ -55,5 +55,6 @@ return new Suite(
       '2.3.1.4-render-loops-foreach-continue_after_close',
       '5.2.3-render-components-default_slot_override',
       '0.2.1-render-directives-scoped_expressions',
+      '3.1.2.3-render-conditionals-short_conditional_anchoring',
    ]
 );

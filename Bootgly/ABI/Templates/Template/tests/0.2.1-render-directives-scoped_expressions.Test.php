@@ -85,11 +85,27 @@ return new Test(
          description: "@switch/@case on a class constant: \n`{$output}`"
       );
 
+      // @else if opens on a colon too, so it needs the same scan
+      $output = $render(
+         '@if (false):N@else if ($s === TemplateScope_0_2_1::ACTIVE):Y@if;',
+         ['s' => 'active']
+      );
+      yield assert(
+         assertion: $output === 'Y',
+         description: "@else if with a class constant: \n`{$output}`"
+      );
+
       // The same scan consumes quoted strings whole, so a colon inside one survives
       $output = $render("@if (\$s === 'a:b'):HIT@if;", ['s' => 'a:b']);
       yield assert(
          assertion: $output === 'HIT',
          description: "@if comparing against a string holding a colon: \n`{$output}`"
+      );
+
+      $output = $render("@if (false):N@else if (\$s === 'a:b'):Y@if;", ['s' => 'a:b']);
+      yield assert(
+         assertion: $output === 'Y',
+         description: "@else if comparing against a string holding a colon: \n`{$output}`"
       );
 
       // @ Neutral

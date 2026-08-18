@@ -9,10 +9,21 @@ return [
 
       // Conditional
       $conditional = $matches[2];
+      // ! Both rewrites are anchored to the WHOLE condition and accept only a bare
+      //   variable chain, so the marker is the one the author wrote at the end —
+      //   a `?->`, a `??` or a ternary inside a real condition is left alone
       // @ Replace Short syntax to isSet(...)
-      $conditional = preg_replace('/\$(.*?)\?\?/sx', 'isSet(\$${1})', $conditional);
+      $conditional = preg_replace(
+         '/^(\s*\(?\s*)\$([\w\[\]\'"\->]+)\?\?(\s*\)?\s*)$/sx',
+         '${1}isSet(\$${2})${3}',
+         $conditional
+      );
       // @ Replace Short Syntax to !empty(...)
-      $conditional = preg_replace('/\$(.*?)\?/sx', '!empty(\$${1})', $conditional);
+      $conditional = preg_replace(
+         '/^(\s*\(?\s*)\$([\w\[\]\'"\->]+)\?(\s*\)?\s*)$/sx',
+         '${1}!empty(\$${2})${3}',
+         $conditional
+      );
 
       // ? preg_replace failed on the condition — emitting '' would silently drop
       //   the whole @if block and produce a template that renders wrong output
