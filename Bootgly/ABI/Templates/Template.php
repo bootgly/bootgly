@@ -78,6 +78,12 @@ class Template implements Templates
    // * Metadata
    private null|string $file;
    // Cache
+   /**
+    * Identity of the compiler that turns a template into PHP: the framework version
+    * and this pipeline's own mtime. Resolved once per process and combined with the
+    * live directive fingerprint to key every compiled cache.
+    */
+   private static string $compiler;
    private string $cache;
    /**
     * Compiled cache file => source template file (null = inline template).
@@ -260,11 +266,19 @@ class Template implements Templates
       $file = $this->file;
 
       // # Key: file templates by path (edits overwrite); inline templates by content.
-      // Salted with the framework version: upgrades may change directive output,
-      // so caches compiled by an older Bootgly must not be reused.
+      // Salted with the identity of the COMPILER, not just of the framework: the
+      // version alone only moves at release, so every directive edit inside a
+      // version — and every runtime Directives::extend() — would otherwise keep
+      // serving output compiled by a compiler that is no longer installed.
+      if (isSet(self::$compiler) === false) {
+         self::$compiler = sha1(BOOTGLY_VERSION . filemtime(__FILE__));
+      }
+      // The directive fingerprint is read per call: extend() can change it mid-process
+      $compiler = self::$compiler . (string) self::$Directives->fingerprint;
+
       $key = ($file !== null)
-         ? sha1(BOOTGLY_VERSION . $file)
-         : sha1(BOOTGLY_VERSION . $this->raw);
+         ? sha1($compiler . $file)
+         : sha1($compiler . $this->raw);
       $cache = $this->cache = BOOTGLY_STORAGE_DIR . "cache/templates/{$key}.php";
 
       // ? Warm cache

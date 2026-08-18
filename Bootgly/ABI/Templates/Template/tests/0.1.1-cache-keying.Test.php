@@ -13,66 +13,151 @@ return new Test(
    test: new Assertions(function () {
       // !
       $storage = BOOTGLY_STORAGE_DIR . 'cache/templates/';
-      $file = sys_get_temp_dir() . '/bootgly-' . uniqid() . '.template.php';
+      // The key formula is deliberately NOT rebuilt here: it also carries the compiler
+      // identity (see BUGS TPL-15), and a spec that duplicates it pins the bytes of the
+      // salt instead of the invariant the description states. What is observable — and
+      // what actually matters — is which renders share a cache entry and which do not.
+      $snapshot = static function () use ($storage): array {
+         return array_flip(glob($storage . '*.php') ?: []);
+      };
+      $created = static function (array $before) use ($snapshot): array {
+         return array_keys(array_diff_key($snapshot(), $before));
+      };
+
+      $first = sys_get_temp_dir() . '/bootgly-' . uniqid() . '.template.php';
+      $second = sys_get_temp_dir() . '/bootgly-' . uniqid() . '.template.php';
+      $caches = [];
 
       // @ Valid
-      // File template -> cache keyed by source path
-      file_put_contents($file, '@> $a;');
+      // File template -> one cache entry
+      file_put_contents($first, '@> $a;');
 
-      $Template1 = new Template(new File($file));
+      $before = $snapshot();
+      $Template1 = new Template(new File($first));
       $Template1->render(['a' => 'first']);
-
-      // Cache keys are salted with the framework version (upgrade invalidation)
-      $cache = $storage . sha1(BOOTGLY_VERSION . $file) . '.php';
+      $caches = $created($before);
 
       yield new Assertion(
-         description: 'File template cache keyed by path',
-         fallback: "Cache file not found at `{$cache}`"
+         description: 'File template compiles to exactly one cache entry',
+         fallback: 'Cache entries created: ' . json_encode($caches)
       )
          ->assert(
-            actual: is_file($cache),
-            expected: true
+            actual: count($caches),
+            expected: 1
+         );
+
+      // A different path with IDENTICAL content -> its own entry (keyed by path)
+      file_put_contents($second, '@> $a;');
+
+      $before = $snapshot();
+      $Template2 = new Template(new File($second));
+      $Template2->render(['a' => 'second']);
+      $entries = $created($before);
+      $caches = [...$caches, ...$entries];
+
+      yield new Assertion(
+         description: 'Same content at another path gets its own cache entry',
+         fallback: 'Cache entries created: ' . json_encode($entries)
+      )
+         ->assert(
+            actual: count($entries),
+            expected: 1
+         );
+
+      // The same path again -> no new entry
+      $before = $snapshot();
+      $Template3 = new Template(new File($first));
+      $Template3->render(['a' => 'again']);
+
+      yield new Assertion(
+         description: 'Re-rendering the same path reuses its cache entry',
+         fallback: 'Cache entries created: ' . json_encode($created($before))
+      )
+         ->assert(
+            actual: $created($before),
+            expected: []
          );
 
       // File template edited -> same cache path is overwritten (no orphans)
-      file_put_contents($file, '@> $a; edited');
-      touch($file, time() + 2);
+      file_put_contents($first, '@> $a; edited');
+      touch($first, time() + 2);
 
-      $Template2 = new Template(new File($file));
-      $Template2->render(['a' => 'second']);
+      $before = $snapshot();
+      $Template4 = new Template(new File($first));
+      $Template4->render(['a' => 'fourth']);
 
       yield new Assertion(
          description: 'Edited file template overwrites the same cache path',
-         fallback: "Template #2: output does not match: \n`" . $Template2->output . '`'
+         fallback: "Template #4: output does not match: \n`" . $Template4->output . '`'
       )
          ->assert(
-            actual: $Template2->output,
-            expected: 'second edited'
+            actual: $Template4->output,
+            expected: 'fourth edited'
+         );
+      yield new Assertion(
+         description: 'Editing a file template leaves no orphan cache entry',
+         fallback: 'Cache entries created: ' . json_encode($created($before))
+      )
+         ->assert(
+            actual: $created($before),
+            expected: []
          );
 
-      // Inline template -> cache keyed by content hash
+      // Inline template -> keyed by content
       $inline = '@> $b;' . uniqid();
 
-      $Template3 = new Template($inline);
-      $Template3->render(['b' => 'inline']);
-
-      $keyed = $storage . sha1(BOOTGLY_VERSION . $inline) . '.php';
+      $before = $snapshot();
+      $Template5 = new Template($inline);
+      $Template5->render(['b' => 'inline']);
+      $entries = $created($before);
+      $caches = [...$caches, ...$entries];
 
       yield new Assertion(
-         description: 'Inline template cache keyed by content',
-         fallback: "Cache file not found at `{$keyed}`"
+         description: 'Inline template compiles to exactly one cache entry',
+         fallback: 'Cache entries created: ' . json_encode($entries)
       )
          ->assert(
-            actual: is_file($keyed),
-            expected: true
+            actual: count($entries),
+            expected: 1
+         );
+
+      // The same content again -> no new entry; different content -> its own
+      $before = $snapshot();
+      $Template6 = new Template($inline);
+      $Template6->render(['b' => 'again']);
+
+      yield new Assertion(
+         description: 'Re-rendering the same inline content reuses its cache entry',
+         fallback: 'Cache entries created: ' . json_encode($created($before))
+      )
+         ->assert(
+            actual: $created($before),
+            expected: []
+         );
+
+      $before = $snapshot();
+      $Template7 = new Template($inline . ' more');
+      $Template7->render(['b' => 'other']);
+      $entries = $created($before);
+      $caches = [...$caches, ...$entries];
+
+      yield new Assertion(
+         description: 'Different inline content gets its own cache entry',
+         fallback: 'Cache entries created: ' . json_encode($entries)
+      )
+         ->assert(
+            actual: count($entries),
+            expected: 1
          );
 
       // @ Invalid
       // ...
 
       // ! Cleanup
-      @unlink($file);
-      @unlink($cache);
-      @unlink($keyed);
+      @unlink($first);
+      @unlink($second);
+      foreach ($caches as $cache) {
+         @unlink($cache);
+      }
    })
 );

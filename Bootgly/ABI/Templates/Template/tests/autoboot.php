@@ -56,5 +56,6 @@ return new Suite(
       '5.2.3-render-components-default_slot_override',
       '0.2.1-render-directives-scoped_expressions',
       '3.1.2.3-render-conditionals-short_conditional_anchoring',
+      '0.1.3-cache-compiler_invalidation',
    ]
 );

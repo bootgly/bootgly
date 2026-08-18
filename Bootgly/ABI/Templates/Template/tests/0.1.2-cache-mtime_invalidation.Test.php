@@ -12,8 +12,11 @@ return new Test(
    description: 'It should recompile only when the source mtime reaches the cache mtime',
    test: new Assertions(function () {
       // !
+      $storage = BOOTGLY_STORAGE_DIR . 'cache/templates/';
       $file = sys_get_temp_dir() . '/bootgly-' . uniqid() . '.template.php';
-      $cache = BOOTGLY_STORAGE_DIR . 'cache/templates/' . sha1(BOOTGLY_VERSION . $file) . '.php';
+      // The cache entry is identified by observation, not by rebuilding the key: it also
+      // carries the compiler identity (see BUGS TPL-15), which this spec does not pin.
+      $before = array_flip(glob($storage . '*.php') ?: []);
 
       // @ Valid
       // First render compiles
@@ -67,6 +70,8 @@ return new Test(
 
       // ! Cleanup
       @unlink($file);
-      @unlink($cache);
+      foreach (array_keys(array_diff_key(array_flip(glob($storage . '*.php') ?: []), $before)) as $cache) {
+         @unlink($cache);
+      }
    })
 );
