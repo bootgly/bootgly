@@ -29,6 +29,7 @@ use function serialize;
 use function sprintf;
 use function str_ends_with;
 use function time;
+use function touch;
 use function unlink;
 use function unserialize;
 
@@ -116,6 +117,16 @@ class File extends Driver
          if (@rename("{$ready}/{$file}", "{$reserved}/{$file}") === false) {
             continue;
          }
+
+         // ! Stamp the claim time — `rename()` preserves the mtime, and
+         //   `recover()` measures the visibility window from it. Unstamped, the
+         //   window runs from when the job was WRITTEN to `ready/`, so anything
+         //   that waited there longer than `visibility` (a backlog, a delayed
+         //   job, a `release()` backoff wider than the window) is stale the
+         //   instant it is claimed and the reaper hands it to a second worker.
+         //   Wall clock, never the Config clock — it is compared against
+         //   `filemtime()`, as `recover()` documents.
+         @touch("{$reserved}/{$file}");
 
          $Job = $this->load("{$reserved}/{$file}");
          // ? Corrupt record — drop the claim and keep scanning
