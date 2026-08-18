@@ -31,5 +31,6 @@ return new Suite(
       // @ Appended to preserve every existing selected-case index.
       '2.x-calculator-selection',
       '4.x-parser-git-headers',
+      '3.x-differ-zero-range',
    ]
 );

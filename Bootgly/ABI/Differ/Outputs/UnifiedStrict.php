@@ -294,6 +294,14 @@ final class UnifiedStrict implements Output
    ): void {
       assert(is_resource($output));
 
+      // ? A zero-length side names the line preceding the change (git convention)
+      if ($fromRange === 0) {
+         $fromStart = max(0, $fromStart - 1);
+      }
+      if ($toRange === 0) {
+         $toStart = max(0, $toStart - 1);
+      }
+
       fwrite($output, '@@ -' . $fromStart);
 
       if (! $this->collapse || $fromRange !== 1) {
