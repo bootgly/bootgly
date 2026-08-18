@@ -1,6 +1,8 @@
 <?php
 return [
-   "/(@)?@for[ ]+?(.+?)[ ]?:/sx" => function ($matches) {
+   // (quoted strings are consumed whole and `::` never terminates, so `:`
+   //  inside strings and class constants survive; the opener is a single `:`)
+   '/(@)?@for[ ]+?((?:[^:\'"]++|::|\'(?:[^\'\\\\]|\\\\.)*+\'|"(?:[^"\\\\]|\\\\.)*+")+?)[ ]?(?<!:):(?!:)/sx' => function ($matches) {
       if (@$matches[1]) {
          return substr($matches[0], 1);
       }
