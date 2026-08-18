@@ -11,6 +11,7 @@
 namespace Bootgly\ACI\Tests\Suite;
 
 
+use const E_ALL;
 use const PHP_EOL;
 use const STR_PAD_BOTH;
 use const STR_PAD_RIGHT;
@@ -18,6 +19,7 @@ use function array_reduce;
 use function array_values;
 use function count;
 use function current;
+use function error_reporting;
 use function file_put_contents;
 use function gettype;
 use function is_a;
@@ -315,6 +317,14 @@ class Tester
       $retest = $this->Test->retest ?? null;
       $runtimeArguments = $arguments;
 
+      // ! The runner owns the diagnostic environment of a case instead of
+      //   inheriting the host's php.ini mask, which makes the suite blind to
+      //   whatever that mask hides — on a stock php.ini that is E_DEPRECATED,
+      //   exactly the class a framework must see before a PHP upgrade. ABI's
+      //   handler is registered at E_ALL but short-circuits on
+      //   `error_reporting() & $level`, so raising it here is what makes it fire.
+      $reporting = error_reporting(E_ALL);
+
       try {
          ob_start();
 
@@ -436,6 +446,8 @@ class Tester
          }
       }
       finally {
+         error_reporting($reporting);
+
          if ($retest) {
             $this->Test->test = $retest;
             $this->Test->retest = null;
