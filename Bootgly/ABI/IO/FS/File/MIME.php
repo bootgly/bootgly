@@ -11,6 +11,7 @@
 namespace Bootgly\ABI\IO\FS\File;
 
 
+use function count;
 use function explode;
 use function mime_content_type;
 
@@ -26,15 +27,25 @@ class MIME
 
    public function __construct (string $filename)
    {
-      $mime_content_type = mime_content_type($filename) ?: "";
+      // ! `mime_content_type()` warns on a path it cannot open and throws on an empty
+      //   one — and a type it fails to determine carries no `format/subtype` to split
+      $type = ($filename !== '')
+         ? @mime_content_type($filename) ?: ''
+         : '';
 
-      [$format, $subtype] = explode("/", $mime_content_type);
+      $parts = explode('/', $type, 2);
+
+      // ? An undeterminable type leaves every part unknown
+      if (count($parts) !== 2) {
+         $type = '';
+         $parts = ['', ''];
+      }
 
       // * Data
-      $this->type = $mime_content_type;
+      $this->type = $type;
       // * Metadata
-      $this->format = $format;
-      $this->subtype = $subtype;
+      $this->format = $parts[0];
+      $this->subtype = $parts[1];
    }
    public function __toString ()
    {
