@@ -14,6 +14,7 @@ namespace Bootgly\API\Security\JWT;
 use const JSON_BIGINT_AS_STRING;
 use const JSON_THROW_ON_ERROR;
 use function file_get_contents;
+use function http_get_last_response_headers;
 use function is_array;
 use function is_string;
 use function json_decode;
@@ -370,9 +371,12 @@ class Remote implements KeyResolver
          return Failures::Network;
       }
 
-      // @ PHP populates `$http_response_header` in this local scope after
-      //   `file_get_contents()` HTTP stream requests.
-      $headers = $http_response_header;
+      // @ The headers PHP recorded for the `file_get_contents()` HTTP request.
+      //   The predefined local `$http_response_header` is deprecated since PHP
+      //   8.4, and that deprecation is raised at COMPILE time — so merely naming
+      //   the variable made this whole file fail to load under `E_ALL`, taking
+      //   the class with it.
+      $headers = http_get_last_response_headers() ?? [];
       $status = 0;
       if (isset($headers[0]) && preg_match('/^HTTP\/\S+\s+(\d{3})/', $headers[0], $matches) === 1) {
          $status = (int) $matches[1];
