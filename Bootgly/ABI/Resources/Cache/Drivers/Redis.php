@@ -17,8 +17,11 @@ use const STREAM_CLIENT_PERSISTENT;
 use const TCP_NODELAY;
 use function array_chunk;
 use function array_shift;
+use function bin2hex;
 use function count;
 use function extension_loaded;
+use function fclose;
+use function fmod;
 use function fread;
 use function fwrite;
 use function is_array;
@@ -26,6 +29,7 @@ use function is_int;
 use function is_resource;
 use function is_scalar;
 use function is_string;
+use function random_bytes;
 use function serialize;
 use function socket_import_stream;
 use function socket_set_option;
@@ -36,6 +40,7 @@ use function substr;
 use function unserialize;
 use Redis as RedisClient;
 use RuntimeException;
+use Throwable;
 
 use Bootgly\ABI\Data\RESP\Decoder;
 use Bootgly\ABI\Data\RESP\Encoder;
@@ -455,6 +460,8 @@ LUA;
    {
       $Socket = $this->Socket;
       if (is_resource($Socket) === false) {
+         $this->drop();
+
          throw new RuntimeException('Redis socket is not connected.');
       }
 
@@ -464,10 +471,79 @@ LUA;
       while ($offset < $length) {
          $written = @fwrite($Socket, $offset === 0 ? $payload : substr($payload, $offset));
          if ($written === false || $written === 0) {
+            $this->drop();
+
             throw new RuntimeException('Redis socket write failed.');
          }
 
          $offset += $written;
+      }
+   }
+
+   /**
+    * Abandon the connection so the next command reconnects on a known-clean stream.
+    *
+    * A command that fails mid-exchange leaves the socket holding replies nobody asked
+    * for and the Decoder holding a half-parsed frame; reusing either offsets every
+    * later reply from the command that asked for it. Dropping the socket is enough to
+    * clear both: `connect()` builds a fresh `Decoder` for every new socket. The Decoder
+    * is deliberately not touched here — on the ext-redis path it is never assigned.
+    */
+   private function drop (): void
+   {
+      $Socket = $this->Socket;
+
+      if (is_resource($Socket) === true) {
+         @fclose($Socket);
+      }
+
+      $this->Socket = null;
+      $this->connected = false;
+   }
+
+   /**
+    * Resynchronize a reused persistent stream against a token only this connection knows.
+    *
+    * A stream PHP hands back may still be carrying a reply its previous owner abandoned —
+    * possibly one that has not arrived yet, which no amount of draining can see. `ECHO`
+    * plants a landmark instead: everything read before our own token belongs to someone
+    * else and is discarded, so the first real command is guaranteed to be aligned.
+    */
+   private function resync (): void
+   {
+      $Socket = $this->Socket;
+
+      if (is_resource($Socket) === false) {
+         $this->drop();
+
+         throw new RuntimeException('Redis socket is not connected.');
+      }
+
+      $token = 'bootgly:' . bin2hex(random_bytes(8));
+
+      $this->write($this->Encoder->encode(['ECHO', $token]));
+
+      try {
+         // @@ Read past whatever the previous owner left behind
+         while (true) {
+            $chunk = @fread($Socket, 16384);
+
+            if ($chunk === false || $chunk === '') {
+               throw new RuntimeException('Redis connection closed or timed out.');
+            }
+
+            foreach ($this->Decoder->decode($chunk) as $reply) {
+               // ?:
+               if ($reply === $token) {
+                  return;
+               }
+            }
+         }
+      }
+      catch (Throwable $Throwable) {
+         $this->drop();
+
+         throw $Throwable;
       }
    }
 
@@ -480,21 +556,41 @@ LUA;
    {
       $Socket = $this->Socket;
       if (is_resource($Socket) === false) {
+         $this->drop();
+
          throw new RuntimeException('Redis socket is not connected.');
       }
 
-      // ! Drain any replies already buffered
-      $replies = $this->Decoder->decode();
+      try {
+         // ! Drain any replies already buffered
+         $replies = $this->Decoder->decode();
 
-      while (count($replies) < $count) {
-         $chunk = @fread($Socket, 16384);
-         if ($chunk === false || $chunk === '') {
-            throw new RuntimeException('Redis connection closed or timed out.');
-         }
+         while (count($replies) < $count) {
+            $chunk = @fread($Socket, 16384);
+            if ($chunk === false || $chunk === '') {
+               throw new RuntimeException('Redis connection closed or timed out.');
+            }
 
-         foreach ($this->Decoder->decode($chunk) as $reply) {
-            $replies[] = $reply;
+            foreach ($this->Decoder->decode($chunk) as $reply) {
+               $replies[] = $reply;
+            }
          }
+      }
+      catch (Throwable $Throwable) {
+         // ! Whatever went wrong — a timeout, a closed peer, an undecodable byte — the
+         //   stream is no longer known to be aligned with the commands sent on it
+         $this->drop();
+
+         throw $Throwable;
+      }
+
+      // ? More replies than commands means the stream was already offset
+      if (count($replies) > $count) {
+         $this->drop();
+
+         throw new RuntimeException(
+            'Redis protocol desync: ' . count($replies) . " replies for {$count} command(s)."
+         );
       }
 
       // :
@@ -549,7 +645,10 @@ LUA;
             throw new RuntimeException("Redis connect failed ({$Config->host}:{$Config->port}): {$error}");
          }
 
-         stream_set_timeout($Socket, (int) $Config->timeout);
+         // ! The configured timeout is a float in seconds — pass the fractional part as
+         //   microseconds, or any sub-second value collapses to "no wait at all"
+         $timeout = $Config->timeout;
+         stream_set_timeout($Socket, (int) $timeout, (int) (fmod($timeout, 1) * 1000000));
 
          // @ Disable Nagle: commands and replies are small — latency dominates
          if (extension_loaded('sockets') === true) {
@@ -571,6 +670,11 @@ LUA;
          }
          if ($Config->database !== 0) {
             $this->dispatch(['SELECT', $Config->database]);
+         }
+
+         // ? A stream handed over by a previous owner is not known to be aligned
+         if ($Config->persistent === true) {
+            $this->resync();
          }
       }
 

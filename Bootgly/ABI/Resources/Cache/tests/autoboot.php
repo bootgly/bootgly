@@ -38,5 +38,6 @@ return new Suite(
 
       // @ Appended to preserve every existing selected-case index.
       '5.5-shared-expired-capacity',
+      '5.6-redis-desync',
    ]
 );
