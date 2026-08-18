@@ -37,5 +37,22 @@ return new Test(
          assertion: $File3->link === null,
          description: 'File #3 - fake file - link should be null'
       );
+
+      // @ Neutral — an ordinary regular file is not a link, and asking must not throw:
+      //   SplFileInfo::getLinkTarget() throws (not warns) on exactly this case (IO-2)
+      $File4 = new File(__DIR__ . '/1.1-construct-real_file.Test.php');
+      $thrown = null;
+      $linked = null;
+      try {
+         $linked = $File4->link;
+      }
+      catch (Throwable $Throwable) {
+         $thrown = $Throwable::class;
+      }
+      yield assert(
+         assertion: $thrown === null && $linked === null,
+         description: "File #4 - regular file - link should be null, got: "
+            . var_export($linked, true) . " / thrown: " . var_export($thrown, true)
+      );
    }
 );

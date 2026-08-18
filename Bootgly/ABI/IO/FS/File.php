@@ -30,6 +30,7 @@ use function is_link;
 use function ob_get_clean;
 use function ob_start;
 use function readfile;
+use function readlink;
 use function realpath;
 use function rtrim;
 use function str_starts_with;
@@ -419,11 +420,12 @@ class File implements FS
    public protected(set) null|string $link {
       get {
          if (isSet($this->link) === false) {
-            // ! `null` for a non-link (or missing) file is this property's
-            //   contract, and that is exactly the case the call warns on —
-            //   silence it so the error handler cannot turn it into a throw.
-            // @phpstan-ignore-next-line
-            $this->link = @new SplFileInfo($this->file)->getLinkTarget() ?: null;
+            // ! `null` for a non-link (or missing) file is this property's contract,
+            //   and `SplFileInfo::getLinkTarget()` throws — not warns — on one of
+            //   those very cases, so ask whether the file is a link first.
+            $this->link = is_link($this->file)
+               ? (readlink($this->file) ?: null)
+               : null;
          }
 
          return $this->link;
