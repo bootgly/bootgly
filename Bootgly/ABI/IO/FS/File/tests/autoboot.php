@@ -50,5 +50,8 @@ return new Suite(
       '4.1.3-dynamic_call-open_file-append_modes',
       '4.1.4-dynamic_call-open_file-continuous_modes',
       '4.1.5-dynamic_call-open_file-exclusive_modes',
+
+      // @ Appended to preserve every existing selected-case index.
+      '4.2.1-dynamic_call-base_jail-boundary',
    ]
 );

@@ -13,16 +13,20 @@ namespace Bootgly\ABI\IO\FS;
 
 use const DIRECTORY_SEPARATOR;
 use function count;
+use function dirname;
 use function fclose;
 use function feof;
 use function fgets;
 use function file;
+use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
 use function fopen;
 use function fread;
 use function fwrite;
+use function is_dir;
 use function is_file;
+use function is_link;
 use function ob_get_clean;
 use function ob_start;
 use function readfile;
@@ -572,6 +576,44 @@ class File implements FS
 
       return $this->file = '';
    }
+   /**
+    * Resolves the filename a filesystem operation must act on, subject to the jail.
+    *
+    * `pathify()` only resolves paths that already exist as files, so an operation that
+    * creates its own target (`create()`, `open()` in a write mode) has nothing pathified
+    * to work with. Such a target is judged by the deepest existing directory it would
+    * land in — the entry cannot escape a jail its parent does not escape.
+    *
+    * @return string The filename to operate on, or `''` when the jail blocks it.
+    */
+   private function resolve (): string
+   {
+      // ?
+      $filename = $this->file ?: $this->Path->path;
+
+      if ($filename === '' || $this->base === '') {
+         return $filename;
+      }
+
+      // ?: An existing entry is judged by itself (guard() resolves symlinks)
+      if (file_exists($filename) === true || is_link($filename) === true) {
+         return $this->guard($filename) ? '' : $filename;
+      }
+
+      // ! A target that does not exist yet is judged by the directory it would land in
+      $parent = dirname($filename);
+      while (is_dir($parent) === false && $parent !== dirname($parent)) {
+         $parent = dirname($parent);
+      }
+
+      // ?: The jail directory itself is trivially contained — guard() only matches below it
+      if (realpath($parent) === realpath($this->base)) {
+         return $filename;
+      }
+
+      // :
+      return $this->guard($parent) ? '' : $filename;
+   }
 
    /**
     * Creates a file (touch).
@@ -585,12 +627,15 @@ class File implements FS
       // !
       // * Data
       // Path
-      $filename = ($this->file !== '')
-         ? $this->file
-         : $this->Path->path;
+      $filename = $this->resolve();
       // * Metadata
       $dir  = null;
       $file = null;
+
+      // ? The jail blocks the target — create nothing, not even its parent directories
+      if ($filename === '') {
+         return false;
+      }
 
       // @
       if ($recursively === true) {
@@ -619,7 +664,7 @@ class File implements FS
     */
    public function open (string $mode = self::READONLY_MODE)
    {
-      $filename = $this->file ?: $this->Path->path;
+      $filename = $this->resolve();
 
       // @
       $handler = false;
@@ -820,7 +865,7 @@ class File implements FS
       }
 
       // * Data
-      $filename = $this->file ?: $this->Path->path;
+      $filename = $this->resolve();
 
       if ( ! $filename ) {
          return false;
