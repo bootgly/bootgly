@@ -15,14 +15,11 @@ use const BOOTGLY_STORAGE_DIR;
 use const LOCK_EX;
 use const LOCK_NB;
 use const LOCK_UN;
-use function clearstatcache;
 use function fclose;
 use function flock;
 use function fopen;
 use function is_dir;
-use function is_file;
 use function mkdir;
-use function unlink;
 
 
 /**
@@ -76,7 +73,14 @@ final class Lock
    }
 
    /**
-    * Release the lock and remove the lock file.
+    * Release the lock, leaving the lock inode in place.
+    *
+    * The file is deliberately NOT unlinked. Exclusion is keyed to the inode,
+    * not to the path: unlinking after unlock lets a concurrent opener keep the
+    * old inode while a third process creates and locks a new inode under the
+    * same path — so both are told they own the lock, which is the precise
+    * outcome this class exists to prevent. Same rationale, and the same cost of
+    * one empty file per job id, as `ACI\Process\State::clean()`.
     */
    public function release (): void
    {
@@ -89,11 +93,5 @@ final class Lock
       fclose($this->handle);
 
       $this->handle = null;
-
-      clearstatcache();
-
-      if (is_file($this->file)) {
-         @unlink($this->file);
-      }
    }
 }

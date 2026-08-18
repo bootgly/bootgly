@@ -35,5 +35,8 @@ return new Suite(
       '5.1-events-started-finished',
       '5.2-events-failed-survives',
       '5.3-events-skipped-overlap',
+
+      // @ Appended to preserve every existing selected-case index.
+      '4.4-lock-inode-identity',
    ]
 );
