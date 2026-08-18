@@ -35,5 +35,8 @@ return new Suite(
       '4.1-redis-driver',
       // # Security
       '6.1-security-deserialization',
+
+      // @ Appended to preserve every existing selected-case index.
+      '4.2-redis-desync',
    ]
 );
