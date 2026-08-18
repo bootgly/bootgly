@@ -30,5 +30,6 @@ return new Suite(
       '5.x-input-git-diff',
       // @ Appended to preserve every existing selected-case index.
       '2.x-calculator-selection',
+      '4.x-parser-git-headers',
    ]
 );

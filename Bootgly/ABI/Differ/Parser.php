@@ -17,6 +17,7 @@ use function count;
 use function max;
 use function preg_match;
 use function preg_split;
+use function str_starts_with;
 
 use Bootgly\ABI\Differ\Diff\Chunk;
 use Bootgly\ABI\Differ\Diff\Line;
@@ -50,6 +51,21 @@ final class Parser
       $collected = [];
 
       for ($i = 0; $i < $count; $i++) {
+         // ? A new git file section ends the still-open diff — extended headers
+         //   after it must never feed the previous file's chunks
+         if (str_starts_with($lines[$i], 'diff --git ')) {
+            if ($diff !== null) {
+               $this->fill($diff, $collected);
+
+               $diffs[] = $diff;
+               $diff    = null;
+            }
+
+            $collected = [];
+
+            continue;
+         }
+
          if (
             preg_match('#^---\h+"?(?P<file>[^\v\t"]+)#', $lines[$i], $fromMatch)
             && isset($lines[$i + 1])
@@ -58,16 +74,22 @@ final class Parser
             if ($diff !== null) {
                $this->fill($diff, $collected);
 
-               $diffs[]   = $diff;
-               $collected = [];
+               $diffs[] = $diff;
             }
 
-            $diff = new Diff($fromMatch['file'], $toMatch['file']);
+            $diff      = new Diff($fromMatch['file'], $toMatch['file']);
+            $collected = [];
 
             $i++;
          }
          else {
-            if (preg_match('/^(?:diff --git |index [\da-f.]+|[+-]{3} [ab])/', $lines[$i])) {
+            if (preg_match(
+               '/^(?:index [\da-f.]+|[+-]{3} [ab]'
+               . '|(?:old|new) mode |(?:new|deleted) file mode '
+               . '|(?:copy|rename) (?:from|to) |(?:similarity|dissimilarity) index '
+               . '|Binary files |GIT binary patch)/',
+               $lines[$i]
+            )) {
                continue;
             }
 
