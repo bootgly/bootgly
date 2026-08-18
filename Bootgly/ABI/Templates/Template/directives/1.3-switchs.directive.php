@@ -2,7 +2,7 @@
 return [
    // (quoted strings are consumed whole and `::` never terminates, so `:`
    //  inside strings and class constants survive; the opener is a single `:`)
-   '/(@)?@switch[\s]+?((?:[^:\'"]++|::|\'(?:[^\'\\\\]|\\\\.)*+\'|"(?:[^"\\\\]|\\\\.)*+")+?)[\s]?(?<!:):(?!:)/sx' => function ($matches) {
+   '/(@)?@switch[\s]+?((?:[^:\'"()]++|::|\'(?:[^\'\\\\]|\\\\.)*+\'|"(?:[^"\\\\]|\\\\.)*+"|(?<paren>\((?:[^()\'"]++|\'(?:[^\'\\\\]|\\\\.)*+\'|"(?:[^"\\\\]|\\\\.)*+"|(?P>paren))*+\)))+?)[\s]?(?<!:):(?!:)/sx' => function ($matches) {
       if (@$matches[1]) {
          return substr($matches[0], 1);
       }
@@ -15,7 +15,7 @@ return [
       PHP;
    },
 
-   '/(@)?@case[\s]+?((?:[^:\'"]++|::|\'(?:[^\'\\\\]|\\\\.)*+\'|"(?:[^"\\\\]|\\\\.)*+")+?)[\s]?(?<!:):(?!:)/sx' => function ($matches) {
+   '/(@)?@case[\s]+?((?:[^:\'"()]++|::|\'(?:[^\'\\\\]|\\\\.)*+\'|"(?:[^"\\\\]|\\\\.)*+"|(?<paren>\((?:[^()\'"]++|\'(?:[^\'\\\\]|\\\\.)*+\'|"(?:[^"\\\\]|\\\\.)*+"|(?P>paren))*+\)))+?)[\s]?(?<!:):(?!:)/sx' => function ($matches) {
       if (@$matches[1]) {
          return substr($matches[0], 1);
       }

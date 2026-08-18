@@ -108,6 +108,99 @@ return new Test(
          description: "@else if comparing against a string holding a colon: \n`{$output}`"
       );
 
+      // A ternary's `:` is a bare single colon — the directive terminator itself — so a
+      // parenthesized group has to be consumed whole or the opener ends inside it and
+      // the rest of the condition is emitted as page text (TPL-16)
+      $output = $render('@if ($a ? true : false):T@if;', ['a' => true]);
+      yield assert(
+         assertion: $output === 'T',
+         description: "@if on a ternary: \n`{$output}`"
+      );
+
+      $output = $render('@if ($a ?: $b):T@if;', ['a' => false, 'b' => true]);
+      yield assert(
+         assertion: $output === 'T',
+         description: "@if on an elvis: \n`{$output}`"
+      );
+
+      $output = $render('@if ($a === ($b ? 1 : 2)):T@if;', ['a' => 1, 'b' => true]);
+      yield assert(
+         assertion: $output === 'T',
+         description: "@if on a nested ternary: \n`{$output}`"
+      );
+
+      $output = $render(
+         '@if (false):N@else if ($a ? true : false):T@if;',
+         ['a' => true]
+      );
+      yield assert(
+         assertion: $output === 'T',
+         description: "@else if on a ternary: \n`{$output}`"
+      );
+
+      $output = $render(
+         '@for ($i = 0; $i < ($big ? 3 : 2); $i++):@>. $i;@for;',
+         ['big' => false]
+      );
+      yield assert(
+         assertion: $output === "0\n1\n",
+         description: "@for bounded by a ternary: \n`{$output}`"
+      );
+
+      $output = $render(
+         '@: $i = 0; @;@while ($i < ($big ? 3 : 2)):@>. $i;@: $i++; @;@while;',
+         ['big' => false]
+      );
+      yield assert(
+         assertion: $output === "0\n1\n",
+         description: "@while bounded by a ternary: \n`{$output}`"
+      );
+
+      $output = $render(
+         "@foreach (\$items[\$k ? 'a' : 'b'] as \$x):@>. \$x;@foreach;",
+         ['k' => true, 'items' => ['a' => ['x', 'y'], 'b' => []]]
+      );
+      yield assert(
+         assertion: $output === "x\ny\n",
+         description: "@foreach over a ternary-selected key: \n`{$output}`"
+      );
+
+      $output = $render(
+         "@switch (\$a ? 'x' : 'y'):@case 'x':X@break;@default:D@switch;",
+         ['a' => true]
+      );
+      yield assert(
+         assertion: $output === 'X',
+         description: "@switch on a ternary: \n`{$output}`"
+      );
+
+      $output = $render(
+         "@switch \$s:@case (\$a ? 'x' : 'y'):X@break;@default:D@switch;",
+         ['s' => 'x', 'a' => true]
+      );
+      yield assert(
+         assertion: $output === 'X',
+         description: "@case on a ternary: \n`{$output}`"
+      );
+
+      // @component's `with` payload opens on the same colon and needed the same scan
+      $path = Template::$path;
+      Template::$path = __DIR__ . '/templates/';
+
+      try {
+         $output = $render(
+            "@component components/card with ['x' => (\$a ? 1 : 2)]:B@slot header:H@slot;@component;",
+            ['a' => true]
+         );
+         yield assert(
+            assertion: $output === '<div>H|B</div>',
+            description: "@component with a ternary in its payload: \n`{$output}`"
+         );
+      }
+      finally {
+         Template::$path = $path;
+      }
+
       // @ Neutral
       // The opener is still a single `:`, and escaping still wins over everything
       $output = $render('@@if ($a === 1):');

@@ -3,7 +3,7 @@ return [
    // With explicit data (explicit keys win): @component name with [...]:
    // (quoted strings are consumed whole and `::` never terminates, so `:`
    //  inside strings and class constants survive; the opener is a single `:`)
-   '/(@)?@component[ ]+?([\w\/-]+)[ ]+with[ ]+((?:[^:\'"]++|::|\'(?:[^\'\\\\]|\\\\.)*+\'|"(?:[^"\\\\]|\\\\.)*+")+?)[ ]?(?<!:):(?!:)/sx' => function ($matches) {
+   '/(@)?@component[ ]+?([\w\/-]+)[ ]+with[ ]+((?:[^:\'"()]++|::|\'(?:[^\'\\\\]|\\\\.)*+\'|"(?:[^"\\\\]|\\\\.)*+"|(?<paren>\((?:[^()\'"]++|\'(?:[^\'\\\\]|\\\\.)*+\'|"(?:[^"\\\\]|\\\\.)*+"|(?P>paren))*+\)))+?)[ ]?(?<!:):(?!:)/sx' => function ($matches) {
       if (@$matches[1]) {
          return substr($matches[0], 1);
       }
