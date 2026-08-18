@@ -33,5 +33,8 @@ return new Suite(
       '5.4-s3-multipart',
 
       '6.1-s3-offline',
+
+      // @ Appended to preserve every existing selected-case index.
+      '1.7-local-symlink-copy',
    ]
 );

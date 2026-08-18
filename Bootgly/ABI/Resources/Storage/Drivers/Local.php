@@ -262,10 +262,23 @@ class Local extends Driver
          return $this->fail("Local copy {$target}: path escapes the disk root");
       }
 
+      // @ Atomic copy: into a temp file inside the jailed parent + rename, so a
+      //   symlinked target is replaced instead of written through (as write() and
+      //   move() already do — `copy()` is the only path that follows the link)
+      $temp = $target . '.' . getmypid() . '.' . uniqid('', true) . '.tmp';
+      if (@copy($source, $temp) === false) {
+         @unlink($temp);
+
+         return $this->fail("Local copy {$target}: copy failed");
+      }
+      if (@rename($temp, $target) === false) {
+         @unlink($temp);
+
+         return $this->fail("Local copy {$target}: copy failed");
+      }
+
       // :
-      return @copy($source, $target) === true
-         ? true
-         : $this->fail("Local copy {$target}: copy failed");
+      return true;
    }
 
    /**
