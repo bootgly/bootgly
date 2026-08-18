@@ -92,7 +92,7 @@ final class Ownership
          $State['Owners'] = $Owners;
       }
 
-      $Owners->attach($Owner, true);
+      $Owners->offsetSet($Owner, true);
       self::$Scopes[$Scope] = $State;
    }
 
@@ -112,7 +112,7 @@ final class Ownership
          return;
       }
 
-      $State['Owners']?->detach($Owner);
+      $State['Owners']?->offsetUnset($Owner);
       self::$Scopes[$Scope] = $State;
    }
 

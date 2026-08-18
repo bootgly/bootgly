@@ -1600,7 +1600,7 @@ class Response extends Server\Response
             $Self = Fiber::getCurrent();
 
             if ($Self !== null) {
-               $Response->Fibers->detach($Self);
+               $Response->Fibers->offsetUnset($Self);
             }
          }
 
@@ -1812,7 +1812,7 @@ class Response extends Server\Response
          if ($DeferredRequest !== null) {
             Cancellation::link($DeferredRequest, $Cancellation);
          }
-         $Response->Fibers->attach($Fiber);
+         $Response->Fibers->offsetSet($Fiber, true);
 
          $Cancellation->observe(static function (
             Cancellation $Observed,
@@ -1825,8 +1825,8 @@ class Response extends Server\Response
             //   capability. In a nested handoff the parent finishes normally
             //   while still RUNNING; allowing it to suspend again afterward
             //   would abandon or cancel the selected child exchange.
-            if ($Response->Fibers->contains($Fiber)) {
-               $Response->Fibers->detach($Fiber);
+            if ($Response->Fibers->offsetExists($Fiber)) {
+               $Response->Fibers->offsetUnset($Fiber);
             }
             if ($cancelled === false) {
                return;
@@ -1913,8 +1913,8 @@ class Response extends Server\Response
                   $Cancellation->check() // @phpstan-ignore booleanAnd.leftAlwaysFalse
                   && $Fiber->isSuspended() // @phpstan-ignore booleanAnd.rightAlwaysTrue
                ) {
-                  if ($Response->Fibers->contains($Fiber)) {
-                     $Response->Fibers->detach($Fiber);
+                  if ($Response->Fibers->offsetExists($Fiber)) {
+                     $Response->Fibers->offsetUnset($Fiber);
                   }
                   $Response->Request?->clean();
                }
@@ -2020,9 +2020,9 @@ class Response extends Server\Response
          if (
             $Fiber !== null
             && $Response !== null // @phpstan-ignore notIdentical.alwaysTrue
-            && $Response->Fibers->contains($Fiber)
+            && $Response->Fibers->offsetExists($Fiber)
          ) {
-            $Response->Fibers->detach($Fiber);
+            $Response->Fibers->offsetUnset($Fiber);
          }
 
          throw $Throwable;
@@ -2048,7 +2048,7 @@ class Response extends Server\Response
 
       // ? Guard: only suspend from a Fiber created by defer()
       $current = Fiber::getCurrent();
-      if ($current === null || !$this->Fibers->contains($current)) {
+      if ($current === null || !$this->Fibers->offsetExists($current)) {
          return $this;
       }
 
