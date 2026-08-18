@@ -204,5 +204,8 @@ return new Suites(
       // # ABI/Syntax/Imports — the import analyzer behind `lint imports`
       //   (appended last to keep every suite index above stable)
       'Bootgly/ABI/Syntax/Imports/',
+      // # ACI/Events — the SIGALRM timer wheel behind every supervisor
+      //   (appended last to keep every suite index above stable)
+      'Bootgly/ACI/Events/',
    ]
 );

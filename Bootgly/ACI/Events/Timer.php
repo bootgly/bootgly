@@ -116,6 +116,16 @@ class Timer
                $args       = $task[2];
                $persistent = $task[3];
 
+               // @ Detach the executed task from the LIVE bucket instead of
+               //   dropping the whole bucket below: `$tasks` is a by-value
+               //   snapshot, while a persistent task re-arms into the live map
+               //   — possibly into a bucket still AHEAD in this same snapshot,
+               //   which a blocking handler can make due before it is reached.
+               //   Dropping that bucket wholesale destroys the re-armed task
+               //   (its `$status` entry stays `true`, so it never fires again
+               //   and is never re-added). Same idiom as `del()` below.
+               unset(self::$tasks[$runtime][$index]);
+
                try {
                   call_user_func_array($handler, $args);
                }
@@ -136,7 +146,11 @@ class Timer
                }
             }
 
-            unset(self::$tasks[$runtime]);
+            // ? The bucket is empty only when nothing re-armed into it — a
+            //   handler may also have cleared the whole map (`Timer::del()`).
+            if ( isSet(self::$tasks[$runtime]) && self::$tasks[$runtime] === [] ) {
+               unset(self::$tasks[$runtime]);
+            }
          }
       }
    }
