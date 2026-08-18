@@ -200,14 +200,14 @@ $scripted = function (array $script, callable $drive): array {
    return $result;
 };
 
-$config = function (int $port, float $timeout): array {
+$config = function (int $port, float $timeout, array $extra = []): array {
    return [
       'driver'  => 'redis',
       'host'    => '127.0.0.1',
       'port'    => $port,
       'prefix'  => 'q:',
       'timeout' => $timeout,
-   ];
+   ] + $extra;
 };
 
 // ! One job in the ready set: the first ZRANGEBYSCORE offers it, later ones are empty
@@ -303,9 +303,52 @@ $surplus = $scripted(
    }
 );
 
+// @ A rejected AUTH: every mutating method here hard-codes `return true`, so an
+//   unexamined error reply used to ack a job Redis never stored (QUEUE-4)
+$refused = $scripted(
+   [
+      function ($Peer): void {
+         @fwrite($Peer, "-WRONGPASS invalid username-password pair\r\n");
+      },
+      function ($Peer): void {
+         @fwrite($Peer, "-NOAUTH Authentication required.\r\n");
+      },
+   ],
+   function (int $port) use ($config, $probe): array {
+      $Queue = new Queues($config($port, 2.0, ['password' => 'wrong']))->fetch('jobs');
+
+      return [
+         'enqueued' => $probe(fn () => $Queue->enqueue(new Job('send-invoice', ['id' => 42]))),
+         'counted'  => $probe(fn () => $Queue->count()),
+      ];
+   }
+);
+
+// @ An error reply to an ordinary command is a COMPLETE frame: report it, keep the socket
+$errored = $scripted(
+   [
+      function ($Peer): void {
+         @fwrite($Peer, "-OOM command not allowed when used memory > 'maxmemory'.\r\n");
+      },
+      function ($Peer): void {
+         @fwrite($Peer, ":7\r\n");
+      },
+   ],
+   function (int $port) use ($config, $probe): array {
+      $Queue = new Queues($config($port, 2.0))->fetch('jobs');
+
+      return [
+         'errored' => $probe(fn () => $Queue->enqueue(new Job('send-invoice', ['id' => 7]))),
+         'after'   => $probe(fn () => $Queue->count()),
+      ];
+   }
+);
+
 $emit([
-   'loss'    => $loss,
-   'stall'   => $stall,
-   'surplus' => $surplus,
-   'control' => $control,
+   'loss'     => $loss,
+   'stall'    => $stall,
+   'surplus'  => $surplus,
+   'control'  => $control,
+   'refused'  => $refused,
+   'errored'  => $errored,
 ]);

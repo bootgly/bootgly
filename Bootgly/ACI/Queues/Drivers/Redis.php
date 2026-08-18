@@ -477,6 +477,17 @@ class Redis extends Driver
          );
       }
 
+      // ? The Decoder hands `-`/`!` replies back as RuntimeException VALUES, never
+      //   thrown, so an unexamined one turns a command Redis refused into a silent
+      //   success — every mutating method here hard-codes `return true`. The frame is
+      //   complete and the stream stays aligned, so this is raised without dropping the
+      //   connection, unlike every throw above.
+      foreach ($replies as $reply) {
+         if ($reply instanceof Throwable) {
+            throw $reply;
+         }
+      }
+
       // :
       return $replies;
    }
@@ -549,16 +560,26 @@ class Redis extends Driver
 
          // @ Authenticate and select the database over the native protocol
          //   (dispatch, not command — connect() has not finished yet)
-         if ($Config->password !== '') {
-            $this->dispatch(['AUTH', $Config->password]);
-         }
-         if ($Config->database !== 0) {
-            $this->dispatch(['SELECT', $Config->database]);
-         }
+         try {
+            if ($Config->password !== '') {
+               $this->dispatch(['AUTH', $Config->password]);
+            }
+            if ($Config->database !== 0) {
+               $this->dispatch(['SELECT', $Config->database]);
+            }
 
-         // ? A stream handed over by a previous owner is not known to be aligned
-         if ($Config->persistent === true) {
-            $this->resync();
+            // ? A stream handed over by a previous owner is not known to be aligned
+            if ($Config->persistent === true) {
+               $this->resync();
+            }
+         }
+         catch (Throwable $Throwable) {
+            // ! A refused handshake leaves a socket that is perfectly aligned and
+            //   perfectly useless — keeping it would let the next command run
+            //   unauthenticated, or against the wrong database
+            $this->drop();
+
+            throw $Throwable;
          }
       }
 

@@ -110,5 +110,33 @@ return new Test(
             && $control['completed']['value'] === true,
          description: 'Ordinary operations must still round-trip: ' . var_export($control, true)
       );
+
+      // @ The Decoder returns `-`/`!` replies as RuntimeException VALUES, never thrown, and
+      //   every mutating method here hard-codes `return true` — so a rejected handshake
+      //   used to ack a job Redis never stored (QUEUE-4)
+      $refused = $observed['refused'];
+      yield assert(
+         assertion: $refused['enqueued']['throw'] !== null,
+         description: 'A rejected AUTH must fail the enqueue, not ack a job that was refused: '
+            . var_export($refused['enqueued'], true)
+      );
+      yield assert(
+         assertion: $refused['counted']['throw'] !== null,
+         description: 'A command after a rejected AUTH must not report an empty queue: '
+            . var_export($refused['counted'], true)
+      );
+
+      // @ An error frame is complete, so the connection must be reported AND kept
+      $errored = $observed['errored'];
+      yield assert(
+         assertion: $errored['errored']['throw'] !== null,
+         description: 'A refused enqueue must be raised, not acked: '
+            . var_export($errored['errored'], true)
+      );
+      yield assert(
+         assertion: $errored['after']['value'] === 7,
+         description: 'An error reply must NOT drop the connection — the frame was aligned: '
+            . var_export($errored['after'], true)
+      );
    }
 );
