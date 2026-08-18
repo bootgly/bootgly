@@ -60,19 +60,22 @@ $probe = static function (Closure $Callable, int $timeout, array $arguments = []
    }
 };
 
-// @@ The two ways a waited callable can die without ever running out of time
+// @@ The two ways a waited callable can die without ever running out of time.
+//    The budgets are deliberately huge: since TESTS-WAIT the timeout is real,
+//    and a tight one would let the parent SIGKILL the child before it reports
+//    what it threw — turning these probes into timeout tests instead.
 $verdicts = [];
 // # A Throwable from the callable
 $verdicts['throwing'] = $probe(
    static function (): void {
       throw new RuntimeException('boom');
    },
-   1000
+   10_000_000
 );
 // # Too few arguments — the same escape through a different catch
 $verdicts['argcount'] = $probe(
    static fn (int $needed): int => $needed,
-   1000
+   10_000_000
 );
 
 // @@ Controls — ordinary waiting must be untouched

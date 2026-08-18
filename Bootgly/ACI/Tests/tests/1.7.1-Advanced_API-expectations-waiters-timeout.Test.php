@@ -18,7 +18,13 @@ return new Test(
             usleep(10000);
          })
          ->to->call()
-         ->to->wait(10000)
+         // ! Microseconds, and the budget is now enforced (TESTS-WAIT), so it
+         //   has to clear the 10 ms callable PLUS the fork + reap around it —
+         //   the same wall-clock the subassertion below measures at ~8 ms here
+         //   and ~22 ms on a shared CI runner. 200 ms leaves an order of
+         //   magnitude of headroom over that; the over-budget direction is
+         //   covered by `1.7.3` rather than by tightening this one.
+         ->to->wait(200000)
          ->assert();
 
       // Closure with Subassertion

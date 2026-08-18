@@ -63,7 +63,18 @@ class RunTimeout extends Waiter
 
       // !
       $arguments = $this->arguments;
-      $timeout = $this->expected ?? $expected;
+      // ! `wait()` takes its budget in MICROseconds — that is what `Waiter`
+      //   documents, what `fail()` reports, and what the `$duration` setter
+      //   converts to — while every measurement below is `microtime(true)`,
+      //   which is seconds. Normalise the budget once, here, before the fork:
+      //   the parent's kill guard and the child's verdict then compare like
+      //   with like from one conversion, instead of each carrying its own.
+      //   Comparing the two raw made every budget 1,000,000x too large, so no
+      //   waiter assertion could fail and no long callable was ever cut short.
+      //   The `?? $expected` this replaces was dead: `Waiter::$expected` is
+      //   typed `int|float` and always assigned by the constructor, so the
+      //   fallback could never be reached — and it made the division `mixed`.
+      $timeout = $this->expected / 1000000;
 
       // ! Check if have pcntl_* extension
       if (function_exists('pcntl_fork') === false) {
@@ -201,7 +212,9 @@ class RunTimeout extends Waiter
          );
       }
 
-      $timeout = $this->expected ?? $expected;
+      // ! Reported in the unit the caller wrote it in — only the comparison in
+      //   `assert()` is normalised, never the budget the reader is shown
+      $timeout = $this->expected;
 
       return new Fallback(
          'Failed asserting that the callable executed within %s microseconds.',
