@@ -117,5 +117,6 @@ return new Suite(
       '9.2.1-Suite-case_attribution',
       '9.3.1-Suite-diagnostic_environment',
       '1.0.3-Advanced_API-modifier_not_scope',
+      '1.1.9-Advanced_API-expectations-null_expected',
    ]
 );

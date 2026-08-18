@@ -27,13 +27,31 @@ use Bootgly\ACI\Tests\Asserting;
 abstract class Comparator implements Asserting
 {
    // * Config
-   public mixed $expected;
+   /**
+    * The value to compare `$actual` against, or `Argument::Undefined` when the
+    * comparator was built without one.
+    *
+    * The sentinel is STORED rather than left unassigned: `null` is a legitimate
+    * expected value, and `isSet()` — which is what `??` consults — cannot tell
+    * an unassigned property from one holding `null`.
+    */
+   public mixed $expected = Argument::Undefined;
 
 
    public function __construct (mixed $expected = Argument::Undefined)
    {
-      if ($expected !== Argument::Undefined) {
-         $this->expected = $expected;
-      }
+      $this->expected = $expected;
+   }
+
+   /**
+    * Resolve which expected value this comparison uses: the configured one, or
+    * the caller's fallback when the comparator was built without one.
+    */
+   protected function resolve (mixed $fallback): mixed
+   {
+      // ?:
+      return $this->expected === Argument::Undefined
+         ? $fallback
+         : $this->expected;
    }
 }
