@@ -181,10 +181,14 @@ class Sections
          return [null, []];
       }
 
-      // @
+      // @ The buffer is always closed first: `??=` would short-circuit over
+      //   ob_get_clean() whenever the body already declared its own `slot`,
+      //   stranding the frame's buffer open and swallowing the parent output
       $frame = &self::$frames[$index];
       if ($frame['buffered']) {
-         $frame['sections']['slot'] ??= (string) ob_get_clean();
+         $slot = (string) ob_get_clean();
+         // First writer wins — an explicit `@slot slot:` overrides the body
+         $frame['sections']['slot'] ??= $slot;
          $frame['buffered'] = false;
       }
 
