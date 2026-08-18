@@ -295,6 +295,15 @@ class Assertion extends Expectations
          // # Result
          $failed = $results[$index] === $false;
 
+         // ! Consume the Not modifier — it negates the expectation that follows
+         //   it and nothing else. Left armed, every later expectation in the
+         //   same chain is judged against an inverted verdict, so
+         //   `->not->to->be(6)->and->to->be(999)` reports success. The reset
+         //   belongs HERE and not next to the `assert()` call above: `$failed`
+         //   is what reads the flag, and resetting before it is read disables
+         //   negation outright.
+         $false = false;
+
          if ($failed && $or === true) {
             $or = false;
 

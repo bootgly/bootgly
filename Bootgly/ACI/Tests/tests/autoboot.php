@@ -116,5 +116,6 @@ return new Suite(
       '1.7.2-Advanced_API-expectations-waiters-runaway',
       '9.2.1-Suite-case_attribution',
       '9.3.1-Suite-diagnostic_environment',
+      '1.0.3-Advanced_API-modifier_not_scope',
    ]
 );
