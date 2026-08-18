@@ -201,5 +201,8 @@ return new Suites(
       // # commands — the installer's child-process nesting
       //   (appended last to keep every suite index above stable)
       'Bootgly/commands/',
+      // # ABI/Syntax/Imports — the import analyzer behind `lint imports`
+      //   (appended last to keep every suite index above stable)
+      'Bootgly/ABI/Syntax/Imports/',
    ]
 );

@@ -611,13 +611,17 @@ class Analyzer
             }
             $byteEnd = $Tokens->locate($i, true);
 
-            if (trim($parts) !== '') {
-               $symbol = trim($parts);
-               $alias = $this->resolve($symbol);
+            $symbol = trim($parts);
+            if ($symbol !== '') {
+               // ! The last item of a group is flushed here instead of at a comma, so it
+               //   needs the same prefix the comma branch applies — without it the item
+               //   is recorded under its bare short name
+               $fullSymbol = $grouped ? $prefix . $symbol : $symbol;
+               $alias = $this->resolve($fullSymbol);
                $items[] = [
-                  'symbol' => $symbol,
+                  'symbol' => $fullSymbol,
                   'kind'   => $kind,
-                  'global' => !str_contains($symbol, '\\'),
+                  'global' => !str_contains($fullSymbol, '\\'),
                   'line'   => $line,
                   'alias'  => $alias,
                ];
