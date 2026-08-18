@@ -531,6 +531,11 @@ class Analyzer
          'end'   => $importEnd,
       ];
 
+      // ---
+      // Phase 4: Report anything inside the range a rewrite would destroy
+      // ---
+      $this->survey($Tokens, $tokens, $count, $source, $importRange, $issues);
+
       return new Result(
          file: $file,
          source: $source,
@@ -754,6 +759,74 @@ class Analyzer
          $symbols[$name] = ['kind' => $kind, 'lines' => []];
       }
       $symbols[$name]['lines'][] = $line;
+   }
+
+   /**
+    * Report comments sitting inside the import block.
+    *
+    * `Formatter::format()` rewrites the whole block from the parsed import list, which is
+    * the only way it can reorder them — so anything in that range that is not a `use`
+    * has no defined place in the output and would simply vanish. There is no automatic
+    * answer either: the import a comment describes may end up in a different section, and
+    * a comment left next to the wrong statement misinforms worse than a missing fix does.
+    * So the block is reported as un-rewritable and left for a human instead.
+    *
+    * @param array<int,mixed> $tokens
+    * @param array{start:int,end:int} $range
+    * @param array<int,Issue> $issues
+    */
+   private function survey (
+      Tokens $Tokens,
+      array $tokens,
+      int $count,
+      string $source,
+      array $range,
+      array &$issues
+   ): void
+   {
+      // ?
+      if ($range['start'] === -1 || $range['end'] === -1) {
+         return;
+      }
+
+      // ! A trailing comment shares the last import's line, so the block ends at that
+      //   line's break — not at the closing semicolon
+      $break = strpos($source, "\n", $range['end']);
+      $blockEnd = $break === false ? strlen($source) : $break;
+
+      // @
+      for ($i = 0; $i < $count; $i++) {
+         $token = $tokens[$i];
+
+         if (is_array($token) === false) {
+            continue;
+         }
+         if ($token[0] !== T_COMMENT && $token[0] !== T_DOC_COMMENT) {
+            continue;
+         }
+
+         $offset = $Tokens->locate($i);
+
+         if ($offset < $range['start'] || $offset >= $blockEnd) {
+            continue;
+         }
+
+         /** @var int $line */
+         $line = $token[2];
+
+         $issues[] = new Issue(
+            type: 'comment_in_imports',
+            symbol: '',
+            kind: 'comment',
+            line: $line,
+            message: 'Comment inside the import block: reordering would drop it, '
+               . 'so the block is left untouched — move the comment above or below it',
+            offset: $offset
+         );
+
+         // : One report per block is enough to explain why nothing was rewritten
+         return;
+      }
    }
 
    /**

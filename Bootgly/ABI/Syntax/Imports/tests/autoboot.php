@@ -15,5 +15,6 @@ return new Suite(
    suiteName: __NAMESPACE__,
    tests: [
       '1.1-analyzer-grouped-use',
+      '1.2-formatter-comments',
    ]
 );

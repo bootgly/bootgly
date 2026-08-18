@@ -174,8 +174,25 @@ class LintCommand extends Command
             }
          }
 
+         // ? A block the formatter refuses to rewrite is not fixable — saying otherwise
+         //   would report a fix that never happened
+         $rewritable = true;
+         foreach ($Result->issues as $Issue) {
+            if ($Issue->type === 'comment_in_imports') {
+               $rewritable = false;
+               break;
+            }
+         }
+
          // @ Fix
-         if ($fix || $dryRun) {
+         if (($fix || $dryRun) && $rewritable === false) {
+            if (!$Agent->detected) {
+               $Output->render(
+                  "@#Yellow:   ! Left untouched — the import block carries a comment @;\n\n"
+               );
+            }
+         }
+         else if ($fix || $dryRun) {
             $corrected = $Imports->format($Result);
 
             if ($dryRun) {

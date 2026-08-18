@@ -140,6 +140,14 @@ class Formatter
       }
       $importBlock = implode("\n\n", $sections);
 
+      // ? The block carries something a rewrite cannot place — leave it to a human
+      //   (the backslash fixes above are outside it and still stand)
+      foreach ($result->issues as $Issue) {
+         if ($Issue->type === 'comment_in_imports') {
+            return $source;
+         }
+      }
+
       // @ Replace in source
       if ($result->importRange['start'] !== -1 && $result->importRange['end'] !== -1) {
          $start = $result->importRange['start'];
