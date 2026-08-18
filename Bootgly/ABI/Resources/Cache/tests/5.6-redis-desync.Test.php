@@ -14,7 +14,7 @@ $probe = @shell_exec(
 $native = trim((string) $probe) === '0';
 
 return new Test(
-   description: 'Cache(Redis): a failed command never lets the next one read its reply',
+   description: 'Cache(Redis): a failed command is raised, and never answers the next one',
    skip: DIRECTORY_SEPARATOR === '\\'
       || function_exists('shell_exec') === false
       || function_exists('pcntl_fork') === false
@@ -101,6 +101,46 @@ return new Test(
             && $control['increment']['value'] === 5
             && $control['delete']['value'] === true,
          description: 'Ordinary operations must still round-trip: ' . var_export($control, true)
+      );
+
+      // @ The Decoder returns `-`/`!` replies as RuntimeException VALUES, never thrown, so
+      //   a rejected handshake used to leave a reusable, unauthenticated socket and every
+      //   later command degraded to a silent miss (CACHE-10)
+      yield assert(
+         assertion: $observed['refused']['store']['throw'] !== null,
+         description: 'A rejected AUTH must fail the command, not answer it silently: '
+            . var_export($observed['refused']['store'], true)
+      );
+      yield assert(
+         assertion: $observed['refused']['fetch']['throw'] !== null,
+         description: 'A command after a rejected AUTH must not report a cache miss: '
+            . var_export($observed['refused']['fetch'], true)
+      );
+
+      // @ A rejected SELECT is worse than a miss — it reports SUCCESS on database 0
+      yield assert(
+         assertion: $observed['database']['store']['throw'] !== null,
+         description: 'A rejected SELECT must fail, not silently use another database: '
+            . var_export($observed['database']['store'], true)
+      );
+
+      // @ An error frame is complete, so the connection must be reported AND kept
+      yield assert(
+         assertion: $observed['errored']['errored']['throw'] !== null,
+         description: 'An error reply must be raised, not returned as a miss: '
+            . var_export($observed['errored']['errored'], true)
+      );
+      yield assert(
+         assertion: $observed['errored']['after']['value'] === 'AFTER',
+         description: 'An error reply must NOT drop the connection — the frame was aligned: '
+            . var_export($observed['errored']['after'], true)
+      );
+
+      // @ A healthy handshake still passes through
+      yield assert(
+         assertion: $observed['handshake']['fetch']['value'] === 'v',
+         description: 'An accepted AUTH/SELECT must connect normally: '
+            . var_export($observed['handshake'], true)
       );
    }
 );

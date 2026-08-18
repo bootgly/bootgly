@@ -113,14 +113,14 @@ $scenario = function (array $script, callable $drive): array {
    return $result;
 };
 
-$config = function (int $port, float $timeout): array {
+$config = function (int $port, float $timeout, array $extra = []): array {
    return [
       'driver'  => 'redis',
       'host'    => '127.0.0.1',
       'port'    => $port,
       'prefix'  => '',
       'timeout' => $timeout,
-   ];
+   ] + $extra;
 };
 
 // @ An honest server that answers 100 ms late, with a sub-second configured timeout
@@ -212,9 +212,85 @@ $control = $scenario(
    }
 );
 
+// @ A rejected AUTH: the reply is an error frame, which the Decoder returns as a value
+$refused = $scenario(
+   [
+      function ($Peer): void {
+         @fwrite($Peer, "-WRONGPASS invalid username-password pair\r\n");
+      },
+      function ($Peer): void {
+         @fwrite($Peer, "-NOAUTH Authentication required.\r\n");
+      },
+   ],
+   function (int $port) use ($config, $probe): array {
+      $Cache = new Cache($config($port, 2.0, ['password' => 'wrong']));
+
+      return [
+         'store' => $probe(fn () => $Cache->store('k', 'v')),
+         'fetch' => $probe(fn () => $Cache->fetch('k')),
+      ];
+   }
+);
+
+// @ A rejected SELECT would otherwise leave the driver working on database 0
+$database = $scenario(
+   [
+      function ($Peer): void {
+         @fwrite($Peer, "-ERR DB index is out of range\r\n");
+      },
+      function ($Peer): void {
+         @fwrite($Peer, "+OK\r\n");
+      },
+   ],
+   function (int $port) use ($config, $probe): array {
+      $Cache = new Cache($config($port, 2.0, ['database' => 9]));
+
+      return ['store' => $probe(fn () => $Cache->store('k', 'v'))];
+   }
+);
+
+// @ An error reply to an ordinary command is a COMPLETE frame, so the connection stays
+//   aligned — it must be reported without being dropped
+$errored = $scenario(
+   [
+      function ($Peer): void {
+         @fwrite($Peer, "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n");
+      },
+      function ($Peer) use ($bulk): void {
+         @fwrite($Peer, $bulk('AFTER'));
+      },
+   ],
+   function (int $port) use ($config, $probe): array {
+      $Cache = new Cache($config($port, 2.0));
+
+      return [
+         'errored' => $probe(fn () => $Cache->fetch('list-key')),
+         'after'   => $probe(fn () => $Cache->fetch('ok-key')),
+      ];
+   }
+);
+
+// @ A healthy handshake must still pass through untouched
+$handshake = $scenario(
+   [
+      function ($Peer): void { @fwrite($Peer, "+OK\r\n"); },
+      function ($Peer): void { @fwrite($Peer, "+OK\r\n"); },
+      function ($Peer) use ($bulk): void { @fwrite($Peer, $bulk('v')); },
+   ],
+   function (int $port) use ($config, $probe): array {
+      $Cache = new Cache($config($port, 5.0, ['password' => 'right', 'database' => 3]));
+
+      return ['fetch' => $probe(fn () => $Cache->fetch('k'))];
+   }
+);
+
 $emit([
-   'leak'    => $leak,
-   'stall'   => $stall,
-   'surplus' => $surplus,
-   'control' => $control,
+   'leak'      => $leak,
+   'stall'     => $stall,
+   'surplus'   => $surplus,
+   'control'   => $control,
+   'refused'   => $refused,
+   'database'  => $database,
+   'errored'   => $errored,
+   'handshake' => $handshake,
 ]);
