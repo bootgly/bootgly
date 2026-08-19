@@ -202,7 +202,14 @@ final class Compiler
             [$id, $text, $line] = $token;
             $context = end($stack);
 
-            if (($id === T_CASE || $id === T_DEFAULT) && $context !== self::SKIP) {
+            // A `case` label only exists inside a switch body, which always
+            // carries a BODY frame. An ENUM case lives in a CLS frame and a
+            // `match` arm in SKIP, and neither is followed by a label colon —
+            // arming the flag for them left it set for the rest of the file, so
+            // the next `:` anywhere (a backed-enum type, a return type) was
+            // read as the label colon and anchored a statement inside a type
+            // declaration.
+            if (($id === T_CASE || $id === T_DEFAULT) && $context === self::BODY) {
                $afterLabel = true;
             }
 

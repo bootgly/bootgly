@@ -120,5 +120,6 @@ return new Suite(
       '1.1.9-Advanced_API-expectations-null_expected',
       '1.7.3-Advanced_API-expectations-waiters-budget',
       '1.4.4-Advanced_API-expectations-finders-in',
+      '7.2.12-Coverage-Native_label_state',
    ]
 );

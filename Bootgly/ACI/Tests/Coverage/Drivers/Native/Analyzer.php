@@ -213,6 +213,13 @@ final class Analyzer
                $depthSquare--;
                break;
             case ';':
+               // An ENUM case ends in `;`, a switch label in `:`. Without this
+               // the flag armed by `case X;` survives the enum and the next `:`
+               // in the file — a backed-enum type, a return type — is counted
+               // as a statement start. This scanner has no frame stack to tell
+               // the two apart the way `Compiler` does, so it disarms on the
+               // token that proves the label was never a label.
+               $afterLabel = false;
                $atStatementStart = true;
                break;
             case ':':
