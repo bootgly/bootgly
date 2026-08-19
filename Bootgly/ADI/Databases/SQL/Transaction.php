@@ -197,19 +197,26 @@ class Transaction implements Awaiting, Querying
       $Emitter->check(Events::Rollback) && $Emitter->emit(Events::Rollback, $this);
 
       if ($savepointing) {
-         $name ??= (string) array_pop($this->savepoints);
+         $index = $this->locate($name);
 
-         if ($name === '') {
+         // ? Either the stack is empty, or an earlier teardown already destroyed
+         //   this name along with everything above its own target.
+         if ($index < 0) {
             return $this->fail('ROLLBACK', [], 'SQL transaction savepoint is not available.');
          }
 
-         $this->forget($name);
+         $target = $this->savepoints[$index];
 
-         if ($this->depth > 1) {
-            $this->depth--;
-         }
+         // @ ROLLBACK TO destroys every savepoint established after its target
+         //   and keeps the target itself, so a named rollback truncates the
+         //   stack just above it. Retiring exactly one level left every newer
+         //   name in place and the framework then named savepoints the server
+         //   had already destroyed. The unnamed form ends the level it names,
+         //   which is this API's own contract, so it drops the target too.
+         $this->savepoints = array_slice($this->savepoints, 0, $name === null ? $index : $index + 1);
+         $this->depth = count($this->savepoints) + 1;
 
-         $savepoint = $this->quote($name);
+         $savepoint = $this->quote($target);
 
          return $this->create("ROLLBACK TO SAVEPOINT {$savepoint}");
       }
@@ -261,16 +268,21 @@ class Transaction implements Awaiting, Querying
          return $this->fail('RELEASE SAVEPOINT', [], 'SQL transaction savepoint is not active.');
       }
 
-      $name ??= (string) array_pop($this->savepoints);
+      $index = $this->locate($name);
 
-      if ($name === '') {
+      // ?
+      if ($index < 0) {
          return $this->fail('RELEASE SAVEPOINT', [], 'SQL transaction savepoint is not available.');
       }
 
-      $this->forget($name);
-      $this->depth--;
+      $target = $this->savepoints[$index];
 
-      $savepoint = $this->quote($name);
+      // @ RELEASE destroys its target and everything established after it, so
+      //   the stack truncates below it either way.
+      $this->savepoints = array_slice($this->savepoints, 0, $index);
+      $this->depth = count($this->savepoints) + 1;
+
+      $savepoint = $this->quote($target);
 
       return $this->create("RELEASE SAVEPOINT {$savepoint}");
    }
@@ -382,16 +394,26 @@ class Transaction implements Awaiting, Querying
    }
 
    /**
-    * Remove a savepoint name from the local stack.
+    * Locate one live savepoint on the local stack, most recent first.
     */
-   private function forget (string $name): void
+   private function locate (null|string $name): int
    {
-      $index = array_search($name, $this->savepoints, true);
-
-      if ($index !== false) {
-         unset($this->savepoints[$index]);
-         $this->savepoints = [...$this->savepoints];
+      // ?: An unnamed target is whatever sits on top of the stack.
+      if ($name === null) {
+         return count($this->savepoints) - 1;
       }
+
+      // @@ Both engines resolve a duplicated savepoint name to the most recent
+      //    one, so this walks backwards: array_search() finds the oldest and
+      //    would truncate the stack far below what the server destroyed.
+      for ($index = count($this->savepoints) - 1; $index >= 0; $index--) {
+         if ($this->savepoints[$index] === $name) {
+            return $index;
+         }
+      }
+
+      // :
+      return -1;
    }
 
    /**
