@@ -96,6 +96,31 @@ class SQLite extends Dialect
    }
 
    /**
+    * SQLite row slicing.
+    */
+   public function slice (null|int $limited, int $offset): string
+   {
+      // ?
+      if ($limited === null && $offset === 0) {
+         return '';
+      }
+
+      // ! SQLite admits only `LIMIT expr [OFFSET expr]`, so the row count is
+      //   mandatory here too. It reads a negative one as unlimited and rejects
+      //   MySQL's unsigned maximum outright, so the two sentinels cannot be
+      //   shared.
+      $count = $limited ?? -1;
+
+      // ?:
+      if ($offset === 0) {
+         return " LIMIT {$count}";
+      }
+
+      // :
+      return " LIMIT {$count} OFFSET {$offset}";
+   }
+
+   /**
     * Compile SQLite ON CONFLICT handling when configured.
     *
     * @param array<string,array<int,mixed>> $assignments

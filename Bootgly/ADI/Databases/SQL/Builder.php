@@ -687,13 +687,11 @@ class Builder
          $sql = "{$sql} ORDER BY {$ordered}";
       }
 
-      if ($this->limited !== null) {
-         $sql = "{$sql} LIMIT {$this->limited}";
-      }
-
-      if ($this->offset > 0) {
-         $sql = "{$sql} OFFSET {$this->offset}";
-      }
+      // @ Row slicing is dialect-specific text: only PostgreSQL takes OFFSET on
+      //   its own, and the row count MySQL and SQLite require in its place is a
+      //   different sentinel in each. Deciding it here emitted SQL two of the
+      //   three dialects reject outright.
+      $sql = "{$sql}{$this->Dialect->slice($this->limited, $this->offset)}";
 
       if ($this->Lock !== null) {
          $sql = "{$sql} {$this->Lock->value}";

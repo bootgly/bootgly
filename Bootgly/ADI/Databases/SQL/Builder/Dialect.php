@@ -125,6 +125,11 @@ abstract class Dialect
    abstract public function order (string $column, Orders $Order, null|Nulls $Nulls = null): string;
 
    /**
+    * Compile one row-slicing clause.
+    */
+   abstract public function slice (null|int $limited, int $offset): string;
+
+   /**
     * Compile one dialect-specific upsert clause.
     *
     * @param array<string,array<int,mixed>> $assignments

@@ -81,6 +81,27 @@ class PostgreSQL extends Dialect
    }
 
    /**
+    * PostgreSQL row slicing.
+    */
+   public function slice (null|int $limited, int $offset): string
+   {
+      $sql = '';
+
+      if ($limited !== null) {
+         $sql = " LIMIT {$limited}";
+      }
+
+      // @ PostgreSQL is the one dialect whose grammar takes OFFSET on its own,
+      //   so the offset-only form needs no row count to stand in for.
+      if ($offset > 0) {
+         $sql = "{$sql} OFFSET {$offset}";
+      }
+
+      // :
+      return $sql;
+   }
+
+   /**
     * Compile PostgreSQL ON CONFLICT handling when configured.
     *
     * @param array<string,array<int,mixed>> $assignments

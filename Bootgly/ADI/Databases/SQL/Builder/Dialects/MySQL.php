@@ -87,6 +87,31 @@ class MySQL extends Dialect
    }
 
    /**
+    * MySQL row slicing.
+    */
+   public function slice (null|int $limited, int $offset): string
+   {
+      // ?
+      if ($limited === null && $offset === 0) {
+         return '';
+      }
+
+      // ! MySQL's grammar has no offset-only form — a bare `OFFSET n` is a 1064
+      //   syntax error — so the row count is mandatory. The manual's own idiom
+      //   for "every row after n" is the unsigned BIGINT maximum; `LIMIT -1`,
+      //   which SQLite reads as unlimited, is a syntax error here.
+      $count = $limited ?? '18446744073709551615';
+
+      // ?:
+      if ($offset === 0) {
+         return " LIMIT {$count}";
+      }
+
+      // :
+      return " LIMIT {$count} OFFSET {$offset}";
+   }
+
+   /**
     * Compile MySQL ON DUPLICATE KEY handling when configured.
     *
     * @param array<string,array<int,mixed>> $assignments

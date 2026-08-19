@@ -26,5 +26,6 @@ return new Suite(
       '9.8-sql_builder_subqueries',
       '9.9-sql_builder_cte',
       '9.10-sql_builder_upsert_ordering',
+      '9.11-sql_builder_slice',
    ]
 );
