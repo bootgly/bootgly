@@ -24,6 +24,7 @@ use function is_resource;
 use function is_scalar;
 use function socket_import_stream;
 use function socket_set_option;
+use function spl_object_id;
 use function substr;
 use RuntimeException;
 use Throwable;
@@ -68,6 +69,8 @@ class Redis extends Driver
    private array $pipeline = [];
    /** @var array<int,Operation> Operations resolved while another operation was advancing. */
    private array $completed = [];
+   /** @var array<int,true> Stand-in slots owed a reply nobody waits for, by object id. */
+   private array $abandoned = [];
    /** Operation currently holding the write stream (partial writes must not interleave). */
    private null|Operation $Writing = null;
    private null|Readiness $ReadReadiness = null;
@@ -239,6 +242,72 @@ class Redis extends Driver
       }
 
       return $Operation;
+   }
+
+   /**
+    * Reconcile the wire when the pool takes one operation away.
+    */
+   public function abandon (DatabaseOperation $Operation): void
+   {
+      $index = null;
+
+      foreach ($this->pipeline as $id => $Queued) {
+         if ($Queued === $Operation) {
+            $index = $id;
+
+            break;
+         }
+      }
+
+      // ? Not pipelined here — a command joins the FIFO only once its frame is
+      //   whole on the wire, so nothing is owed to this one.
+      if ($index === null) {
+         // ? Unless it holds the write stream: a half-written frame leaves the
+         //   server reading a bulk string that never ends, so the next command
+         //   handed this connection is consumed as the payload of this one.
+         if ($this->Writing === $Operation) {
+            $this->abort($Operation, 'Redis operation was abandoned while writing its command.');
+         }
+
+         return;
+      }
+
+      /** @var Operation $Operation */
+
+      // ? Draining needs a reader: the pool has already released this operation,
+      //   so only a sibling advance still pumps this socket.
+      $readers = 0;
+
+      foreach ($this->pipeline as $Queued) {
+         if ($Queued !== $Operation && isset($this->abandoned[spl_object_id($Queued)]) === false) {
+            $readers++;
+         }
+      }
+
+      // @ The command still being written is a reader too — it is the operation
+      //   its caller is actively advancing, and it joins the FIFO behind this
+      //   slot as soon as its bytes are whole on the wire.
+      $Writing = $this->Writing;
+
+      if ($Writing !== null && $Writing !== $Operation && $Writing->finished === false) {
+         $readers++;
+      }
+
+      if ($readers === 0) {
+         $this->abort($Operation, 'Redis abandoned command has no reader left to drain its reply.');
+
+         return;
+      }
+
+      // @ Detach the operation from the slot it still owns. Redis answers in
+      //   order, so the slot cannot simply be dropped — the reply is applied to
+      //   a stand-in nobody waits for, and the object the pool took back is
+      //   never resolved by this driver again.
+      $Stand = new Operation(null, $Operation->command, $Operation->arguments);
+      $Stand->state = OperationStates::Reading;
+
+      $this->pipeline[$index] = $Stand;
+      $this->abandoned[spl_object_id($Stand)] = true;
    }
 
    /**
@@ -479,6 +548,7 @@ class Redis extends Driver
       $this->Decoder->reset();
       $this->Writing = null;
       $this->skip = 0;
+      $this->abandoned = [];
 
       $Pipeline = $this->pipeline;
       $this->pipeline = [];

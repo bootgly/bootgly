@@ -109,5 +109,6 @@ return new Suite(
       '10.24-mysql_insert_id_width',
       '4.10-pool-pending_wait',
       '8.7-kv_redis_transport_failures',
+      '8.8-kv_redis_abandon_contract',
    ]
 );
