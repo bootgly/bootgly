@@ -77,5 +77,9 @@ return new Suite(
       '7.1.1-chart-render-svg',
       // Report — Markdown + SVG artifacts
       '8.1.1-report-save-markdown_and_charts',
+
+      // ! Appended last on purpose — a new case only ever goes at the end,
+      //   so every existing case index above stays stable.
+      '6.18.3-http_tracker-reclaim_timestamps',
    ],
 );

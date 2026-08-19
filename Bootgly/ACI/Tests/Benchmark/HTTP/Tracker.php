@@ -15,6 +15,7 @@ use const PHP_INT_MAX;
 use function array_key_last;
 use function array_keys;
 use function array_shift;
+use function array_slice;
 use function array_sum;
 use function count;
 use function explode;
@@ -36,7 +37,6 @@ use function strpos;
 use function strtolower;
 use function substr;
 use function trim;
-
 use InvalidArgumentException;
 use LogicException;
 
@@ -1365,9 +1365,26 @@ final class Tracker
       // ? Pipeline 1 consumes the scalar slot on every response and never
       //   materializes the generic FIFO. Avoid count() and redundant empty
       //   array assignments on that dominant path.
-      if ($this->timestamps !== [] && $this->timestampHead >= count($this->timestamps)) {
-         $this->timestamps = [];
-         $this->timestampHead = 0;
+      if ($this->timestamps !== []) {
+         $length = count($this->timestamps);
+
+         if ($this->timestampHead >= $length) {
+            // @ Fully drained — drop the array so the scalar slot takes over
+            //   again on the next send.
+            $this->timestamps = [];
+            $this->timestampHead = 0;
+         }
+         else if ($this->timestampHead >= 64 && $this->timestampHead * 2 >= $length) {
+            // @ Reclaim the consumed prefix. Waiting for a full drain means
+            //   waiting for zero outstanding requests, which a pipeline of
+            //   depth >= 2 — the regime this FIFO exists for — never reaches:
+            //   the head advances forever while the array is never truncated,
+            //   at ~400 bytes per retained segment. Amortized to O(1) per
+            //   append by compacting only once the consumed prefix is at least
+            //   half the array, and never for the first 64 entries.
+            $this->timestamps = array_slice($this->timestamps, $this->timestampHead);
+            $this->timestampHead = 0;
+         }
       }
 
       if ($this->timestamps === []) {
