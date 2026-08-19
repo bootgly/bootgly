@@ -119,5 +119,6 @@ return new Suite(
       '1.0.3-Advanced_API-modifier_not_scope',
       '1.1.9-Advanced_API-expectations-null_expected',
       '1.7.3-Advanced_API-expectations-waiters-budget',
+      '1.4.4-Advanced_API-expectations-finders-in',
    ]
 );

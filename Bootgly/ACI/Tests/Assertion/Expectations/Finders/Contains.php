@@ -27,7 +27,7 @@ class Contains extends Finder
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
-      $needle = $this->needle ?? $expected;
+      $needle = $this->needle;
 
       if (is_array($actual) === true) {
          return in_array(
@@ -62,7 +62,7 @@ class Contains extends Finder
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
       $type = gettype($actual);
-      $needle = $this->needle ?? $expected;
+      $needle = $this->needle;
 
       $template = match ($type) {
          'array' => [

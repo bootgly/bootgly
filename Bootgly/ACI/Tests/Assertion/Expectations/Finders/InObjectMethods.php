@@ -23,25 +23,29 @@ class InObjectMethods extends Finder
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
+      $needle = $this->needle;
+
       if (
          is_object($actual) === false
          && is_string($actual) === false
       ) {
          return false;
       }
-      if (is_string($expected) === false) {
+      if (is_string($needle) === false) {
          return false;
       }
 
-      return method_exists($actual, $expected);
+      return method_exists($actual, $needle);
    }
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
+      $needle = $this->needle;
+
       return new Fallback(
          'Failed asserting that the object has the method "%s".',
          [
-            'expected' => $expected
+            'expected' => $needle
          ],
          $verbosity
       );

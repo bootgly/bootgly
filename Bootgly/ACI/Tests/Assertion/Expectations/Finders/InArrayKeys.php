@@ -27,13 +27,15 @@ class InArrayKeys extends Finder
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
+      $needle = $this->needle;
+
       if (
-         is_int($expected) === false
-         && is_float($expected) === false
-         && is_string($expected) === false
-         && is_bool($expected) === false
-         && is_resource($expected) === false
-         && $expected !== null
+         is_int($needle) === false
+         && is_float($needle) === false
+         && is_string($needle) === false
+         && is_bool($needle) === false
+         && is_resource($needle) === false
+         && $needle !== null
       ) {
          return false;
       }
@@ -42,15 +44,17 @@ class InArrayKeys extends Finder
          return false;
       }
 
-      return array_key_exists($expected, $actual); // @phpstan-ignore-line
+      return array_key_exists($needle, $actual); // @phpstan-ignore-line
    }
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
+      $needle = $this->needle;
+
       return new Fallback(
          'Failed asserting that the array has the key "%s".',
          [
-            'expected' => $expected
+            'expected' => $needle
          ],
          $verbosity
       );

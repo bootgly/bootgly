@@ -22,19 +22,23 @@ class InArrayValues extends Finder
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
+      $needle = $this->needle;
+
       if (is_array($actual) === false) {
          return false;
       }
 
-      return in_array($expected, $actual);
+      return in_array($needle, $actual);
    }
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
+      $needle = $this->needle;
+
       return new Fallback(
          'Failed asserting that the array contains the value "%s".',
          [
-            'expected' => $expected
+            'expected' => $needle
          ],
          $verbosity
       );

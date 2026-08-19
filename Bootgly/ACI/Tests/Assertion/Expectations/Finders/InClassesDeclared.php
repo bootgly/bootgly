@@ -22,19 +22,23 @@ class InClassesDeclared extends Finder
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
-      if (is_string($expected) === false) {
+      $needle = $this->needle;
+
+      if (is_string($needle) === false) {
          return false;
       }
 
-      return class_exists($expected);
+      return class_exists($needle);
    }
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
+      $needle = $this->needle;
+
       return new Fallback(
          'Failed asserting that the class "%s" is declared.',
          [
-            'expected' => $expected
+            'expected' => $needle
          ],
          $verbosity
       );

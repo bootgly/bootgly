@@ -22,7 +22,7 @@ class EndsWith extends Finder
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
-      $needle = $this->needle ?? $expected;
+      $needle = $this->needle;
 
       if (
          is_string($actual) === false
@@ -36,7 +36,7 @@ class EndsWith extends Finder
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
-      $needle = $this->needle ?? $expected;
+      $needle = $this->needle;
 
       return new Fallback(
          'Failed asserting that the string "%s" ends with "%s".',
