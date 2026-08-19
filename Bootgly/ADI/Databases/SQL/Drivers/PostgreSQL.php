@@ -29,6 +29,7 @@ use function is_numeric;
 use function is_resource;
 use function is_scalar;
 use function is_string;
+use function ltrim;
 use function preg_match;
 use function sha1;
 use function spl_object_id;
@@ -1095,6 +1096,20 @@ class PostgreSQL extends Driver
 
          $command = (string) $command;
          $Operation->status = $command;
+
+         // ? The backend answers a COMMIT with the ROLLBACK tag when the
+         //   transaction block was aborted — some earlier statement in it
+         //   failed and the caller carried on from the error. The tag is the
+         //   only place that is reported: no ErrorResponse follows, so the
+         //   operation carries no error of its own and used to resolve as a
+         //   successful commit while the server had discarded every write in
+         //   the transaction.
+         if ($command === 'ROLLBACK' && str_starts_with(strtolower(ltrim($Operation->SQL)), 'commit')) {
+            return $Operation->fail(
+               'SQL transaction was rolled back by the server: a statement inside it had failed.'
+            );
+         }
+
          $parts = explode(' ', $command);
          $last = $parts[count($parts) - 1] ?? '0';
          $Operation->affected = is_numeric($last) ? (int) $last : 0;

@@ -112,5 +112,6 @@ return new Suite(
       '8.8-kv_redis_abandon_contract',
       '4.11-pool-finished_pipeline_gate',
       '7.27-sql_savepoint_stack',
+      '7.28-postgresql_commit_tag',
    ]
 );
