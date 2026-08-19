@@ -90,9 +90,11 @@ class PostgreSQL extends Driver
    private null|Operation $writing = null;
    /** @var array<string,string> */
    private array $names = [];
-   // @ Statement names with a Parse in flight, each mapped to the object id of
-   //   the operation that composed it — ownership matters, see prepare().
-   /** @var array<string,int> */
+   // @ Statement names with a Parse in flight. The value is the operation that
+   //   composed it while its batch is still unsent, and `true` once those bytes
+   //   have reached the socket. A sibling may Bind the name warm only after
+   //   that — see prepare().
+   /** @var array<string,true|Operation> */
    private array $preparing = [];
    // @ Statement names evicted client-side, awaiting their paired wire Close.
    /** @var array<string,true> */
@@ -186,9 +188,23 @@ class PostgreSQL extends Driver
          //   composed batch with the startup packet — and on that second pass
          //   it has to compose the Parse again, not Bind a name the backend
          //   never registered.
-         $owner = $this->preparing[$Operation->statement] ?? 0;
-         $preparing = $owner !== 0 && $owner !== spl_object_id($Operation);
-         $Operation->prepared = $cached !== false || $preparing;
+         $marker = $this->preparing[$Operation->statement] ?? null;
+
+         if ($marker === $Operation) {
+            $marker = null;
+         }
+
+         // ? A marker its owner will never send suppresses every later Parse
+         //   for that name: `fail()` is invisible to the driver, so nothing
+         //   released it. Composing a warm Bind against it produces a Bind for
+         //   a statement nothing ever Parsed.
+         if ($marker instanceof Operation && $marker->finished) {
+            unset($this->preparing[$Operation->statement]);
+
+            $marker = null;
+         }
+
+         $Operation->prepared = $cached !== false || $marker !== null;
 
          $bind = $Encoder->bind([
             'portal' => $Operation->portal,
@@ -240,7 +256,7 @@ class PostgreSQL extends Driver
          //   after the flush. A sibling composed inside that gap would read an
          //   empty ledger and Parse the same name again, and the backend
          //   answers the second one with 42P05 instead of running the query.
-         $this->preparing[$Operation->statement] = spl_object_id($Operation);
+         $this->preparing[$Operation->statement] = $Operation;
 
          return $Operation;
       }
@@ -375,6 +391,45 @@ class PostgreSQL extends Driver
             $Operation->state = OperationStates::Querying;
          }
 
+         // ? This batch Binds a name whose Parse is composed but still sitting
+         //   in another operation's buffer, and nothing orders that flush ahead
+         //   of this one — whichever operation the caller advances first is the
+         //   one that writes first, so this Bind would reach the backend before
+         //   the Parse and come back as `prepared statement "…" does not exist`.
+         //   Waiting for the owner is not available: a caller awaiting this
+         //   operation advances only this one, so deferring hangs both. Take the
+         //   Parse instead and strip the owner back to nothing, exactly as
+         //   abandon() does for the warm Binds of a batch that will never be
+         //   sent — advance() re-derives it, and by then this Parse is on the
+         //   wire, so it comes back as the warm Bind it was.
+         if ($Operation->prepared && $Operation->statement !== '') {
+            $Owner = $this->preparing[$Operation->statement] ?? null;
+
+            // ? Not while this batch is re-entering a partial flush: its first
+            //   bytes are already on the wire, so re-composing it would send a
+            //   Parse behind the Bind it belongs in front of. A live owner
+            //   mid-flush cannot reach here at all — the write-stream guard
+            //   above returns first.
+            if (
+               $Owner instanceof Operation
+               && $Owner !== $Operation
+               && $this->writing !== $Operation
+            ) {
+               if ($Owner->finished === false) {
+                  $Owner->write = '';
+                  $Owner->prepared = false;
+               }
+
+               unset($this->preparing[$Operation->statement]);
+               unset($this->Holders[$Operation->statement][spl_object_id($Operation)]);
+
+               $Operation->write = '';
+               $Operation->prepared = false;
+
+               $this->prepare($Operation);
+            }
+         }
+
          // ! Pending statement Closes ride ahead of this batch — rendered once
          //   per batch: a partial-flush re-entry keeps $writing === $Operation.
          if ($this->closing !== [] && $this->writing !== $Operation) {
@@ -415,6 +470,17 @@ class PostgreSQL extends Driver
 
          $this->writing = null;
          $this->free($Operation);
+
+         // @ The Parse this batch carried is on the wire now, so a sibling may
+         //   Bind the name warm from here on: the backend reads the socket in
+         //   order and cannot see the Bind first.
+         if (
+            $Operation->prepared === false
+            && $Operation->statement !== ''
+            && ($this->preparing[$Operation->statement] ?? null) === $Operation
+         ) {
+            $this->preparing[$Operation->statement] = true;
+         }
 
          $Operation->state = OperationStates::Reading;
          $this->queue($Operation);
@@ -527,7 +593,7 @@ class PostgreSQL extends Driver
             $Operation instanceof Operation
             && $Operation->statement !== ''
             && isset($this->statements[$Operation->statement]) === false
-            && ($this->preparing[$Operation->statement] ?? 0) === spl_object_id($Operation)
+            && ($this->preparing[$Operation->statement] ?? null) === $Operation
          ) {
             $statement = $Operation->statement;
             unset($this->preparing[$statement]);

@@ -113,5 +113,6 @@ return new Suite(
       '4.11-pool-finished_pipeline_gate',
       '7.27-sql_savepoint_stack',
       '7.28-postgresql_commit_tag',
+      '7.29-postgresql_parse_order',
    ]
 );
