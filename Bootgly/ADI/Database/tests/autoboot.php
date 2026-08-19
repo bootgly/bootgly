@@ -110,5 +110,6 @@ return new Suite(
       '4.10-pool-pending_wait',
       '8.7-kv_redis_transport_failures',
       '8.8-kv_redis_abandon_contract',
+      '4.11-pool-finished_pipeline_gate',
    ]
 );

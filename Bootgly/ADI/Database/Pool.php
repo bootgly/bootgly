@@ -347,15 +347,22 @@ class Pool
          $this->unlock($Connection);
       }
 
-      if ($Protocol !== null && $Protocol->check()) {
+      $alive = is_resource($Connection->socket);
+      $usable = $alive && $Connection->state === ConnectionStates::Ready;
+
+      // ? A pipelined reply is still owed, so the connection stays busy until
+      //   whoever is reading drains the FIFO — but only while the socket can
+      //   still deliver it. An unusable one owes an answer it can never bring,
+      //   and everything that frees the slot lives below this gate: the
+      //   reservation, the busy entry, drop() and promote(). Gating on it there
+      //   left the pool counting a dead connection against `max` for good.
+      if ($usable && $Protocol !== null && $Protocol->check()) {
          return $this;
       }
 
       unset($this->busy[$id]);
 
-      $alive = is_resource($Connection->socket);
-
-      if ($alive === false || $Connection->state !== ConnectionStates::Ready) {
+      if ($usable === false) {
          unset($this->idle[$id]);
          unset($this->locked[$id]);
 

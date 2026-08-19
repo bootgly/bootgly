@@ -607,7 +607,19 @@ class MySQL extends Driver
     */
    public function check (): bool
    {
-      return $this->pipeline !== [];
+      // @@ A finished entry is not work in flight: the read loop keeps it only
+      //    until the message that terminates it arrives, and it stays at its
+      //    slot to absorb that message whoever reads next. Reading a non-empty
+      //    FIFO as "still busy" gates release() off for the connection's life
+      //    when the command that failed was answered in two reads.
+      foreach ($this->pipeline as $Queued) {
+         if ($Queued->finished === false) {
+            return true;
+         }
+      }
+
+      // :
+      return false;
    }
 
    /**
