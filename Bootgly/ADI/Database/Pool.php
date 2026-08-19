@@ -179,6 +179,38 @@ class Pool
             break;
          }
 
+         // ? `Pending` is a legitimate parked state, not a missing one: assign()
+         //   found no capacity and parked the operation, so it carries no
+         //   Connection, Protocol or Readiness BY DESIGN. Reading that as a hard
+         //   failure and throwing left the operation in `$pending` with the pool
+         //   still holding a strong reference — and promote() then put the
+         //   command on the wire once capacity freed, AFTER the caller's
+         //   compensating rollback and outside its transaction.
+         //
+         //   Waiting for capacity instead is not available here. wait() is the
+         //   synchronous API: while it blocks, nothing advances the operations
+         //   holding the connections, and only they can free one. Measured on a
+         //   saturated pool, a select() over `$busy` returns immediately on every
+         //   readable undrained reply and burns the whole deadline at ~50% CPU
+         //   before failing anyway, while a synchronous driver has no selectable
+         //   socket at all. So the operation leaves the pool here and fails with
+         //   the cause the caller can act on.
+         if ($Operation->state === OperationStates::Pending) {
+            $Pool = $Operation->Pool;
+
+            // ?: Fallback re-dispatched this operation to another pool mid-wait —
+            //    it is that pool's to satisfy or refuse, and `$this->pending`
+            //    describes the old one.
+            if ($Pool !== null && $Pool !== $this) {
+               return $Pool->wait($Operation);
+            }
+
+            $this->forget($Operation);
+            $Operation->fail('Database pool has no capacity for the operation.');
+
+            continue;
+         }
+
          if ($Readiness === null) {
             $Pool = $Operation->Pool;
 
