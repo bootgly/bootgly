@@ -420,19 +420,48 @@ class Database extends Resource implements Awaiting, Scheduling
 
       try {
          $result = $work($Transaction, $this);
-         $Commit = $this->await($Transaction->commit());
-         $this->check($Commit);
+
+         // @@ The work may have opened nested levels and left them open. One
+         //    commit() at `depth > 1` releases a savepoint, so the outer
+         //    transaction would never be committed and its pinned connection
+         //    never handed back — while this method reported the unit of work
+         //    as done. The contract here is the whole transaction, not the
+         //    level the callback happened to stop on.
+         do {
+            $Commit = $this->await($Transaction->commit());
+
+            // ? Every commit() that cannot make progress fails the operation,
+            //   so the loop always ends through here rather than spinning.
+            $this->check($Commit);
+         }
+         while ($Transaction->depth > 0);
+
          $this->Database->touch($this->Scope);
 
          return $result;
       }
       catch (Throwable $Throwable) {
-         try {
-            $this->await($Transaction->rollback());
+         // @@ Same for the failure path — a single rollback() unwinds one
+         //    savepoint and leaves the transaction open. Every level is
+         //    attempted: only the outermost carries `unlock`, so stopping at
+         //    the first failure would strand the reservation.
+         do {
+            $depth = $Transaction->depth;
+
+            try {
+               $this->await($Transaction->rollback());
+            }
+            catch (Throwable) {
+               // Preserve the original work failure.
+            }
+
+            // ? await() does not raise here and the catch above swallows what
+            //   would, so a teardown that cannot advance is what ends this loop.
+            if ($Transaction->depth >= $depth) {
+               break;
+            }
          }
-         catch (Throwable) {
-            // Preserve the original work failure.
-         }
+         while ($Transaction->depth > 0);
 
          throw $Throwable;
       }

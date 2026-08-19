@@ -24,5 +24,6 @@ return new Suite(
       '1.6-negotiation_resource',
       '1.7-database_resource_paginate',
       '1.8-database_resource_transact',
+      '1.9-database_resource_transact_nested',
    ]
 );
