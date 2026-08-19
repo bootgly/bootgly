@@ -34,7 +34,6 @@ use const T_EXTENDS;
 use const T_FILE;
 use const T_FINAL;
 use const T_FINALLY;
-use const T_FN;
 use const T_FUNCTION;
 use const T_IMPLEMENTS;
 use const T_INLINE_HTML;
@@ -273,8 +272,15 @@ final class Compiler
                continue;
             }
 
-            // Track upcoming block kind.
-            if ($id === T_FUNCTION || $id === T_FN) {
+            // Track upcoming block kind. `T_FN` is deliberately absent: an
+            // arrow function is `fn (…) => <expr>` and owns no `{`, so marking
+            // a body pending leaves the flag armed until some LATER `{`
+            // consumes it — most visibly a property-hook list, which then
+            // becomes a BODY frame and gets a hit marker emitted before its
+            // `get =>`. Any brace an arrow function's expression can reach
+            // belongs to a construct that arms its own kind (`match`, an
+            // anonymous class) or is a dynamic accessor.
+            if ($id === T_FUNCTION) {
                $pending = self::BODY;
             }
             else if ($id === T_CLASS || $id === T_INTERFACE || $id === T_TRAIT || $id === T_ENUM) {

@@ -121,5 +121,6 @@ return new Suite(
       '1.7.3-Advanced_API-expectations-waiters-budget',
       '1.4.4-Advanced_API-expectations-finders-in',
       '7.2.12-Coverage-Native_label_state',
+      '7.2.13-Coverage-Native_arrow_pending',
    ]
 );
