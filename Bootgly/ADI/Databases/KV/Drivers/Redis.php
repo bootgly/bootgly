@@ -151,6 +151,13 @@ class Redis extends Driver
       }
 
       if ($Operation->state === OperationStates::Connecting) {
+         // ? A co-located sibling can abort between this operation's connect()
+         //   and its transition — the teardown drops the shared socket, and
+         //   transition() rejects a connection without one.
+         if (is_resource($this->Connection->socket) === false) {
+            return $this->abort($Operation, 'Redis socket is not available.');
+         }
+
          // @ TCP is established; mark ready and prepend the AUTH/SELECT preamble once.
          $this->Connection->transition(ConnectionStates::Ready);
 
@@ -289,8 +296,7 @@ class Redis extends Driver
 
       $socket = $this->Connection->socket;
       if (is_resource($socket) === false) {
-         $Operation->quarantine = $this->Connection->state !== ConnectionStates::Ready;
-         $Operation->fail('Redis socket is not available.');
+         $this->abort($Operation, 'Redis socket is not available.');
 
          return false;
       }
@@ -298,16 +304,14 @@ class Redis extends Driver
       $written = @fwrite($socket, $Operation->write);
 
       if ($written === false) {
-         $Operation->quarantine = $this->Connection->state !== ConnectionStates::Ready;
-         $Operation->fail('Redis socket write failed.');
+         $this->abort($Operation, 'Redis socket write failed.');
 
          return false;
       }
 
       if ($written === 0) {
          if (feof($socket)) {
-            $Operation->quarantine = $this->Connection->state !== ConnectionStates::Ready;
-            $Operation->fail('Redis socket closed during write.');
+            $this->abort($Operation, 'Redis socket closed during write.');
 
             return false;
          }
@@ -335,8 +339,7 @@ class Redis extends Driver
    {
       $socket = $this->Connection->socket;
       if (is_resource($socket) === false) {
-         $Operation->quarantine = $this->Connection->state !== ConnectionStates::Ready;
-         $Operation->fail('Redis socket is not available.');
+         $this->abort($Operation, 'Redis socket is not available.');
 
          return;
       }
@@ -344,16 +347,14 @@ class Redis extends Driver
       $bytes = @fread($socket, 16384);
 
       if ($bytes === false) {
-         $Operation->quarantine = $this->Connection->state !== ConnectionStates::Ready;
-         $Operation->fail('Redis socket read failed.');
+         $this->abort($Operation, 'Redis socket read failed.');
 
          return;
       }
 
       if ($bytes === '') {
          if (feof($socket)) {
-            $Operation->quarantine = $this->Connection->state !== ConnectionStates::Ready;
-            $Operation->fail('Redis socket closed.');
+            $this->abort($Operation, 'Redis socket closed.');
          }
 
          return;
@@ -363,7 +364,9 @@ class Redis extends Driver
          $replies = $this->Decoder->decode($bytes);
       }
       catch (Throwable $Throwable) {
-         $Operation->fail($Throwable->getMessage());
+         // @ A malformed frame desynchronises the RESP stream: every later reply
+         //   would be attributed to the wrong command, and nothing can resync it.
+         $this->abort($Operation, $Throwable->getMessage());
 
          return;
       }
@@ -374,7 +377,13 @@ class Redis extends Driver
             $this->skip--;
 
             if ($reply instanceof RuntimeException) {
-               $Operation->fail($reply->getMessage());
+               // @ AUTH or SELECT was refused, so the session is unusable — and
+               //   the replies this loop has already consumed cannot be put back.
+               //   Returning here left the FIFO shifted by one for the rest of
+               //   the connection's life, resolving every later command with its
+               //   predecessor's reply: a GET answered with another key's value,
+               //   reported as success.
+               $this->abort($Operation, $reply->getMessage());
 
                return;
             }
@@ -435,10 +444,7 @@ class Redis extends Driver
       $socket = $this->Connection->socket;
 
       if (is_resource($socket) === false) {
-         $Operation->quarantine = $this->Connection->state !== ConnectionStates::Ready;
-         $Operation->fail('Redis socket is not available.');
-
-         return $Operation;
+         return $this->abort($Operation, 'Redis socket is not available.');
       }
 
       // @ Invalidate cached Readiness when the socket changes.
@@ -460,6 +466,48 @@ class Redis extends Driver
       $Readiness->renew($Operation->deadline);
       $Operation->await($Readiness);
 
+      return $Operation;
+   }
+
+   /**
+    * Tear the session down after an unrecoverable transport failure.
+    */
+   private function abort (Operation $Operation, string $error): Operation
+   {
+      // ! Wire state — a partial frame and a preamble count belong to the dead
+      //   socket, and the next connection must not inherit either.
+      $this->Decoder->reset();
+      $this->Writing = null;
+      $this->skip = 0;
+
+      $Pipeline = $this->pipeline;
+      $this->pipeline = [];
+
+      // @@ Pipelined commands — completed[] hands the siblings to Pool::drain()
+      foreach ($Pipeline as $Queued) {
+         if ($Queued->finished === false) {
+            $Queued->quarantine = true;
+            $Queued->fail($error);
+         }
+
+         if ($Queued !== $Operation) {
+            $this->completed[] = $Queued;
+         }
+      }
+
+      if ($Operation->finished === false) {
+         $Operation->quarantine = true;
+         $Operation->fail($error);
+      }
+
+      // @ Drop the transport. Only the peer closed, so the socket still reports
+      //   `connected`, `Ready` and `is_resource()` — without this the pool keeps
+      //   the connection in `busy` behind its check() gate for the worker's life,
+      //   and advance()'s reconnect branch, the only code that clears the
+      //   pipeline, is never reachable again.
+      $this->Connection->disconnect();
+
+      // :
       return $Operation;
    }
 }
