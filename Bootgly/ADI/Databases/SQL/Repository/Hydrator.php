@@ -16,6 +16,9 @@ use function is_bool;
 use function is_float;
 use function is_int;
 use function is_string;
+use function ltrim;
+use function preg_match;
+use function substr;
 use ReflectionNamedType;
 use ReflectionProperty;
 use RuntimeException;
@@ -104,7 +107,35 @@ class Hydrator
    }
 
    /**
-    * Cast one scalar value according to a mapped property type.
+    * Narrow one decoded value into an int property without losing precision.
+    */
+   private function narrow (bool|float|int|string $value, ReflectionProperty $Property): int
+   {
+      // ? Only an exact decimal string can carry more than an int holds. The
+      //   MySQL decoder hands one back for a `BIGINT UNSIGNED` past 2^63, and
+      //   PHP saturates it to PHP_INT_MAX — a key that matches no row, so the
+      //   next save() targets nothing and reports success. Same contract the
+      //   write side already applies to a generated key.
+      if (is_string($value) && preg_match('/^[+-]?[0-9]+$/', $value) === 1) {
+         $sign = $value[0] === '-' ? '-' : '';
+         $digits = ltrim($value[0] === '+' || $value[0] === '-' ? substr($value, 1) : $value, '0');
+         $canonical = $digits === '' ? '0' : "{$sign}{$digits}";
+
+         if ((string) (int) $value !== $canonical) {
+            $property = "{$Property->getDeclaringClass()->getName()}::\${$Property->getName()}";
+
+            throw new RuntimeException(
+               "ORM cannot hydrate a value beyond PHP_INT_MAX into an int property: {$property} ({$value}) — declare it as null|int|string."
+            );
+         }
+      }
+
+      // :
+      return (int) $value;
+   }
+
+   /**
+    * Cast one decoded value to the declared property type.
     */
    private function cast (mixed $value, ReflectionProperty $Property): mixed
    {
@@ -135,7 +166,7 @@ class Hydrator
          return match ($Type->getName()) {
             'bool' => (bool) $value,
             'float' => (float) $value,
-            'int' => (int) $value,
+            'int' => $this->narrow($value, $Property),
             'string' => (string) $value,
             default => $value,
          };
