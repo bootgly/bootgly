@@ -85,8 +85,13 @@ abstract class Driver
     * have to be failed and handed back through `drain()`, and whatever the
     * session cached server-side must not outlive the socket. Dropping the
     * transport from outside leaves a driver still holding a pipeline, a
-    * statement cache and a cancel key for a session that no longer exists —
-    * and the pool then builds a second driver onto the same connection.
+    * statement cache and a cancel key for a session that no longer exists.
+    *
+    * What this does NOT reach, because the drivers' teardown knows only the
+    * pipeline and the write holder: an operation composed on the session but
+    * never written, and — in PostgreSQL — the one holding a half-flushed
+    * batch, which is dropped rather than failed. Either is left pointing at a
+    * driver whose session is gone.
     */
    public function sever (Operation $Operation, string $error): void
    {

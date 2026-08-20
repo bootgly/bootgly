@@ -721,15 +721,6 @@ class PostgreSQL extends Driver
    }
 
    /**
-    * Abort the session after a transport failure.
-    *
-    * A dead socket can never deliver the responses the pipeline is waiting
-    * for: every pipelined operation fails, the session state (server-side
-    * prepared statements, packet buffer, write holder) dies with the socket
-    * and the connection is disconnected so the pool drops it instead of
-    * keeping it busy forever.
-    */
-   /**
     * Sever this session, failing everything it still owes.
     */
    public function sever (DatabaseOperation $Operation, string $error): void
@@ -745,6 +736,15 @@ class PostgreSQL extends Driver
       $this->abort($Operation, $error);
    }
 
+   /**
+    * Abort the session after a transport failure.
+    *
+    * A dead socket can never deliver the responses the pipeline is waiting
+    * for: every pipelined operation fails, the session state (server-side
+    * prepared statements, packet buffer, write holder) dies with the socket
+    * and the connection is disconnected so the pool drops it instead of
+    * keeping it busy forever.
+    */
    private function abort (Operation $Operation, string $error): Operation
    {
       // ! Session state — packets and named statements die with the socket

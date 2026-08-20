@@ -5,6 +5,7 @@ use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\ADI\Database\Driver;
 use Bootgly\ADI\Database\Operation;
 use Bootgly\ADI\Database\Pool;
+use Bootgly\ADI\Databases\KV;
 use Bootgly\ADI\Databases\SQL;
 
 
@@ -222,6 +223,66 @@ return new Test(
       fclose($peer);
       $Database->Connection->disconnect();
 
+      // # A teardown that DID reach the server leaves the session alone
+      //   Severing is for a statement the server never saw. This is the shape
+      //   that tells the two apart, and it exists only because `acquire()`'s
+      //   pinned branch asks neither whether a connection is busy nor whether
+      //   it is reserved: a reused transaction re-pins onto the connection its
+      //   last teardown carried, so a reserved session really can be carrying
+      //   somebody else's read. Severing then kills that reader — and tells it
+      //   the statement never reached the server, which is the opposite of true.
+      [$client, $peer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+      stream_set_blocking($client, false);
+      stream_set_blocking($peer, false);
+
+      $Database = new SQL(['timeout' => 0.05, 'pool' => ['min' => 0, 'max' => 1]]);
+      $Database->Connection->attach($client);
+      $Pool = $Database->Pool;
+
+      $Transaction = $Database->begin();
+      $Opened = $Transaction->Operation;
+
+      $Database->advance($Opened);
+      fread($peer, 8192);
+      fwrite($peer, $complete('BEGIN'));
+      $Database->advance($Opened);
+
+      $Closed = $Transaction->commit();
+      $Database->advance($Closed);
+      fread($peer, 8192);
+      fwrite($peer, $complete('COMMIT'));
+      $Database->advance($Closed);
+
+      // @ An unrelated caller takes the connection and is genuinely reading.
+      $Reader = $Database->query('SELECT 1 AS v');
+      $Database->advance($Reader);
+      fread($peer, 8192);
+
+      // @ The same transaction object is reused, re-pinning onto that session.
+      $Transaction->begin();
+      $Teardown = $Transaction->rollback();
+
+      $Database->advance($Teardown);
+      fread($peer, 8192);
+
+      $shared = $Teardown->Connection === $Reader->Connection;
+      $onTheWire = $Teardown->state->name !== 'Queued';
+
+      usleep(80_000);
+      $Database->advance($Teardown);
+
+      yield assert(
+         assertion: $shared
+            && $onTheWire
+            && $Teardown->unlock
+            && $Reader->finished === false
+            && is_resource($Database->Connection->socket),
+         description: 'A teardown already on the wire leaves its session alone'
+      );
+
+      fclose($peer);
+      $Database->Connection->disconnect();
+
       // # A sibling on the severed session is failed, not abandoned
       //   Severing has to go through the driver: dropping the transport from
       //   outside leaves whoever else was on that session unfinished and
@@ -251,6 +312,48 @@ return new Test(
       );
 
       fclose($server);
+
+      // # Every driver severs through its own teardown
+      //   The pool reaches only one driver per configuration, so the other
+      //   implementations of the contract go unexercised by the routes above —
+      //   and an override that quietly does nothing would leave a whole engine
+      //   dropping transports from outside again.
+      $severing = static function (string $driver): array {
+         [$client, $peer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+         stream_set_blocking($client, false);
+         stream_set_blocking($peer, false);
+
+         // ! Redis is a key-value database, not an SQL one.
+         $Database = $driver === 'redis'
+            ? new KV(['driver' => 'redis', 'timeout' => 30.0, 'pool' => ['min' => 0, 'max' => 1]])
+            : new SQL(['driver' => $driver, 'timeout' => 30.0, 'pool' => ['min' => 0, 'max' => 1]]);
+         $Database->Connection->attach($client);
+
+         $Operation = $driver === 'redis'
+            ? $Database->command('GET', ['k'])
+            : $Database->query('SELECT 1 AS v');
+         $Database->advance($Operation);
+         fread($peer, 8192);
+
+         $Protocol = $Operation->Protocol;
+         $Protocol?->sever($Operation, 'Severed by the pool.');
+
+         $severed = [
+            $Operation->finished,
+            $Operation->error === 'Severed by the pool.',
+            is_resource($Database->Connection->socket) === false,
+         ];
+
+         fclose($peer);
+
+         return $severed;
+      };
+
+      yield assert(
+         assertion: $severing('mysql') === [true, true, true]
+            && $severing('redis') === [true, true, true],
+         description: 'Every driver severs through its own teardown'
+      );
 
       // # A retry keeps what decides who owns a connection
       //   `retry()` re-arms an operation for another attempt, and the two flags

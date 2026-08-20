@@ -590,9 +590,6 @@ class Redis extends Driver
    }
 
    /**
-    * Tear the session down after an unrecoverable transport failure.
-    */
-   /**
     * Sever this session, failing everything it still owes.
     */
    public function sever (DatabaseOperation $Operation, string $error): void
@@ -608,6 +605,9 @@ class Redis extends Driver
       $this->abort($Operation, $error);
    }
 
+   /**
+    * Tear the session down after an unrecoverable transport failure.
+    */
    private function abort (Operation $Operation, string $error): Operation
    {
       // ! Wire state — a partial frame and a preamble count belong to the dead
