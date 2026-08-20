@@ -123,6 +123,13 @@ class Runner
     */
    private function apply (Seeder $Seeder): void
    {
+      // ! Composed before any transaction opens. The closure is handed the pool and has no
+      //   route to the transaction, so composing it inside one leaves a seeder that reads
+      //   the database asking a pool whose only connection is already locked. `preview()`
+      //   composes outside a transaction too, and `Guard::execute()` takes the compiled SQL,
+      //   so nothing here needs the transaction open before the queries exist.
+      $queries = $Seeder->run($this->Database, $this->Seed);
+
       if ($this->Guard->Dialect->transactions) {
          $Transaction = $this->Database->begin();
          if ($Transaction->Operation !== null) {
@@ -130,7 +137,6 @@ class Runner
          }
 
          try {
-            $queries = $Seeder->run($this->Database, $this->Seed);
             $this->Guard->execute($queries, $Transaction);
             $this->Database->Pool->wait($Transaction->commit());
          }
@@ -143,7 +149,6 @@ class Runner
          return;
       }
 
-      $queries = $Seeder->run($this->Database, $this->Seed);
       $this->Guard->execute($queries);
    }
 

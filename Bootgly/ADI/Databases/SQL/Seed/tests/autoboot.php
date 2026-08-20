@@ -19,5 +19,6 @@ return new Suite(
       '11.1-seeders_files',
       '11.2-seeders_runner',
       '11.3-seeders_transactions',
+      '11.4-seeders_composition',
    ]
 );
