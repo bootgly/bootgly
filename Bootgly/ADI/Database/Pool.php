@@ -118,7 +118,17 @@ class Pool
          // @ The driver still owns whatever the server is sending for this
          //   operation: let it reconcile the wire before the connection is
          //   handed to anyone else and before fallback() revives the object.
-         $Operation->Protocol?->abandon($Operation);
+         $Protocol = $Operation->Protocol;
+         $Protocol?->abandon($Operation);
+
+         // @ Reconciling may have torn the session down, which fails every
+         //   sibling on it and hands them back through the driver. They must be
+         //   collected here, while the connection they were on is still the one
+         //   being released: left for a later advance, their release lands on
+         //   whatever connection the pool has rebuilt since and drops that one.
+         if ($Protocol !== null) {
+            $this->drain($Protocol, $Operation);
+         }
 
          $this->forget($Operation);
          $this->release($Operation);
@@ -272,6 +282,11 @@ class Pool
       //   same route — reconcile the wire, then take the connection back.
       if ($Operation->finished && $Operation->cancelled === false) {
          $Protocol->abandon($Operation);
+
+         // @ Same reason as the expire branch: a teardown here hands the
+         //   siblings back, and their release belongs to this connection.
+         $this->drain($Protocol, $Operation);
+
          $this->forget($Operation);
          $this->release($Operation);
       }
@@ -338,6 +353,14 @@ class Pool
 
       $id = spl_object_id($Connection);
       $Protocol = $Operation->Protocol;
+
+      // ? The driver this operation was assigned to is no longer the one on the
+      //   connection: its session was torn down and the pool has since rebuilt
+      //   on the same Connection object. The claim died with that session, and
+      //   honouring it here drops a connection somebody else is holding.
+      if ($Protocol !== null && $Connection->Protocol !== null && $Protocol !== $Connection->Protocol) {
+         return $this;
+      }
 
       // ? The reservation is this operation's to release, and the intent lives
       //   on the object: deferring it because the driver still holds a sibling

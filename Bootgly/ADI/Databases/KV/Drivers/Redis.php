@@ -24,10 +24,10 @@ use function is_resource;
 use function is_scalar;
 use function socket_import_stream;
 use function socket_set_option;
-use function spl_object_id;
 use function substr;
 use RuntimeException;
 use Throwable;
+use WeakMap;
 
 use Bootgly\ABI\Data\RESP\Decoder;
 use Bootgly\ABI\Data\RESP\Encoder;
@@ -69,8 +69,14 @@ class Redis extends Driver
    private array $pipeline = [];
    /** @var array<int,Operation> Operations resolved while another operation was advancing. */
    private array $completed = [];
-   /** @var array<int,true> Stand-in slots owed a reply nobody waits for, by object id. */
-   private array $abandoned = [];
+   // @ This driver tore its own transport down and the pool has moved on.
+   private bool $aborted = false;
+   // @ Stand-in slots owed a reply nobody waits for. Keyed by the object, not by
+   //   spl_object_id: an id is recycled as soon as its stand-in is collected, and
+   //   a live command landing on one reads as abandoned — which drops it out of
+   //   abandon()'s reader count and kills a healthy session.
+   /** @var WeakMap<Operation,true> */
+   private WeakMap $abandoned;
    /** Operation currently holding the write stream (partial writes must not interleave). */
    private null|Operation $Writing = null;
    private null|Readiness $ReadReadiness = null;
@@ -81,6 +87,8 @@ class Redis extends Driver
 
    public function __construct (Config $Config, Connection $Connection)
    {
+      $this->abandoned = new WeakMap();
+
       parent::__construct($Config, $Connection);
 
       // * Config
@@ -136,6 +144,18 @@ class Redis extends Driver
          return $Operation;
       }
 
+      // ? This driver dropped its transport and the Connection no longer binds
+      //   it, so the pool has built a fresh driver on the same Connection. An
+      //   operation still pointing here — assigned before the teardown and not
+      //   advanced since — would reconnect that shared Connection through this
+      //   object and pipeline on it behind a FIFO the live driver cannot see:
+      //   two decoders on one wire, each taking replies meant for the other.
+      if ($this->aborted) {
+         $Operation->quarantine = true;
+
+         return $Operation->fail('Redis connection was torn down before the command was sent.');
+      }
+
       if ($Operation->state === OperationStates::Queued) {
          if ($this->Connection->connected === false || is_resource($this->Connection->socket) === false) {
             $Operation->state = OperationStates::Connecting;
@@ -180,7 +200,20 @@ class Redis extends Driver
             $this->completed[] = $Stale;
          }
          $this->pipeline = [];
+
+         // ! The command that held the write stream owns bytes of the socket
+         //   that just died. Its buffer must not be flushed onto this one.
+         $Stale = $this->Writing;
          $this->Writing = null;
+
+         if ($Stale !== null && $Stale !== $Operation) {
+            $Stale->write = '';
+
+            if ($Stale->finished === false) {
+               $Stale->fail('Redis connection was lost before the command was sent.');
+               $this->completed[] = $Stale;
+            }
+         }
 
          // @ Disable Nagle: commands and replies are small — latency dominates
          $socket = $this->Connection->socket;
@@ -279,7 +312,7 @@ class Redis extends Driver
       $readers = 0;
 
       foreach ($this->pipeline as $Queued) {
-         if ($Queued !== $Operation && isset($this->abandoned[spl_object_id($Queued)]) === false) {
+         if ($Queued !== $Operation && isset($this->abandoned[$Queued]) === false) {
             $readers++;
          }
       }
@@ -307,7 +340,7 @@ class Redis extends Driver
       $Stand->state = OperationStates::Reading;
 
       $this->pipeline[$index] = $Stand;
-      $this->abandoned[spl_object_id($Stand)] = true;
+      $this->abandoned[$Stand] = true;
    }
 
    /**
@@ -499,6 +532,12 @@ class Redis extends Driver
             $Active->resolve(new Result($Active->command));
          }
 
+         // ? A stand-in is not an operation the pool ever assigned: draining it
+         //   must not hand a connection back a second time.
+         if (isset($this->abandoned[$Active])) {
+            continue;
+         }
+
          $this->completed[] = $Active;
       }
    }
@@ -558,9 +597,29 @@ class Redis extends Driver
       // ! Wire state — a partial frame and a preamble count belong to the dead
       //   socket, and the next connection must not inherit either.
       $this->Decoder->reset();
-      $this->Writing = null;
       $this->skip = 0;
-      $this->abandoned = [];
+      $this->abandoned = new WeakMap();
+
+      // ! So does the half-written command. A command joins the FIFO only once
+      //   its frame is whole, so this one is nowhere else — and nulling the
+      //   stream pointer without discarding its buffer left it holding the tail
+      //   of a frame. Its next advance flushed those bytes onto the NEW socket,
+      //   where Redis reads a truncated value as inline commands and runs them.
+      $Writer = $this->Writing;
+      $this->Writing = null;
+
+      if ($Writer !== null) {
+         $Writer->write = '';
+
+         if ($Writer->finished === false) {
+            $Writer->quarantine = true;
+            $Writer->fail($error);
+
+            if ($Writer !== $Operation) {
+               $this->completed[] = $Writer;
+            }
+         }
+      }
 
       $Pipeline = $this->pipeline;
       $this->pipeline = [];
@@ -588,6 +647,7 @@ class Redis extends Driver
       //   and advance()'s reconnect branch, the only code that clears the
       //   pipeline, is never reachable again.
       $this->Connection->disconnect();
+      $this->aborted = true;
 
       // :
       return $Operation;
