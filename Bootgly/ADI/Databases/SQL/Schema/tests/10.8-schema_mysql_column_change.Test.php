@@ -126,6 +126,62 @@ return new Test(
          description: 'Stating the identity keeps the change typed without a shaper'
       );
 
+      // # The three types that carry an identity all compile it
+      //   Naming only one of them leaves the other two free to be dropped from
+      //   the allowlist without a test noticing — and dropping one is a refusal
+      //   of something the server accepts, which is the direction that hurts.
+      $carriers = [];
+
+      foreach (['Integer' => Types::Integer, 'BigInteger' => Types::BigInteger, 'Boolean' => Types::Boolean] as $label => $Type) {
+         $carriers[$label] = $compile(static function (Blueprint $Table) use ($Type): void {
+            $Change = $Table->change('id', $Type)->generate();
+            $Change->nullable = false;
+         });
+      }
+
+      yield assert(
+         assertion: $carriers === [
+            'Integer'    => 'ALTER TABLE `t` MODIFY COLUMN `id` INT NOT NULL AUTO_INCREMENT',
+            'BigInteger' => 'ALTER TABLE `t` MODIFY COLUMN `id` BIGINT NOT NULL AUTO_INCREMENT',
+            'Boolean'    => 'ALTER TABLE `t` MODIFY COLUMN `id` BOOLEAN NOT NULL AUTO_INCREMENT',
+         ],
+         description: 'Every type that can carry an identity still compiles one'
+      );
+
+      // # …and an identity is never nullable
+      //   MySQL makes the column NOT NULL whatever the statement says, so
+      //   honouring a stated `true` would land the opposite of what was asked.
+      $nullableKey = $compile(static function (Blueprint $Table): void {
+         $Change = $Table->change('id', Types::BigInteger)->generate();
+         $Change->nullable = true;
+      });
+
+      yield assert(
+         assertion: str_contains($nullableKey, 'both AUTO_INCREMENT and nullable'),
+         description: 'A nullable identity is refused rather than silently made NOT NULL'
+      );
+
+      // # The literal-default refusal covers all three column kinds
+      //   `$texted` above exercises Text alone, and the JSON case reaches the
+      //   compiler through the expression path, which bypasses this gate.
+      $literals = [];
+
+      foreach (['Text' => Types::Text, 'Json' => Types::Json, 'JsonB' => Types::JsonB] as $label => $Type) {
+         $literals[$label] = str_contains(
+            $compile(static function (Blueprint $Table) use ($Type): void {
+               $Change = $Table->change('doc', $Type)->limit(1);
+               $Change->nullable = true;
+               $Change->default = 'hi';
+            }),
+            'take one only as an expression'
+         );
+      }
+
+      yield assert(
+         assertion: $literals === ['Text' => true, 'Json' => true, 'JsonB' => true],
+         description: 'Every column kind that refuses a literal default is covered'
+      );
+
       // # An identity contradicts a default, and most types cannot carry one
       //   Both are decidable from the change alone: MySQL answers 1067 to the
       //   first whichever order the clauses take, and 1063 to the second for

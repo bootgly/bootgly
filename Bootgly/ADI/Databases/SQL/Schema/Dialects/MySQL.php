@@ -161,6 +161,16 @@ class MySQL extends Dialect
                );
             }
 
+            // ? An identity is never nullable — MySQL makes the column NOT NULL
+            //   whatever the statement says, so honouring a stated `true` here
+            //   would mean landing the opposite of what was asked, silently.
+            if ($Change->generated && $Change->nullable === true) {
+               throw new InvalidArgumentException(
+                  "MySQL cannot make the column \"{$Change->name}\" both AUTO_INCREMENT and "
+                  . 'nullable: a generated column is always NOT NULL.'
+               );
+            }
+
             // ? And only the integer types carry one at all; everything else
             //   answers 1063. This is decidable from the type alone.
             if (
