@@ -592,6 +592,22 @@ class Redis extends Driver
    /**
     * Tear the session down after an unrecoverable transport failure.
     */
+   /**
+    * Sever this session, failing everything it still owes.
+    */
+   public function sever (DatabaseOperation $Operation, string $error): void
+   {
+      // ? Not this driver's own operation — the base contract still ends the
+      //   session, it just has no pipeline of its own to hand back.
+      if ($Operation instanceof Operation === false) {
+         parent::sever($Operation, $error);
+
+         return;
+      }
+
+      $this->abort($Operation, $error);
+   }
+
    private function abort (Operation $Operation, string $error): Operation
    {
       // ! Wire state — a partial frame and a preamble count belong to the dead

@@ -138,6 +138,8 @@ return new Test(
       $Commit = $Transaction->commit();
       $carried = $Commit->unlock;
 
+      $Severed = $Commit->Protocol;
+
       $Database->cancel($Commit);
 
       $gone = is_resource($Database->Connection->socket) === false;
@@ -159,19 +161,21 @@ return new Test(
          description: 'A withdrawn teardown drops the connection it could not end'
       );
 
-      // # …and the pool is usable again straight away
-      //   Holding the reservation instead left the slot lost for the worker's
-      //   life: `commit()` had already given up the transaction, so nothing
-      //   could ever free it, and the caller's own escape hatch — re-arming the
-      //   withdrawn teardown — cannot be driven through await() at all.
+      // # …and what comes back is a new session, not the old one
+      //   Asserting only that the pool serves again passes on a settle() that
+      //   drops nothing at all — the slot was never taken in that case. What
+      //   distinguishes the fix is that the driver behind the next operation is
+      //   not the one that was severed.
       $Serving = $Database->query('SELECT 1 AS v');
       $Database->advance($Serving);
 
       yield assert(
          assertion: $Serving->state->name !== 'Pending'
             && $Serving->error === null
-            && $Pool->created === 1,
-         description: 'The slot comes back with the connection that was dropped'
+            && $Pool->created === 1
+            && $Serving->Protocol !== null
+            && $Serving->Protocol !== $Severed,
+         description: 'The slot comes back on a session that is not the severed one'
       );
 
       fclose($server);
@@ -217,6 +221,51 @@ return new Test(
 
       fclose($peer);
       $Database->Connection->disconnect();
+
+      // # A sibling on the severed session is failed, not abandoned
+      //   Severing has to go through the driver: dropping the transport from
+      //   outside leaves whoever else was on that session unfinished and
+      //   errorless forever, and leaves the driver holding a pipeline for a
+      //   session that no longer exists.
+      [$Database, $server] = $open(1);
+      $Pool = $Database->Pool;
+
+      $Sibling = $Database->query('SELECT 1 AS v');
+      $Database->advance($Sibling);
+      fread($server, 8192);
+
+      // ! A teardown pinned to the same connection, composed but never written.
+      $Teardown = $Database->query('COMMIT');
+      $Teardown->unlock = true;
+      $Database->Pool->assign($Teardown);
+
+      $shared = $Teardown->Connection === $Sibling->Connection;
+
+      $Database->cancel($Teardown);
+
+      yield assert(
+         assertion: $shared
+            && $Sibling->finished
+            && $Sibling->error === 'Database transaction teardown never reached the server.',
+         description: 'Severing a session fails the siblings it was carrying'
+      );
+
+      fclose($server);
+
+      // # A retry keeps what decides who owns a connection
+      //   `retry()` re-arms an operation for another attempt, and the two flags
+      //   that say what it does to the pool's reservation are not part of the
+      //   attempt. Clearing either turns a teardown into an ordinary statement.
+      $Reserving = new SQL(['timeout' => 30.0, 'pool' => ['min' => 0, 'max' => 0]]);
+      $Flagged = $Reserving->query('COMMIT');
+      $Flagged->unlock = true;
+      $Flagged->lock = true;
+      $Flagged->retry();
+
+      yield assert(
+         assertion: $Flagged->unlock && $Flagged->lock,
+         description: 'Retrying keeps the reservation flags'
+      );
 
       // # …unless the connection under it is gone
       //   Then there is no session left to protect and no transaction left to

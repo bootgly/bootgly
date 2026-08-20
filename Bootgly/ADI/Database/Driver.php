@@ -76,6 +76,28 @@ abstract class Driver
    }
 
    /**
+    * Sever this session because the pool cannot leave it as it is.
+    *
+    * The pool reaches this when a statement it retired left the server in a
+    * state nobody can resolve — a transaction teardown that never arrived, so
+    * the transaction stays open with nobody left able to end it. The connection
+    * has to go, and only the driver knows what dies with it: pipelined siblings
+    * have to be failed and handed back through `drain()`, and whatever the
+    * session cached server-side must not outlive the socket. Dropping the
+    * transport from outside leaves a driver still holding a pipeline, a
+    * statement cache and a cancel key for a session that no longer exists —
+    * and the pool then builds a second driver onto the same connection.
+    */
+   public function sever (Operation $Operation, string $error): void
+   {
+      if ($Operation->finished === false) {
+         $Operation->fail($error);
+      }
+
+      $this->Connection->disconnect();
+   }
+
+   /**
     * Check whether this driver still has in-flight operations.
     */
    public function check (): bool

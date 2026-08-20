@@ -399,12 +399,27 @@ class Pool
     */
    private function settle (Operation $Operation, bool $sent): void
    {
-      $Connection = $Operation->Connection;
+      $Protocol = $Operation->Protocol;
 
       // ? Only a teardown ends a transaction. An ordinary statement withdrawn
       //   inside one must leave it alone — the caller can still commit it.
-      if ($sent === false && $Operation->unlock && $Connection !== null) {
-         $Connection->disconnect();
+      //   The `sent` half is defensive and, measured, changes nothing today:
+      //   the deadline route abandons first, and `abandon()` drops a session
+      //   with no reader left — which a reserved connection never has, since
+      //   the pool refuses to co-locate onto one. It stays because it states
+      //   the precondition the branch relies on, and a driver that keeps the
+      //   wire instead would need it.
+      if ($sent === false && $Operation->unlock && $Protocol !== null) {
+         // @ Through the driver, never around it. Dropping the transport from
+         //   here left the driver holding a pipeline, a statement cache and a
+         //   cancel key for a session that no longer existed — and the pool
+         //   then built a second driver onto the same connection, so two of
+         //   them drove one socket.
+         $Protocol->sever($Operation, 'Database transaction teardown never reached the server.');
+
+         // @ Severing fails every sibling on that session and hands them back;
+         //   their release belongs to the connection they were on.
+         $this->drain($Protocol, $Operation);
       }
 
       $this->release($Operation);

@@ -936,6 +936,22 @@ class MySQL extends Driver
     * buffer, pending closes) dies with the socket and the connection is
     * disconnected so the pool drops it instead of keeping it busy forever.
     */
+   /**
+    * Sever this session, failing everything it still owes.
+    */
+   public function sever (DatabaseOperation $Operation, string $error): void
+   {
+      // ? Not this driver's own operation — the base contract still ends the
+      //   session, it just has no pipeline of its own to hand back.
+      if ($Operation instanceof Operation === false) {
+         parent::sever($Operation, $error);
+
+         return;
+      }
+
+      $this->abort($Operation, $error);
+   }
+
    private function abort (Operation $Operation, string $error): Operation
    {
       // ! Session state — packets, statement ids and evictions die with the socket
