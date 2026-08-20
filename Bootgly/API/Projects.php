@@ -29,6 +29,7 @@ use function is_file;
 use function is_string;
 use function ksort;
 use function mkdir;
+use function rawurlencode;
 use function rename;
 use function rtrim;
 use function scandir;
@@ -606,10 +607,12 @@ abstract class Projects
    }
 
    /**
-    * Encode a canonical project path into a filesystem-safe identifier.
+    * Encode a canonical project path into an injective filesystem identifier.
     *
-    * Used for pid/lock filenames so nested leaves never collide:
-    * `Demo/HTTP_Server_CLI` becomes `Demo~HTTP_Server_CLI`.
+    * Names accepted by ProjectCommand retain their legacy identity, including
+    * `Demo/HTTP_Server_CLI` becoming `Demo~HTTP_Server_CLI`. Characters that
+    * can alias the slash marker, percent escapes, instance separator or glob
+    * syntax are encoded, so manually registered names cannot share state.
     *
     * @param string $path
     *
@@ -617,6 +620,10 @@ abstract class Projects
     */
    public static function encode (string $path): string
    {
-      return str_replace('/', '~', $path);
+      return strtr(rawurlencode($path), [
+         '%2F' => '~',
+         '~' => '%7E',
+         '.' => '%2E',
+      ]);
    }
 }

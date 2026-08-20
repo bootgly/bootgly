@@ -660,5 +660,9 @@ return new Suite(
       // # Cross-protocol inbound body budget (audit 2026-08-20 M6)
       // HTTP/1 and HTTP/2 unfinished bodies share one worker-wide byte cap.
       '102.03-cross_protocol_worker_body_budget',
+      // # Project state namespace collision (audit 2026-08-20 M2)
+      // Nested and literal-tilde project names must never resolve the same
+      // authenticated master state or deliver a cross-project control signal.
+      '102.06-project_state_namespace_collision',
    ],
 );
