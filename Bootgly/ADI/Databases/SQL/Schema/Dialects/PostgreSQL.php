@@ -12,6 +12,7 @@ namespace Bootgly\ADI\Databases\SQL\Schema\Dialects;
 
 
 use function array_pop;
+use function count;
 use function explode;
 use function implode;
 use function str_contains;
