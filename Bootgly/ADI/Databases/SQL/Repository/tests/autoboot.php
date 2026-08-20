@@ -32,5 +32,6 @@ return new Suite(
       '12.14-orm_insert_key_width',
       '12.15-orm_update_provenance',
       '12.16-orm_hydrate_key_width',
+      '12.17-orm_relation_empty_window',
    ]
 );

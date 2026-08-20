@@ -288,6 +288,18 @@ class Repository
       }
 
       $operations = $loads === [] || $this->Awaiting !== null ? [] : $this->load($entities, $loads, $Scope);
+
+      // @ Same for the deferred path: a relation load() skipped never reaches
+      //   $Mapped->loads, so the documented foreach over it iterates zero times
+      //   and leaves the property holding whatever it held before.
+      if ($this->Awaiting === null) {
+         foreach ($loads as $relation) {
+            if (isset($operations[$relation]) === false) {
+               $this->vacate($entities, $relation);
+            }
+         }
+      }
+
       $Mapped = new MappedResult($Result, $entities, $operations, $Pagination);
 
       if ($loads !== [] && $this->Awaiting !== null) {
@@ -563,7 +575,26 @@ class Repository
    }
 
    /**
-    * Assign relation entities onto their parent entities.
+    * Write the empty form of one relation onto its parent entities.
+    *
+    * @param array<int,object> $Entities
+    */
+   private function vacate (array $Entities, string $relation): void
+   {
+      $Relation = $this->Model->relations[$relation] ?? null;
+
+      if ($Relation === null) {
+         return;
+      }
+
+      // @ The per-entity null branch assign() already implements writes the
+      //   right empty form for each cardinality: null for BelongsTo/HasOne and
+      //   an empty array for the collections.
+      $this->assign($Entities, $relation, $Relation, []);
+   }
+
+   /**
+    * Assign grouped related entities onto their parents.
     *
     * @param array<int,object> $Entities
     * @param array<string,array<int,object>> $groups
@@ -789,7 +820,13 @@ class Repository
          $Operations = $this->load($Mapped->entities, [$relation], $Scope);
          $Operation = $Operations[$relation] ?? null;
 
+         // ? load() produces no operation when every parent's local key is null:
+         //   there is nothing to look up. The relation still has an answer, and
+         //   it is the empty one — abandoning it leaves whatever the property
+         //   held before, so a stale related entity survives this hydration.
          if ($Operation === null) {
+            $this->vacate($Mapped->entities, $relation);
+
             continue;
          }
 
