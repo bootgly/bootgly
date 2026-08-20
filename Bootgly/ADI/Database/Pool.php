@@ -332,9 +332,14 @@ class Pool
          //   since that session is suspect and the connection goes anyway, and
          //   wrong here. Releasing it lent an open transaction to the next
          //   caller, whose write then vanished with a session it never knew of.
-         if ($Operation->unlock === false) {
-            $this->release($Operation);
-         }
+         //   The intent died with the statement, so it is dropped rather than
+         //   the release skipped: skipping left the claim unsettled, and the
+         //   next advance() released it with the flag honoured after all —
+         //   while also skipping the branch that drops a connection whose
+         //   socket has gone.
+         $Operation->unlock = false;
+
+         $this->release($Operation);
 
          return $Operation;
       }

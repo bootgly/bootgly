@@ -133,12 +133,19 @@ return new Test(
 
       $held = $reserved($Pool);
       $Commit = $Transaction->commit();
+      $carried = $Commit->unlock;
 
       $Database->cancel($Commit);
 
+      // @ And the caller then collects what it withdrew, which is what the
+      //   manual tells it to do. Suppressing the release instead of the intent
+      //   left the claim unsettled here, so this very call released it with the
+      //   flag honoured after all — the fix deferred by exactly one advance.
+      $Database->advance($Commit);
+
       yield assert(
          assertion: $held === 1
-            && $Commit->unlock
+            && $carried
             && $Commit->finished
             && $reserved($Pool) === 1
             && $busy($Pool) === 1,
@@ -147,6 +154,37 @@ return new Test(
 
       fclose($server);
       $Database->Connection->disconnect();
+
+      // # …unless the connection under it is gone
+      //   Then there is no session left to protect and no transaction left to
+      //   end, so the reservation dies with the connection. Reaching this needs
+      //   the release to run at all, which is why the intent is dropped rather
+      //   than the release skipped.
+      [$Database, $server] = $open(1);
+      $Pool = $Database->Pool;
+
+      $Transaction = $Database->begin();
+      $Begin = $Transaction->Operation;
+
+      $Database->advance($Begin);
+      fread($server, 8192);
+      fwrite($server, $complete('BEGIN'));
+      $Database->advance($Begin);
+
+      $Commit = $Transaction->commit();
+
+      fclose($server);
+      $Database->Connection->disconnect();
+
+      $Database->cancel($Commit);
+
+      yield assert(
+         assertion: $Commit->finished
+            && $Pool->created === 0
+            && $busy($Pool) === 0
+            && $reserved($Pool) === 0,
+         description: 'A reservation whose connection is gone dies with it'
+      );
 
       // # A finished operation the pool still has parked leaves the queue
       //   `pending` carries live work only, and returning early for a finished
