@@ -67,6 +67,59 @@ class Config extends \Bootgly\ADI\Database\Config
       ];
 
       $this->complete($config['replicas'] ?? []);
+      $this->confine();
+   }
+
+   /**
+    * Confine every SQLite pool in this configuration to a single connection.
+    *
+    * The `sqlite3` extension opens one database per driver instance and the pool builds one
+    * driver per connection, so a second connection is a second database instead of a second
+    * route to the same one: `:memory:` splits into disjoint databases, and a file database
+    * refuses the write whose sibling holds the lock.
+    */
+   private function confine (): void
+   {
+      if ($this->driver === 'sqlite') {
+         $this->pool = $this->narrow($this->pool);
+      }
+
+      // @ A replica carries its own driver and its own pool.
+      foreach ($this->replicas as $id => $replica) {
+         $pool = $replica['pool'] ?? null;
+
+         if (($replica['driver'] ?? null) !== 'sqlite' || is_array($pool) === false) {
+            continue;
+         }
+
+         $min = $pool['min'] ?? self::DEFAULT_POOL_MIN;
+         $max = $pool['max'] ?? self::DEFAULT_POOL_MAX;
+
+         $this->replicas[$id]['pool'] = $this->narrow([
+            'min' => is_scalar($min) ? (int) $min : self::DEFAULT_POOL_MIN,
+            'max' => is_scalar($max) ? (int) $max : self::DEFAULT_POOL_MAX,
+         ]);
+      }
+   }
+
+   /**
+    * Narrow one pool configuration down to a single connection.
+    *
+    * @param array{min:int,max:int} $pool
+    * @return array{min:int,max:int}
+    */
+   private function narrow (array $pool): array
+   {
+      // ? A pool configured to open nothing keeps refusing — only sharing is corrected.
+      if ($pool['max'] > 1) {
+         $pool['max'] = 1;
+      }
+
+      if ($pool['min'] > $pool['max']) {
+         $pool['min'] = $pool['max'];
+      }
+
+      return $pool;
    }
 
    /**

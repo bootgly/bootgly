@@ -119,5 +119,6 @@ return new Suite(
       '4.13-pool-bookkeeping_invariant',
       '4.14-pool-cancel_preconditions',
       '7.30-sql_transaction_failed_begin',
+      '9.12-sqlite_pool_confinement',
    ]
 );
