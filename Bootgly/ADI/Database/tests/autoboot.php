@@ -116,5 +116,6 @@ return new Suite(
       '7.29-postgresql_parse_order',
       '8.9-kv_redis_teardown_isolation',
       '4.12-pool-settled_claim',
+      '4.13-pool-bookkeeping_invariant',
    ]
 );

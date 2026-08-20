@@ -280,6 +280,18 @@ class Pool
       $Protocol = $Operation->Protocol;
 
       if ($Protocol === null) {
+         // ? A parked operation has no protocol, and failing it while the pool
+         //   still holds it in `pending` leaves promote() free to shift it once
+         //   capacity frees. `pending` carries live operations only, which is
+         //   what wait() and assign() both maintain.
+         $this->forget($Operation);
+
+         // ! And it must never come back. `cancelled` is the flag fallback()
+         //   reads to decide whether an operation may be revived, so leaving it
+         //   false let a later await() retry the very statement the caller
+         //   cancelled — measured executing on the server.
+         $Operation->cancelled = true;
+
          return $Operation->fail('Database operation has no protocol to cancel.');
       }
 
@@ -427,7 +439,21 @@ class Pool
          return $this;
       }
 
-      $this->idle[$id] = $Connection;
+      // ? The pool dropped this connection and a driver has since reconnected
+      //   it on its own. It is not the pool's to hand out any more: admitting
+      //   it would serve work from a connection nothing counts against `max`,
+      //   and the cap would then describe fewer sockets than are open.
+      //
+      //   Refusing alone is not enough — nothing else would ever close it, and
+      //   the socket would outlive the pool's knowledge of it. The unusable
+      //   branch above disconnects for the same reason, so this does too.
+      if (isset($this->counted[$id])) {
+         $this->idle[$id] = $Connection;
+      }
+      else {
+         $Connection->disconnect();
+      }
+
       $this->promote();
 
       return $this;
