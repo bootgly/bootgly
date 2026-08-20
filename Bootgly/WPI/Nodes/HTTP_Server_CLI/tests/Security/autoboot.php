@@ -562,8 +562,9 @@ return new Suite(
       // duration, total, gauge and status-class accounting.
       '101.04-telemetry_deferred_inverse_completion',
       // # Exceptional Telemetry terminal paths (L4 remediation)
-      // Received-listener, Response-resource reset and Session-save throws must
-      // close core accounting without changing their throw/no-wire semantics.
+      // Received-listener and Response-resource reset throws preserve their
+      // cancellation semantics; reversible Session-save failure becomes one
+      // clean 500 while all three close core accounting exactly once.
       '101.05-telemetry_exceptional_lifecycle',
       // # Fresh selected Response Telemetry paths (L4 remediation)
       // A distinct handler Response(201) and Catcher Response(500) must each
@@ -652,5 +653,9 @@ return new Suite(
       // while defer() opens the generation on the clone — so an SSE mounted
       // under a non-default name silently refuses to open.
       '101.26-sse_mounted_resource_generation',
+      // # Session persistence failure containment (audit 2026-08-20 H1)
+      // Fixed-size Shared cache exhaustion must become one bounded request
+      // failure, never an uncaught worker exit and supervisor refork loop.
+      '102.02-session_cache_capacity_worker_crash',
    ],
 );

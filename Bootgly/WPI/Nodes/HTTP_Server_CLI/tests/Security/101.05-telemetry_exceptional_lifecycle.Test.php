@@ -28,19 +28,20 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
 
 /**
  * L4 exceptional-lifecycle regression — every admitted exchange must close its
- * core Telemetry accounting even when production Encoder_ preserves and
- * rethrows a failure outside the ordinary routing catcher.
+ * core Telemetry accounting when production Encoder_ either preserves an
+ * early failure or contains a reversible pre-wire Session failure.
  *
  * The positive control proves the real decoder, encoder, handler and 2xx
- * terminal path. Three isolated negative legs then preserve both the original
- * Throwable and the absence of response wire while checking the registry:
+ * terminal path. Three isolated negative legs then check the registry:
  *
  * 1. a Received listener ordered after Telemetry throws before Response reset;
  * 2. a persistent scoped Response resource throws from clean() during reset;
- * 3. a Session atomic handler throws while save() commits the selected response.
+ * 3. a Session atomic handler throws while save() commits the selected response;
+ *    Encoder_ must replace it with a fresh 500 before any wire is emitted.
  *
- * Each exception is cancellation-like for observability: total and duration
- * close, the in-flight gauge returns to zero, and no response status is invented.
+ * The first two exceptions are cancellation-like for observability. The
+ * reversible Session failure is a completed 5xx lifecycle: total and duration
+ * close, the in-flight gauge returns to zero, and exactly one 5xx is recorded.
  */
 $Probe = new class {
    public string $error = '';
@@ -83,7 +84,7 @@ $Snapshot = static function (Observability $Observability): array {
 };
 
 return new Test(
-   description: 'Exceptional production paths must terminalize Telemetry without changing throw or wire semantics',
+   description: 'Exceptional production paths must terminalize Telemetry with safe pre-wire Session containment',
    Separator: new Separator(line: true),
 
    request: static function () use ($Probe, $Snapshot): string {
@@ -487,7 +488,7 @@ return new Test(
 
          // @ Session::save() clears its retry flag in finally. Restore the real
          //   backend before dropping that Request, then run one neutral encode
-         //   to clear Encoder_'s private per-request roots after the throw.
+         //   to prove the contained failure left Encoder_ reusable.
          SessionHandler::$instance = $OldSessionHandler;
          $NeutralEvents = new Emitter;
          $Configure($NeutralEvents);
@@ -619,6 +620,16 @@ return new Test(
          'responses_4xx' => 0,
          'responses_5xx' => 0,
       ];
+      $expectedContained = [
+         'requests_total' => 1,
+         'in_flight' => 0,
+         'duration_count' => 1,
+         'responses_1xx' => 0,
+         'responses_2xx' => 0,
+         'responses_3xx' => 0,
+         'responses_4xx' => 0,
+         'responses_5xx' => 1,
+      ];
 
       $received = $Probe->received;
       if (
@@ -659,42 +670,49 @@ return new Test(
       }
 
       $session = $Probe->session;
+      $sessionWire = $session['wire'] ?? null;
       if (
          ($session['handlers'] ?? null) !== 1
          || ($session['fetches'] ?? null) !== 1
          || ($session['commits'] ?? null) !== 1
-         || ($session['wire'] ?? null) !== null
-         || ($session['throwable_class'] ?? null) !== RuntimeException::class
-         || ($session['throwable_message'] ?? null) !== 'L4-SESSION-COMMIT-THROW'
+         || is_string($sessionWire) === false
+         || str_contains($sessionWire, 'HTTP/1.1 500 Internal Server Error') === false
+         || str_contains($sessionWire, 'L4-SESSION-SELECTED-NO-WIRE')
+         || stripos($sessionWire, "\r\nSet-Cookie:") !== false
+         || ($session['throwable_class'] ?? null) !== null
+         || ($session['throwable_message'] ?? null) !== null
       ) {
-         Vars::$labels = ['L4 Session save/commit throw controls'];
+         Vars::$labels = ['L4 Session save/commit containment controls'];
          dump(json_encode($session));
 
-         return 'L4 exceptional fixture did not preserve the Session commit throw/no-wire path.';
+         return 'L4 exceptional fixture did not contain Session commit failure as a clean 500.';
       }
 
       $accountingFailures = [];
       foreach ([
          'posterior Received listener' => $received['metrics'] ?? null,
          'Response resource clean' => $resource['metrics'] ?? null,
-         'Session commit' => $session['metrics'] ?? null,
       ] as $path => $metrics) {
          if ($metrics !== $expectedExceptional) {
             $accountingFailures[$path] = $metrics;
          }
       }
+      if (($session['metrics'] ?? null) !== $expectedContained) {
+         $accountingFailures['Session commit'] = $session['metrics'] ?? null;
+      }
 
       if ($accountingFailures !== []) {
          Vars::$labels = ['L4 exceptional Telemetry terminal accounting'];
          dump(json_encode([
-            'expected' => $expectedExceptional,
+            'expected exceptional' => $expectedExceptional,
+            'expected contained' => $expectedContained,
             'failures' => $accountingFailures,
             'probe' => $Probe,
          ]));
 
          return 'L4 regression: exceptional Encoder_ paths leaked or duplicated core '
             . 'Telemetry accounting. Every admitted throw must close total/duration, '
-            . 'balance in-flight and invent no status. Evidence: '
+            . 'balance in-flight, and count only the contained Session 500. Evidence: '
             . json_encode($accountingFailures);
       }
 

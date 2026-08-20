@@ -730,11 +730,54 @@ class Encoder_ extends Encoders
 
                return '';
             }
-            // ! Persistence is outside the routing catcher and can fail after
-            //   defer() transferred the token to a suspended clone. Close the
-            //   local admitted exchange; its terminal observer drops that job.
-            $Exchange?->finish(null);
-            throw $Throwable;
+
+            // ! No wire has been selected yet, so the failure remains
+            //   reversible. Never let a backend exception cross the transport
+            //   reactor: discard every admitted/cache snapshot and serialize a
+            //   fresh error response instead of the handler response (whose
+            //   Set-Cookie can name a Session that was never persisted).
+            self::$wire = null;
+            self::$Admitted = null;
+            self::$admittedBody = '';
+            self::$admittedFields = [];
+            self::$admittedPrepared = [];
+            self::$admittedQueued = [];
+            self::$admittedMasked = [];
+            self::$admittedType = '';
+            self::$admittedPreset = [];
+            self::$admittedCode = 200;
+            self::$admittedHints = '';
+            self::$admittedStream = false;
+            self::$admittedChunked = false;
+            self::$admittedEncoded = false;
+            self::$adopted = false;
+            self::$handled = [];
+            self::$mutated = false;
+            self::$observed = false;
+            self::$mediated = false;
+
+            // ! Break the Server::$Response reference exactly as the routing
+            //   catcher does. The persistent worker Response is reset on the
+            //   next request; only this fresh, resource-less 500 reaches wire.
+            try {
+               $Errored = Catcher::respond($Request, Server::$Response, $Throwable);
+            }
+            catch (Throwable) {
+               $Errored = new Response(code: 500, body: '');
+            }
+
+            // ? A deferred job may be admitted but still have emitted no
+            //   wire. Terminalize its exchange with this 500: the registered
+            //   observer cancels the pending generation so it cannot later
+            //   emit the stale success response or Session cookie.
+            $Cancellation = $Exchange === null ? null : Cancellation::fetch($Exchange);
+            if ($Cancellation !== null) {
+               $Exchange->finish($Errored);
+               $Exchange = null;
+            }
+            unset($Response);
+            $Response = $Errored;
+            $Injected = $Errored;
          }
       }
 

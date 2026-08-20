@@ -355,8 +355,35 @@ class Encoder_Testing extends Encoders
 
                return '';
             }
-            $Exchange?->finish(null);
-            throw $Throwable;
+
+            // ! Mirror production: before wire selection a Session backend
+            //   failure is reversible. Drop every replay/admission snapshot
+            //   and encode a fresh error without the unpersisted Session's
+            //   Set-Cookie instead of escaping into the worker reactor.
+            $cacheWire = null;
+            $CachedResponse = null;
+            $admitted = [];
+            $adopted = false;
+            $handled = [];
+            $mutated = false;
+            $observed = false;
+            $mediated = false;
+
+            try {
+               $Errored = Catcher::respond($Request, Server::$Response, $Throwable);
+            }
+            catch (Throwable) {
+               $Errored = new Response(code: 500, body: '');
+            }
+
+            $Cancellation = $Exchange === null ? null : Cancellation::fetch($Exchange);
+            if ($Cancellation !== null) {
+               $Exchange->finish($Errored);
+               $Exchange = null;
+            }
+            unset($Response);
+            $Response = $Errored;
+            $Injected = $Errored;
          }
       }
 

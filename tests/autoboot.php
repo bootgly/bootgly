@@ -207,5 +207,11 @@ return new Suites(
       // # ACI/Events — the SIGALRM timer wheel behind every supervisor
       //   (appended last to keep every suite index above stable)
       'Bootgly/ACI/Events/',
+      // # HTTP_Server_CLI Security — explicit isolated-audit opt-in only. Some
+      //   cases exercise signals, process death and private SysV IPC and are not
+      //   portable to ordinary CI or a host IPC namespace.
+      ...(getenv('BOOTGLY_SECURITY_AUDIT') === '1'
+         ? ['Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/Security/']
+         : []),
    ]
 );
