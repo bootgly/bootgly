@@ -152,6 +152,32 @@ return new Test(
          description: 'A withdrawn transaction teardown keeps its reservation'
       );
 
+      // # …and the intent survives, because one route still ends that transaction
+      //   The caller can re-arm the teardown it withdrew — `retry()` says so in
+      //   as many words — and that COMMIT does reach the server. Dropping the
+      //   flag for good instead of suppressing it for one release left the slot
+      //   reserved for a transaction that had closed, measured on two engines.
+      $rearmed = $Commit->unlock;
+
+      $Commit->retry($Database->Connection);
+
+      // @ One turn to re-enter the queue, one to reach the wire.
+      $Database->advance($Commit);
+      $Database->advance($Commit);
+
+      fread($server, 8192);
+      fwrite($server, $complete('COMMIT'));
+      $Database->advance($Commit);
+
+      yield assert(
+         assertion: $rearmed
+            && $Commit->finished
+            && $Commit->error === null
+            && $reserved($Pool) === 0
+            && $busy($Pool) === 0,
+         description: 'A re-armed teardown that reaches the server frees the reservation'
+      );
+
       fclose($server);
       $Database->Connection->disconnect();
 
