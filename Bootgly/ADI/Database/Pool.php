@@ -385,36 +385,34 @@ class Pool
    }
 
    /**
-    * Drain protocol-completed operations and release failures first.
-    */
-   /**
-    * Settle one operation's claim, honouring only a teardown that was sent.
+    * Settle one operation's claim, ending a transaction nobody else can.
     *
-    * `release()` applies an `unlock` whatever the outcome, which is right for a
-    * teardown the wire refused — that session is suspect and the connection is
-    * dropped anyway. A teardown the pool retires before it reaches the server
-    * ended nothing: the transaction is still open and still holds its locks, so
-    * its reservation stands, or the next caller inherits an open transaction and
-    * its writes vanish with a session it never knew of. The intent is suppressed
-    * for this release only, so whoever ends that transaction later still frees
-    * the connection.
+    * A teardown the pool retires before it reaches the server ended nothing:
+    * the transaction is still open on that connection and still holds its
+    * locks, and nobody is left to close it — `Transaction` gave up its depth
+    * and its connection when it composed the statement. Releasing the
+    * reservation hands that open transaction to the next caller, whose writes
+    * then vanish with a session it never knew of; keeping it strands the slot
+    * for the worker's life and leaves the session open anyway. Dropping the
+    * connection is the one outcome that matches what the caller was told: the
+    * server rolls the transaction back, and the slot comes back with it.
     */
    private function settle (Operation $Operation, bool $sent): void
    {
-      if ($sent) {
-         $this->release($Operation);
+      $Connection = $Operation->Connection;
 
-         return;
+      // ? Only a teardown ends a transaction. An ordinary statement withdrawn
+      //   inside one must leave it alone — the caller can still commit it.
+      if ($sent === false && $Operation->unlock && $Connection !== null) {
+         $Connection->disconnect();
       }
 
-      $unlock = $Operation->unlock;
-      $Operation->unlock = false;
-
       $this->release($Operation);
-
-      $Operation->unlock = $unlock;
    }
 
+   /**
+    * Drain protocol-completed operations and release failures first.
+    */
    private function drain (Driver $Protocol, Operation $Operation): bool
    {
       $Completed = $Protocol->drain();

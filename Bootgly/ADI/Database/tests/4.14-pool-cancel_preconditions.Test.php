@@ -112,14 +112,17 @@ return new Test(
       fclose($server);
       $Database->Connection->disconnect();
 
-      // # …and a withdrawn teardown does not hand the transaction away
+      // # …and a withdrawn teardown ends the transaction nobody else can
       //   `commit()` and `rollback()` carry `unlock`, and release() honours it
       //   whatever the outcome — right for a teardown the wire refused, since
-      //   that session is suspect and the connection goes anyway. A teardown
-      //   that never reached the server ended nothing: the transaction is still
-      //   open and still holds its locks, so the reservation has to stand.
-      //   Releasing it lent an open transaction to the next caller, whose write
-      //   then vanished with a session it never knew existed.
+      //   that session is suspect and the connection goes anyway. One that never
+      //   reached the server ended nothing, and by then nobody is left to end
+      //   it: `Transaction` gave up its depth and its connection when it
+      //   composed the statement. Releasing the reservation lent an open
+      //   transaction to the next caller, whose write vanished with a session it
+      //   never knew existed; keeping it stranded the slot for good and left
+      //   that session open anyway. Dropping the connection rolls the
+      //   transaction back server-side and gives the slot back.
       [$Database, $server] = $open(1);
       $Pool = $Database->Pool;
 
@@ -137,45 +140,38 @@ return new Test(
 
       $Database->cancel($Commit);
 
+      $gone = is_resource($Database->Connection->socket) === false;
+
       // @ And the caller then collects what it withdrew, which is what the
-      //   manual tells it to do. Suppressing the release instead of the intent
-      //   left the claim unsettled here, so this very call released it with the
-      //   flag honoured after all — the fix deferred by exactly one advance.
+      //   manual tells it to do. Settling it must be idempotent: an earlier
+      //   shape left the claim unrecorded here, so this very call released the
+      //   connection a second time.
       $Database->advance($Commit);
 
       yield assert(
          assertion: $held === 1
             && $carried
+            && $gone
             && $Commit->finished
-            && $reserved($Pool) === 1
-            && $busy($Pool) === 1,
-         description: 'A withdrawn transaction teardown keeps its reservation'
+            && $reserved($Pool) === 0
+            && $busy($Pool) === 0
+            && $Pool->created === 0,
+         description: 'A withdrawn teardown drops the connection it could not end'
       );
 
-      // # …and the intent survives, because one route still ends that transaction
-      //   The caller can re-arm the teardown it withdrew — `retry()` says so in
-      //   as many words — and that COMMIT does reach the server. Dropping the
-      //   flag for good instead of suppressing it for one release left the slot
-      //   reserved for a transaction that had closed, measured on two engines.
-      $rearmed = $Commit->unlock;
-
-      $Commit->retry($Database->Connection);
-
-      // @ One turn to re-enter the queue, one to reach the wire.
-      $Database->advance($Commit);
-      $Database->advance($Commit);
-
-      fread($server, 8192);
-      fwrite($server, $complete('COMMIT'));
-      $Database->advance($Commit);
+      // # …and the pool is usable again straight away
+      //   Holding the reservation instead left the slot lost for the worker's
+      //   life: `commit()` had already given up the transaction, so nothing
+      //   could ever free it, and the caller's own escape hatch — re-arming the
+      //   withdrawn teardown — cannot be driven through await() at all.
+      $Serving = $Database->query('SELECT 1 AS v');
+      $Database->advance($Serving);
 
       yield assert(
-         assertion: $rearmed
-            && $Commit->finished
-            && $Commit->error === null
-            && $reserved($Pool) === 0
-            && $busy($Pool) === 0,
-         description: 'A re-armed teardown that reaches the server frees the reservation'
+         assertion: $Serving->state->name !== 'Pending'
+            && $Serving->error === null
+            && $Pool->created === 1,
+         description: 'The slot comes back with the connection that was dropped'
       );
 
       fclose($server);
@@ -183,9 +179,10 @@ return new Test(
 
       // # …and the deadline reaches the same conclusion as the cancel
       //   A teardown can also be retired by its own deadline, and that route
-      //   settles the claim through the same call. It ended nothing either, so
-      //   it must not hand the open transaction to whoever asks next — which is
-      //   what it did while the rule lived only in cancel().
+      //   settles the claim through the same call. It ended nothing either, and
+      //   while the rule lived only in cancel() this route handed the open
+      //   transaction to whoever asked next — reached by any application that
+      //   merely sets a timeout, without calling cancel() at all.
       [$client, $peer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
       stream_set_blocking($client, false);
       stream_set_blocking($peer, false);
@@ -212,9 +209,10 @@ return new Test(
          assertion: $opened
             && $Expired->finished
             && $Expired->unlock
-            && $reserved($Pool) === 1
-            && $busy($Pool) === 1,
-         description: 'A teardown retired by its deadline keeps its reservation too'
+            && $reserved($Pool) === 0
+            && $busy($Pool) === 0
+            && $Pool->created === 0,
+         description: 'A teardown retired by its deadline is ended the same way'
       );
 
       fclose($peer);
