@@ -1084,8 +1084,34 @@ class Repository
 
       $Builder = $this->build()->update();
 
+      // ! Columns a hydration carried for this entity. Null means this
+      //   repository never hydrated it — the caller built it, so every mapped
+      //   column is theirs to write and the whole map applies.
+      $carried = $this->Identity->carried($Entity);
+      $written = 0;
+
       foreach ($this->Model->updates as $column => $property) {
-         $Builder->set(new Identifier($column), $this->Model->read($Entity, $property));
+         // ? The row this entity came from omitted the column, so the property
+         //   holds a class default nobody chose. Writing it back replaces stored
+         //   data with a plausible-looking value and reports success.
+         if ($carried !== null && isset($carried[$column]) === false) {
+            continue;
+         }
+
+         $value = $this->Model->read($Entity, $property);
+
+         // ? Same guard insert() already applies: a generated column with no
+         //   value is the database's to fill, not ours to null out.
+         if ($value === null && $this->Model->definitions[$column]->generated) {
+            continue;
+         }
+
+         $Builder->set(new Identifier($column), $value);
+         $written++;
+      }
+
+      if ($written === 0) {
+         throw new RuntimeException('ORM update has no column carrying a value to write.');
       }
 
       $Builder->filter(new Identifier($this->Model->key), Operators::Equal, $id);

@@ -69,6 +69,11 @@ class Hydrator
 
          $Entity ??= $this->Model->create();
 
+         // ! Only the columns this row actually carried. A property left at its
+         //   class default reads exactly like one the caller chose, so an UPDATE
+         //   built from the whole map writes those defaults over stored data.
+         $carried = [];
+
          foreach ($this->Model->columns as $column => $property) {
             // ? Required columns.
             if (array_key_exists($column, $row) === false) {
@@ -81,7 +86,10 @@ class Hydrator
 
             $value = $this->cast($row[$column], $this->Model->Reflections[$property]);
             $this->Model->write($Entity, $property, $value);
+            $carried[$column] = true;
          }
+
+         $this->Identity->record($Entity, $carried);
 
          // @ Identity store.
          if ($key !== null) {
