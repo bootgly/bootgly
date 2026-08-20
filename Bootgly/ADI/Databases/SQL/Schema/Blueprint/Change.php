@@ -46,6 +46,7 @@ class Change
    }
    public private(set) bool $defaulted = false;
    public private(set) bool $dropped = false;
+   public private(set) bool $generated = false;
    public private(set) bool $typed = true;
    public null|bool|float|int|string|Stringable|Defaults $default {
       get => $this->Default;
@@ -120,6 +121,24 @@ class Change
    {
       $this->precision = $precision;
       $this->scale = $scale;
+      $this->configured = true;
+      $this->typed = true;
+
+      return $this;
+   }
+
+   /**
+    * Keep generating values with the dialect's identity mechanism.
+    *
+    * A dialect that restates a whole column definition to change its type — as
+    * MySQL's `MODIFY COLUMN` does — drops the identity unless it is written
+    * again, and the next insert has nothing to supply the key. Stating it here
+    * is also stating that this is a type change, so no shaper is needed to say
+    * so.
+    */
+   public function generate (): self
+   {
+      $this->generated = true;
       $this->configured = true;
       $this->typed = true;
 

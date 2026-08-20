@@ -3,6 +3,7 @@
 
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\ADI\Databases\SQL;
+use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Defaults;
 use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Types;
 use Bootgly\ADI\Databases\SQL\Schema\Blueprint;
 
@@ -38,8 +39,9 @@ return new Test(
 
       yield assert(
          assertion: str_contains($refused, 'MySQL cannot retype the column "age" on its own')
-            && str_contains($refused, 'limit() or size()'),
-         description: 'A bare type change is refused, naming the shape that works'
+            && str_contains($refused, 'generate()')
+            && str_contains($refused, 'COMMENT or COLLATE'),
+         description: 'A bare type change is refused, naming what must be restated'
       );
 
       // # Shaped and stated, it compiles the whole definition
@@ -82,6 +84,72 @@ return new Test(
       yield assert(
          assertion: str_contains($alone, 'lacks capability: AlterColumnNullability'),
          description: 'Nullability without a shaped type is refused by the capability'
+      );
+
+      // # An identity key keeps generating
+      //   `MODIFY` drops AUTO_INCREMENT with everything else it does not
+      //   restate, and the next insert then has nothing to supply the key —
+      //   `1364: Field 'id' doesn't have a default value`. Nothing in the
+      //   blueprint could say it before, so the shape this dialect recommends
+      //   destroyed exactly what the refusal exists to protect.
+      $identity = $compile(static function (Blueprint $Table): void {
+         $Change = $Table->change('id', Types::BigInteger)->generate();
+         $Change->nullable = false;
+      });
+
+      yield assert(
+         assertion: $identity === 'ALTER TABLE `t` MODIFY COLUMN `id` BIGINT NOT NULL AUTO_INCREMENT',
+         description: 'A retyped identity column keeps generating'
+      );
+
+      // # …and stating it is enough to mean a type change
+      //   Otherwise the caller has to call a shaper whose argument this type
+      //   discards, purely to keep the change typed.
+      $unshaped = $compile(static function (Blueprint $Table): void {
+         $Change = $Table->change('id', Types::BigInteger);
+         $Change->generate();
+         $Change->nullable = false;
+      });
+
+      yield assert(
+         assertion: $unshaped === $identity,
+         description: 'Stating the identity keeps the change typed without a shaper'
+      );
+
+      // # Dropping a default alongside a type change rides in the same action
+      //   A `MODIFY` that carries no DEFAULT clause IS the drop, so emitting
+      //   `ALTER COLUMN … DROP DEFAULT` beside it targets a column the MODIFY
+      //   has already redefined — which MySQL rejects with 1054.
+      $dropped = $compile(static function (Blueprint $Table): void {
+         $Change = $Table->change('n', Types::Integer)->limit(1);
+         $Change->nullable = false;
+         $Change->default = Defaults::None;
+      });
+
+      yield assert(
+         assertion: $dropped === 'ALTER TABLE `t` MODIFY COLUMN `n` INT NOT NULL',
+         description: 'A type change that also drops the default emits one action'
+      );
+
+      // # What MySQL forbids outright is refused before it reaches the server
+      //   Opening the typed branch made these reachable for the first time: the
+      //   unconditional capability guard used to refuse every typed-and-defaulted
+      //   shape, so neither could be composed at all.
+      $texted = $compile(static function (Blueprint $Table): void {
+         $Change = $Table->change('bio', Types::Text)->limit(1);
+         $Change->nullable = false;
+         $Change->default = 'hi';
+      });
+      $contradicted = $compile(static function (Blueprint $Table): void {
+         $Change = $Table->change('age', Types::BigInteger)->limit(1);
+         $Change->nullable = false;
+         $Change->default = null;
+      });
+
+      yield assert(
+         assertion: str_contains($texted, 'BLOB, TEXT and JSON columns take none')
+            && str_contains($contradicted, 'NOT NULL while it defaults to NULL'),
+         description: 'Defaults MySQL rejects are refused rather than compiled'
       );
 
       // # A default change on its own is untouched

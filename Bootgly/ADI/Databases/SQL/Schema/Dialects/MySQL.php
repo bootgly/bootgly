@@ -124,9 +124,37 @@ class MySQL extends Dialect
             if ($Change->nullable === null) {
                throw new InvalidArgumentException(
                   "MySQL cannot retype the column \"{$Change->name}\" on its own: "
-                  . 'MODIFY COLUMN restates the whole definition. Shape the type with '
-                  . 'limit() or size(), then state nullability and default on the change; '
-                  . 'a COMMENT or COLLATE the column carries needs a raw statement.'
+                  . 'MODIFY COLUMN restates the whole definition, so state on the change '
+                  . 'everything the column must keep: nullability, default, and generate() '
+                  . 'for an AUTO_INCREMENT key. A COMMENT or COLLATE is not part of a '
+                  . 'blueprint and needs a raw statement.'
+               );
+            }
+
+            // ? MySQL forbids a literal DEFAULT on these, whatever the rest of
+            //   the definition says. Emitting one compiles here and dies on the
+            //   server with 1101 — the unconditional guard used to make the
+            //   pairing unreachable, so opening it means gating it.
+            if (
+               $Change->defaulted
+               && (
+                  $Change->Type === Types::Text
+                  || $Change->Type === Types::Json
+                  || $Change->Type === Types::JsonB
+               )
+            ) {
+               throw new InvalidArgumentException(
+                  "MySQL cannot give the column \"{$Change->name}\" a default: "
+                  . 'BLOB, TEXT and JSON columns take none.'
+               );
+            }
+
+            // ? And a column cannot be NOT NULL and default to NULL at once —
+            //   the server answers 1067 rather than picking one.
+            if ($Change->nullable === false && $Change->defaulted && $Change->default === null) {
+               throw new InvalidArgumentException(
+                  "MySQL cannot make the column \"{$Change->name}\" NOT NULL while it "
+                  . 'defaults to NULL.'
                );
             }
 
@@ -135,6 +163,10 @@ class MySQL extends Dialect
 
             if ($Change->nullable === false) {
                $definition .= ' NOT NULL';
+            }
+
+            if ($Change->generated) {
+               $definition .= ' AUTO_INCREMENT';
             }
 
             // @ Carried by the MODIFY itself: a separate ALTER COLUMN beside it
