@@ -81,17 +81,17 @@ return new Test(
 
          return $broken;
       };
-      /**
-       * Opens a pooled database over a socketpair, with the peer alongside.
-       *
-       * @return array{SQL, resource}
-       */
       // ! A complete backend answer: CommandComplete then ReadyForQuery.
       $complete = static function (string $command): string {
          $command = "{$command}\0";
 
          return 'C' . pack('N', strlen($command) + 4) . $command . 'Z' . pack('N', 5) . 'I';
       };
+      /**
+       * Opens a pooled database over a socketpair, with the peer alongside.
+       *
+       * @return array{SQL, resource}
+       */
       $open = static function (int $max): array {
          [$client, $server] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
          stream_set_blocking($client, false);
@@ -122,19 +122,68 @@ return new Test(
       );
 
       // # …and can never come back
-      //   Leaving the queue is only half of it. `cancelled` is the flag
-      //   fallback() reads to decide whether an operation may be revived, so a
-      //   refusal that does not set it lets a later advance() retry the very
-      //   statement the caller cancelled — measured executing on the server.
+      //   Leaving the queue is only half of it. A refused cancel reaches no
+      //   wire, so `cancelled` stays false — which is what Pool::cancel() reads
+      //   to decide it must still reconcile the driver. `revoked` answers the
+      //   other question fallback() actually needs: the caller withdrew this
+      //   work, so a later advance() must never retry it.
       $Database->advance($Cancelled);
 
       yield assert(
-         assertion: $Cancelled->cancelled
+         assertion: $Cancelled->revoked
+            && $Cancelled->cancelled === false
             && $Cancelled->fallback === false
             && $Cancelled->finished
             && $Cancelled->error === 'Database operation has no protocol to cancel.',
          description: 'A refused cancel is never revived by a later advance'
       );
+
+      // # The same rule through the driver's door
+      //   Every driver refusal leaves `cancelled` false too — and two of them
+      //   never override the refusal at all, so for those drivers every cancel
+      //   takes this path. The withdrawal is the caller's, not the wire's, so
+      //   it is recorded whatever the driver answered.
+      [$Database, $server] = $open(1);
+
+      $Flight = $Database->query('SELECT 1 AS v');
+      $Database->advance($Flight);
+      fread($server, 8192);
+
+      // ! No handshake ever completed on this socket, so the driver has no
+      //   BackendKeyData to cancel with and must refuse.
+      $Refused = $Database->cancel($Flight);
+
+      yield assert(
+         assertion: $Refused->revoked
+            && $Refused->cancelled === false
+            && $Refused->error === 'PostgreSQL cancellation requires BackendKeyData.',
+         description: 'A cancel the driver refuses still records the withdrawal'
+      );
+
+      // ! A read routed to a replica carries a FallbackPool, which is the only
+      //   state in which fallback() would revive anything at all.
+      $Replica = new SQL(['timeout' => 30.0, 'pool' => ['min' => 0, 'max' => 0]]);
+      $Refused->FallbackPool = $Replica->Pool;
+
+      $Database->advance($Refused);
+
+      yield assert(
+         assertion: $Refused->fallback === false && $Refused->state->name === 'Failed',
+         description: 'A withdrawn operation is not re-dispatched to its fallback pool'
+      );
+
+      // ? And the withdrawal outlives a retry. Everything else about an
+      //   operation is re-armed for another attempt; the caller's decision to
+      //   drop it is not something another attempt can undo.
+      $Refused->retry();
+
+      yield assert(
+         assertion: $Refused->revoked && $Refused->cancelled === false,
+         description: 'Retrying an operation does not undo its withdrawal'
+      );
+
+      fclose($server);
+      $Database->Connection->disconnect();
 
       // # I2 — a connection the pool dropped is not re-admitted
       //   The pool drops a connection whose socket died, and a driver that still
