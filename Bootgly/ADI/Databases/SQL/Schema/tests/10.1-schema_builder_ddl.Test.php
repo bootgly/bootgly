@@ -6,6 +6,7 @@ namespace Bootgly\ADI\Databases\SQL\Schema\Tests\DDL;
 use function assert;
 use function ini_set;
 use function preg_match;
+use function str_contains;
 use function strlen;
 use InvalidArgumentException;
 
@@ -149,12 +150,47 @@ return new Test(
          $Active->nullable = true;
          $Active->default = false;
          $Table->change(Columns::Created, Types::Timestamp)->default = Defaults::None;
-         $Table->rename('bio', 'profile');
       });
 
       yield assert(
-         assertion: $Query->SQL === 'ALTER TABLE "users" ALTER COLUMN "email" TYPE VARCHAR(320), ALTER COLUMN "email" SET NOT NULL, ALTER COLUMN "legacy_id" TYPE BIGINT USING legacy_id::bigint, ALTER COLUMN "active" DROP NOT NULL, ALTER COLUMN "active" SET DEFAULT FALSE, ALTER COLUMN "created_at" DROP DEFAULT, RENAME COLUMN "bio" TO "profile"',
-         description: 'Schema compiles ALTER COLUMN type rename nullability and default actions'
+         assertion: $Query->SQL === 'ALTER TABLE "users" ALTER COLUMN "email" TYPE VARCHAR(320), ALTER COLUMN "email" SET NOT NULL, ALTER COLUMN "legacy_id" TYPE BIGINT USING legacy_id::bigint, ALTER COLUMN "active" DROP NOT NULL, ALTER COLUMN "active" SET DEFAULT FALSE, ALTER COLUMN "created_at" DROP DEFAULT',
+         description: 'Schema compiles ALTER COLUMN type nullability and default actions'
+      );
+
+      // ? The rename used to ride in that list, and the expected string above
+      //   was the proof: fed to a server it answers `syntax error at or near
+      //   "RENAME"`. PostgreSQL's grammar has two disjoint ALTER TABLE forms,
+      //   and a rename belongs to the separable one in no version — so it gets
+      //   an alter() of its own, and asking for both is refused.
+      $Renamed = $Schema->alter(Tables::Users, function (Blueprint $Table): void {
+         $Table->rename('bio', 'profile');
+      });
+      $refuse = static function (callable $shape) use ($Schema): null|string {
+         try {
+            $Schema->alter(Tables::Users, $shape);
+
+            return null;
+         }
+         catch (InvalidArgumentException $Refused) {
+            return $Refused->getMessage();
+         }
+      };
+      // ! Two renames chained answer `syntax error at or near ","` just as a
+      //   rename beside any other action does: the form takes exactly one.
+      $mixed = $refuse(static function (Blueprint $Table): void {
+         $Table->rename('bio', 'profile');
+         $Table->remove('legacy');
+      });
+      $paired = $refuse(static function (Blueprint $Table): void {
+         $Table->rename('bio', 'profile');
+         $Table->rename('legacy', 'archive');
+      });
+
+      yield assert(
+         assertion: $Renamed->SQL === 'ALTER TABLE "users" RENAME COLUMN "bio" TO "profile"'
+            && $mixed !== null && str_contains($mixed, 'an ALTER TABLE of its own')
+            && $paired !== null && str_contains($paired, 'an ALTER TABLE of its own'),
+         description: 'Schema compiles one rename alone and refuses any other action beside it'
       );
 
       $Query = $Schema->alter('profiles', function (Blueprint $Table): void {

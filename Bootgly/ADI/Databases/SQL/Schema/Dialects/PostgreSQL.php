@@ -21,6 +21,7 @@ use Stringable;
 
 use Bootgly\ADI\Databases\SQL\Builder\Expression;
 use Bootgly\ADI\Databases\SQL\Builder\Query;
+use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Capabilities;
 use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Types;
 use Bootgly\ADI\Databases\SQL\Schema\Blueprint;
 use Bootgly\ADI\Databases\SQL\Schema\Blueprint\Change;
@@ -114,10 +115,14 @@ class PostgreSQL extends Dialect
          }
       }
 
+      // ! Kept apart from the action list on purpose — see the refusal below.
+      $renames = [];
+
       foreach ($Blueprint->renames as $Rename) {
+         $this->guard(Capabilities::RenameColumn);
          $from = $this->quote($Rename->from);
          $to = $this->quote($Rename->to);
-         $actions[] = "RENAME COLUMN {$from} TO {$to}";
+         $renames[] = "RENAME COLUMN {$from} TO {$to}";
       }
 
       foreach ($Blueprint->drops as $drop) {
@@ -129,6 +134,21 @@ class PostgreSQL extends Dialect
          $reference = $this->reference($Reference, true);
          $actions[] = "ADD {$reference}";
       }
+
+      // ? PostgreSQL's ALTER TABLE has two disjoint forms: a comma-separated
+      //   list of actions, and one rename. A rename belongs to the separable
+      //   list in no version, so chaining it with anything — including a second
+      //   rename — is a syntax error the server answers with, and this compiler
+      //   emits one statement, so it cannot split them itself. Refused with the
+      //   shape that works: the manual's own recipe was the failing combination.
+      if ($renames !== [] && ($actions !== [] || count($renames) > 1)) {
+         throw new InvalidArgumentException(
+            'PostgreSQL renames a column in an ALTER TABLE of its own: give each rename '
+            . 'its own alter(), with no other action beside it.'
+         );
+      }
+
+      $actions = $renames === [] ? $actions : $renames;
 
       if ($actions === []) {
          throw new InvalidArgumentException('ALTER TABLE requires at least one schema action.');
