@@ -657,5 +657,8 @@ return new Suite(
       // Fixed-size Shared cache exhaustion must become one bounded request
       // failure, never an uncaught worker exit and supervisor refork loop.
       '102.02-session_cache_capacity_worker_crash',
+      // # Cross-protocol inbound body budget (audit 2026-08-20 M6)
+      // HTTP/1 and HTTP/2 unfinished bodies share one worker-wide byte cap.
+      '102.03-cross_protocol_worker_body_budget',
    ],
 );

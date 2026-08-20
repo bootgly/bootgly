@@ -15,13 +15,13 @@ use function max;
 
 
 /**
- * Worker-wide accountant for unfinished HTTP/1 request bodies held in memory.
+ * Worker-wide accountant for unfinished HTTP request bodies held in memory.
  *
- * One instance belongs to one body decoder: `Decoder_Waiting` (Content-Length),
- * `Decoder_Chunked` (chunked) and `Decoder_Downloading` (the multipart TEXT
- * parts it keeps in memory). `Request::$maxBodySize` already bounds a SINGLE
- * body; this bounds their SUM, which is what a peer that opens N connections
- * and finishes none of them actually spends.
+ * One instance belongs to one HTTP/1 body decoder (`Decoder_Waiting`,
+ * `Decoder_Chunked` or `Decoder_Downloading`) or to the aggregate body token
+ * of one HTTP/2 connection or captured Request snapshot. `Request::$maxBodySize`
+ * already bounds a SINGLE body; this bounds their cross-protocol SUM, which is
+ * what peers opening N connections and finishing none of them actually spend.
  *
  * `reserve()` is absolute, not incremental: the caller states the footprint it
  * is about to hold and the ledger moves by the difference. A decoder therefore
@@ -36,16 +36,16 @@ final class Bodies
    // * Config
    /**
     * Per-worker ceiling, in bytes, on the sum of every unfinished in-memory
-    * HTTP/1 request body. Mirrors `Decoder_HTTP2::$maxWorkerBodySize`, the
-    * equivalent control on the HTTP/2 side. Multipart FILE parts are not
-    * counted here — they stream to disk under `Decoder_Downloading\Downloads`,
-    * which has its own aggregate — but multipart text parts are, because they
-    * are held in memory exactly like a Content-Length body.
+    * HTTP/1 and HTTP/2 request body. HTTP/2's per-connection ceiling remains a
+    * subordinate control. Multipart FILE parts are not counted here — they
+    * stream to disk under `Decoder_Downloading\Downloads`, which has its own
+    * aggregate — but multipart text parts are, because they are held in memory
+    * exactly like a Content-Length body.
     */
    public static int $maxWorkerBodySize = 64 * 1024 * 1024; // @ 64 megabytes
 
    // * Data
-   /** Bytes retained by every HTTP/1 body decoder in this worker. */
+   /** Bytes retained by every HTTP body decoder in this worker. */
    private static int $total = 0;
    /** Bytes retained by this decoder. */
    public protected(set) int $retained = 0;

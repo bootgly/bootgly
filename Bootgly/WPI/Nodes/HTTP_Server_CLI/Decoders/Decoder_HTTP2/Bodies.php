@@ -11,6 +11,8 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_HTTP2;
 
 
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Bodies as WorkerBodies;
+
 use function max;
 use function min;
 
@@ -19,8 +21,8 @@ use function min;
  * Inbound HTTP/2 request-body accountant.
  *
  * One instance belongs to one Decoder_HTTP2 connection. `$retained` bounds
- * the sum of that connection's unfinished stream bodies; static `$total`
- * bounds the same resource across every decoder in the current worker.
+ * the sum of that connection's unfinished stream bodies; `$Worker` owns
+ * the connection's absolute token in the shared HTTP/1 + HTTP/2 worker ledger.
  * Workers are single-process event loops, so both checks and increments are
  * one synchronous operation with no cross-thread race.
  */
@@ -29,9 +31,11 @@ final class Bodies
    // * Config
    /** Per-connection ceiling. */
    public readonly int $limit;
-   /** Per-worker ceiling. */
+   /** HTTP/2-only per-worker ceiling, subordinate to the shared aggregate. */
    public readonly int $worker;
    // * Data
+   /** This connection's token in the cross-protocol worker ledger. */
+   private WorkerBodies $Worker;
    /** Bytes retained by every HTTP/2 connection in this worker. */
    private static int $total = 0;
    /** Bytes retained by this connection. */
@@ -40,6 +44,7 @@ final class Bodies
 
    public function __construct (int $limit, int $worker)
    {
+      $this->Worker = new WorkerBodies;
       $this->retained = 0;
       $this->limit = max(0, $limit);
       $this->worker = max(0, $worker);
@@ -57,6 +62,7 @@ final class Bodies
       if (
          $bytes > $this->limit - $this->retained
          || $bytes > $this->worker - self::$total
+         || $this->Worker->reserve($this->retained + $bytes) === false
       ) {
          return false;
       }
@@ -75,7 +81,11 @@ final class Bodies
       }
 
       $released = min($bytes, $this->retained);
-      $this->retained -= $released;
+      $wanted = $this->retained - $released;
+      // Shrinking an absolute token always fits, even if configuration was
+      // lowered below the currently live total after this reservation.
+      $this->Worker->reserve($wanted);
+      $this->retained = $wanted;
       self::$total = max(0, self::$total - $released);
    }
 

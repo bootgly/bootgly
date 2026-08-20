@@ -125,7 +125,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
    public static int $resets = 64;
    /** @var int Aggregate decoded request-body ceiling per HTTP/2 connection (default: 10 MiB). */
    public static int $maxConnectionBodySize = 10 * 1024 * 1024;
-   /** @var int Aggregate decoded request-body ceiling per worker (default: 64 MiB). */
+   /** @var int HTTP/2-only request-body ceiling per worker (default: 64 MiB). */
    public static int $maxWorkerBodySize = 64 * 1024 * 1024;
    /**
     * @var int Absolute seconds from a decoded opening HEADERS block to
