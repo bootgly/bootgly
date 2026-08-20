@@ -6,56 +6,59 @@ use Bootgly\ADI\Databases\SQL;
 
 
 return new Test(
-   description: 'SQLite: a file database is confined to one pooled handle, and one is enough',
+   description: 'SQLite: file databases share state across pooled handles',
    skip: extension_loaded('sqlite3') === false,
    test: function () {
       $directory = sys_get_temp_dir();
       $file = $directory . '/bootgly-sqlite-' . uniqid() . '.db';
 
       try {
-         // ! Two connections are asked for on purpose: two handles on one file do not
-         //   share a transaction, they contend for its lock.
          $Database = new SQL([
             'driver' => 'sqlite',
             'database' => $file,
+            'timeout' => 1.0,
             'pool' => ['max' => 2],
          ]);
 
+         // ? A file is one database whichever handle opens it, so the pool keeps
+         //   every connection it was given — unlike `:memory:`, which is private
+         //   to its handle and is confined to one.
          yield assert(
-            assertion: $Database->Config->pool['max'] === 1,
-            description: 'A file database pool is confined to one connection, whatever it was asked for'
+            assertion: $Database->Config->pool['max'] === 2,
+            description: 'A file database keeps the pool it was configured with'
          );
 
          $Database->query('CREATE TABLE shared (id INTEGER PRIMARY KEY, tag TEXT)');
+         $Database->query("INSERT INTO shared (tag) VALUES ('committed')");
 
-         // # The transaction takes the one connection and gives it back on commit
+         // # A transaction pins the first connection, so the next query takes a second
          $Transaction = $Database->begin();
          $Pinned = $Transaction->query("INSERT INTO shared (tag) VALUES ('inside')");
-         $Transaction->commit();
 
-         $Outside = $Database->query("INSERT INTO shared (tag) VALUES ('outside')");
-
-         yield assert(
-            assertion: $Pinned->error === null && $Outside->error === null,
-            description: 'Transaction and pool queries both write to the file database'
-         );
+         $Outside = $Database->query('SELECT count(*) AS total FROM shared');
 
          yield assert(
             assertion: $Pinned->Connection !== null && $Outside->Connection !== null
-               && spl_object_id($Pinned->Connection) === spl_object_id($Outside->Connection),
-            description: 'Released transaction connections are reused by later queries'
-         );
-
-         yield assert(
-            assertion: $Database->Pool->created === 1,
-            description: 'The pool never opens a second handle on the file, found: '
+               && spl_object_id($Pinned->Connection) !== spl_object_id($Outside->Connection)
+               && $Database->Pool->created === 2,
+            description: 'A second handle serves the query the transaction cannot, found: '
                . $Database->Pool->created
          );
+
+         // ! The second handle reads the same file, and sees only what is committed —
+         //   one row, not the two the transaction is holding.
+         yield assert(
+            assertion: $Outside->error === null && $Outside->Result?->cell === 1,
+            description: 'The second handle reads the shared file at its committed state, found: '
+               . json_encode($Outside->error ?? $Outside->Result?->cell)
+         );
+
+         $Transaction->commit();
 
          $Count = $Database->query('SELECT count(*) AS total FROM shared');
 
          yield assert(
-            assertion: $Count->Result?->cell === 2 && file_exists($file),
+            assertion: $Pinned->error === null && $Count->Result?->cell === 2 && file_exists($file),
             description: 'Every write lands in the one database file'
          );
       }

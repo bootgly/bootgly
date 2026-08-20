@@ -71,24 +71,31 @@ class Config extends \Bootgly\ADI\Database\Config
    }
 
    /**
-    * Confine every SQLite pool in this configuration to a single connection.
+    * Confine every pool whose database is private to the handle that opens it.
     *
     * The `sqlite3` extension opens one database per driver instance and the pool builds one
-    * driver per connection, so a second connection is a second database instead of a second
-    * route to the same one: `:memory:` splits into disjoint databases, and a file database
-    * refuses the write whose sibling holds the lock.
+    * driver per connection. For `:memory:` and for the empty name that database is private
+    * to its handle, so a second connection is a second, empty database and a row written
+    * through one is invisible to the other with no error anywhere. A file database is shared
+    * between handles and keeps the pool it was given.
     */
    private function confine (): void
    {
-      if ($this->driver === 'sqlite') {
+      if ($this->check($this->driver, $this->database)) {
          $this->pool = $this->narrow($this->pool);
       }
 
-      // @ A replica carries its own driver and its own pool.
+      // @ A replica carries its own driver, its own database and its own pool.
       foreach ($this->replicas as $id => $replica) {
+         $driver = $replica['driver'] ?? null;
+         $database = $replica['database'] ?? null;
          $pool = $replica['pool'] ?? null;
 
-         if (($replica['driver'] ?? null) !== 'sqlite' || is_array($pool) === false) {
+         if (is_string($driver) === false || is_string($database) === false) {
+            continue;
+         }
+
+         if (is_array($pool) === false || $this->check($driver, $database) === false) {
             continue;
          }
 
@@ -103,6 +110,16 @@ class Config extends \Bootgly\ADI\Database\Config
    }
 
    /**
+    * Check whether a database is private to the handle that opens it.
+    */
+   private function check (string $driver, string $database): bool
+   {
+      // ?: Only SQLite mints a database per handle, and only under these two names —
+      //    every other name is a file that all handles share.
+      return $driver === 'sqlite' && ($database === ':memory:' || $database === '');
+   }
+
+   /**
     * Narrow one pool configuration down to a single connection.
     *
     * @param array{min:int,max:int} $pool
@@ -110,13 +127,14 @@ class Config extends \Bootgly\ADI\Database\Config
     */
    private function narrow (array $pool): array
    {
-      // ? A pool configured to open nothing keeps refusing — only sharing is corrected.
+      // ? A pool of one, or of none, is already confined — and only a pool narrowed here
+      //   can end up with a floor above its ceiling.
       if ($pool['max'] > 1) {
          $pool['max'] = 1;
-      }
 
-      if ($pool['min'] > $pool['max']) {
-         $pool['min'] = $pool['max'];
+         if ($pool['min'] > $pool['max']) {
+            $pool['min'] = $pool['max'];
+         }
       }
 
       return $pool;

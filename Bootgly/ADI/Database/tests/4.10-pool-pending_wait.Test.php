@@ -127,8 +127,8 @@ return new Test(
                . json_encode($committed)
          );
 
-         // @@ Control — a pool nothing is holding is untouched by any of this
-         $Database = $open(1);
+         // @@ Control — an unsaturated pool is untouched by any of this
+         $Database = $open(4);
          $Plain = $Database->query("INSERT INTO t VALUES ('plain')");
          $error = null;
 
@@ -142,7 +142,7 @@ return new Test(
          yield assert(
             assertion: $error === null && $Plain->finished && $rows() === ['plain']
                && $Database->Pool->pending === [],
-            description: 'A pool nobody is holding still runs the write normally'
+            description: 'A pool with capacity still runs the write normally'
          );
 
          // @@ Control — a transaction that commits still commits its own work,
