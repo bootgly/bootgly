@@ -18,6 +18,7 @@ use Stringable;
 
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\ADI\Database\Connection;
+use Bootgly\ADI\Database\Operation\OperationStates;
 use Bootgly\ADI\Databases\SQL as SQLDatabase;
 use Bootgly\ADI\Databases\SQL\Builder;
 use Bootgly\ADI\Databases\SQL\Builder\Query;
@@ -41,6 +42,9 @@ class Transaction implements Awaiting, Querying
    public private(set) int $depth = 0;
 
    // * Metadata
+   // ! The BEGIN this transaction was opened with. A transaction exists only if
+   //   that statement actually reached the server and succeeded.
+   private null|Operation $Begin = null;
    /** @var array<int,string> */
    private array $savepoints = [];
    private int $saves = 0;
@@ -57,6 +61,9 @@ class Transaction implements Awaiting, Querying
       // * Data
       $this->Operation = $this->create('BEGIN', lock: true);
       $this->depth = 1;
+
+      // * Metadata
+      $this->Begin = $this->Operation;
    }
 
    /**
@@ -75,6 +82,7 @@ class Transaction implements Awaiting, Querying
       if ($this->depth <= 0) {
          $this->Operation = $this->create('BEGIN', lock: true);
          $this->depth = 1;
+         $this->Begin = $this->Operation;
 
          return $this->Operation;
       }
@@ -331,6 +339,15 @@ class Transaction implements Awaiting, Querying
    private function active (): bool
    {
       $this->attach();
+
+      // ? A BEGIN that failed opened nothing. `depth` is set the moment the
+      //   statement is composed, long before the server sees it, so without
+      //   this the transaction reports itself open on a connection that never
+      //   started one — and everything the caller runs lands in autocommit and
+      //   survives the rollback it asks for, with no error anywhere.
+      if ($this->Begin !== null && $this->Begin->state === OperationStates::Failed) {
+         return false;
+      }
 
       return $this->depth > 0 && $this->Connection !== null;
    }
