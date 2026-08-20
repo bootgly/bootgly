@@ -56,6 +56,9 @@ return new Test(
          };
       };
       $busy = static fn (Pool $Pool): int => count($Pool->busy);
+      $reserved = static fn (Pool $Pool): int => count(
+         (new ReflectionProperty(Pool::class, 'locked'))->getValue($Pool)
+      );
 
       // # An operation that has already left the wire
       //   A cancel request names a backend, not a statement. Sending one for
@@ -108,6 +111,60 @@ return new Test(
 
       fclose($server);
       $Database->Connection->disconnect();
+
+      // # …and a withdrawn teardown does not hand the transaction away
+      //   `commit()` and `rollback()` carry `unlock`, and release() honours it
+      //   whatever the outcome — right for a teardown the wire refused, since
+      //   that session is suspect and the connection goes anyway. A teardown
+      //   that never reached the server ended nothing: the transaction is still
+      //   open and still holds its locks, so the reservation has to stand.
+      //   Releasing it lent an open transaction to the next caller, whose write
+      //   then vanished with a session it never knew existed.
+      [$Database, $server] = $open(1);
+      $Pool = $Database->Pool;
+
+      $Transaction = $Database->begin();
+      $Begin = $Transaction->Operation;
+
+      $Database->advance($Begin);
+      fread($server, 8192);
+      fwrite($server, $complete('BEGIN'));
+      $Database->advance($Begin);
+
+      $held = $reserved($Pool);
+      $Commit = $Transaction->commit();
+
+      $Database->cancel($Commit);
+
+      yield assert(
+         assertion: $held === 1
+            && $Commit->unlock
+            && $Commit->finished
+            && $reserved($Pool) === 1
+            && $busy($Pool) === 1,
+         description: 'A withdrawn transaction teardown keeps its reservation'
+      );
+
+      fclose($server);
+      $Database->Connection->disconnect();
+
+      // # A finished operation the pool still has parked leaves the queue
+      //   `pending` carries live work only, and returning early for a finished
+      //   operation must not make it the one exception.
+      $Database = new SQL(['timeout' => 30.0, 'pool' => ['min' => 0, 'max' => 0]]);
+      $Pool = $Database->Pool;
+
+      $Parked = $Database->query('SELECT 1 AS v');
+      $parked = count($Pool->pending);
+
+      $Parked->fail('Finished by something other than this pool.');
+
+      $Database->cancel($Parked);
+
+      yield assert(
+         assertion: $parked === 1 && $Pool->pending === [],
+         description: 'Cancelling a finished operation still takes it out of pending'
+      );
 
       // # A cancel that goes out onto a wire that can no longer answer
       //   The answer the cancel provokes is what normally finishes the

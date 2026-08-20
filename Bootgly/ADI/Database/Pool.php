@@ -292,6 +292,10 @@ class Pool
       //   on it. Every driver's advance() opens with this same guard, for the
       //   same reason; cancel() is the entry point that lacked it.
       if ($Operation->finished) {
+         // ? It can still be parked — a pool that refused it capacity finishes
+         //   it without shifting it — and `pending` carries live work only.
+         $this->forget($Operation);
+
          return $Operation;
       }
 
@@ -320,7 +324,17 @@ class Pool
 
          $Protocol->abandon($Operation);
          $this->forget($Operation);
-         $this->release($Operation);
+
+         // ? A teardown that never reached the server ended nothing: the
+         //   transaction is still open on this connection and still holds its
+         //   locks, so its reservation stands. release() honours `unlock`
+         //   whatever the outcome — right for a teardown the wire refused,
+         //   since that session is suspect and the connection goes anyway, and
+         //   wrong here. Releasing it lent an open transaction to the next
+         //   caller, whose write then vanished with a session it never knew of.
+         if ($Operation->unlock === false) {
+            $this->release($Operation);
+         }
 
          return $Operation;
       }
