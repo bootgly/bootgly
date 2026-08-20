@@ -98,7 +98,11 @@ class MySQL extends Dialect
             $this->guard(Capabilities::AlterColumnUsing);
          }
 
-         if ($Change->nullable !== null) {
+         // ? The capability is about a standalone nullability action, which
+         //   MySQL has none of. Inside a MODIFY the whole definition is
+         //   restated, so the nullability rides along and needs no such action —
+         //   guarding it there would refuse the one statement that is correct.
+         if ($Change->nullable !== null && $Change->typed === false) {
             $this->guard(Capabilities::AlterColumnNullability);
          }
 
@@ -110,8 +114,40 @@ class MySQL extends Dialect
 
          if ($Change->typed) {
             $this->guard(Capabilities::AlterColumnType);
+
+            // ? MODIFY COLUMN takes a whole column definition, and every
+            //   attribute the statement leaves out reverts to its default with
+            //   no warning — the column's NOT NULL, DEFAULT, AUTO_INCREMENT,
+            //   COMMENT and COLLATE all go. A change that names only a type
+            //   cannot be compiled without destroying them, and a compiler
+            //   never saw them to restate: refuse rather than emit the loss.
+            if ($Change->nullable === null) {
+               throw new InvalidArgumentException(
+                  "MySQL cannot retype the column \"{$Change->name}\" on its own: "
+                  . 'MODIFY COLUMN restates the whole definition. Shape the type with '
+                  . 'limit() or size(), then state nullability and default on the change; '
+                  . 'a COMMENT or COLLATE the column carries needs a raw statement.'
+               );
+            }
+
             $type = $this->cast($Change);
-            $actions[] = "MODIFY COLUMN {$name} {$type}";
+            $definition = "MODIFY COLUMN {$name} {$type}";
+
+            if ($Change->nullable === false) {
+               $definition .= ' NOT NULL';
+            }
+
+            // @ Carried by the MODIFY itself: a separate ALTER COLUMN beside it
+            //   targets a column the MODIFY has already redefined, which MySQL
+            //   rejects outright.
+            if ($Change->defaulted) {
+               $value = $this->escape($Change->default);
+               $definition .= " DEFAULT {$value}";
+            }
+
+            $actions[] = $definition;
+
+            continue;
          }
 
          if ($Change->dropped) {

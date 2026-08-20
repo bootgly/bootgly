@@ -23,5 +23,6 @@ return new Suite(
       '10.5-migration-events',
       '10.6-schema_sqlite_transactions',
       '10.7-schema_mysql_lock',
+      '10.8-schema_mysql_column_change',
    ]
 );
