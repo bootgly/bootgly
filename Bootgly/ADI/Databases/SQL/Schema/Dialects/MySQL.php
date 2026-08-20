@@ -137,6 +137,8 @@ class MySQL extends Dialect
             //   pairing unreachable, so opening it means gating it.
             if (
                $Change->defaulted
+               && $Change->default !== null
+               && $Change->default instanceof Expression === false
                && (
                   $Change->Type === Types::Text
                   || $Change->Type === Types::Json
@@ -144,8 +146,32 @@ class MySQL extends Dialect
                )
             ) {
                throw new InvalidArgumentException(
-                  "MySQL cannot give the column \"{$Change->name}\" a default: "
-                  . 'BLOB, TEXT and JSON columns take none.'
+                  "MySQL cannot give the column \"{$Change->name}\" a literal default: "
+                  . 'BLOB, TEXT and JSON columns take one only as an expression, '
+                  . 'as in DEFAULT (JSON_OBJECT()).'
+               );
+            }
+
+            // ? An identity supplies the value itself, so a default contradicts
+            //   it — the server answers 1067 whichever order the clauses take.
+            if ($Change->generated && $Change->defaulted) {
+               throw new InvalidArgumentException(
+                  "MySQL cannot give the generated column \"{$Change->name}\" a default: "
+                  . 'an AUTO_INCREMENT column supplies its own values.'
+               );
+            }
+
+            // ? And only the integer types carry one at all; everything else
+            //   answers 1063. This is decidable from the type alone.
+            if (
+               $Change->generated
+               && $Change->Type !== Types::Integer
+               && $Change->Type !== Types::BigInteger
+               && $Change->Type !== Types::Boolean
+            ) {
+               throw new InvalidArgumentException(
+                  "MySQL cannot make the column \"{$Change->name}\" AUTO_INCREMENT as a "
+                  . "{$Change->Type->name}: only the integer types carry one."
                );
             }
 

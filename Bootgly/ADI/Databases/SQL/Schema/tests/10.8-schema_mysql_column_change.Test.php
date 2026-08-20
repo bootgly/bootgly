@@ -3,6 +3,7 @@
 
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\ADI\Databases\SQL;
+use Bootgly\ADI\Databases\SQL\Builder\Expression;
 use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Defaults;
 use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Types;
 use Bootgly\ADI\Databases\SQL\Schema\Blueprint;
@@ -102,18 +103,47 @@ return new Test(
          description: 'A retyped identity column keeps generating'
       );
 
-      // # …and stating it is enough to mean a type change
+      // # …and stating it is enough to mean a type change, in either order
       //   Otherwise the caller has to call a shaper whose argument this type
-      //   discards, purely to keep the change typed.
-      $unshaped = $compile(static function (Blueprint $Table): void {
+      //   discards, purely to keep the change typed. Both orders matter: naming
+      //   nullability first clears the typed flag, and `generate()` has to put
+      //   it back — anchored to the literal, because comparing the two results
+      //   to each other stays green with the whole feature deleted.
+      $after = $compile(static function (Blueprint $Table): void {
          $Change = $Table->change('id', Types::BigInteger);
          $Change->generate();
          $Change->nullable = false;
       });
+      $before = $compile(static function (Blueprint $Table): void {
+         $Change = $Table->change('id', Types::BigInteger);
+         $Change->nullable = false;
+         $Change->generate();
+      });
 
       yield assert(
-         assertion: $unshaped === $identity,
+         assertion: $after === 'ALTER TABLE `t` MODIFY COLUMN `id` BIGINT NOT NULL AUTO_INCREMENT'
+            && $before === $after,
          description: 'Stating the identity keeps the change typed without a shaper'
+      );
+
+      // # An identity contradicts a default, and most types cannot carry one
+      //   Both are decidable from the change alone: MySQL answers 1067 to the
+      //   first whichever order the clauses take, and 1063 to the second for
+      //   every type but the integers.
+      $defaulted = $compile(static function (Blueprint $Table): void {
+         $Change = $Table->change('id', Types::BigInteger)->generate();
+         $Change->nullable = false;
+         $Change->default = 0;
+      });
+      $mistyped = $compile(static function (Blueprint $Table): void {
+         $Change = $Table->change('id', Types::String)->generate();
+         $Change->nullable = false;
+      });
+
+      yield assert(
+         assertion: str_contains($defaulted, 'supplies its own values')
+            && str_contains($mistyped, 'only the integer types carry one'),
+         description: 'An identity that MySQL could not accept is refused'
       );
 
       // # Dropping a default alongside a type change rides in the same action
@@ -147,9 +177,31 @@ return new Test(
       });
 
       yield assert(
-         assertion: str_contains($texted, 'BLOB, TEXT and JSON columns take none')
+         assertion: str_contains($texted, 'take one only as an expression')
             && str_contains($contradicted, 'NOT NULL while it defaults to NULL'),
          description: 'Defaults MySQL rejects are refused rather than compiled'
+      );
+
+      // # …but the forms it accepts still compile
+      //   `DEFAULT (expr)` is the documented way to default a TEXT or JSON
+      //   column, and `DEFAULT NULL` is accepted outright. A gate that keys on
+      //   "has a default" rather than "has a literal default" makes a supported
+      //   feature inexpressible.
+      $expressed = $compile(static function (Blueprint $Table): void {
+         $Change = $Table->change('doc', Types::Json)->limit(1);
+         $Change->nullable = false;
+         $Change->default = new Expression('(JSON_OBJECT())');
+      });
+      $nulled = $compile(static function (Blueprint $Table): void {
+         $Change = $Table->change('bio', Types::Text)->limit(1);
+         $Change->nullable = true;
+         $Change->default = null;
+      });
+
+      yield assert(
+         assertion: $expressed === 'ALTER TABLE `t` MODIFY COLUMN `doc` JSON NOT NULL DEFAULT (JSON_OBJECT())'
+            && $nulled === 'ALTER TABLE `t` MODIFY COLUMN `bio` LONGTEXT DEFAULT NULL',
+         description: 'The default forms MySQL accepts on TEXT and JSON still compile'
       );
 
       // # A default change on its own is untouched
