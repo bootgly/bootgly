@@ -40,6 +40,7 @@ use function strtolower;
 use function substr;
 use DateTimeImmutable;
 use Throwable;
+use WeakReference;
 
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\ACI\Events\Readiness;
@@ -90,11 +91,13 @@ class PostgreSQL extends Driver
    private null|Operation $writing = null;
    /** @var array<string,string> */
    private array $names = [];
-   // @ Statement names with a Parse in flight. The value is the operation that
-   //   composed it while its batch is still unsent, and `true` once those bytes
-   //   have reached the socket. A sibling may Bind the name warm only after
-   //   that — see prepare().
-   /** @var array<string,true|Operation> */
+   // @ Statement names with a Parse in flight. The value is a weak reference to
+   //   the operation that composed it while its batch is still unsent, and
+   //   `true` once those bytes have reached the socket — a sibling may Bind the
+   //   name warm only after that, see prepare(). Weak because a composer whose
+   //   caller dropped it must not be kept alive here: the ledger would then pin
+   //   its whole result set for the connection's life.
+   /** @var array<string,true|WeakReference<Operation>> */
    private array $preparing = [];
    // @ Statement names evicted client-side, awaiting their paired wire Close.
    /** @var array<string,true> */
@@ -190,18 +193,19 @@ class PostgreSQL extends Driver
          //   never registered.
          $marker = $this->preparing[$Operation->statement] ?? null;
 
-         if ($marker === $Operation) {
-            $marker = null;
-         }
+         if ($marker instanceof WeakReference) {
+            $Composer = $marker->get();
 
-         // ? A marker its owner will never send suppresses every later Parse
-         //   for that name: `fail()` is invisible to the driver, so nothing
-         //   released it. Composing a warm Bind against it produces a Bind for
-         //   a statement nothing ever Parsed.
-         if ($marker instanceof Operation && $marker->finished) {
-            unset($this->preparing[$Operation->statement]);
+            // ? Collected, this operation's own from an earlier pass, or one its
+            //   caller gave up on: either way those bytes never left, so the name
+            //   is free and this batch Parses it. `fail()` is invisible to the
+            //   driver, and a marker nothing releases suppresses every later
+            //   Parse for that name.
+            if ($Composer === null || $Composer === $Operation || $Composer->finished) {
+               unset($this->preparing[$Operation->statement]);
 
-            $marker = null;
+               $marker = null;
+            }
          }
 
          $Operation->prepared = $cached !== false || $marker !== null;
@@ -256,7 +260,7 @@ class PostgreSQL extends Driver
          //   after the flush. A sibling composed inside that gap would read an
          //   empty ledger and Parse the same name again, and the backend
          //   answers the second one with 42P05 instead of running the query.
-         $this->preparing[$Operation->statement] = $Operation;
+         $this->preparing[$Operation->statement] = WeakReference::create($Operation);
 
          return $Operation;
       }
@@ -403,16 +407,23 @@ class PostgreSQL extends Driver
          //   sent — advance() re-derives it, and by then this Parse is on the
          //   wire, so it comes back as the warm Bind it was.
          if ($Operation->prepared && $Operation->statement !== '') {
-            $Owner = $this->preparing[$Operation->statement] ?? null;
+            $marker = $this->preparing[$Operation->statement] ?? null;
+            $Owner = $marker instanceof WeakReference ? $marker->get() : null;
 
             // ? Not while this batch is re-entering a partial flush: its first
             //   bytes are already on the wire, so re-composing it would send a
             //   Parse behind the Bind it belongs in front of. A live owner
             //   mid-flush cannot reach here at all — the write-stream guard
             //   above returns first.
+            //
+            //   And only an owner still assigned to this driver may be stripped:
+            //   fallback() retries an operation onto another pool, where it
+            //   composes a batch of its own, and blanking that from here would
+            //   corrupt a stream this driver does not own.
             if (
-               $Owner instanceof Operation
+               $Owner !== null
                && $Owner !== $Operation
+               && $Owner->Protocol === $this
                && $this->writing !== $Operation
             ) {
                if ($Owner->finished === false) {
@@ -423,10 +434,21 @@ class PostgreSQL extends Driver
                unset($this->preparing[$Operation->statement]);
                unset($this->Holders[$Operation->statement][spl_object_id($Operation)]);
 
+               if (($this->Holders[$Operation->statement] ?? null) === []) {
+                  unset($this->Holders[$Operation->statement]);
+               }
+
                $Operation->write = '';
                $Operation->prepared = false;
 
                $this->prepare($Operation);
+
+               // ! prepare() rewinds the state to Queued, which is the branch
+               //   that reconnects. Leaving it there parks an operation holding
+               //   the write stream as "nothing sent yet", so a connection lost
+               //   during a partial flush re-handshakes instead of failing and
+               //   keeps a statement cache the new session never Parsed.
+               $Operation->state = OperationStates::Querying;
             }
          }
 
@@ -474,10 +496,14 @@ class PostgreSQL extends Driver
          // @ The Parse this batch carried is on the wire now, so a sibling may
          //   Bind the name warm from here on: the backend reads the socket in
          //   order and cannot see the Bind first.
+         $marker = $Operation->statement === ''
+            ? null
+            : ($this->preparing[$Operation->statement] ?? null);
+
          if (
             $Operation->prepared === false
-            && $Operation->statement !== ''
-            && ($this->preparing[$Operation->statement] ?? null) === $Operation
+            && $marker instanceof WeakReference
+            && $marker->get() === $Operation
          ) {
             $this->preparing[$Operation->statement] = true;
          }
@@ -593,7 +619,8 @@ class PostgreSQL extends Driver
             $Operation instanceof Operation
             && $Operation->statement !== ''
             && isset($this->statements[$Operation->statement]) === false
-            && ($this->preparing[$Operation->statement] ?? null) === $Operation
+            && ($this->preparing[$Operation->statement] ?? null) instanceof WeakReference
+            && ($this->preparing[$Operation->statement])->get() === $Operation
          ) {
             $statement = $Operation->statement;
             unset($this->preparing[$statement]);
@@ -741,6 +768,29 @@ class PostgreSQL extends Driver
    }
 
    /**
+    * Release one in-flight Parse marker its composer no longer owes.
+    */
+   private function release (string $statement): void
+   {
+      $marker = $this->preparing[$statement] ?? null;
+
+      // ? A live composer still holds that Parse in its buffer, so this event
+      //   describes a different registration of the name. Dropping the marker
+      //   would strand it: a warm sibling could then neither read it nor take
+      //   it, and would reach the wire with a Bind for a statement nothing has
+      //   Parsed — which is the very defect the marker exists to prevent.
+      if ($marker instanceof WeakReference) {
+         $Composer = $marker->get();
+
+         if ($Composer !== null && $Composer->finished === false) {
+            return;
+         }
+      }
+
+      unset($this->preparing[$statement]);
+   }
+
+   /**
     * Cache prepared statement metadata.
     *
     * @param bool|array<int,int> $metadata
@@ -751,7 +801,7 @@ class PostgreSQL extends Driver
          return $this;
       }
 
-      unset($this->preparing[$statement]);
+      $this->release($statement);
       $this->statements[$statement] = $metadata;
 
       return $this;
@@ -767,7 +817,7 @@ class PostgreSQL extends Driver
          return $this;
       }
 
-      unset($this->preparing[$statement]);
+      $this->release($statement);
       unset($this->statements[$statement]);
 
       // ! Pair every client-side removal with a wire Close on the next batch.

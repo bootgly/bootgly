@@ -3,6 +3,7 @@
 
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\ADI\Database\Connection;
+use Bootgly\ADI\Database\Operation\OperationStates;
 use Bootgly\ADI\Databases\SQL\Config;
 use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL;
 
@@ -167,5 +168,105 @@ return new Test(
 
       fclose($server);
       $Connection->disconnect();
+
+      // # Taking the Parse leaves the batch mid-send, not mid-queue
+      //   prepare() rewinds the state to Queued, which is the branch that
+      //   reconnects. Parking a batch that holds the write stream there makes a
+      //   connection lost during a partial flush re-handshake instead of fail,
+      //   and keep a statement cache the new session never Parsed.
+      [$PostgreSQL, $Connection, $server] = $connect();
+
+      // ! Large enough that the socket buffer cannot take the batch in one write.
+      $wide = 'SELECT $1::int AS v /* ' . str_repeat('x', 512 * 1024) . ' */';
+      $Owner = $PostgreSQL->query($wide, [1]);
+      $Taker = $PostgreSQL->query($wide, [2]);
+
+      $PostgreSQL->advance($Taker);
+
+      yield assert(
+         assertion: $Taker->state === OperationStates::Querying
+            && $Taker->write !== ''
+            && $Owner->write === '',
+         description: 'A partially flushed take-over stays in the querying state'
+      );
+
+      $Connection->disconnect();
+      $PostgreSQL->advance($Taker);
+
+      yield assert(
+         assertion: $Taker->state === OperationStates::Failed && $Taker->finished,
+         description: 'Losing the connection mid-send fails the batch instead of reconnecting'
+      );
+
+      fclose($server);
+
+      // # Only the composer's own completion releases its name
+      //   `cache()` and `evict()` are on the read path and know a statement name
+      //   but not who owes its Parse. Dropping an unsent composer's marker there
+      //   strands it: a warm sibling can then neither read it nor take it, and
+      //   reaches the wire with a Bind for a statement nothing has Parsed — this
+      //   entry's own defect, by another route.
+      [$PostgreSQL, $Connection, $server] = $connect();
+
+      $Owner = $PostgreSQL->query($SQL, [1]);
+      $Sibling = $PostgreSQL->query($SQL, [2]);
+
+      $PostgreSQL->evict($Owner->statement);
+      $PostgreSQL->advance($Sibling);
+      $evicted = (string) fread($server, 65536);
+
+      yield assert(
+         assertion: str_contains($messages($evicted), 'P')
+            && substr_count($messages($evicted), 'P') === 1,
+         description: 'Evicting a name its composer has not sent still leaves the Parse to send'
+      );
+
+      fclose($server);
+      $Connection->disconnect();
+
+      // # A composer nobody holds any more releases its name
+      //   The ledger keeps a weak reference precisely so a dropped composer can
+      //   be collected: holding it would pin its whole result set for the
+      //   connection's life, and the name would suppress every later Parse.
+      [$PostgreSQL, $Connection, $server] = $connect();
+
+      $Ghost = $PostgreSQL->query($SQL, [1]);
+      $Ghost = null;
+      gc_collect_cycles();
+
+      $Next = $PostgreSQL->query($SQL, [2]);
+
+      yield assert(
+         assertion: $messages($Next->write) === 'PDBDES',
+         description: 'A name whose composer was collected is Parsed again'
+      );
+
+      fclose($server);
+      $Connection->disconnect();
+
+      // # An operation retried onto another driver is never stripped
+      //   fallback() moves an operation to a replica pool, where it composes a
+      //   batch of its own. Blanking that from the driver it left would corrupt
+      //   a stream this one does not own.
+      [$Left, $LeftConnection, $leftServer] = $connect();
+      [$Joined, $JoinedConnection, $joinedServer] = $connect();
+
+      $Moved = $Left->query($SQL, [1]);
+      $Moved->retry();
+      $Joined->prepare($Moved);
+      $composed = $Moved->write;
+
+      $Local = $Left->query($SQL, [2]);
+      $Left->advance($Local);
+
+      yield assert(
+         assertion: $Moved->Protocol === $Joined && $Moved->write === $composed && $composed !== '',
+         description: 'A batch composed on another driver survives a take-over here'
+      );
+
+      fclose($leftServer);
+      fclose($joinedServer);
+      $LeftConnection->disconnect();
+      $JoinedConnection->disconnect();
    }
 );
