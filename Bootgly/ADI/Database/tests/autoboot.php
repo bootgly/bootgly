@@ -115,5 +115,6 @@ return new Suite(
       '7.28-postgresql_commit_tag',
       '7.29-postgresql_parse_order',
       '8.9-kv_redis_teardown_isolation',
+      '4.12-pool-settled_claim',
    ]
 );

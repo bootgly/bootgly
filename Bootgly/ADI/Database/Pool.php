@@ -20,6 +20,7 @@ use function mt_rand;
 use function spl_object_id;
 use function stream_select;
 use RuntimeException;
+use WeakMap;
 
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ADI\Database\Config;
@@ -67,6 +68,13 @@ class Pool
    }
    /** @var array<int,true> */
    private array $counted = [];
+   // @ Operations whose claim on a connection is already settled. A driver may
+   //   keep a finished operation's FIFO slot until the message that terminates
+   //   it arrives, so the same object reaches release() a second time when that
+   //   message retires it — by which point the connection belongs to somebody
+   //   else, and re-running the compensation takes their reservation with it.
+   /** @var WeakMap<Operation,true> */
+   private WeakMap $settled;
    /** @var array<int,true> */
    private array $locked = [];
    // @ Round-robin cursor for co-locating pipelined operations across connections.
@@ -81,6 +89,7 @@ class Pool
       // * Config
       $this->Config = $Config;
       $this->Connection = $Connection;
+      $this->settled = new WeakMap();
       $this->min = $Config->pool['min'];
       $this->max = $Config->pool['max'];
       $this->drivers = $drivers;
@@ -351,6 +360,14 @@ class Pool
          return $this;
       }
 
+      // ? Its claim was settled when it finished. Running the compensation again
+      //   now applies it to whatever holds this connection since.
+      if (isset($this->settled[$Operation])) {
+         return $this;
+      }
+
+      $this->settled[$Operation] = true;
+
       $id = spl_object_id($Connection);
       $Protocol = $Operation->Protocol;
 
@@ -461,6 +478,8 @@ class Pool
       $this->forget($Operation);
 
       $Protocol = $this->create($Connection);
+      unset($this->settled[$Operation]);
+
       $Operation->Connection = $Connection;
       $Operation->Protocol = $Protocol;
 
