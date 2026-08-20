@@ -2,6 +2,8 @@
 
 
 use Bootgly\ACI\Tests\Suite\Test;
+use Bootgly\ADI\Database\Driver;
+use Bootgly\ADI\Database\Operation;
 use Bootgly\ADI\Database\Pool;
 use Bootgly\ADI\Databases\SQL;
 
@@ -172,14 +174,56 @@ return new Test(
          description: 'A withdrawn operation is not re-dispatched to its fallback pool'
       );
 
-      // ? And the withdrawal outlives a retry. Everything else about an
-      //   operation is re-armed for another attempt; the caller's decision to
-      //   drop it is not something another attempt can undo.
+      // ? And the withdrawal outlives a retry. A cancel that DID reach the wire
+      //   sets both flags, so start from that shape: `retry()` re-arms an
+      //   operation for another attempt and clears `cancelled` with everything
+      //   else, while the caller's decision to drop the work survives it.
+      $Refused->cancelled = true;
       $Refused->retry();
 
       yield assert(
          assertion: $Refused->revoked && $Refused->cancelled === false,
-         description: 'Retrying an operation does not undo its withdrawal'
+         description: 'Retrying clears the wire flag and keeps the withdrawal'
+      );
+
+      // # A driver that throws instead of answering
+      //   Every refusal above is a clean return, but a driver can also raise:
+      //   MySQL's cancel opens a side channel and decodes a greeting on it, and
+      //   both the greeting decoder and the authentication scrambler throw on
+      //   input they do not support. Recording the withdrawal after the driver
+      //   answered would skip it exactly there, and `fallback()` would then
+      //   re-dispatch the statement the caller withdrew.
+      $Database = new SQL(['timeout' => 30.0, 'pool' => ['min' => 0, 'max' => 0]]);
+      $Thrown = $Database->query('DELETE FROM accounts WHERE id = 1');
+      $Thrown->Protocol = new class ($Database->Config, $Database->Connection) extends Driver {
+         public function prepare (Operation $Operation): Operation
+         {
+            return $Operation;
+         }
+
+         public function advance (Operation $Operation): Operation
+         {
+            return $Operation;
+         }
+
+         public function cancel (Operation $Operation): Operation
+         {
+            throw new InvalidArgumentException('Driver raised instead of answering.');
+         }
+      };
+
+      $raised = null;
+
+      try {
+         $Database->cancel($Thrown);
+      }
+      catch (Throwable $Raised) {
+         $raised = $Raised->getMessage();
+      }
+
+      yield assert(
+         assertion: $raised === 'Driver raised instead of answering.' && $Thrown->revoked,
+         description: 'A cancel the driver raises on still records the withdrawal'
       );
 
       fclose($server);

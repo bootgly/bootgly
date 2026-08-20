@@ -277,6 +277,15 @@ class Pool
          return $Pool->cancel($Operation);
       }
 
+      // ! The withdrawal is the caller's own decision, so it is recorded before
+      //   anything else is consulted. Every route out of this method has to
+      //   leave the work withdrawn — a parked refusal, a driver that refuses, a
+      //   driver that throws instead of answering — or a later advance() reaches
+      //   fallback() and re-dispatches the very statement the caller withdrew.
+      //   The drivers mark `cancelled` only when the request reached the wire,
+      //   which is what the reconciliation below reads and not what this asks.
+      $Operation->revoked = true;
+
       $Protocol = $Operation->Protocol;
 
       if ($Protocol === null) {
@@ -286,21 +295,10 @@ class Pool
          //   what wait() and assign() both maintain.
          $this->forget($Operation);
 
-         // ! And it must never come back: a later await() would otherwise call
-         //   fallback(), which re-dispatches the very statement the caller
-         //   cancelled — measured executing on the server.
-         $Operation->revoked = true;
-
          return $Operation->fail('Database operation has no protocol to cancel.');
       }
 
       $Operation = $Protocol->cancel($Operation);
-
-      // ! Whatever the driver answered, the caller has withdrawn this work. The
-      //   drivers mark `cancelled` only when the request reached the wire, and
-      //   every refusal leaves it false — which is right for the reconciliation
-      //   below and wrong for fallback(), the other reader of that one flag.
-      $Operation->revoked = true;
 
       // ? The cancel never reached the server: the operation is finished while
       //   the driver still owns the answer the server keeps sending. That is

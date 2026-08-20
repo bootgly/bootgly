@@ -51,9 +51,7 @@ class Operation
    public bool $unlock = false;
    /** CancelRequest was sent; the main operation still resolves, fails or expires later. */
    public bool $cancelled = false;
-   // @ The caller gave up on this operation. Distinct from `cancelled`, which
-   //   answers whether the cancel reached the wire — a refused cancel reaches
-   //   nothing and still means the work must never run.
+   /** The caller withdrew this work; unlike `cancelled`, a refused cancel sets it too. */
    public bool $revoked = false;
    /** Operation was retried through its fallback pool. */
    public bool $fallback = false;
@@ -130,8 +128,10 @@ class Operation
       $this->error = null;
       $this->finished = false;
       $this->cancelled = false;
-      // ! `revoked` is deliberately not reset. A retry re-arms an operation for
-      //   another attempt; a caller's withdrawal outlives every attempt.
+      // ! `revoked` is deliberately not reset: it records the caller's
+      //   withdrawal, and another attempt does not undo that. What it gates is
+      //   failover in fallback(), not dispatch — an operation re-armed by hand
+      //   after a withdrawal still runs.
       $this->quarantine = false;
       $this->state = OperationStates::Pending;
       $this->deadline = $this->timeout > 0.0 ? microtime(true) + $this->timeout : 0.0;
