@@ -181,6 +181,45 @@ return new Test(
       fclose($server);
       $Database->Connection->disconnect();
 
+      // # …and the deadline reaches the same conclusion as the cancel
+      //   A teardown can also be retired by its own deadline, and that route
+      //   settles the claim through the same call. It ended nothing either, so
+      //   it must not hand the open transaction to whoever asks next — which is
+      //   what it did while the rule lived only in cancel().
+      [$client, $peer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+      stream_set_blocking($client, false);
+      stream_set_blocking($peer, false);
+
+      $Database = new SQL(['timeout' => 0.05, 'pool' => ['min' => 0, 'max' => 1]]);
+      $Database->Connection->attach($client);
+      $Pool = $Database->Pool;
+
+      $Transaction = $Database->begin();
+      $Begin = $Transaction->Operation;
+
+      $Database->advance($Begin);
+      fread($peer, 8192);
+      fwrite($peer, $complete('BEGIN'));
+      $Database->advance($Begin);
+
+      $opened = $reserved($Pool) === 1;
+      $Expired = $Transaction->commit();
+
+      usleep(80_000);
+      $Database->advance($Expired);
+
+      yield assert(
+         assertion: $opened
+            && $Expired->finished
+            && $Expired->unlock
+            && $reserved($Pool) === 1
+            && $busy($Pool) === 1,
+         description: 'A teardown retired by its deadline keeps its reservation too'
+      );
+
+      fclose($peer);
+      $Database->Connection->disconnect();
+
       // # …unless the connection under it is gone
       //   Then there is no session left to protect and no transaction left to
       //   end, so the reservation dies with the connection. Reaching this needs

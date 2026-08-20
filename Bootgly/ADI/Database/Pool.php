@@ -123,6 +123,10 @@ class Pool
          return $Operation;
       }
 
+      // ! Whether this operation ever reached the wire, read before expire()
+      //   fails it and the answer is lost.
+      $sent = $Operation->state !== OperationStates::Queued;
+
       if ($Operation->expire()) {
          // @ The driver still owns whatever the server is sending for this
          //   operation: let it reconcile the wire before the connection is
@@ -140,7 +144,7 @@ class Pool
          }
 
          $this->forget($Operation);
-         $this->release($Operation);
+         $this->settle($Operation, $sent);
 
          $this->fallback($Operation);
 
@@ -332,20 +336,12 @@ class Pool
          //   since that session is suspect and the connection goes anyway, and
          //   wrong here. Releasing it lent an open transaction to the next
          //   caller, whose write then vanished with a session it never knew of.
-         //   The intent is suppressed for THIS release only, not dropped:
-         //   skipping the release instead left the claim unsettled, so the next
+         //   Skipping the release instead left the claim unsettled, so the next
          //   advance() honoured the flag after all and the branch that drops a
          //   dead connection never ran — while dropping the flag for good broke
          //   the one route that legitimately ends the transaction, a caller
-         //   re-arming the teardown it withdrew. That commit then reached the
-         //   server and the slot stayed reserved for a transaction that had
-         //   closed.
-         $unlock = $Operation->unlock;
-         $Operation->unlock = false;
-
-         $this->release($Operation);
-
-         $Operation->unlock = $unlock;
+         //   re-arming the teardown it withdrew.
+         $this->settle($Operation, sent: false);
 
          return $Operation;
       }
@@ -391,6 +387,34 @@ class Pool
    /**
     * Drain protocol-completed operations and release failures first.
     */
+   /**
+    * Settle one operation's claim, honouring only a teardown that was sent.
+    *
+    * `release()` applies an `unlock` whatever the outcome, which is right for a
+    * teardown the wire refused — that session is suspect and the connection is
+    * dropped anyway. A teardown the pool retires before it reaches the server
+    * ended nothing: the transaction is still open and still holds its locks, so
+    * its reservation stands, or the next caller inherits an open transaction and
+    * its writes vanish with a session it never knew of. The intent is suppressed
+    * for this release only, so whoever ends that transaction later still frees
+    * the connection.
+    */
+   private function settle (Operation $Operation, bool $sent): void
+   {
+      if ($sent) {
+         $this->release($Operation);
+
+         return;
+      }
+
+      $unlock = $Operation->unlock;
+      $Operation->unlock = false;
+
+      $this->release($Operation);
+
+      $Operation->unlock = $unlock;
+   }
+
    private function drain (Driver $Protocol, Operation $Operation): bool
    {
       $Completed = $Protocol->drain();
