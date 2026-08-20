@@ -286,6 +286,15 @@ class Pool
       //   which is what the reconciliation below reads and not what this asks.
       $Operation->revoked = true;
 
+      // ? Nothing of this operation is on the wire any more. A cancel request
+      //   names a backend, not a statement, so sending one now reaches whatever
+      //   has held this connection since — measured killing an unrelated query
+      //   on it. Every driver's advance() opens with this same guard, for the
+      //   same reason; cancel() is the entry point that lacked it.
+      if ($Operation->finished) {
+         return $Operation;
+      }
+
       $Protocol = $Operation->Protocol;
 
       if ($Protocol === null) {
@@ -296,6 +305,24 @@ class Pool
          $this->forget($Operation);
 
          return $Operation->fail('Database operation has no protocol to cancel.');
+      }
+
+      // ? Composed but never written, so the server has never heard of it and
+      //   there is nothing out there to cancel. A request would once more land
+      //   on what the backend is actually doing — inside a transaction, on the
+      //   transaction itself, which then can never be committed. It is withdrawn
+      //   locally instead, the way a parked operation is. No drain() follows:
+      //   the drivers leave `Queued` for `Querying` before anything claims the
+      //   write stream, so abandoning one tears no session down and hands no
+      //   sibling back — unlike the two branches below.
+      if ($Operation->state === OperationStates::Queued) {
+         $Operation->fail('Database operation was cancelled before reaching the server.');
+
+         $Protocol->abandon($Operation);
+         $this->forget($Operation);
+         $this->release($Operation);
+
+         return $Operation;
       }
 
       $Operation = $Protocol->cancel($Operation);
@@ -311,6 +338,24 @@ class Pool
          //   siblings back, and their release belongs to this connection.
          $this->drain($Protocol, $Operation);
 
+         $this->forget($Operation);
+         $this->release($Operation);
+      }
+
+      // ? The cancel did reach the server, so the answer it provokes is what
+      //   normally finishes this operation and frees the slot. On a connection
+      //   that can no longer deliver anything, that answer never comes and
+      //   nobody else settles the claim — the pool counts the slot forever.
+      //   The socket is the whole test: a connection that is merely still
+      //   handshaking is not lost, and an operation stuck there is the
+      //   deadline's business, not this method's.
+      $Connection = $Operation->Connection;
+
+      if ($Operation->finished === false && $Connection !== null && is_resource($Connection->socket) === false) {
+         $Operation->fail('Database connection was lost while cancelling the operation.');
+
+         $Protocol->abandon($Operation);
+         $this->drain($Protocol, $Operation);
          $this->forget($Operation);
          $this->release($Operation);
       }

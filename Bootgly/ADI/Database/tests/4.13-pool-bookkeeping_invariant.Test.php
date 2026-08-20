@@ -194,7 +194,7 @@ return new Test(
       //   answered would skip it exactly there, and `fallback()` would then
       //   re-dispatch the statement the caller withdrew.
       $Database = new SQL(['timeout' => 30.0, 'pool' => ['min' => 0, 'max' => 0]]);
-      $Thrown = $Database->query('DELETE FROM accounts WHERE id = 1');
+      $Thrown = $Database->query('SELECT id FROM accounts');
       $Thrown->Protocol = new class ($Database->Config, $Database->Connection) extends Driver {
          public function prepare (Operation $Operation): Operation
          {

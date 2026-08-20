@@ -45,7 +45,10 @@ return new Test(
          $Driver->identify(123, 456);
       }
 
-      $Database->cancel($Operation);
+      // ! The driver's own door. This case is about what PostgreSQL puts on the
+      //   side channel, and the pool refuses to cancel an operation that never
+      //   reached the wire — a cancel request names a backend, not a statement.
+      $Driver->cancel($Operation);
       $cancel = stream_socket_accept($server, 1);
 
       yield assert(
@@ -77,7 +80,7 @@ return new Test(
          'port' => $port,
       ]);
       $MissingOperation = $Missing->query('SELECT 1');
-      $Missing->cancel($MissingOperation);
+      $MissingOperation->Protocol?->cancel($MissingOperation);
 
       yield assert(
          assertion: $MissingOperation->state === OperationStates::Failed && $MissingOperation->error === 'PostgreSQL cancellation requires BackendKeyData.',
