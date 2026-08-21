@@ -19,7 +19,6 @@ use function is_array;
 use function is_int;
 use function is_string;
 use function ltrim;
-use function max;
 use function pack;
 use function strlen;
 use function strpos;
@@ -30,7 +29,6 @@ use function time;
 use Bootgly\WPI\Endpoints\Servers\Ownership;
 use Bootgly\WPI\Endpoints\Servers\Packages;
 use Bootgly\WPI\Events\Cancellation;
-use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Modules\HTTP2;
 use Bootgly\WPI\Modules\HTTP2\Errors;
 use Bootgly\WPI\Modules\HTTP2\Frame;
@@ -159,10 +157,10 @@ final class Encoder_HTTP2
             }
          }
 
-         // ? Reserve before the Stream adopts the body/pad owners. On worker
-         //   pressure only this newly-growing stream is reset; existing
-         //   owners keep their ordered wire intact.
-         if ($Stream->Buffers->reserve($retained) === false) {
+         // ? Reserve before the Stream adopts the body/pad owners. On
+         //   connection or worker pressure only this newly-growing stream is
+         //   reset; existing owners keep their ordered wire intact.
+         if ($H2->permit($Stream->Buffers, $retained) === false) {
             $Stream->close();
             unset($H2->Streams[$stream]);
             $H2->opened--;
@@ -192,42 +190,6 @@ final class Encoder_HTTP2
          $frames .= $data;
 
          if ($done === false) {
-            // ? Outbound retention cap (audit M3) — what drain() could not
-            //   emit stays in memory until the peer grants credit. A peer that
-            //   simply withholds WINDOW_UPDATE could otherwise park one whole
-            //   response body per concurrent stream, multiplying the transport
-            //   pending cap by the stream limit. Budget is per CONNECTION, the
-            //   same shape SSE already enforces for sustained streams.
-            $retained = $H2->Buffers->retained;
-            $limit = max(0, TCP_Server_CLI::$maxPendingBytes);
-            $exceeded = $retained > $limit;
-            foreach ($H2->Streams as $Sibling) {
-               $bytes = $Sibling->HeadBuffers->retained
-                  + $Sibling->measure();
-               if ($bytes > $limit - $retained) {
-                  $exceeded = true;
-                  break;
-               }
-               $retained += $bytes;
-            }
-
-            if ($exceeded) {
-               $Stream->close();
-               unset($H2->Streams[$stream]);
-               $H2->opened--;
-
-               $frames .= Frame::pack(
-                  HTTP2::FRAME_RST_STREAM,
-                  0,
-                  $stream,
-                  pack('N', Errors::EnhanceYourCalm->value)
-               );
-
-               $raw = "{$outbox}{$frames}";
-               $length = strlen($raw);
-               return $raw;
-            }
-
             $Stream->responded = true;
 
             $raw = "{$outbox}{$frames}";

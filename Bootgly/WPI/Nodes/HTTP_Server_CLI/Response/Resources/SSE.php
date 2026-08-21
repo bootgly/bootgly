@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources;
 
 
+use const PHP_INT_MAX;
 use function dechex;
 use function explode;
 use function feof;
@@ -808,38 +809,14 @@ class SSE extends Resource implements Disconnecting
             return false;
          }
 
-         // ? Outbound backlog cap — a flow-control-starved peer (one that
-         //   stops sending WINDOW_UPDATE) must not grow unbounded in
-         //   memory. The budget is per CONNECTION: every stream's parked
-         //   bytes count against it, so concurrent slow streams cannot
-         //   multiply the transport pendingBuffer cap by the stream limit.
-         //   On breach, reset THIS stream (CANCEL) and tear this unit down.
-         $backlogged = strlen($payload);
-         $limit = max(0, TCP_Server_CLI::$maxPendingBytes);
-         $exceeded = $backlogged > $limit;
-         foreach ($H2->Streams as $Sibling) {
-            $bytes = $Sibling->measure();
-            if ($bytes > $limit - $backlogged) {
-               $exceeded = true;
-               break;
-            }
-            $backlogged += $bytes;
-         }
-         if ($exceeded) {
-            $this->abort();
-            return false;
-         }
-
-         // ? The per-connection check above and this worker-wide reservation
-         //   are separate boundaries. Reserve before concatenation so many
-         //   HTTP/2 connections cannot multiply an individually valid SSE
-         //   backlog into unbounded worker retention.
+         // ? One owner admission composes this SSE backlog with the decoder,
+         //   HPACK, every head/tail on the connection, and the worker ledger.
+         //   Reserve before concatenation; on breach reset THIS stream only.
          $retained = $Stream->measure();
          $bytes = strlen($payload);
          if (
-            $bytes > max(0, TCP_Server_CLI::$maxWorkerPendingBytes)
-               - TCP_Server_CLI::$pendingBytes
-            || $Stream->Buffers->reserve($retained + $bytes) === false
+            $bytes > PHP_INT_MAX - $retained
+            || $H2->permit($Stream->Buffers, $retained + $bytes) === false
          ) {
             $this->abort();
             return false;

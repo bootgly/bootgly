@@ -36,7 +36,12 @@ $streamsPerConnection = 128;
 $fieldsPerStream = 448;
 $targetStreams = $connectionCount * $streamsPerConnection;
 $targetFields = $targetStreams * $fieldsPerStream;
-$workerCap = 256 * 1024;
+$headWorkerCap = 256 * 1024;
+$HPACKLimit = 4096;
+$HPACKCapacity = 2 * $HPACKLimit
+   + intdiv($HPACKLimit, 32) * 384
+   + 1024;
+$workerCap = $headWorkerCap + $connectionCount * $HPACKCapacity;
 $heapFloor = 8 * 1024 * 1024;
 $probe = [
    'error' => '',
@@ -660,6 +665,7 @@ return new Test(
          $bodyBytes = 0;
          $bodyLedger = 0;
          $decoderLedger = 0;
+         $HPACKLedger = 0;
          $streamLedger = 0;
          $headLedger = 0;
          $H2 = [];
@@ -716,6 +722,7 @@ return new Test(
                $taggedConnections++;
                $bodyLedger += $Decoder->Bodies->retained;
                $decoderLedger += $Decoder->Buffers->retained;
+               $HPACKLedger += $Decoder->HPACKBuffers->retained;
             }
             $H2[(string) $Connection->id] = [
                'id' => $Connection->id,
@@ -744,6 +751,7 @@ return new Test(
             'body_bytes' => $bodyBytes,
             'body_ledger' => $bodyLedger,
             'decoder_ledger' => $decoderLedger,
+            'hpack_ledger' => $HPACKLedger,
             'stream_ledger' => $streamLedger,
             'head_ledger' => $headLedger,
             'h2' => $H2,
@@ -1001,6 +1009,8 @@ return new Test(
       $fieldsPerStream,
       $targetStreams,
       $targetFields,
+      $headWorkerCap,
+      $HPACKCapacity,
       $workerCap,
       $heapFloor,
    ): bool|string {
@@ -1062,12 +1072,14 @@ return new Test(
       $over = $probe['over'];
       $nearPending = $probe['near_snapshot']['pending'] ?? -1;
       $nearHeadLedger = $probe['near_snapshot']['head_ledger'] ?? -1;
+      $nearHPACKLedger = $probe['near_snapshot']['hpack_ledger'] ?? -1;
       $nearCharge = 2 * 16373 + ($fieldsPerStream + 5) * 384 + 1024;
       $nearAccounting =
-         ($nearPending === 0 && $nearHeadLedger === 0)
+         ($nearPending === 0 && $nearHeadLedger === 0 && $nearHPACKLedger === 0)
          || (
-            $nearPending === $nearCharge
+            $nearPending === $HPACKCapacity + $nearCharge
             && $nearHeadLedger === $nearCharge
+            && $nearHPACKLedger === $HPACKCapacity
             && $nearPending <= $workerCap
          );
       if (
@@ -1119,6 +1131,7 @@ return new Test(
          $connectionCount * $streamsPerConnection * (9 + 3193);
       $barrierPorts = $probe['first_ping_ports']
          + $probe['pressure_goaway_ports'];
+      $expectedHPACK = $connectionCount * $HPACKCapacity;
       $usedRefreshed = 0;
       $writesAdvanced = 0;
       $ports = array_flip($probe['attack_ports']);
@@ -1163,9 +1176,10 @@ return new Test(
          && ($retained['body_bytes'] ?? -1) === 0
          && ($retained['body_ledger'] ?? -1) === 0
          && ($retained['decoder_ledger'] ?? -1) === 0
+         && ($retained['hpack_ledger'] ?? -1) === $expectedHPACK
          && ($retained['stream_ledger'] ?? -1) === 0
          && ($retained['head_ledger'] ?? -1) === 0
-         && ($retained['pending'] ?? -1) === 0
+         && ($retained['pending'] ?? -1) === $expectedHPACK
          && $heapGrowth >= $heapFloor
          && ($persistent['pid'] ?? 0) === $PID
          && ($persistent['tagged_connections'] ?? -1) === $connectionCount
@@ -1173,8 +1187,9 @@ return new Test(
          && ($persistent['controlled_fields'] ?? -1) === $targetFields
          && ($persistent['decoded_list_bytes'] ?? -1) === $expectedListBytes
          && ($persistent['body_ledger'] ?? -1) === 0
+         && ($persistent['hpack_ledger'] ?? -1) === $expectedHPACK
          && ($persistent['head_ledger'] ?? -1) === 0
-         && ($persistent['pending'] ?? -1) === 0
+         && ($persistent['pending'] ?? -1) === $expectedHPACK
          && $persistentHeapGrowth >= $heapFloor
          && $usedRefreshed === $connectionCount
          && $writesAdvanced === $connectionCount;
@@ -1194,8 +1209,9 @@ return new Test(
             . "{$targetStreams} half-open request heads containing {$targetFields} "
             . "attacker-controlled field entries and {$expectedListBytes} decoded "
             . "list bytes. Live PHP heap grew by {$heapGrowth} bytes while the "
-            . 'worker, decoder-carry, stream-output, and body ledgers all remained '
-            . 'zero. Unique PING ACKs advanced every connection idle clock over '
+            . 'worker head, decoder-carry, stream-output, and body ledgers all '
+            . "remained zero; only {$expectedHPACK} bytes of HPACK capacity were "
+            . 'charged. Unique PING ACKs advanced every connection idle clock over '
             . (int) $probe['sustain_elapsed_ms'] . ' ms, the same state persisted '
             . 'past the natural timeout, and same-worker cleanup released it exactly.';
       }
@@ -1222,13 +1238,18 @@ return new Test(
       $bounded = ($retained['decoded_list_bytes'] ?? PHP_INT_MAX) <= $workerCap
          && ($persistent['decoded_list_bytes'] ?? PHP_INT_MAX) <= $workerCap
          && ($retained['pending'] ?? PHP_INT_MAX) <= $workerCap
-         && ($persistent['pending'] ?? PHP_INT_MAX) <= $workerCap;
+         && ($persistent['pending'] ?? PHP_INT_MAX) <= $workerCap
+         && ($retained['pending'] ?? PHP_INT_MAX)
+            - ($retained['hpack_ledger'] ?? 0) <= $headWorkerCap
+         && ($persistent['pending'] ?? PHP_INT_MAX)
+            - ($persistent['hpack_ledger'] ?? 0) <= $headWorkerCap;
       $accounted =
          (
             ($retained['tagged_streams'] ?? -1) === 0
             || (
                ($retained['pending'] ?? -1) > 0
                && ($retained['pending'] ?? -1)
+                  - ($retained['hpack_ledger'] ?? 0)
                   >= ($retained['decoded_list_bytes'] ?? PHP_INT_MAX)
             )
          )
@@ -1237,6 +1258,7 @@ return new Test(
             || (
                ($persistent['pending'] ?? -1) > 0
                && ($persistent['pending'] ?? -1)
+                  - ($persistent['hpack_ledger'] ?? 0)
                   >= ($persistent['decoded_list_bytes'] ?? PHP_INT_MAX)
             )
          );

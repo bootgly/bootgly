@@ -694,12 +694,14 @@ return new Test(
          $body = 0;
          $bodyLedger = 0;
          $fragmentLedger = 0;
+         $HPACKLedger = 0;
          foreach (Connections::$Connections as $Connection) {
             $Decoder = $Connection->Decoder;
             if (! $Decoder instanceof Decoder_HTTP2) {
                continue;
             }
             $fragmentLedger += $Decoder->Buffers->retained;
+            $HPACKLedger += $Decoder->HPACKBuffers->retained;
             $bodyLedger += $Decoder->Bodies->retained;
             foreach ($Decoder->Streams as $Stream) {
                if (($Stream->fields['x-h3-token'] ?? null) !== $token) {
@@ -719,6 +721,7 @@ return new Test(
             'body' => $body,
             'body_ledger' => $bodyLedger,
             'fragment_ledger' => $fragmentLedger,
+            'hpack_ledger' => $HPACKLedger,
          ];
       };
 
@@ -750,7 +753,14 @@ return new Test(
          $fragment = HPACK::encode([['x-h3-trailer', 'accepted']]);
          $fragmentCharge = 2 * $list + count($fields) * 384 + 1024;
          $fragmentBytes = strlen($fragment) - 1;
-         TCP_Server_CLI::$maxPendingBytes = $fragmentCharge + $fragmentBytes;
+         $HPACKLimit = 4096;
+         $HPACKCapacity = 2 * $HPACKLimit
+            + intdiv($HPACKLimit, 32) * 384
+            + 1024;
+         TCP_Server_CLI::$maxPendingBytes = $HPACKCapacity
+            + $fragmentCharge
+            + $fragmentBytes
+            + 1;
 
          return $Response->JSON->send([
             'pid' => getmypid(),
@@ -759,6 +769,8 @@ return new Test(
             'pending_cap' => TCP_Server_CLI::$maxPendingBytes,
             'fragment_head_charge' => $fragmentCharge,
             'fragment_bytes' => $fragmentBytes,
+            'fragment_completion_byte' => 1,
+            'hpack_capacity' => $HPACKCapacity,
          ]);
       }, GET);
 
@@ -836,6 +848,7 @@ return new Test(
          && ($fragmentControlReleased['head'] ?? -1) === 0
          && ($fragmentControlReleased['body_ledger'] ?? -1) === 0
          && ($fragmentControlReleased['fragment_ledger'] ?? -1) === 0
+         && ($fragmentControlReleased['hpack_ledger'] ?? -1) === 0
          && ($fragmentControlReleased['pending'] ?? -1) === $baseline;
       if ($fragmentControlSafe === false) {
          Vars::$labels = ['H3 fragmented-trailer positive control'];
@@ -893,6 +906,8 @@ return new Test(
       $fragmentReleased = $probe['fragment_released'];
       $fragmentHeadCharge = $probe['setup']['fragment_head_charge'] ?? -1;
       $fragmentBytes = $probe['setup']['fragment_bytes'] ?? -1;
+      $fragmentCompletionByte = $probe['setup']['fragment_completion_byte'] ?? -1;
+      $HPACKCapacity = $probe['setup']['hpack_capacity'] ?? -1;
 
       $timerCalm = in_array(
          Errors::EnhanceYourCalm->value,
@@ -933,8 +948,9 @@ return new Test(
          && ($fragmentRetained['body'] ?? -1) === 0
          && ($fragmentRetained['body_ledger'] ?? -1) === 0
          && ($fragmentRetained['fragment_ledger'] ?? -1) === $fragmentBytes
+         && ($fragmentRetained['hpack_ledger'] ?? -1) === $HPACKCapacity
          && ($fragmentRetained['pending'] ?? -1)
-            === $baseline + $fragmentHeadCharge + $fragmentBytes;
+            === $baseline + $HPACKCapacity + $fragmentHeadCharge + $fragmentBytes;
       $fragmented =
          $fragmentRetainedExact
          && $fragmentCalm
@@ -949,6 +965,7 @@ return new Test(
          && ($fragmentExpired['body'] ?? -1) === 0
          && ($fragmentExpired['body_ledger'] ?? -1) === 0
          && ($fragmentExpired['fragment_ledger'] ?? -1) === 0
+         && ($fragmentExpired['hpack_ledger'] ?? -1) === 0
          && ($fragmentExpired['pending'] ?? -1) === $baseline
          && in_array(
             bin2hex('frag-ok!'),
@@ -966,6 +983,7 @@ return new Test(
          && ($fragmentReleased['body'] ?? -1) === 0
          && ($fragmentReleased['body_ledger'] ?? -1) === 0
          && ($fragmentReleased['fragment_ledger'] ?? -1) === 0
+         && ($fragmentReleased['hpack_ledger'] ?? -1) === 0
          && ($fragmentReleased['pending'] ?? -1) === $baseline;
 
       if ($fragmentRetainedExact && $fragmentRST && $fragmentCalm === false) {
@@ -982,8 +1000,12 @@ return new Test(
          && str_contains($timer['data'] ?? '', 'H3-DEADLINE-OK')
          && ($timer['goaways'] ?? []) === [];
       $bounded =
-         ($probe['setup']['pending_cap'] ?? -1)
-            === $fragmentHeadCharge + $fragmentBytes
+         $fragmentCompletionByte === 1
+         && ($probe['setup']['pending_cap'] ?? -1)
+            === $HPACKCapacity
+               + $fragmentHeadCharge
+               + $fragmentBytes
+               + $fragmentCompletionByte
          && ($cap['first']['resets'] ?? null) === []
          && ($cap['first']['goaways'] ?? null) === []
          && in_array(
@@ -994,23 +1016,28 @@ return new Test(
          && ($capReleased['tagged'] ?? -1) === 0
          && ($capReleased['head'] ?? -1) === 0
          && ($capReleased['fragment_ledger'] ?? -1) === 0
+         && ($capReleased['hpack_ledger'] ?? -1) === 0
          && ($capReleased['pending'] ?? -1) === $baseline;
       $exact =
          ($probe['setup']['deadline'] ?? 0) === 2
          && $baseline >= 0
          && ($retained['tagged'] ?? -1) === 1
          && ($retained['head'] ?? -1) === $charge
-         && ($retained['pending'] ?? -1) === $baseline + $charge
+         && ($retained['hpack_ledger'] ?? -1) === $HPACKCapacity
+         && ($retained['pending'] ?? -1)
+            === $baseline + $HPACKCapacity + $charge
          && ($retained['body'] ?? -1) === 0
          && ($released['tagged'] ?? -1) === 0
          && ($released['head'] ?? -1) === 0
          && ($released['body_ledger'] ?? -1) === 0
          && ($released['fragment_ledger'] ?? -1) === 0
+         && ($released['hpack_ledger'] ?? -1) === 0
          && ($released['pending'] ?? -1) === $baseline
          && ($cleanup['tagged'] ?? -1) === 0
          && ($cleanup['head'] ?? -1) === 0
          && ($cleanup['body_ledger'] ?? -1) === 0
          && ($cleanup['fragment_ledger'] ?? -1) === 0
+         && ($cleanup['hpack_ledger'] ?? -1) === 0
          && ($cleanup['pending'] ?? -1) === $baseline
          && ($cleanup['pid'] ?? 0) === $setupPID
          && ($cleanup['restored'] ?? 0) > 2
@@ -1029,7 +1056,9 @@ return new Test(
          && in_array(bin2hex('data-one'), $data['pings'] ?? [], true)
          && ($dataRetained['tagged'] ?? -1) === 1
          && ($dataRetained['head'] ?? -1) === $charge
-         && ($dataRetained['pending'] ?? -1) === $baseline + $charge
+         && ($dataRetained['hpack_ledger'] ?? -1) === $HPACKCapacity
+         && ($dataRetained['pending'] ?? -1)
+            === $baseline + $HPACKCapacity + $charge
          && ($dataRetained['body'] ?? -1) === 1
          && ($dataRetained['body_ledger'] ?? -1) === 1
          && ($dataRetained['fragment_ledger'] ?? -1) === 0
@@ -1038,6 +1067,7 @@ return new Test(
          && ($dataReleased['body'] ?? -1) === 0
          && ($dataReleased['body_ledger'] ?? -1) === 0
          && ($dataReleased['fragment_ledger'] ?? -1) === 0
+         && ($dataReleased['hpack_ledger'] ?? -1) === 0
          && ($dataReleased['pending'] ?? -1) === $baseline
          && ($data['elapsed_ms'] ?? 0.0) >= 1600.0
          && ($data['elapsed_ms'] ?? PHP_FLOAT_MAX) < 3200.0
@@ -1048,6 +1078,7 @@ return new Test(
          && ($goawayReleased['head'] ?? -1) === 0
          && ($goawayReleased['body_ledger'] ?? -1) === 0
          && ($goawayReleased['fragment_ledger'] ?? -1) === 0
+         && ($goawayReleased['hpack_ledger'] ?? -1) === 0
          && ($goawayReleased['pending'] ?? -1) === $baseline;
 
       if (

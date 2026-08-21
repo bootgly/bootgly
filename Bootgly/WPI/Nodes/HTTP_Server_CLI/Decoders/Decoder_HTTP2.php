@@ -97,6 +97,13 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
    protected const int HEAD_LIST_FACTOR = 2;
    protected const int HEAD_FIELD_BYTES = 384;
    protected const int HEAD_BASE_BYTES = 1024;
+   // @ HPACK's RFC table size prices names, values and 32 bytes per entry,
+   //   but PHP retains two strings plus a tuple/hash bucket per entry. Reserve
+   //   the advertised lifetime capacity conservatively before decode so a
+   //   semantically-doomed block cannot allocate outside either byte ledger.
+   protected const int HPACK_LIST_FACTOR = 2;
+   protected const int HPACK_ENTRY_BYTES = 384;
+   protected const int HPACK_BASE_BYTES = 1024;
    protected const int NANOSECOND = 1_000_000_000;
 
    // @ Connection-specific fields forbidden in HTTP/2 requests (RFC 9113 §8.2.2)
@@ -146,6 +153,8 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
    public Settings $Remote;
    public HPACK $HPACK;
    public Bodies $Bodies;
+   /** Worker-wide reservation for the persistent HPACK decode table. */
+   public Buffers $HPACKBuffers;
    /** Worker-wide reservation for protocol-internal receive carry. */
    public Buffers $Buffers;
    /** @var array<int, Stream> */
@@ -199,6 +208,8 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
    protected null|TCP_Packages $Package;
    // @ One deferred continuation for locally-sliced outbound DATA.
    protected bool $scheduled;
+   // @ Conservative connection-lifetime price of the advertised HPACK table.
+   protected int $HPACKCapacity;
    // @ One monotonic timer for the nearest incomplete request Stream.
    protected int $timer;
    protected int $timerDeadline;
@@ -217,6 +228,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
          static::$maxConnectionBodySize,
          static::$maxWorkerBodySize
       );
+      $this->HPACKBuffers = new Buffers;
       $this->Buffers = new Buffers;
       $this->Streams = [];
 
@@ -241,6 +253,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
       $this->since = 0;
       $this->Package = null;
       $this->scheduled = false;
+      $this->HPACKCapacity = self::estimate($Local->table);
       $this->timer = 0;
       $this->timerDeadline = 0;
    }
@@ -870,6 +883,8 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
       $this->ending = false;
       $this->trailing = false;
       $this->circular = false;
+      $this->HPACK = new HPACK($this->Local->table);
+      $this->HPACKBuffers->release();
       $this->Buffers->release();
       $this->Streams = [];
       $this->opened = 0;
@@ -887,9 +902,16 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
       /** @var TCP_Packages $Package */
       $this->expected = 0;
 
-      // @ HPACK decompression is connection state — failures are fatal
-      //   (decode first, even for a doomed stream, to keep the dynamic
-      //   table synchronized with the peer)
+      // @ HPACK decompression is connection state — reserve its conservative
+      //   lifetime capacity before any mutation. Decode still precedes HTTP
+      //   semantics, even for a doomed stream, to stay synchronized.
+      if ($this->permit($this->HPACKBuffers, $this->HPACKCapacity) === false) {
+         return $this->fail(
+            $Package,
+            Errors::EnhanceYourCalm,
+            'HPACK table budget exceeded'
+         );
+      }
       $fields = $this->HPACK->decode($block, static::$list);
       if ($fields === null) {
          return $this->fail($Package, Errors::Compression, 'header block decode failed');
@@ -1831,25 +1853,72 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
     */
    protected function admit (Stream $Stream, int $bytes): bool
    {
-      $limit = max(0, TCP_Server_CLI::$maxPendingBytes);
+      return $this->permit($Stream->HeadBuffers, $bytes);
+   }
+
+   /** Conservatively price one connection's advertised HPACK table capacity. */
+   protected static function estimate (int $limit): int
+   {
+      $table = max(0, $limit);
+      if ($table > intdiv(PHP_INT_MAX, self::HPACK_LIST_FACTOR)) {
+         return PHP_INT_MAX;
+      }
+      $strings = $table * self::HPACK_LIST_FACTOR;
+      $entries = intdiv($table, 32);
+      if (
+         $entries > intdiv(
+            PHP_INT_MAX - self::HPACK_BASE_BYTES,
+            self::HPACK_ENTRY_BYTES
+         )
+      ) {
+         return PHP_INT_MAX;
+      }
+      $containers = self::HPACK_BASE_BYTES
+         + $entries * self::HPACK_ENTRY_BYTES;
+      if ($strings > PHP_INT_MAX - $containers) {
+         return PHP_INT_MAX;
+      }
+
+      return $strings + $containers;
+   }
+
+   /** Measure every transport-owned reservation on this HTTP/2 connection. */
+   protected function weigh (): int
+   {
       $retained = $this->Buffers->retained;
-      if ($retained > $limit) {
-         return false;
+      if ($this->HPACKBuffers->retained > PHP_INT_MAX - $retained) {
+         return PHP_INT_MAX;
       }
+      $retained += $this->HPACKBuffers->retained;
 
-      foreach ($this->Streams as $Sibling) {
-         $owned = $Sibling->HeadBuffers->retained
-            + $Sibling->Buffers->retained;
-         if ($owned > $limit - $retained) {
-            return false;
+      foreach ($this->Streams as $Stream) {
+         foreach ([$Stream->HeadBuffers, $Stream->Buffers] as $Buffers) {
+            if ($Buffers->retained > PHP_INT_MAX - $retained) {
+               return PHP_INT_MAX;
+            }
+            $retained += $Buffers->retained;
          }
-         $retained += $owned;
       }
-      if ($bytes > $limit - $retained) {
+
+      return $retained;
+   }
+
+   /** Admit one absolute owner reservation under connection + worker caps. */
+   public function permit (Buffers $Buffers, int $bytes): bool
+   {
+      $wanted = max(0, $bytes);
+      $growth = $wanted - $Buffers->retained;
+      if ($growth <= 0) {
+         return $Buffers->reserve($wanted);
+      }
+
+      $retained = $this->weigh();
+      $limit = max(0, TCP_Server_CLI::$maxPendingBytes);
+      if ($retained > $limit || $growth > $limit - $retained) {
          return false;
       }
 
-      return $Stream->HeadBuffers->reserve($bytes);
+      return $Buffers->reserve($wanted);
    }
 
    /**
@@ -1917,15 +1986,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
    /** Reserve an absolute receive-carry footprint against both TCP ceilings. */
    protected function reserve (int $bytes): bool
    {
-      $wanted = max(0, $bytes);
-      if (
-         $wanted > $this->Buffers->retained
-         && $wanted > max(0, TCP_Server_CLI::$maxPendingBytes)
-      ) {
-         return false;
-      }
-
-      return $this->Buffers->reserve($wanted);
+      return $this->permit($this->Buffers, $bytes);
    }
 
    /**
@@ -1956,6 +2017,8 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
       $this->ending = false;
       $this->trailing = false;
       $this->circular = false;
+      $this->HPACK = new HPACK($this->Local->table);
+      $this->HPACKBuffers->release();
       $this->Buffers->release();
       $raw = "{$this->outbox}{$goaway}";
       $this->outbox = '';

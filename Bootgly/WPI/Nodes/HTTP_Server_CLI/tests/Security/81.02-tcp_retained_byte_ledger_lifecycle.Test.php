@@ -530,11 +530,13 @@ return new Test(
          $H2SocketB = fopen('php://temp', 'w+');
          $H2SocketC = fopen('php://temp', 'w+');
          $H2SocketD = fopen('php://temp', 'w+');
+         $H2SocketE = fopen('php://temp', 'w+');
          if (
             ! is_resource($H2SocketA)
             || ! is_resource($H2SocketB)
             || ! is_resource($H2SocketC)
             || ! is_resource($H2SocketD)
+            || ! is_resource($H2SocketE)
          ) {
             throw new RuntimeException('Could not create HTTP/2 carry fixture streams.');
          }
@@ -542,28 +544,34 @@ return new Test(
          $Resources[] = $H2SocketB;
          $Resources[] = $H2SocketC;
          $Resources[] = $H2SocketD;
+         $Resources[] = $H2SocketE;
 
          $H2ConnectionA = new L1LedgerConnection($H2SocketA, 18406);
          $H2ConnectionB = new L1LedgerConnection($H2SocketB, 18407);
          $H2ConnectionC = new L1LedgerConnection($H2SocketC, 18408);
          $H2ConnectionD = new L1LedgerConnection($H2SocketD, 18409);
+         $H2ConnectionE = new L1LedgerConnection($H2SocketE, 18410);
          $H2PackageA = new L1LedgerPackage($H2ConnectionA);
          $H2PackageB = new L1LedgerPackage($H2ConnectionB);
          $H2PackageC = new L1LedgerPackage($H2ConnectionC);
          $H2PackageD = new L1LedgerPackage($H2ConnectionD);
+         $H2PackageE = new L1LedgerPackage($H2ConnectionE);
          $Owners[] = $H2PackageA;
          $Owners[] = $H2PackageB;
          $Owners[] = $H2PackageC;
          $Owners[] = $H2PackageD;
+         $Owners[] = $H2PackageE;
 
          $DecoderA = new Decoder_HTTP2;
          $DecoderB = new Decoder_HTTP2;
          $DecoderC = new Decoder_HTTP2;
          $DecoderD = new Decoder_HTTP2;
+         $DecoderE = new Decoder_HTTP2;
          $Decoders[] = $DecoderA;
          $Decoders[] = $DecoderB;
          $Decoders[] = $DecoderC;
          $Decoders[] = $DecoderD;
+         $Decoders[] = $DecoderE;
 
          $PartialA = $DecoderA->decode($H2PackageA, $partial, strlen($partial));
          $partialABytes = strlen($DecoderA->buffer);
@@ -585,6 +593,7 @@ return new Test(
          $preface = HTTP2::PREFACE . $settings;
          $DecoderC->decode($H2PackageC, $preface, strlen($preface));
          $DecoderD->decode($H2PackageD, $preface, strlen($preface));
+         $DecoderE->decode($H2PackageE, $preface, strlen($preface));
 
          $headerBlock = HPACK::encode([
             [':method', 'GET'],
@@ -608,7 +617,7 @@ return new Test(
          $FragmentC = $DecoderC->decode($H2PackageC, $header, strlen($header));
          $fragmentOverflowTotal = TCPServer::$pendingBytes;
 
-         TCPServer::$maxWorkerPendingBytes = $baseline + strlen($headerBlock);
+         TCPServer::$maxWorkerPendingBytes = $baseline + 128 * 1024;
          $continuation = Frame::pack(
             HTTP2::FRAME_CONTINUATION,
             HTTP2::FLAG_END_HEADERS,
@@ -622,15 +631,18 @@ return new Test(
          );
          $fragmentCompleteRetained = $DecoderA->Buffers->retained;
          $fragmentReleased = TCPServer::$pendingBytes;
+         $fragmentHPACKRetained = $DecoderA->HPACKBuffers->retained;
+         $DecoderA->disconnect();
+         $fragmentDisconnected = TCPServer::$pendingBytes;
 
          $feed = str_repeat('F', 10);
          TCPServer::$maxWorkerPendingBytes = $baseline + (2 * strlen($feed)) - 1;
-         $DecoderA->feed($feed);
-         $feedARetained = $DecoderA->Buffers->retained;
-         $feedTotal = TCPServer::$pendingBytes;
          $DecoderD->feed($feed);
+         $feedDRetained = $DecoderD->Buffers->retained;
+         $feedTotal = TCPServer::$pendingBytes;
+         $DecoderE->feed($feed);
          $feedOverflowTotal = TCPServer::$pendingBytes;
-         $DecoderA->disconnect();
+         $DecoderD->disconnect();
          $feedReleased = TCPServer::$pendingBytes;
 
          $probe['h2_carry'] = [
@@ -656,11 +668,13 @@ return new Test(
             'fragment_complete' => $FragmentComplete === States::Incomplete,
             'fragment_complete_retained' => $fragmentCompleteRetained,
             'fragment_released' => $fragmentReleased,
+            'fragment_hpack_retained' => $fragmentHPACKRetained,
+            'fragment_disconnected' => $fragmentDisconnected,
             'feed_bytes' => strlen($feed),
-            'feed_a_retained' => $feedARetained,
+            'feed_d_retained' => $feedDRetained,
             'feed_total' => $feedTotal,
-            'feed_d_closed' => $H2ConnectionD->closed,
-            'feed_d_retained' => $DecoderD->Buffers->retained,
+            'feed_e_closed' => $H2ConnectionE->closed,
+            'feed_e_retained' => $DecoderE->Buffers->retained,
             'feed_overflow_total' => $feedOverflowTotal,
             'feed_released' => $feedReleased,
          ];
@@ -746,6 +760,10 @@ return new Test(
          $outboxHead = 2 * $outboxList
             + count($outboxFields) * 384
             + 1024;
+         $HPACKLimit = $OutboxDecoderA->HPACK->limit;
+         $HPACKCapacity = 2 * $HPACKLimit
+            + intdiv($HPACKLimit, 32) * 384
+            + 1024;
          $request = Frame::pack(
             HTTP2::FRAME_HEADERS,
             HTTP2::FLAG_END_HEADERS | HTTP2::FLAG_END_STREAM,
@@ -754,7 +772,11 @@ return new Test(
          );
          $attack = str_repeat($ping, $pingCount) . $request;
          TCPServer::$maxWorkerPendingBytes =
-            $baseline + (2 * $outboxHead) + (2 * $ackBytes) - 1;
+            $baseline
+            + (2 * $HPACKCapacity)
+            + (2 * $outboxHead)
+            + (2 * $ackBytes)
+            - 1;
 
          $OutboxA = $OutboxDecoderA->decode(
             $OutboxPackageA,
@@ -764,6 +786,7 @@ return new Test(
          $outboxAPending = strlen($OutboxPackageA->pendingBuffer)
             - $OutboxPackageA->pendingOffset;
          $outboxARetained = $OutboxPackageA->Buffers->retained;
+         $outboxHPACKRetained = $OutboxDecoderA->HPACKBuffers->retained;
          $outboxATotal = TCPServer::$pendingBytes;
 
          $OutboxB = $OutboxDecoderB->decode(
@@ -791,6 +814,8 @@ return new Test(
             'preface_b' => $OutboxPrefaceB === States::Incomplete,
             'ack_bytes' => $ackBytes,
             'head_bytes' => $outboxHead,
+            'hpack_capacity' => $HPACKCapacity,
+            'hpack_retained' => $outboxHPACKRetained,
             'a' => $OutboxA === States::Complete,
             'a_decoder_bytes' => strlen($OutboxDecoderA->outbox),
             'a_pending' => $outboxAPending,
@@ -1478,12 +1503,16 @@ return new Test(
          || ($H2Carry['fragment_overflow_total'] ?? null) !== $baseline + $H2Carry['fragment_bytes']
          || ($H2Carry['fragment_complete'] ?? null) !== true
          || ($H2Carry['fragment_complete_retained'] ?? null) !== 0
-         || ($H2Carry['fragment_released'] ?? null) !== $baseline
+         || ! is_int($H2Carry['fragment_hpack_retained'] ?? null)
+         || $H2Carry['fragment_hpack_retained'] <= 0
+         || ($H2Carry['fragment_released'] ?? null)
+            !== $baseline + $H2Carry['fragment_hpack_retained']
+         || ($H2Carry['fragment_disconnected'] ?? null) !== $baseline
          || ($H2Carry['feed_bytes'] ?? null) !== 10
-         || ($H2Carry['feed_a_retained'] ?? null) !== 10
+         || ($H2Carry['feed_d_retained'] ?? null) !== 10
          || ($H2Carry['feed_total'] ?? null) !== $baseline + 10
-         || ($H2Carry['feed_d_closed'] ?? null) !== true
-         || ($H2Carry['feed_d_retained'] ?? null) !== 0
+         || ($H2Carry['feed_e_closed'] ?? null) !== true
+         || ($H2Carry['feed_e_retained'] ?? null) !== 0
          || ($H2Carry['feed_overflow_total'] ?? null) !== $baseline + 10
          || ($H2Carry['feed_released'] ?? null) !== $baseline
       ) {
@@ -1497,6 +1526,7 @@ return new Test(
       $outbox = $probe['outbox'];
       $ackBytes = $outbox['ack_bytes'] ?? null;
       $headBytes = $outbox['head_bytes'] ?? null;
+      $HPACKCapacity = $outbox['hpack_capacity'] ?? null;
       if (
          ($outbox['preface_a'] ?? null) !== true
          || ($outbox['preface_b'] ?? null) !== true
@@ -1504,18 +1534,22 @@ return new Test(
          || $ackBytes <= 0
          || ! is_int($headBytes)
          || $headBytes <= 0
+         || ! is_int($HPACKCapacity)
+         || $HPACKCapacity <= 0
+         || ($outbox['hpack_retained'] ?? null) !== $HPACKCapacity
          || ($outbox['a'] ?? null) !== true
          || ($outbox['a_decoder_bytes'] ?? null) !== 0
          || ($outbox['a_pending'] ?? null) !== $ackBytes
          || ($outbox['a_retained'] ?? null) !== $ackBytes
-         || ($outbox['a_total'] ?? null) !== $baseline + $headBytes + $ackBytes
+         || ($outbox['a_total'] ?? null)
+            !== $baseline + $HPACKCapacity + $headBytes + $ackBytes
          || ($outbox['b'] ?? null) !== true
          || ($outbox['b_closed'] ?? null) !== true
          || ($outbox['b_decoder_bytes'] ?? null) !== 0
          || ($outbox['b_pending'] ?? null) !== 0
          || ($outbox['b_retained'] ?? null) !== 0
          || ($outbox['overflow_total'] ?? null)
-            !== $baseline + $headBytes + $ackBytes
+            !== $baseline + $HPACKCapacity + $headBytes + $ackBytes
          || ($outbox['drained'] ?? null) !== true
          || ($outbox['drained_pending'] ?? null) !== 0
          || ($outbox['drained_retained'] ?? null) !== 0
