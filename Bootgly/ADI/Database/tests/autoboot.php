@@ -123,5 +123,8 @@ return new Suite(
       '7.31-postgresql_stale_write_holder',
       '7.32-postgresql_stale_holder_live',
       '7.33-postgresql_teardown_holder',
+      '7.34-postgresql_parse_marker_ownership',
+      '7.35-postgresql_parse_close_order',
+      '7.36-postgresql_parse_close_live',
    ]
 );

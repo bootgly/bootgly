@@ -925,9 +925,17 @@ class PostgreSQL extends Driver
    /**
     * Release one in-flight Parse marker its composer no longer owes.
     */
-   private function release (string $statement): void
+   private function release (string $statement, bool $answered = false): void
    {
       $marker = $this->preparing[$statement] ?? null;
+
+      // ? A Parse already on the wire remains in flight until a backend answer
+      //   settles it. A name-only cache eviction belongs to no particular
+      //   operation and must not erase that fact: a queued Close could then
+      //   overtake the unanswered Parse and leave the cache ahead of the server.
+      if ($marker === true && $answered === false) {
+         return;
+      }
 
       // ? A live composer still holds that Parse in its buffer, so this event
       //   describes a different registration of the name. Dropping the marker
@@ -987,6 +995,13 @@ class PostgreSQL extends Driver
     */
    private function scan (string $statement): bool
    {
+      // ? A sent Parse holds the name until ParseComplete or ErrorResponse. A
+      //   Close rendered now would follow that Parse on the socket, destroy its
+      //   registration, and leave the next warm Bind naming nothing.
+      if (($this->preparing[$statement] ?? null) === true) {
+         return true;
+      }
+
       $Holders = $this->Holders[$statement] ?? [];
 
       // @@ Holders — a flushed or finished operation no longer holds anything:
@@ -1460,6 +1475,11 @@ class PostgreSQL extends Driver
          // ! Unconditional — the driver model mirrors the backend truth; a
          //   zero statements budget discards transiently at ReadyForQuery.
          if ($Operation->statement !== '') {
+            // @ ParseComplete settles this operation's sent marker. Any Close
+            //   queued while the Parse was unanswered described an older
+            //   registration and is stale now that this one exists.
+            $this->release($Operation->statement, answered: true);
+            unset($this->closing[$Operation->statement]);
             $this->cache($Operation->statement);
             $Operation->prepared = true;
          }
@@ -1488,9 +1508,19 @@ class PostgreSQL extends Driver
          $message = $Message->fields['message'] ?? 'PostgreSQL error.';
 
          if ($Operation->statement !== '') {
-            if (isset($this->statements[$Operation->statement]) === false) {
+            if ($Operation->prepared === false) {
                // ? No ParseComplete arrived — the backend never registered the
-               //   statement: drop every local trace of it.
+               //   statement. This ErrorResponse is therefore the protocol
+               //   answer that may release its sent marker.
+               $this->release($Operation->statement, answered: true);
+               $this->evict($Operation->statement);
+               $Operation->prepared = false;
+            }
+            elseif (isset($this->statements[$Operation->statement]) === false) {
+               // ? A warm operation can outlive the cache entry it used. Its
+               //   error does not answer a newer sibling's Parse for the same
+               //   content-derived name, so ordinary eviction preserves that
+               //   sent marker until its own response arrives.
                $this->evict($Operation->statement);
                $Operation->prepared = false;
             }
