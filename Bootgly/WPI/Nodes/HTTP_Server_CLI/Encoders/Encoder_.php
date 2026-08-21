@@ -892,8 +892,47 @@ class Encoder_ extends Encoders
                ]);
             }
             else {
-               $Exchange?->finish(null);
-               throw $Throwable;
+               // ! No output was selected, so the listener failure remains
+               //   reversible. Keep this Handled lifecycle mediated, discard
+               //   every replay snapshot, and serialize one fresh 500 instead
+               //   of letting application event code escape the reactor.
+               self::$wire = null;
+               self::$Admitted = null;
+               self::$admittedBody = '';
+               self::$admittedFields = [];
+               self::$admittedPrepared = [];
+               self::$admittedQueued = [];
+               self::$admittedMasked = [];
+               self::$admittedType = '';
+               self::$admittedPreset = [];
+               self::$admittedCode = 200;
+               self::$admittedHints = '';
+               self::$admittedStream = false;
+               self::$admittedChunked = false;
+               self::$admittedEncoded = false;
+               self::$adopted = false;
+               self::$handled = [];
+               self::$mutated = false;
+
+               try {
+                  $Errored = Catcher::respond($Request, Server::$Response, $Throwable);
+               }
+               catch (Throwable) {
+                  $Errored = new Response(code: 500, body: '');
+               }
+
+               // Connection management ran before Handled. The fresh error
+               // Response must retain the close framing selected there.
+               if (
+                  $Request->closeConnection
+                  && $Request->protocol === 'HTTP/1.1'
+               ) {
+                  $Errored->Header->set('Connection', 'close');
+               }
+
+               unset($Response);
+               $Response = $Errored;
+               $Injected = $Errored;
             }
          }
 

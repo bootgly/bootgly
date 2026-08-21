@@ -485,8 +485,33 @@ class Encoder_Testing extends Encoders
                ]);
             }
             else {
-               $Exchange?->finish(null);
-               throw $Throwable;
+               // ! Mirror production: a pre-wire Handled failure is still
+               //   reversible. Drop replay state and finish this request with
+               //   a fresh 500 instead of escaping the test worker reactor.
+               $cacheWire = null;
+               $CachedResponse = null;
+               $admitted = [];
+               $adopted = false;
+               $handled = [];
+               $mutated = false;
+
+               try {
+                  $Errored = Catcher::respond($Request, Server::$Response, $Throwable);
+               }
+               catch (Throwable) {
+                  $Errored = new Response(code: 500, body: '');
+               }
+
+               if (
+                  $Request->closeConnection
+                  && $Request->protocol === 'HTTP/1.1'
+               ) {
+                  $Errored->Header->set('Connection', 'close');
+               }
+
+               unset($Response);
+               $Response = $Errored;
+               $Injected = $Errored;
             }
          }
 

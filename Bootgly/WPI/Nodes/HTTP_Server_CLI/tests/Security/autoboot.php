@@ -683,5 +683,9 @@ return new Suite(
       // Replacing a persistent scoped resource must release the displaced
       // instance from the reusable Response registry lifecycle.
       '102.08-scoped_resource_replacement_retention',
+      // # Synchronous Handled-listener containment (audit 2026-08-20 M7)
+      // A pre-wire listener failure becomes one bounded 500 and must never
+      // escape the request boundary or terminate the serving worker.
+      '102.09-handled_listener_worker_crash',
    ],
 );
