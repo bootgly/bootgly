@@ -20,6 +20,7 @@ use function min;
 use function strtok;
 use BackedEnum;
 use Closure;
+use Fiber;
 use InvalidArgumentException;
 use RuntimeException;
 use Stringable;
@@ -67,7 +68,19 @@ class Database extends Resource implements Awaiting, Scheduling
    private null|Response $Response = null;
 
    // * Metadata
-   // ...
+   // ! The transaction that owns this resource's query surface while a
+   //   transact() callback runs, and null the rest of the time. Plain nullable
+   //   for the same reason $Scope is: a get hook on this class costs ~2% CPU on
+   //   1-query routes, and null falls through to the pool facade at every site.
+   private null|Transaction $Transaction = null;
+   // ! The execution context that opened it. One resource object is reachable
+   //   from two of them — Resources::fork() carries a definition-less mount into
+   //   the clone by reference, and a plain capture crosses defer() with no
+   //   registry at all — and a surface without an owner would hand a stranger's
+   //   request the transaction: uncommitted rows to read, and its own writes
+   //   destroyed by a rollback it never asked for.
+   /** @var null|Fiber<mixed,mixed,mixed,mixed> */
+   private null|Fiber $Fiber = null;
 
 
    public function __construct (SQL $Database)
@@ -219,7 +232,16 @@ class Database extends Resource implements Awaiting, Scheduling
     */
    public function map (string $Entity): Repository
    {
-      return $this->Database->map($Entity, $this->Scope, $this);
+      // ? The transaction is this context's only while the context that opened it
+      //   is the one asking. Anyone else falls through to the pool, which is
+      //   what they would have got before a transaction was ever open.
+      $Querying = $this->Database;
+
+      if ($this->Transaction !== null && $this->Fiber === Fiber::getCurrent()) {
+         $Querying = $this->Transaction;
+      }
+
+      return $Querying->map($Entity, $this->Scope, $this);
    }
 
    /**
@@ -309,7 +331,16 @@ class Database extends Resource implements Awaiting, Scheduling
     */
    public function query (string|Builder|Query $query, array $parameters = [], null|object $Scope = null): Operation
    {
-      return $this->await($this->Database->query($query, $parameters, $Scope ?? $this->Scope));
+      // ? The transaction is this context's only while the context that opened it
+      //   is the one asking. Anyone else falls through to the pool, which is
+      //   what they would have got before a transaction was ever open.
+      $Querying = $this->Database;
+
+      if ($this->Transaction !== null && $this->Fiber === Fiber::getCurrent()) {
+         $Querying = $this->Transaction;
+      }
+
+      return $this->await($Querying->query($query, $parameters, $Scope ?? $this->Scope));
    }
 
    /**
@@ -410,16 +441,52 @@ class Database extends Resource implements Awaiting, Scheduling
     */
    public function transact (callable $work): mixed
    {
-      $Transaction = $this->Database->begin();
-      $Begin = $Transaction->Operation;
+      // ! A nested transact() nests on the surface already open, as a savepoint.
+      //   Beginning again on the facade would open a SECOND, independent
+      //   transaction: its writes escape the outer one's rollback, and on a
+      //   saturated pool its exclusive BEGIN parks waiting for the connection the
+      //   outer one is holding. `$entry` is the depth this call found, so the
+      //   unwind below gives back exactly the levels this call opened.
+      $Fiber = Fiber::getCurrent();
+      $Transaction = $this->Fiber === $Fiber ? $this->Transaction : null;
+
+      if ($Transaction === null) {
+         $entry = 0;
+         $Transaction = $this->Database->begin();
+         $Begin = $Transaction->Operation;
+      }
+      else {
+         $entry = $Transaction->depth;
+         $Begin = $Transaction->begin();
+      }
 
       if ($Begin !== null) {
          $this->await($Begin);
          $this->check($Begin);
       }
 
+      // ! For the length of the callback, this resource's query surface IS the
+      //   transaction. Through the facade the same call asks the pool for a
+      //   DIFFERENT connection: with capacity to spare it runs outside the unit
+      //   of work that is supposed to contain it — reading none of its writes,
+      //   covered by none of its rollback — and with none to spare it parks
+      //   waiting for the connection this very caller is holding.
+      //   Saved and restored, never cleared, so a nested transact() hands the
+      //   outer surface back.
+      $Previous = $this->Transaction;
+      $Owner = $this->Fiber;
+
       try {
-         $result = $work($Transaction, $this);
+         try {
+            $this->Transaction = $Transaction;
+            $this->Fiber = $Fiber;
+
+            $result = $work($Transaction, $this);
+         }
+         finally {
+            $this->Transaction = $Previous;
+            $this->Fiber = $Owner;
+         }
 
          // @@ The work may have opened nested levels and left them open. One
          //    commit() at `depth > 1` releases a savepoint, so the outer
@@ -428,13 +495,24 @@ class Database extends Resource implements Awaiting, Scheduling
          //    as done. The contract here is the whole transaction, not the
          //    level the callback happened to stop on.
          do {
+            // ? A `do` runs once even when the callback already unwound past the
+            //   depth this call found — and at `depth === $entry === 1` commit()
+            //   is no longer a savepoint release: it ends the CALLER's
+            //   transaction, from inside a nested call, and the caller's own
+            //   rollback then has nothing left to reach. The `$entry > 0` half
+            //   keeps the outer call attempting its teardown unconditionally,
+            //   which is what a transaction reporting `depth === 0` needs.
+            if ($entry > 0 && $Transaction->depth <= $entry) {
+               break;
+            }
+
             $Commit = $this->await($Transaction->commit());
 
             // ? Every commit() that cannot make progress fails the operation,
             //   so the loop always ends through here rather than spinning.
             $this->check($Commit);
          }
-         while ($Transaction->depth > 0);
+         while ($Transaction->depth > $entry);
 
          $this->Database->touch($this->Scope);
 
@@ -446,6 +524,17 @@ class Database extends Resource implements Awaiting, Scheduling
          //    attempted: only the outermost carries `unlock`, so stopping at
          //    the first failure would strand the reservation.
          do {
+            // ? A `do` runs once even when the callback already unwound past the
+            //   depth this call found — and at `depth === $entry === 1` commit()
+            //   is no longer a savepoint release: it ends the CALLER's
+            //   transaction, from inside a nested call, and the caller's own
+            //   rollback then has nothing left to reach. The `$entry > 0` half
+            //   keeps the outer call attempting its teardown unconditionally,
+            //   which is what a transaction reporting `depth === 0` needs.
+            if ($entry > 0 && $Transaction->depth <= $entry) {
+               break;
+            }
+
             $depth = $Transaction->depth;
 
             try {
@@ -461,7 +550,7 @@ class Database extends Resource implements Awaiting, Scheduling
                break;
             }
          }
-         while ($Transaction->depth > 0);
+         while ($Transaction->depth > $entry);
 
          throw $Throwable;
       }

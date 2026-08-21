@@ -26,5 +26,6 @@ return new Suite(
       '1.8-database_resource_transact',
       '1.9-database_resource_transact_nested',
       '1.10-resource_registry_lifecycle',
+      '1.11-database_resource_transact_routing',
    ]
 );
