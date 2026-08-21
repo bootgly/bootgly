@@ -120,5 +120,7 @@ return new Suite(
       '4.14-pool-cancel_preconditions',
       '7.30-sql_transaction_failed_begin',
       '9.12-sqlite_pool_confinement',
+      '7.31-postgresql_stale_write_holder',
+      '7.32-postgresql_stale_holder_live',
    ]
 );

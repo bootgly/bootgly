@@ -30,6 +30,7 @@ use function is_resource;
 use function is_scalar;
 use function is_string;
 use function ltrim;
+use function microtime;
 use function preg_match;
 use function sha1;
 use function spl_object_id;
@@ -89,6 +90,16 @@ class PostgreSQL extends Driver
    private array $completed = [];
    // @ Operation currently holding the socket write stream (co-located pipelining).
    private null|Operation $writing = null;
+   // @ Bytes of the holder's batch already on the wire. Zero means the backend
+   //   never saw the batch start: the stream can be withdrawn locally, while a
+   //   partial count means the backend is parsing a message only the remaining
+   //   buffer can complete.
+   private int $wrote = 0;
+   // @ Statement Closes riding the holder's batch — requeued if that batch is
+   //   withdrawn before any byte reaches the wire, or the backend keeps names
+   //   the driver believes closed.
+   /** @var array<int,string> */
+   private array $carrying = [];
    /** @var array<string,string> */
    private array $names = [];
    // @ Statement names with a Parse in flight. The value is a weak reference to
@@ -384,10 +395,80 @@ class PostgreSQL extends Driver
       }
 
       if ($Operation->state === OperationStates::Querying) {
+         $Holder = $this->writing;
+
          // ? A co-located sibling holds the write stream — wait so the
          //   pipelined wire messages are not interleaved on the socket.
-         if ($this->writing !== null && $this->writing !== $Operation && $this->writing->finished === false) {
-            return $this->await($Operation, Scheduler::SCHEDULE_WRITE);
+         if ($Holder !== null && $Holder !== $Operation && $Holder->finished === false) {
+            // ? A holder inside its own deadline is a live writer: its caller
+            //   still advances it and the flush resumes there. Past it, nobody
+            //   ever advances the holder again — Pool::wait() drives only the
+            //   operation it was handed — so this operation reconciles the
+            //   stream itself. The transport stays up: the backend is healthy,
+            //   waiting for bytes that sit in the holder's own buffer.
+            if ($Holder->deadline <= 0.0 || microtime(true) < $Holder->deadline) {
+               return $this->await($Operation, Scheduler::SCHEDULE_WRITE);
+            }
+
+            if ($this->wrote === 0) {
+               // ? Nothing reached the wire — nothing is owed: withdraw the
+               //   batch locally. The Closes it carried never went out, so they
+               //   are requeued; its in-flight Parse marker dies with it and
+               //   prepare() releases a finished composer's name on the next
+               //   compose. Without `revoked`, a fallback retry stays legal.
+               foreach ($this->carrying as $name) {
+                  $this->closing[$name] = true;
+               }
+
+               $this->carrying = [];
+               $this->writing = null;
+
+               $this->free($Holder);
+               $Holder->expire();
+            }
+            elseif ($this->flush($Holder) === false) {
+               // ?: Still partial — the send buffer is full: park and retry on
+               //    the next pass. A hard failure routed through abort() and
+               //    freed the stream instead; the compose below then reports
+               //    the dead socket on this operation.
+               if ($this->writing === $Holder) {
+                  return $this->await($Operation, Scheduler::SCHEDULE_WRITE);
+               }
+            }
+            else {
+               // ! The batch is whole on the wire now — the same bookkeeping a
+               //   self-completed flush performs, with the answer handed to a
+               //   detached stand-in exactly as abandon() does.
+               $this->writing = null;
+               $this->carrying = [];
+               $this->free($Holder);
+
+               $marker = $Holder->statement === ''
+                  ? null
+                  : ($this->preparing[$Holder->statement] ?? null);
+
+               if (
+                  $Holder->prepared === false
+                  && $marker instanceof WeakReference
+                  && $marker->get() === $Holder
+               ) {
+                  $this->preparing[$Holder->statement] = true;
+               }
+
+               $Stand = new Operation(null, $Holder->SQL);
+               $Stand->state = OperationStates::Reading;
+               $Stand->statement = $Holder->statement;
+               $Stand->portal = $Holder->portal;
+               $Stand->prepared = $Holder->prepared;
+
+               $this->pipeline[] = $Stand;
+               $this->abandoned[spl_object_id($Stand)] = true;
+
+               // ! The work ran with an outcome its caller never sees —
+               //   `revoked` keeps fallback() from running it a second time.
+               $Holder->revoked = true;
+               $Holder->expire();
+            }
          }
 
          if ($Operation->write === '') {
@@ -477,12 +558,18 @@ class PostgreSQL extends Driver
                   'name' => $name,
                ]);
                unset($this->closing[$name]);
+               $this->carrying[] = $name;
             }
 
             $Operation->write = "{$closes}{$Operation->write}";
          }
 
-         $this->writing = $Operation;
+         // ! A fresh claim starts the on-the-wire count at zero; a partial-flush
+         //   re-entry keeps what its earlier passes already wrote.
+         if ($this->writing !== $Operation) {
+            $this->writing = $Operation;
+            $this->wrote = 0;
+         }
 
          if ($this->flush($Operation) === false) {
             // @ A partial write keeps the stream held; on a hard failure the
@@ -491,6 +578,7 @@ class PostgreSQL extends Driver
          }
 
          $this->writing = null;
+         $this->carrying = [];
          $this->free($Operation);
 
          // @ The Parse this batch carried is on the wire now, so a sibling may
@@ -601,12 +689,26 @@ class PostgreSQL extends Driver
       // ? Not pipelined here — an operation only joins the pipeline once its
       //   batch is whole on the wire, so nothing is owed to this one.
       if ($index === null) {
-         // ? Unless it holds the write stream: a half-written batch leaves the
-         //   backend parsing a message that never ends.
+         // ? Unless it holds the write stream with bytes already on the wire: a
+         //   half-written batch leaves the backend parsing a message that only
+         //   the buffer the expiry just destroyed could complete.
          if ($this->writing === $Operation) {
-            $this->abort($Operation, 'PostgreSQL operation was abandoned while writing its batch.');
+            if ($this->wrote > 0) {
+               $this->abort($Operation, 'PostgreSQL operation was abandoned while writing its batch.');
 
-            return;
+               return;
+            }
+
+            // ? Nothing reached the wire — the stream frees and the connection
+            //   is whole. The Closes its batch carried never went out: requeue
+            //   them for the next batch.
+            $this->writing = null;
+
+            foreach ($this->carrying as $name) {
+               $this->closing[$name] = true;
+            }
+
+            $this->carrying = [];
          }
 
          // ? It composed a Parse the backend will never receive — releasing the
@@ -754,6 +856,8 @@ class PostgreSQL extends Driver
       $this->Holders = [];
       $this->abandoned = [];
       $this->writing = null;
+      $this->wrote = 0;
+      $this->carrying = [];
       $this->Decoder = new Decoder;
 
       $Pipeline = $this->pipeline;
@@ -1032,6 +1136,12 @@ class PostgreSQL extends Driver
          $this->await($Operation, Scheduler::SCHEDULE_WRITE);
 
          return false;
+      }
+
+      // ! Only the write-stream holder is counted — connect and authentication
+      //   flushes run with no claim on the stream.
+      if ($this->writing === $Operation) {
+         $this->wrote += $written;
       }
 
       $Operation->write = substr($Operation->write, $written);
