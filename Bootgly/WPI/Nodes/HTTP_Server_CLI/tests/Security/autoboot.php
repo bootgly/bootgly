@@ -664,5 +664,8 @@ return new Suite(
       // Nested and literal-tilde project names must never resolve the same
       // authenticated master state or deliver a cross-project control signal.
       '102.06-project_state_namespace_collision',
+      // # Official Docker Session runtime dependencies (audit 2026-08-20 L1)
+      // The default Shared handler requires sysvshm and sysvsem in the image.
+      '102.05-docker_default_session_extensions',
    ],
 );

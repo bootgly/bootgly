@@ -41,7 +41,7 @@ FROM ${PHP_IMAGE} AS base
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends libonig-dev; \
-    docker-php-ext-install -j"$(nproc)" pcntl sockets shmop opcache mbstring; \
+    docker-php-ext-install -j"$(nproc)" pcntl sockets shmop sysvshm sysvsem opcache mbstring; \
     apt-get purge -y libonig-dev; \
     rm -rf /var/lib/apt/lists/*
 
