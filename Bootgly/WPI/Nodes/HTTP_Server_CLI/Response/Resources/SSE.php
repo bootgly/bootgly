@@ -12,6 +12,8 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources;
 
 
 use const PHP_INT_MAX;
+use function array_search;
+use function array_splice;
 use function dechex;
 use function explode;
 use function feof;
@@ -656,8 +658,23 @@ class SSE extends Resource implements Disconnecting
 
       // @ Stop the supervisor
       if ($this->timer !== 0) {
-         Timer::del($this->timer);
+         $timer = $this->timer;
          $this->timer = 0;
+
+         // @ Release the connection-side ownership too. HTTP/2 keeps the
+         //   transport alive after this stream ends, so leaving the dead ID
+         //   here retains one array entry per completed SSE stream until the
+         //   whole connection closes. Clear our local ID first for re-entrant
+         //   teardown; Connection::close() may already have emptied the list.
+         $Connection = $this->Connection;
+         if ($Connection !== null) {
+            $index = array_search($timer, $Connection->timers, true);
+            if ($index !== false) {
+               array_splice($Connection->timers, (int) $index, 1);
+            }
+         }
+
+         Timer::del($timer);
       }
 
       // # Hook (exactly once)

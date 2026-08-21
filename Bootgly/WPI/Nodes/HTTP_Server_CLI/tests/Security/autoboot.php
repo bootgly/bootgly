@@ -671,5 +671,9 @@ return new Suite(
       // # Official Docker Session runtime dependencies (audit 2026-08-20 L1)
       // The default Shared handler requires sysvshm and sysvsem in the image.
       '102.05-docker_default_session_extensions',
+      // # HTTP/2 SSE connection-timer ownership (audit 2026-08-20 M3)
+      // A completed SSE stream must remove its dead supervisor ID from the
+      // persistent connection timer registry while preserving live timers.
+      '102.07-sse_stale_connection_timer_ids',
    ],
 );
