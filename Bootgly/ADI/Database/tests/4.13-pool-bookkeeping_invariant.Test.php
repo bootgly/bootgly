@@ -250,27 +250,28 @@ return new Test(
 
       $dropped = $Pool->created === 0;
 
-      // @ The survivor reconnects the shared Connection and finishes on it —
-      //   driven, not hand-released, so the release below is the one the
-      //   framework itself performs.
+      // @ The survivor belongs to the retired driver. Even if somebody attaches
+      //   a fresh socket to the same Connection object, the old driver must
+      //   refuse locally; release then closes that uncounted socket instead of
+      //   admitting it outside the pool's max bookkeeping.
       [$fresh, $peer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
       stream_set_blocking($fresh, false);
       stream_set_blocking($peer, false);
       $Database->Connection->attach($fresh);
 
       $Database->advance($Second);
-      fread($peer, 8192);
-      fwrite($peer, $complete('SELECT 1'));
-      $Database->advance($Second);
+      $wire = (string) fread($peer, 8192);
 
       yield assert(
          assertion: $dropped
             && $Second->finished
-            && $Second->error === null
+            && $Second->quarantine
+            && $Second->error === 'PostgreSQL connection was torn down before the query was sent.'
+            && $wire === ''
             && $Pool->created === 0
             && $Pool->idle === []
             && $audit($Pool) === [],
-         description: 'A dropped connection a driver revived is not re-admitted'
+         description: 'A quiet operation on the retired driver cannot revive a dropped connection'
       );
 
       // ? Refusing it is not enough on its own: nothing else would ever close

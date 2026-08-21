@@ -88,6 +88,9 @@ class PostgreSQL extends Driver
    private array $pipeline = [];
    /** @var array<int,Operation> */
    private array $completed = [];
+   // @ This driver tore its session down and must never drive a replacement
+   //   socket attached to the same Connection object.
+   private bool $aborted = false;
    // @ Operation currently holding the socket write stream (co-located pipelining).
    private null|Operation $writing = null;
    // @ Bytes of the holder's batch already on the wire. Zero means the backend
@@ -294,6 +297,12 @@ class PostgreSQL extends Driver
       // ?
       if ($Operation->finished) {
          return $Operation;
+      }
+
+      if ($this->aborted) {
+         $Operation->quarantine = true;
+
+         return $Operation->fail('PostgreSQL connection was torn down before the query was sent.');
       }
 
       if ($Operation->state === OperationStates::Queued) {
@@ -858,6 +867,7 @@ class PostgreSQL extends Driver
 
       // @ Drop the transport — the pool releases the connection as dead.
       $this->Connection->disconnect();
+      $this->aborted = true;
 
       // :
       return $Operation;

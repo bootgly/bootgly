@@ -85,6 +85,9 @@ class MySQL extends Driver
    private array $completed = [];
    private string $nonce = '';
    private bool $encrypted = false;
+   // @ This driver tore its session down and must never drive a replacement
+   //   socket attached to the same Connection object.
+   private bool $aborted = false;
    // # Current result set (only the pipeline head is on the wire)
    private int $expected = 0;
    /** @var array<int,array<string,int|string>> */
@@ -232,6 +235,12 @@ class MySQL extends Driver
       // ?
       if ($Operation->finished) {
          return $Operation;
+      }
+
+      if ($this->aborted) {
+         $Operation->quarantine = true;
+
+         return $Operation->fail('MySQL connection was torn down before the query was sent.');
       }
 
       if ($Operation->state === OperationStates::Queued) {
@@ -985,6 +994,7 @@ class MySQL extends Driver
 
       // @ Drop the transport — the pool releases the connection as dead.
       $this->Connection->disconnect();
+      $this->aborted = true;
 
       // :
       return $Operation;

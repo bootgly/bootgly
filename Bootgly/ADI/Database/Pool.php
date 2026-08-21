@@ -400,6 +400,7 @@ class Pool
    private function settle (Operation $Operation, bool $sent): void
    {
       $Protocol = $Operation->Protocol;
+      $Connection = $Operation->Connection;
 
       // ? Only a teardown ends a transaction. An ordinary statement withdrawn
       //   inside one must leave it alone — the caller can still commit it.
@@ -409,7 +410,17 @@ class Pool
       //   the pool refuses to co-locate onto one. It stays because it states
       //   the precondition the branch relies on, and a driver that keeps the
       //   wire instead would need it.
-      if ($sent === false && $Operation->unlock && $Protocol !== null) {
+      // ? The session is still this driver's to sever. A stale teardown can
+      //   outlive an abort while the pool rebuilds the same Connection object;
+      //   calling the old driver's sever() then disconnects the replacement
+      //   socket before release() reaches its existing stale-claim guard.
+      if (
+         $sent === false
+         && $Operation->unlock
+         && $Protocol !== null
+         && $Connection !== null
+         && $Connection->Protocol === $Protocol
+      ) {
          // @ Through the driver, never around it. Dropping the transport from
          //   here left the driver holding a pipeline, a statement cache and a
          //   cancel key for a session that no longer existed — and the pool
@@ -581,7 +592,26 @@ class Pool
          return $Operation;
       }
 
+      // ? Already assigned here — assigning the same live operation again must
+      //   not normalize its own busy connection as a stale pin, re-prepare its
+      //   command or reserve a second slot. Pending operations carry no driver
+      //   and still pass through so promote() can assign them normally.
+      if ($Operation->Pool === $this && $Operation->Protocol !== null) {
+         return $Operation;
+      }
+
       $Operation->Pool = $this;
+
+      // ? BEGIN is an exclusive request, not permission to steal the supplied
+      //   pin from an operation already using it. Normalize only a lock-taking
+      //   operation: ordinary statements inside an active transaction carry
+      //   lock=false and must remain pinned to its reserved connection.
+      $Pinned = $Operation->Connection;
+
+      if ($Operation->lock && $Pinned !== null && isset($this->busy[spl_object_id($Pinned)])) {
+         $Operation->Connection = null;
+      }
+
       $Connection = $this->acquire($Operation->Connection, $Operation->lock === false);
 
       if ($Connection === null) {

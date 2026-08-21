@@ -223,19 +223,16 @@ return new Test(
       fclose($peer);
       $Database->Connection->disconnect();
 
-      // # A teardown that DID reach the server leaves the session alone
-      //   Severing is for a statement the server never saw. This is the shape
-      //   that tells the two apart, and it exists only because `acquire()`'s
-      //   pinned branch asks neither whether a connection is busy nor whether
-      //   it is reserved: a reused transaction re-pins onto the connection its
-      //   last teardown carried, so a reserved session really can be carrying
-      //   somebody else's read. Severing then kills that reader — and tells it
-      //   the statement never reached the server, which is the opposite of true.
+      // # A reused transaction waits for an unrelated reader to release capacity
+      //   A completed transaction owns no session. Re-attaching it to the
+      //   connection carried by its old COMMIT lets a new BEGIN reserve that
+      //   connection while another caller is reading on it. The BEGIN must start
+      //   unpinned and become reserved only after the reader returns the slot.
       [$client, $peer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
       stream_set_blocking($client, false);
       stream_set_blocking($peer, false);
 
-      $Database = new SQL(['timeout' => 0.05, 'pool' => ['min' => 0, 'max' => 1]]);
+      $Database = new SQL(['timeout' => 30.0, 'pool' => ['min' => 0, 'max' => 1]]);
       $Database->Connection->attach($client);
       $Pool = $Database->Pool;
 
@@ -258,26 +255,29 @@ return new Test(
       $Database->advance($Reader);
       fread($peer, 8192);
 
-      // @ The same transaction object is reused, re-pinning onto that session.
-      $Transaction->begin();
-      $Teardown = $Transaction->rollback();
-
-      $Database->advance($Teardown);
-      fread($peer, 8192);
-
-      $shared = $Teardown->Connection === $Reader->Connection;
-      $onTheWire = $Teardown->state->name !== 'Queued';
-
-      usleep(80_000);
-      $Database->advance($Teardown);
+      // @ Reuse asks for a new exclusive slot. With max=1 it waits in pending
+      //   until the reader's response promotes and flushes the BEGIN.
+      $Reused = $Transaction->begin();
 
       yield assert(
-         assertion: $shared
-            && $onTheWire
-            && $Teardown->unlock
-            && $Reader->finished === false
-            && is_resource($Database->Connection->socket),
-         description: 'A teardown already on the wire leaves its session alone'
+         assertion: $Reused->state->name === 'Pending'
+            && $Reused->Connection === null
+            && $reserved($Pool) === 0
+            && $Reader->finished === false,
+         description: 'A reused transaction never reserves the connection of an active reader'
+      );
+
+      fwrite($peer, $complete('SELECT 1'));
+      $Database->advance($Reader);
+      $wire = (string) fread($peer, 8192);
+
+      yield assert(
+         assertion: $Reader->finished
+            && $Reused->state->name === 'Reading'
+            && $Reused->Connection === $Reader->Connection
+            && $reserved($Pool) === 1
+            && str_contains($wire, "BEGIN\0"),
+         description: 'Releasing the reader promotes BEGIN and only then reserves its connection'
       );
 
       fclose($peer);

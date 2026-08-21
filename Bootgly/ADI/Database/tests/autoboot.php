@@ -126,5 +126,8 @@ return new Suite(
       '7.34-postgresql_parse_marker_ownership',
       '7.35-postgresql_parse_close_order',
       '7.36-postgresql_parse_close_live',
+      '4.15-pool_reused_transaction',
+      '4.16-pool_retired_driver',
+      '4.17-pool_reused_transaction_live',
    ]
 );

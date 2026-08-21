@@ -326,7 +326,16 @@ class Transaction implements Awaiting, Querying
          return $this->Connection;
       }
 
-      if ($this->Connection === null && $this->Operation !== null && $this->Operation->Connection !== null) {
+      // ? Recover a late pool assignment only while this transaction is open.
+      //   Once depth reaches zero, the connection carried by COMMIT/ROLLBACK is
+      //   historical: reusing the object must acquire a new exclusive claim,
+      //   not pin BEGIN onto whoever is serving on that connection now.
+      if (
+         $this->depth > 0
+         && $this->Connection === null
+         && $this->Operation !== null
+         && $this->Operation->Connection !== null
+      ) {
          $this->Connection = $this->Operation->Connection;
       }
 
