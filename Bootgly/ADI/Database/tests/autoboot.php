@@ -122,5 +122,6 @@ return new Suite(
       '9.12-sqlite_pool_confinement',
       '7.31-postgresql_stale_write_holder',
       '7.32-postgresql_stale_holder_live',
+      '7.33-postgresql_teardown_holder',
    ]
 );

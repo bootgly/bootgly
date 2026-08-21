@@ -813,10 +813,28 @@ class PostgreSQL extends Driver
       $this->closing = [];
       $this->Holders = [];
       $this->abandoned = [];
-      $this->writing = null;
       $this->wrote = 0;
       $this->carrying = [];
       $this->Decoder = new Decoder;
+
+      // ! So does the half-written batch. An operation joins the pipeline only
+      //   once its bytes are whole on the wire, so this one is in neither the
+      //   pipeline nor completed[] and the loop below never reaches it: nulling
+      //   the pointer alone left its caller unfinished and errorless on a
+      //   session that no longer exists. Failing it also discards its buffer,
+      //   which must never reach the next socket — the tail of a message would
+      //   be read there as a message of its own.
+      $Writer = $this->writing;
+      $this->writing = null;
+
+      if ($Writer !== null && $Writer->finished === false) {
+         $Writer->quarantine = true;
+         $Writer->fail($error);
+
+         if ($Writer !== $Operation) {
+            $this->completed[] = $Writer;
+         }
+      }
 
       $Pipeline = $this->pipeline;
       $this->pipeline = [];
