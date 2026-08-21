@@ -3,8 +3,10 @@
 
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\ADI\Database\Connection;
+use Bootgly\ADI\Database\Pool;
 use Bootgly\ADI\Databases\SQL\Config;
 use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL;
+use Bootgly\ADI\Databases\SQL\Operation;
 
 
 return new Test(
@@ -202,10 +204,14 @@ return new Test(
       $Next = $PostgreSQL->query('SELECT 4 AS v');
       $PostgreSQL->advance($Next);
 
+      // ? The driver frees the wire and stops there. Finishing the holder here
+      //   would hand the pool an operation already Failed, and Pool::advance()
+      //   answers a Failed operation with fallback() BEFORE the envelope that
+      //   settles its claim — leaving the connection reserved for nobody.
       yield assert(
-         assertion: $Holder->finished && $Holder->error !== null
-            && str_contains($Holder->error, 'timed out') && $Holder->revoked === false,
-         description: 'A zero-byte holder is expired without revocation — nothing ran, so a fallback retry stays legal'
+         assertion: $Holder->finished === false && $Holder->error === null
+            && $Holder->revoked === false && $Holder->write !== '',
+         description: 'A zero-byte holder is left for its own pool to end, unrevoked and with its batch intact'
       );
 
       yield assert(
@@ -224,6 +230,160 @@ return new Test(
 
       fclose($server);
       $Connection->disconnect();
+
+      // # A withdrawn batch releases the Parse name it composed
+      //   The backend never registered that statement, so a sibling that Bound
+      //   the name warm against its in-flight marker would otherwise reach the
+      //   wire naming a statement nothing ever Parsed (26000).
+      [$PostgreSQL, $Config, $Connection, $server] = $connect(0.05);
+
+      $fill($Connection->socket);
+
+      $Holder = $PostgreSQL->query('SELECT $1::text AS v', ['held']);
+      $PostgreSQL->advance($Holder);
+      $Sibling = $PostgreSQL->query('SELECT $1::text AS v', ['warm']);
+
+      yield assert(
+         assertion: $peek($PostgreSQL, 'wrote') === 0 && $messages($Sibling->write) === 'BDES',
+         description: 'A sibling Bound the name warm against the holder in-flight Parse, found: '
+            . $messages($Sibling->write)
+      );
+
+      $wait(0.08);
+      $drain($server);
+      $Config->timeout = 5.0;
+
+      $Next = $PostgreSQL->query('SELECT 6 AS v');
+      $PostgreSQL->advance($Next);
+
+      yield assert(
+         assertion: $peek($PostgreSQL, 'preparing') === []
+            && $Sibling->write === '' && $Sibling->prepared === false,
+         description: 'The withdrawal releases the Parse name and strips every sibling that Bound it warm'
+      );
+
+      // ? Stripped back to nothing, the sibling re-derives its batch — and this
+      //   time it carries the Parse the backend never received.
+      $drain($server);
+      $PostgreSQL->advance($Sibling);
+
+      yield assert(
+         assertion: str_starts_with($messages((string) fread($server, 262144)), 'P'),
+         description: 'The sibling re-derives a batch that Parses the statement itself'
+      );
+
+      fclose($server);
+      $Connection->disconnect();
+
+      // # A withdrawn batch is never pushed to completion
+      //   Pool::cancel() records the withdrawal and leaves an operation whose
+      //   cancel is already out still waiting for its answer. Finishing that
+      //   flush would run exactly what the caller withdrew, and the backend is
+      //   mid-message, so there is nothing left to resynchronise with.
+      [$PostgreSQL, $Config, $Connection, $server] = $connect(0.05);
+
+      $Holder = $PostgreSQL->query('SELECT length($1) AS n', [$payload]);
+      $PostgreSQL->advance($Holder);
+
+      $stalled = strlen($Holder->write);
+      $Holder->revoked = true;
+
+      $wait(0.08);
+      $drain($server);
+      $Config->timeout = 5.0;
+
+      $Next = $PostgreSQL->query('SELECT 8 AS v');
+      $PostgreSQL->advance($Next);
+
+      yield assert(
+         assertion: $stalled > 0 && (string) fread($server, 262144) === '',
+         description: 'The remainder of a withdrawn batch never reaches the wire'
+      );
+
+      yield assert(
+         assertion: $Holder->finished && $Holder->error !== null
+            && str_contains($Holder->error, 'withdrawn') && $Connection->connected === false,
+         description: 'The session goes instead — it cannot be resynchronised without running withdrawn work, found: '
+            . json_encode([$Holder->error, $Connection->connected])
+      );
+
+      fclose($server);
+
+      // # The pool ends a withdrawn batch, and its claim is settled
+      //   Pool::advance() answers an already-failed operation with fallback()
+      //   BEFORE the envelope that forgets, settles and releases it. Finishing
+      //   the holder inside the driver would hand the pool an operation whose
+      //   reservation nobody ever gives back.
+      $attach = static function (float $timeout): array {
+         [$client, $peer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+         stream_set_blocking($client, false);
+         stream_set_blocking($peer, false);
+
+         $Config = new Config([
+            'driver' => 'pgsql',
+            'timeout' => $timeout,
+            'pool' => ['min' => 0, 'max' => 1],
+         ]);
+         $Connection = new Connection($Config);
+         $Connection->attach($client);
+         $Driver = new PostgreSQL($Config, $Connection);
+         $Connection->bind($Driver);
+         $Pool = new Pool($Config, $Connection);
+         $Pool->attach($Connection);
+
+         return [$Pool, $Driver, $Connection, $peer];
+      };
+      $reserved = static function (Pool $Pool): array {
+         return array_keys((new ReflectionProperty(Pool::class, 'locked'))->getValue($Pool));
+      };
+
+      [$Pool, $Driver, $Connection, $server] = $attach(0.05);
+      [$Other, , , $otherServer] = $attach(5.0);
+
+      $fill($Connection->socket);
+
+      // ! A reserving operation — a transaction BEGIN — claims the stream with
+      //   nothing on the wire. Its reservation is what leaks, and the fallback
+      //   pool is what makes the leak observable.
+      $Begin = new Operation($Connection, 'BEGIN', [], 0.05);
+      $Begin->lock = true;
+      $Begin->FallbackPool = $Other;
+      $Pool->assign($Begin);
+      $Pool->advance($Begin);
+
+      yield assert(
+         assertion: $reserved($Pool) !== [] && $peek($Driver, 'writing') === $Begin,
+         description: 'The reserving operation holds the write stream with nothing on the wire'
+      );
+
+      $wait(0.08);
+
+      $Pinned = new Operation($Connection, 'SELECT 1 AS v', [], 5.0);
+      $Pool->assign($Pinned);
+      $Pool->advance($Pinned);
+
+      // @ The holder reaches its own pool only now, and the envelope must run.
+      $Pool->advance($Begin);
+
+      // ? Both halves at once: the reservation comes back because the envelope
+      //   ran, and the retry is legal because the withdrawal never revoked it.
+      yield assert(
+         assertion: $reserved($Pool) === [] && $Begin->fallback === true,
+         description: 'The pool takes its reservation back and the retry the withdrawal never revoked goes ahead, found: '
+            . json_encode([$reserved($Pool), $Begin->fallback])
+      );
+
+      $Fresh = new Operation(null, 'SELECT 42 AS v', [], 5.0);
+      $Pool->assign($Fresh);
+
+      yield assert(
+         assertion: $Fresh->state->name !== 'Pending',
+         description: 'The connection serves the next caller instead of staying reserved for nobody, found: '
+            . $Fresh->state->name
+      );
+
+      fclose($server);
+      fclose($otherServer);
 
       // # abandon() draws the same line
       //   The pool envelope expires before it abandons, so the buffer is

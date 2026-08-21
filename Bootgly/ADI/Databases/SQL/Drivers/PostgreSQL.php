@@ -410,21 +410,22 @@ class PostgreSQL extends Driver
                return $this->await($Operation, Scheduler::SCHEDULE_WRITE);
             }
 
-            if ($this->wrote === 0) {
-               // ? Nothing reached the wire — nothing is owed: withdraw the
-               //   batch locally. The Closes it carried never went out, so they
-               //   are requeued; its in-flight Parse marker dies with it and
-               //   prepare() releases a finished composer's name on the next
-               //   compose. Without `revoked`, a fallback retry stays legal.
-               foreach ($this->carrying as $name) {
-                  $this->closing[$name] = true;
-               }
-
-               $this->carrying = [];
-               $this->writing = null;
-
-               $this->free($Holder);
-               $Holder->expire();
+            // ? The caller withdrew this work, and part of it is already on the
+            //   wire. Finishing the flush would run exactly what was withdrawn,
+            //   and the backend is mid-message, so there is nothing left to
+            //   resynchronise with: the session goes instead.
+            if ($Holder->revoked && $this->wrote > 0) {
+               $this->abort($Holder, 'PostgreSQL operation was withdrawn while writing its batch.');
+            }
+            elseif ($this->wrote === 0) {
+               // ! Nothing reached the wire — nothing is owed: withdraw the
+               //   batch and leave the operation to its own pool. It is past its
+               //   deadline, so the pool expires it through the envelope that
+               //   settles its claim; finishing it here would hand the pool an
+               //   operation already failed, whose connection the fallback hop
+               //   then leaves reserved for nobody. Its bytes never ran, so it
+               //   is deliberately not revoked — a fallback retry stays legal.
+               $this->withdraw($Holder);
             }
             elseif ($this->flush($Holder) === false) {
                // ?: Still partial — the send buffer is full: park and retry on
@@ -692,60 +693,17 @@ class PostgreSQL extends Driver
          // ? Unless it holds the write stream with bytes already on the wire: a
          //   half-written batch leaves the backend parsing a message that only
          //   the buffer the expiry just destroyed could complete.
-         if ($this->writing === $Operation) {
-            if ($this->wrote > 0) {
-               $this->abort($Operation, 'PostgreSQL operation was abandoned while writing its batch.');
+         if ($this->writing === $Operation && $this->wrote > 0) {
+            $this->abort($Operation, 'PostgreSQL operation was abandoned while writing its batch.');
 
-               return;
-            }
-
-            // ? Nothing reached the wire — the stream frees and the connection
-            //   is whole. The Closes its batch carried never went out: requeue
-            //   them for the next batch.
-            $this->writing = null;
-
-            foreach ($this->carrying as $name) {
-               $this->closing[$name] = true;
-            }
-
-            $this->carrying = [];
+            return;
          }
 
-         // ? It composed a Parse the backend will never receive — releasing the
-         //   name lets the next operation Parse it, instead of Binding a
-         //   statement nothing ever registered. Only the operation that composed
-         //   the Parse may release the name: a sibling clearing a marker it does
-         //   not own would let the next one Parse a statement already on the
-         //   wire (42P05).
-         if (
-            $Operation instanceof Operation
-            && $Operation->statement !== ''
-            && isset($this->statements[$Operation->statement]) === false
-            && ($this->preparing[$Operation->statement] ?? null) instanceof WeakReference
-            && ($this->preparing[$Operation->statement])->get() === $Operation
-         ) {
-            $statement = $Operation->statement;
-            unset($this->preparing[$statement]);
-
-            // @@ Siblings composed a warm Bind against that Parse. It is never
-            //    being sent, so their batches would name a statement the backend
-            //    does not have: strip them back to nothing and let advance()
-            //    re-derive each one. The first to reach the wire composes the
-            //    Parse itself. A half-written batch is untouchable — that one
-            //    already owns bytes on the socket.
-            foreach ($this->Holders[$statement] ?? [] as $id => $Held) {
-               if ($Held->finished || $Held->write === '' || $this->writing === $Held) {
-                  continue;
-               }
-
-               $Held->write = '';
-               $Held->prepared = false;
-               unset($this->Holders[$statement][$id]);
-            }
-
-            if (($this->Holders[$statement] ?? []) === []) {
-               unset($this->Holders[$statement]);
-            }
+         // @ Nothing of this batch is on the wire: free whatever it claimed and
+         //   release the Parse name it composed, along with every sibling that
+         //   Bound that name warm.
+         if ($Operation instanceof Operation) {
+            $this->withdraw($Operation);
          }
 
          return;
@@ -885,6 +843,65 @@ class PostgreSQL extends Driver
 
       // :
       return $Operation;
+   }
+
+   /**
+    * Withdraw a batch that never reached the wire.
+    */
+   private function withdraw (Operation $Operation): void
+   {
+      // ? Only a claim that put nothing on the wire may be freed: a batch with
+      //   bytes on the socket left the backend parsing a message that nothing
+      //   but its own remainder can complete.
+      if ($this->writing === $Operation && $this->wrote === 0) {
+         $this->writing = null;
+
+         // @ The Closes this batch carried never went out — requeue them, or
+         //   the backend keeps names the driver believes closed.
+         foreach ($this->carrying as $name) {
+            $this->closing[$name] = true;
+         }
+
+         $this->carrying = [];
+      }
+
+      // ? It composed a Parse the backend will never receive — releasing the
+      //   name lets the next operation Parse it, instead of Binding a statement
+      //   nothing ever registered. Only the operation that composed the Parse
+      //   may release the name: a sibling clearing a marker it does not own
+      //   would let the next one Parse a statement already on the wire (42P05).
+      $statement = $Operation->statement;
+      $marker = $statement === '' ? null : ($this->preparing[$statement] ?? null);
+
+      if (
+         isset($this->statements[$statement])
+         || $marker instanceof WeakReference === false
+         || $marker->get() !== $Operation
+      ) {
+         return;
+      }
+
+      unset($this->preparing[$statement]);
+
+      // @@ Siblings composed a warm Bind against that Parse. It is never being
+      //    sent, so their batches would name a statement the backend does not
+      //    have: strip them back to nothing and let advance() re-derive each
+      //    one. The first to reach the wire composes the Parse itself. A
+      //    half-written batch is untouchable — it already owns bytes on the
+      //    socket.
+      foreach ($this->Holders[$statement] ?? [] as $id => $Held) {
+         if ($Held->finished || $Held->write === '' || $this->writing === $Held) {
+            continue;
+         }
+
+         $Held->write = '';
+         $Held->prepared = false;
+         unset($this->Holders[$statement][$id]);
+      }
+
+      if (($this->Holders[$statement] ?? []) === []) {
+         unset($this->Holders[$statement]);
+      }
    }
 
    /**
