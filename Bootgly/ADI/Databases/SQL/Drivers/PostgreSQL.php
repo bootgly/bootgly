@@ -387,21 +387,6 @@ class PostgreSQL extends Driver
          // ? A co-located sibling holds the write stream — wait so the
          //   pipelined wire messages are not interleaved on the socket.
          if ($this->writing !== null && $this->writing !== $Operation && $this->writing->finished === false) {
-            // ? …unless that sibling is past its own deadline. `Pool::wait()`
-            //   advances only the operation it was given, so a batch left
-            //   half-written by a caller who gave up is never driven again and
-            //   never finishes — and this guard would then park every later
-            //   operation on the connection until each one's own deadline, for
-            //   the connection's life. Its bytes stop in the middle of a wire
-            //   message, so the session cannot be resynchronised: the session
-            //   is aborted and the pool opens a fresh connection.
-            if ($this->writing->expire()) {
-               return $this->abort(
-                  $Operation,
-                  'PostgreSQL connection was left half-written by an abandoned batch.'
-               );
-            }
-
             return $this->await($Operation, Scheduler::SCHEDULE_WRITE);
          }
 
