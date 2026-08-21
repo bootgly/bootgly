@@ -4,6 +4,7 @@
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\ADI\Database\Driver;
 use Bootgly\ADI\Database\Operation;
+use Bootgly\ADI\Database\Operation\OperationStates;
 use Bootgly\ADI\Database\Pool;
 use Bootgly\ADI\Databases\KV;
 use Bootgly\ADI\Databases\SQL;
@@ -474,6 +475,52 @@ return new Test(
       );
 
       fclose($server);
+      $Database->Connection->disconnect();
+
+      // # A teardown the wire DID carry leaves its session alone
+      //   Severing is for a statement the server never saw. A commit already on
+      //   the wire is being answered right now, and the deadline that retires it
+      //   here says nothing about the session — killing it would take the
+      //   co-located reader down with a transaction that may well have
+      //   committed. This is the shape the `sent` precondition exists for, and
+      //   the only route that produces it is an expired teardown, never cancel().
+      [$client, $peer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+      stream_set_blocking($client, false);
+      stream_set_blocking($peer, false);
+
+      $Database = new SQL(['timeout' => 0.05, 'pool' => ['min' => 0, 'max' => 1]]);
+      $Database->Connection->attach($client);
+      $Pool = $Database->Pool;
+
+      $Reader = $Database->query('SELECT 1 AS v');
+      $Database->advance($Reader);
+      fread($peer, 8192);
+
+      $Teardown = $Database->query('COMMIT');
+      $Teardown->unlock = true;
+      $Database->advance($Teardown);
+      fread($peer, 8192);
+
+      $Connection = $Teardown->Connection;
+      $Protocol = $Teardown->Protocol;
+      $onTheWire = $Teardown->state !== OperationStates::Queued
+         && $Connection === $Reader->Connection;
+
+      usleep(80_000);
+      $Database->advance($Teardown);
+
+      yield assert(
+         assertion: $onTheWire
+            && $Teardown->finished
+            && $Teardown->unlock
+            && $Reader->finished === false
+            && $Reader->error === null
+            && $Connection?->Protocol === $Protocol
+            && is_resource($Connection?->socket),
+         description: 'A teardown already on the wire leaves its session alone'
+      );
+
+      fclose($peer);
       $Database->Connection->disconnect();
    }
 );
