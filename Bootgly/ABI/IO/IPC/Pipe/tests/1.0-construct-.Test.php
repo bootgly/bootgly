@@ -5,7 +5,6 @@ use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test;
 
-
 return new Test(
    description: 'Pipe should open, transfer data, guard invalid lengths, and close',
 
@@ -62,5 +61,30 @@ return new Test(
          ->expect($closed)
          ->to->be(true)
          ->assert();
+
+      // Datagram reads must enlarge PHP's default 8192-byte stream chunk;
+      // otherwise fread() truncates and irrevocably drops the suffix.
+      $Datagram = new Pipe(STREAM_SOCK_DGRAM);
+      $datagramOpened = $Datagram->open();
+      $payload = str_repeat('D', 16384);
+      $datagramWritten = $datagramOpened
+         ? $Datagram->write($payload)
+         : false;
+      $datagramRead = $datagramOpened
+         ? $Datagram->read(strlen($payload))
+         : false;
+
+      yield (new Assertion(description: 'datagram pipe preserves a frame larger than the default stream chunk'))
+         ->expect(
+            $datagramOpened
+               && $datagramWritten === strlen($payload)
+               && $datagramRead === $payload
+         )
+         ->to->be(true)
+         ->assert();
+
+      if ($datagramOpened) {
+         $Datagram->close();
+      }
    })
 );

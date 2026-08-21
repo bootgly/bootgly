@@ -13,6 +13,7 @@ namespace Bootgly\ABI\IO\IPC;
 
 use const STREAM_IPPROTO_IP;
 use const STREAM_PF_UNIX;
+use const STREAM_SOCK_DGRAM;
 use const STREAM_SOCK_STREAM;
 use function fclose;
 use function fread;
@@ -20,6 +21,7 @@ use function fwrite;
 use function pcntl_signal_dispatch;
 use function stream_select;
 use function stream_set_blocking;
+use function stream_set_chunk_size;
 use function stream_socket_pair;
 use Generator;
 use Throwable;
@@ -29,6 +31,7 @@ class Pipe
 {
    // * Config
    public bool $blocking;
+   public readonly int $type;
 
    // * Data
    /** @var array<resource> */
@@ -38,10 +41,11 @@ class Pipe
    public bool $paired;
 
 
-   public function __construct ()
+   public function __construct (int $type = STREAM_SOCK_STREAM)
    {
       // * Config
       $this->blocking = false;
+      $this->type = $type;
 
       // * Data
       // $this->pair;
@@ -55,7 +59,7 @@ class Pipe
       // !
       $pair = stream_socket_pair(
          STREAM_PF_UNIX,
-         STREAM_SOCK_STREAM,
+         $this->type,
          STREAM_IPPROTO_IP
       );
       // ?
@@ -126,6 +130,17 @@ class Pipe
       }
 
       try {
+         // ! PHP stream reads default to 8192 bytes. On datagram sockets a
+         //   short read discards the unread suffix, so size the receive chunk
+         //   to the caller's frame buffer before reading.
+         if ($this->type === STREAM_SOCK_DGRAM) {
+            @stream_set_chunk_size($this->pair[0], $length);
+            // `stream_set_chunk_size()` returns the previous size. Reapply it
+            // once and require the requested value to have become effective.
+            if (@stream_set_chunk_size($this->pair[0], $length) !== $length) {
+               return false;
+            }
+         }
          $read = @fread($this->pair[0], $length);
       }
       catch (Throwable) {

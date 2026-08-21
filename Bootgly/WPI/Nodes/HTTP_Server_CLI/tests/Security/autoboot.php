@@ -675,5 +675,9 @@ return new Suite(
       // A completed SSE stream must remove its dead supervisor ID from the
       // persistent connection timer registry while preserving live timers.
       '102.07-sse_stale_connection_timer_ids',
+      // # Monitor log IPC frame atomicity and master retention (audit 2026-08-20 M5)
+      // Oversized/nonblocking records must be dropped atomically, never leave
+      // an unterminated fragment in the Monitor master's live viewer.
+      '102.01-monitor_log_partial_frame_master_memory',
    ],
 );

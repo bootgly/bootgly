@@ -17,12 +17,10 @@ use const PREG_SPLIT_DELIM_CAPTURE;
 use const PREG_SPLIT_NO_EMPTY;
 use function array_filter;
 use function array_keys;
-use function array_pop;
 use function array_slice;
 use function array_values;
 use function count;
 use function date;
-use function explode;
 use function implode;
 use function is_array;
 use function json_decode;
@@ -38,6 +36,7 @@ use function sort;
 use function str_pad;
 use function stripos;
 use function strlen;
+use function strpos;
 use function strrpos;
 use function substr;
 use function trim;
@@ -46,6 +45,7 @@ use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\ACI\Logs\Data\Levels;
 use Bootgly\ACI\Logs\Data\Record;
+use Bootgly\ACI\Logs\Handlers\Pipe as PipeHandler;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Input\Keystrokes;
@@ -96,6 +96,7 @@ class Logs
 
    // * Metadata
    private string $partial = '';                 // carried-over partial JSON line
+   private bool $discarding = false;              // over-cap frame: ignore through next delimiter
    /** @var array<int,Record> */
    private array $Frozen = [];                   // buffer snapshot rendered while paused
    private int $top = 0;                          // window top index (paused navigation)
@@ -124,13 +125,30 @@ class Logs
     */
    public function feed (string $chunk): void
    {
-      $this->partial .= $chunk;
+      $buffer = $this->partial . $chunk;
+      $this->partial = '';
 
-      // @ Split into complete lines; keep the trailing incomplete fragment
-      $lines = explode("\n", $this->partial);
-      $this->partial = (string) array_pop($lines);
+      // ? An over-cap unterminated frame may span reads. Keep no attacker
+      //   bytes while discarding and resume only after its delimiter.
+      if ($this->discarding) {
+         $end = strpos($buffer, "\n");
+         if ($end === false) {
+            return;
+         }
 
-      foreach ($lines as $line) {
+         $buffer = substr($buffer, $end + 1);
+         $this->discarding = false;
+      }
+
+      // @ Decode every complete frame. A complete over-cap frame is dropped
+      //   independently, so a valid frame behind it remains observable.
+      while (($end = strpos($buffer, "\n")) !== false) {
+         $line = substr($buffer, 0, $end);
+         $buffer = substr($buffer, $end + 1);
+         if ($end + 1 > PipeHandler::MAX_FRAME_BYTES) {
+            continue;
+         }
+
          $line = trim($line);
          if ($line === '') {
             continue;
@@ -142,6 +160,15 @@ class Logs
             $this->append(Record::import($data));
          }
       }
+
+      // ? Retain at most MAX_FRAME_BYTES - 1 bytes. At the boundary a future
+      //   newline would make the frame too large, so discard through it.
+      if (strlen($buffer) >= PipeHandler::MAX_FRAME_BYTES) {
+         $this->discarding = true;
+         return;
+      }
+
+      $this->partial = $buffer;
    }
 
    /**

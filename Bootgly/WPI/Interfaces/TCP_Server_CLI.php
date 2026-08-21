@@ -51,6 +51,7 @@ use const STREAM_IPPROTO_IP;
 use const STREAM_PF_UNIX;
 use const STREAM_SERVER_BIND;
 use const STREAM_SERVER_LISTEN;
+use const STREAM_SOCK_DGRAM;
 use const STREAM_SOCK_STREAM;
 use const TCP_NODELAY;
 use const WNOHANG;
@@ -206,6 +207,9 @@ class TCP_Server_CLI implements Servers
    // Linux caps one SCM_RIGHTS control message at 253 descriptors. Keep room
    // for node-owned listeners (for example Auto-TLS' HTTP-01 gate).
    private const int RELOAD_HANDOFF_MAX_RESOURCES = 240;
+   // Bound each Monitor turn so continuous logging cannot starve signals,
+   // worker supervision, input handling or redraws.
+   private const int LOG_DRAIN_FRAMES = 16;
    // Every signal the master handles. One list: `start()` installs it and
    // `disarm()` re-installs it after each readline prompt cycle.
    private const array SIGNALS = [
@@ -1760,7 +1764,9 @@ class TCP_Server_CLI implements Servers
    protected function pipe (): void
    {
       if ($this->Mode === Modes::Monitor) {
-         $this->LogPipe = new IPCPipe;
+         // One JSON record per datagram: nonblocking pressure drops a whole
+         // record instead of exposing an unterminated stream prefix.
+         $this->LogPipe = new IPCPipe(STREAM_SOCK_DGRAM);
          $this->LogPipe->open();
       }
    }
@@ -1775,6 +1781,28 @@ class TCP_Server_CLI implements Servers
          Display::show(Display::NONE);
          Logger::$Tap = new PipeHandler($this->LogPipe);
       }
+   }
+   /**
+    * Drain one bounded Monitor batch so the outer loop always regains control.
+    *
+    * @return int Number of complete frames delivered to the viewer.
+    */
+   protected function flush (LogsViewer $Viewer): int
+   {
+      if ($this->LogPipe === null) {
+         return 0;
+      }
+
+      $frames = 0;
+      for (; $frames < self::LOG_DRAIN_FRAMES; $frames++) {
+         $chunk = $this->LogPipe->read(PipeHandler::MAX_FRAME_BYTES);
+         if ($chunk === false || $chunk === '') {
+            break;
+         }
+         $Viewer->feed($chunk);
+      }
+
+      return $frames;
    }
    /**
     * Monitor mode: a full-screen, non-blocking live log viewer.
@@ -1831,15 +1859,7 @@ class TCP_Server_CLI implements Servers
          $this->tick();
 
          // @ Drain worker + master logs from the pipe
-         if ($this->LogPipe !== null) {
-            while (true) {
-               $chunk = $this->LogPipe->read(65536);
-               if ($chunk === false || $chunk === '') {
-                  break;
-               }
-               $Viewer->feed($chunk);
-            }
-         }
+         $this->flush($Viewer);
 
          // @ Handle one keystroke (non-blocking)
          $key = $Input->read(8);

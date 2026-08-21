@@ -4,6 +4,8 @@ use Bootgly\ABI\IO\IPC\Pipe;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Handlers\Pipe as PipeHandler;
 use Bootgly\ACI\Logs\Data\Levels;
+use Bootgly\ACI\Logs\Data\Record;
+use Bootgly\ACI\Logs\Formatters\JSON as JSONFormatter;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;
@@ -18,7 +20,7 @@ return new Test(
       $savedTap = Logger::$Tap;
 
       // @ Route every logger into a pipe (as Monitor mode does)
-      $Pipe = new Pipe;
+      $Pipe = new Pipe(STREAM_SOCK_DGRAM);
       $Pipe->open();
       Display::show(Display::NONE);
       Logger::$Tap = new PipeHandler($Pipe);
@@ -27,13 +29,20 @@ return new Test(
       new Logger(channel: 'Demo.Auth')->log(notice: 'session refreshed');
       new Logger(channel: 'Demo.App')->log(error: 'boom happened');
 
-      $chunk = (string) $Pipe->read(65536);
-
       // @ Feed the viewer (no terminal render needed)
       $Input = new Input;
       $Output = new Output;
       $Viewer = new Viewer($Input, $Output);
-      $Viewer->feed($chunk);
+      $Drain = static function (Pipe $Pipe, Viewer $Viewer): void {
+         while (true) {
+            $chunk = $Pipe->read(PipeHandler::MAX_FRAME_BYTES);
+            if ($chunk === false || $chunk === '') {
+               return;
+            }
+            $Viewer->feed($chunk);
+         }
+      };
+      $Drain($Pipe, $Viewer);
 
       yield assert(
          assertion: count($Viewer->Records) === 3,
@@ -75,7 +84,7 @@ return new Test(
 
       $frozen = count($Viewer->Records);
       new Logger(channel: 'Demo.App')->log(info: 'hidden while paused');
-      $Viewer->feed((string) $Pipe->read(65536));
+      $Drain($Pipe, $Viewer);
       yield assert(
          assertion: count($Viewer->Records) > $frozen,
          description: 'paused: the buffer keeps ingesting new records behind the frozen view'
@@ -111,11 +120,56 @@ return new Test(
       // @ A multiline message (e.g. an exception) arrives as ONE intact record
       $before = count($Viewer->Records);
       new Logger(channel: 'Demo.App')->log(error: "boom\nstack line 1\nstack line 2");
-      $Viewer->feed((string) $Pipe->read(65536));
+      $Drain($Pipe, $Viewer);
       yield assert(
          assertion: count($Viewer->Records) === $before + 1
             && str_contains($Viewer->Records[count($Viewer->Records) - 1]->message, "\n"),
          description: 'a multiline message is one record (not split by the pipe); collapsed only at render'
+      );
+
+      // @ The master-side parser must bound incomplete input independently of
+      // the datagram transport and recover at the next record delimiter.
+      $Guarded = new Viewer(new Input, new Output);
+      $JSON = new JSONFormatter;
+      $Boundary = new Record(Levels::Info, 'Demo.Guard', '');
+      $base = $JSON->format($Boundary);
+      $Boundary->message = str_repeat(
+         'B',
+         PipeHandler::MAX_FRAME_BYTES - strlen($base),
+      );
+      $maxFrame = $JSON->format($Boundary);
+      $split = intdiv(strlen($maxFrame), 2);
+      $Guarded->feed(substr($maxFrame, 0, $split));
+      $Guarded->feed(substr($maxFrame, $split));
+
+      yield assert(
+         assertion: strlen($maxFrame) === PipeHandler::MAX_FRAME_BYTES
+            && count($Guarded->Records) === 1
+            && $Guarded->Records[0]->message === $Boundary->message,
+         description: 'a maximum-size frame survives split delivery and decodes once'
+      );
+
+      $Guarded->feed(str_repeat('X', PipeHandler::MAX_FRAME_BYTES));
+      $Partial = new ReflectionProperty($Guarded, 'partial');
+      $Dropping = new ReflectionProperty($Guarded, 'discarding');
+      $recovery = $JSON->format(new Record(Levels::Notice, 'Demo.Guard', 'recovered'));
+      $Guarded->feed("\n" . $recovery);
+
+      yield assert(
+         assertion: $Partial->getValue($Guarded) === ''
+            && $Dropping->getValue($Guarded) === false
+            && count($Guarded->Records) === 2
+            && $Guarded->Records[1]->message === 'recovered',
+         description: 'unterminated overflow retains no bytes and resynchronizes at the next delimiter'
+      );
+
+      $afterRecovery = count($Guarded->Records);
+      $next = $JSON->format(new Record(Levels::Warning, 'Demo.Guard', 'after oversized line'));
+      $Guarded->feed(str_repeat('Y', PipeHandler::MAX_FRAME_BYTES) . "\n" . $next);
+      yield assert(
+         assertion: count($Guarded->Records) === $afterRecovery + 1
+            && $Guarded->Records[$afterRecovery]->message === 'after oversized line',
+         description: 'a complete oversized line is dropped without hiding the valid frame behind it'
       );
 
       $Pipe->close();
