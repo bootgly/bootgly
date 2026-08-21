@@ -129,5 +129,6 @@ return new Suite(
       '4.15-pool_reused_transaction',
       '4.16-pool_retired_driver',
       '4.17-pool_reused_transaction_live',
+      '8.10-kv_redis_push_frames',
    ]
 );

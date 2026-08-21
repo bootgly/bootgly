@@ -11,6 +11,7 @@
 namespace Bootgly\ABI\Data\RESP;
 
 
+use function is_array;
 use function is_int;
 use function is_string;
 use function strlen;
@@ -18,6 +19,8 @@ use function strpos;
 use function substr;
 use InvalidArgumentException;
 use RuntimeException;
+
+use Bootgly\ABI\Data\RESP\Decoder\Push;
 
 
 /**
@@ -31,7 +34,9 @@ use RuntimeException;
  *
  * Error replies (`-`, `!`) are decoded as RuntimeException instances (never
  * thrown) so the caller decides how to surface them — preserving position in
- * a pipelined stream.
+ * a pipelined stream. Top-level push frames (`>`, RESP3) are decoded as
+ * `Decoder\Push` for the same reason: they are kept in order, and whether one
+ * answers a command is the reader's decision, not the codec's.
  */
 class Decoder
 {
@@ -59,6 +64,11 @@ class Decoder
       $size = strlen($this->buffer);
 
       while ($this->offset < $size) {
+         // ! The frame's own type byte, read before parse() consumes it. `>` is
+         //   the one type nothing downstream can recover afterwards, because a
+         //   push decodes to the same array a `*` does.
+         $type = $this->buffer[$this->offset];
+
          $result = $this->parse($this->offset);
 
          // ? Incomplete reply — wait for more bytes
@@ -67,6 +77,21 @@ class Decoder
          }
 
          $this->offset = $result[1];
+
+         // @ Push frames keep their place in the stream: under RESP3 the
+         //   confirmation of SUBSCRIBE is itself a push and is the answer to
+         //   the command that asked for it, so removing them here would
+         //   destroy the ordering the reader needs to match it. Only the type
+         //   is preserved; what a push means is the reader's decision.
+         if ($type === '>' && is_array($result[0])) {
+            /** @var array<int,mixed> $items — parse() builds `>` frames as a list */
+            $items = $result[0];
+
+            $replies[] = new Push($items);
+
+            continue;
+         }
+
          $replies[] = $result[0];
       }
 

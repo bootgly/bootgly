@@ -20,5 +20,6 @@ return new Suite(
       '1.4-decode-streamed-partial',
       '1.5-decode-resp3-types',
       '1.6-decode-multiple-and-reset',
+      '1.7-decode-push-frames',
    ]
 );

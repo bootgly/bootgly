@@ -22,14 +22,17 @@ use function fwrite;
 use function is_int;
 use function is_resource;
 use function is_scalar;
+use function is_string;
 use function socket_import_stream;
 use function socket_set_option;
+use function strtolower;
 use function substr;
 use RuntimeException;
 use Throwable;
 use WeakMap;
 
 use Bootgly\ABI\Data\RESP\Decoder;
+use Bootgly\ABI\Data\RESP\Decoder\Push;
 use Bootgly\ABI\Data\RESP\Encoder;
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Events\Scheduler;
@@ -58,6 +61,18 @@ use Bootgly\ADI\Databases\KV\Operation;
  */
 class Redis extends Driver
 {
+   // ! The RESP3 push kinds that ARE a command's reply: SUBSCRIBE and its
+   //   relatives are confirmed with a push frame, so those consume their FIFO
+   //   slot like any other answer. Every other push is out-of-band traffic.
+   private const array CONFIRMATIONS = [
+      'psubscribe' => true,
+      'punsubscribe' => true,
+      'ssubscribe' => true,
+      'subscribe' => true,
+      'sunsubscribe' => true,
+      'unsubscribe' => true,
+   ];
+
    // * Config
    public Encoder $Encoder;
    public Decoder $Decoder;
@@ -486,6 +501,27 @@ class Redis extends Driver
       }
 
       foreach ($replies as $reply) {
+         // ? An unsolicited push answers no command. Matching it to the FIFO
+         //   head positionally hands one command another's reply and keeps
+         //   every later one shifted for the connection's life — measured on
+         //   live Redis with client-side caching on, where an ECHO resolved to
+         //   an `invalidate` frame and its successor took the ECHO's answer.
+         //   This sits above the preamble counter for the same reason: a push
+         //   arriving mid-handshake must not spend an AUTH/SELECT slot either.
+         if ($reply instanceof Push) {
+            $kind = $reply->items[0] ?? null;
+
+            // ?: Out of band — nothing here consumes pub/sub or invalidation,
+            //    and a frame nobody asked for owes no slot.
+            if (is_string($kind) === false || isset(self::CONFIRMATIONS[strtolower($kind)]) === false) {
+               continue;
+            }
+
+            // @ A subscribe-family confirmation IS the answer to the command
+            //   that asked for it, and resolves it as a plain array.
+            $reply = $reply->items;
+         }
+
          // @ Discard AUTH/SELECT preamble replies first
          if ($this->skip > 0) {
             $this->skip--;
