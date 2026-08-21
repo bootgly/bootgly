@@ -641,7 +641,20 @@ LUA;
       }
       else {
          $scheme = $Config->secure === true ? 'tls' : 'tcp';
-         $flags = $Config->persistent === true
+
+         // ? A persistent stream is pooled by target alone: PHP keys it on
+         //   "tcp://host:port" and nothing else, so every client aimed at this
+         //   endpoint is handed the same socket — the database, the password and
+         //   the TLS context are all invisible to that key. A connection that
+         //   needs a session of its own would then carry its state for strangers
+         //   and theirs for us: one SELECT moves everybody, silently, because the
+         //   reply counts stay aligned and no desync guard fires. Only a
+         //   connection whose session IS the server default may share one.
+         $poolable = $Config->persistent === true
+            && $Config->database === 0
+            && $Config->password === ''
+            && $Config->secure === false;
+         $flags = $poolable
             ? STREAM_CLIENT_CONNECT | STREAM_CLIENT_PERSISTENT
             : STREAM_CLIENT_CONNECT;
          $Socket = @stream_socket_client(
@@ -676,16 +689,24 @@ LUA;
          // @ Authenticate and select the database over the native protocol
          //   (always — a reused persistent stream may carry another SELECT state)
          try {
+            // ? A stream handed over by a previous owner is not known to be
+            //   aligned, and it must be realigned BEFORE anything else reads a
+            //   reply: read() refuses debris — it rethrows a stranger's error
+            //   frame and raises desync on a surplus one — while resync() is
+            //   built to skip past exactly that. A stream this driver just
+            //   opened is aligned by definition and owes no round trip here.
+            if ($poolable) {
+               $this->resync();
+            }
+
             if ($Config->password !== '') {
                $this->dispatch(['AUTH', $Config->password]);
             }
-            if ($Config->database !== 0) {
+            // ? Selecting only a non-zero index left a driver on db 0 — the
+            //   default — trusting whatever the previous owner of a borrowed
+            //   stream had selected. A pooled connect states its database.
+            if ($Config->database !== 0 || $poolable) {
                $this->dispatch(['SELECT', $Config->database]);
-            }
-
-            // ? A stream handed over by a previous owner is not known to be aligned
-            if ($Config->persistent === true) {
-               $this->resync();
             }
          }
          catch (Throwable $Throwable) {

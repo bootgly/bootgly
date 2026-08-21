@@ -39,5 +39,6 @@ return new Suite(
       // @ Appended to preserve every existing selected-case index.
       '4.2-redis-desync',
       '1.10-recover-claim-window',
+      '4.3-redis-persistent-identity',
    ]
 );
