@@ -25,5 +25,6 @@ return new Suite(
       '1.7-database_resource_paginate',
       '1.8-database_resource_transact',
       '1.9-database_resource_transact_nested',
+      '1.10-resource_registry_lifecycle',
    ]
 );

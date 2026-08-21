@@ -679,5 +679,9 @@ return new Suite(
       // Oversized/nonblocking records must be dropped atomically, never leave
       // an unterminated fragment in the Monitor master's live viewer.
       '102.01-monitor_log_partial_frame_master_memory',
+      // # Scoped resource replacement retention (audit 2026-08-20 M4)
+      // Replacing a persistent scoped resource must release the displaced
+      // instance from the reusable Response registry lifecycle.
+      '102.08-scoped_resource_replacement_retention',
    ],
 );

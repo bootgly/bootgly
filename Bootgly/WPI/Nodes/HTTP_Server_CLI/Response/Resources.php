@@ -110,12 +110,12 @@ class Resources
       //   the old.
       foreach ($Resources->resources as $name => $Resource) {
          if (isset($Resources->definitions[$name])) {
-            unset($Resources->resources[$name]);
+            $Resources->remove($name, false);
 
             continue;
          }
 
-         $Resources->resources[$name] = $Resources->attach($Resource);
+         $Resources->replace($name, $Resource, false);
       }
 
       return $Resources;
@@ -133,7 +133,7 @@ class Resources
       }
 
       $this->definitions[$name] = $Factory;
-      unset($this->resources[$name]);
+      $this->remove($name);
 
       return $this;
    }
@@ -170,9 +170,35 @@ class Resources
     */
    public function set (string $name, Resource $Resource): Resource
    {
-      $this->resources[$name] = $this->attach($Resource);
+      return $this->replace($name, $Resource, true);
+   }
 
-      return $this->resources[$name];
+   /**
+    * Replace one mounted name after its attach hook succeeds.
+    *
+    * @template T of Resource
+    * @param T $Resource
+    * @return T
+    */
+   private function replace (
+      string $name,
+      Resource $Resource,
+      bool $clean,
+   ): Resource {
+      $Previous = $this->resources[$name] ?? null;
+      $Attached = $this->attach($Resource);
+      $this->resources[$name] = $Attached;
+
+      if ($Previous !== null && $Previous !== $Attached) {
+         try {
+            $this->detach($Previous, $clean);
+         }
+         finally {
+            $this->refresh();
+         }
+      }
+
+      return $Attached;
    }
 
    /**
@@ -240,10 +266,75 @@ class Resources
          }
 
          unset($this->resources[$name]);
+
+         if ($Resource->scoped) {
+            unset($this->Scoped[spl_object_id($Resource)]);
+         }
       }
 
+      $this->refresh();
+   }
+
+   /**
+    * Stop tracking one resource after its final mounted name is removed.
+    */
+   private function detach (Resource $Resource, bool $clean): void
+   {
+      if ($Resource->scoped === false) {
+         return;
+      }
+
+      foreach ($this->resources as $Mounted) {
+         if ($Mounted === $Resource) {
+            return;
+         }
+      }
+
+      unset($this->Scoped[spl_object_id($Resource)]);
+
+      if ($clean) {
+         $Resource->clean();
+      }
+   }
+
+   /**
+    * Remove one mounted name and synchronize its lifecycle metadata.
+    */
+   private function remove (string $name, bool $clean = true): void
+   {
+      $Resource = $this->resources[$name] ?? null;
+
+      if ($Resource === null) {
+         return;
+      }
+
+      unset($this->resources[$name]);
+      try {
+         $this->detach($Resource, $clean);
+      }
+      finally {
+         $this->refresh();
+      }
+   }
+
+   /**
+    * Refresh lifecycle gates after a mounted resource is displaced.
+    */
+   private function refresh (): void
+   {
       $this->ephemeral = false;
-      $this->resettable = $this::class !== self::class || $this->Scoped !== [];
+
+      foreach ($this->resources as $Resource) {
+         if ($Resource->persistent === false) {
+            $this->ephemeral = true;
+
+            break;
+         }
+      }
+
+      $this->resettable = $this::class !== self::class
+         || $this->ephemeral
+         || $this->Scoped !== [];
    }
 
    /**
