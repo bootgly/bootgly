@@ -35,5 +35,10 @@ return new Suite(
       '1.19-trust_lifecycle',
       '1.20-users_credentials',
       '1.21-auth_flows',
+      '1.22-jwt_remote_ttl_bounds',
+      '1.23-jwt_remote_cache_policy',
+      '1.24-jwt_remote_redirect_chain',
+      '1.25-jwt_remote_redirect_downgrade',
+      '1.26-jwt_remote_redirect_references',
    ]
 );
