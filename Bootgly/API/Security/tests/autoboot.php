@@ -43,5 +43,8 @@ return new Suite(
       '1.27-security_store_unrecorded_failure',
       '1.28-users_wait_interruption_live',
       '1.29-tokens_wait_interruption_live',
+      '1.30-trust_rotation_grace',
+      '1.31-security_primary_verdicts',
+      '1.32-trust_rotation_grace_live',
    ]
 );

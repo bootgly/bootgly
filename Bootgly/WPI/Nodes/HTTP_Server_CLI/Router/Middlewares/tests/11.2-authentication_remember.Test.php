@@ -30,6 +30,8 @@ return new Test(
          id INTEGER PRIMARY KEY AUTOINCREMENT,
          selector TEXT NOT NULL UNIQUE,
          verifier TEXT NOT NULL,
+         previous TEXT DEFAULT NULL,
+         rotated INTEGER DEFAULT NULL,
          user_id INTEGER NOT NULL,
          expires INTEGER NOT NULL,
          created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -95,7 +97,9 @@ return new Test(
          ->assert();
 
       // @ Valid cookie → revive: regenerate + identity + rotated Set-Cookie.
+      $Trust->freeze(1_000_000);
       $Issued = $Trust->issue('7');
+      $Trust->issue('7'); // sibling device must survive a benign duplicate
       HTTP_Server_CLI::$Response = new Response;
       [$Request, $Response] = $createMocks();
       $Session = $createSession();
@@ -134,7 +138,27 @@ return new Test(
          ->to->be(true)
          ->assert();
 
-      // @ Replay of the pre-rotation cookie → theft: revoke all + clearing cookie.
+      // @ Immediate duplicate of the pre-rotation cookie declines without side effects.
+      HTTP_Server_CLI::$Response = new Response;
+      [$Request, $Response] = $createMocks();
+      $Request->Session = $createSession();
+      $Request->Cookies = $createCookies(['remember' => $Issued->value]);
+
+      $duplicated = $Guard->authenticate($Request);
+      $duplicateCookies = HTTP_Server_CLI::$Response->Header->Cookies->cookies;
+      $duplicateRows = $Database->query('SELECT count(*) AS total FROM trusts')->Result?->cell;
+
+      $benign = $duplicated === false
+         && $duplicateCookies === []
+         && $duplicateRows === 2;
+
+      yield new Assertion(description: 'An immediate duplicate should decline without clearing or revoking')
+         ->expect($benign)
+         ->to->be(true)
+         ->assert();
+
+      // @ Replay after grace → theft: revoke all + clearing cookie.
+      $Trust->freeze(1_000_006);
       HTTP_Server_CLI::$Response = new Response;
       [$Request, $Response] = $createMocks();
       $Request->Session = $createSession();
@@ -150,7 +174,7 @@ return new Test(
          && str_contains($cleared[0], 'Max-Age=0')
          && $remaining === 0;
 
-      yield new Assertion(description: 'Replaying a rotated cookie should revoke every device and clear the cookie')
+      yield new Assertion(description: 'Replaying a rotated cookie after grace should revoke every device and clear the cookie')
          ->expect($theft)
          ->to->be(true)
          ->assert();

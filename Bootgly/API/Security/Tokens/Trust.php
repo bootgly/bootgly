@@ -24,11 +24,13 @@ use function random_int;
 use function strlen;
 use InvalidArgumentException;
 use RuntimeException;
+use stdClass;
 
 use Bootgly\ADI\Databases\SQL as SQLDatabase;
 use Bootgly\ADI\Databases\SQL\Builder;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Operators;
 use Bootgly\ADI\Databases\SQL\Builder\Identifier;
+use Bootgly\ADI\Databases\SQL\Builder\Query;
 use Bootgly\ADI\Databases\SQL\Operation;
 use Bootgly\ADI\Databases\SQL\Transaction;
 
@@ -64,6 +66,8 @@ class Trust
     * sha256 digest compared when a series misses — uniform timing.
     */
    private const string DECOY = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+   /** Seconds during which the immediately previous validator is benign. */
+   private const int ROTATION_GRACE = 5;
 
 
    public function __construct (SQLDatabase|Transaction $Database, string $table = 'trusts')
@@ -123,11 +127,11 @@ class Trust
     * Validate a trusted-device token and rotate its validator.
     *
     * The series (selector) stays stable; a fresh validator replaces the
-    * presented one atomically. A known series with a wrong validator
-    * revokes ALL of the user's devices and returns a `Theft` incident.
-    * A concurrent rotation losing the conditional-update race returns
-    * `null` — deliberately NOT `Theft`, so a benign double submit cannot
-    * revoke every session.
+    * presented one atomically. A delayed sibling carrying the immediately
+    * previous validator is declined for five seconds without authenticating
+    * or revoking. Any other wrong validator revokes ALL of the user's devices
+    * and returns a `Theft` incident. A concurrent rotation losing the
+    * conditional-update race also returns `null`.
     *
     * @return null|Theft|Token
     * @throws InvalidArgumentException When the ttl is not positive.
@@ -160,8 +164,12 @@ class Trust
          return null;
       }
 
+      // ! One clock sample owns the expiry verdict, grace boundary and new
+      //   expiry so a second boundary cannot split one rotation's decisions.
+      $now = $this->time;
+
       // ? Expired series — purge the dead row and reject
-      if ($row['expires'] <= $this->time) {
+      if ($row['expires'] <= $now) {
          $this->execute(
             $this->Database
                ->table(new Identifier($this->table))
@@ -172,8 +180,20 @@ class Trust
          return null;
       }
 
-      // ? Stolen-cookie signature — known series, wrong validator
+      // ? Stolen-cookie signature — known series, wrong validator. The exact
+      //   immediately previous digest is a benign delayed sibling only inside
+      //   the private inclusive grace window; it never authenticates or writes.
       if (hash_equals($row['verifier'], $digest) === false) {
+         if (
+            $row['previous'] !== null
+            && $row['rotated'] !== null
+            && $row['rotated'] <= $now
+            && $now - $row['rotated'] <= self::ROTATION_GRACE
+            && hash_equals($row['previous'], $digest)
+         ) {
+            return null;
+         }
+
          $this->revoke($row['user']);
 
          return new Theft($row['user']);
@@ -181,13 +201,15 @@ class Trust
 
       // !
       $fresh = bin2hex(random_bytes(32));
-      $expires = $this->time + $ttl;
+      $expires = $now + $ttl;
 
       // @ Atomic rotation gate — the digest recheck makes concurrent rotations lose.
       $Operation = $this->execute(
          $this->Database
             ->table(new Identifier($this->table))
             ->update()
+            ->set(new Identifier('previous'), $digest)
+            ->set(new Identifier('rotated'), $now)
             ->set(new Identifier('verifier'), hash('sha256', $fresh))
             ->set(new Identifier('expires'), $expires)
             ->filter(new Identifier('id'), Operators::Equal, $row['id'])
@@ -321,22 +343,30 @@ class Trust
    /**
     * Select a live series row by its public selector.
     *
-    * @return null|array{id:int|string, user:string, verifier:string, expires:int}
+    * @return null|array{
+    *    id:int|string,
+    *    user:string,
+    *    verifier:string,
+    *    previous:null|string,
+    *    rotated:null|int,
+    *    expires:int
+    * }
     */
    private function select (string $selector): null|array
    {
-      $Operation = $this->execute(
-         $this->Database
-            ->table(new Identifier($this->table))
-            ->select(
-               new Identifier('id'),
-               new Identifier('verifier'),
-               new Identifier('user_id'),
-               new Identifier('expires')
-            )
-            ->filter(new Identifier('selector'), Operators::Equal, $selector)
-            ->limit(1)
-      );
+      $Builder = $this->Database
+         ->table(new Identifier($this->table))
+         ->select(
+            new Identifier('id'),
+            new Identifier('verifier'),
+            new Identifier('previous'),
+            new Identifier('rotated'),
+            new Identifier('user_id'),
+            new Identifier('expires')
+         )
+         ->filter(new Identifier('selector'), Operators::Equal, $selector)
+         ->limit(1);
+      $Operation = $this->read($Builder);
 
       // ?
       if ($Operation->error !== null) {
@@ -351,12 +381,23 @@ class Trust
 
       $id = $row['id'] ?? null;
       $verifier = $row['verifier'] ?? null;
+      $previous = $row['previous'] ?? null;
+      $rotated = $row['rotated'] ?? null;
       $user = $row['user_id'] ?? null;
       $expires = $row['expires'] ?? null;
       // ? Malformed row — fail closed
       if (
          (is_numeric($id) === false && is_string($id) === false)
          || is_string($verifier) === false
+         || (
+            $previous !== null
+            && (
+               is_string($previous) === false
+               || strlen($previous) !== 64
+               || ctype_xdigit($previous) === false
+            )
+         )
+         || ($rotated !== null && is_numeric($rotated) === false)
          || (is_numeric($user) === false && is_string($user) === false)
          || is_numeric($expires) === false
       ) {
@@ -368,8 +409,27 @@ class Trust
          'id' => is_string($id) ? $id : (int) $id,
          'user' => (string) $user,
          'verifier' => $verifier,
+         'previous' => $previous,
+         'rotated' => $rotated === null ? null : (int) $rotated,
          'expires' => (int) $expires,
       ];
+   }
+
+   /**
+    * Execute one trust decision read without replica routing.
+    */
+   private function read (Builder $Builder): Operation
+   {
+      if ($this->Database instanceof Transaction) {
+         return $this->execute($Builder);
+      }
+
+      $Compiled = $Builder->compile();
+
+      return $this->execute(
+         new Query($Compiled->SQL, $Compiled->parameters, reading: false),
+         new stdClass
+      );
    }
 
    /**
@@ -379,9 +439,9 @@ class Trust
     * can fail closed. An infrastructure failure with no Operation error
     * propagates instead of manufacturing a token outcome.
     */
-   private function execute (Builder $Builder): Operation
+   private function execute (Builder|Query $Query, null|object $Scope = null): Operation
    {
-      $Operation = $this->Database->query($Builder);
+      $Operation = $this->Database->query($Query, Scope: $Scope);
       // ?
       if ($Operation->error !== null) {
          return $Operation;

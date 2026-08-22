@@ -48,6 +48,8 @@ return new Test(
          id INTEGER PRIMARY KEY AUTOINCREMENT,
          selector TEXT NOT NULL UNIQUE,
          verifier TEXT NOT NULL,
+         previous TEXT DEFAULT NULL,
+         rotated INTEGER DEFAULT NULL,
          user_id INTEGER NOT NULL,
          expires INTEGER NOT NULL,
          created_at TEXT DEFAULT CURRENT_TIMESTAMP

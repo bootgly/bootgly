@@ -24,11 +24,13 @@ use function random_int;
 use function strlen;
 use InvalidArgumentException;
 use RuntimeException;
+use stdClass;
 
 use Bootgly\ADI\Databases\SQL as SQLDatabase;
 use Bootgly\ADI\Databases\SQL\Builder;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Operators;
 use Bootgly\ADI\Databases\SQL\Builder\Identifier;
+use Bootgly\ADI\Databases\SQL\Builder\Query;
 use Bootgly\ADI\Databases\SQL\Operation;
 use Bootgly\ADI\Databases\SQL\Transaction;
 use Bootgly\API\Security\Tokens\Clocked;
@@ -322,19 +324,18 @@ class Tokens
     */
    private function select (string $selector, Purposes $Purpose): null|array
    {
-      $Operation = $this->execute(
-         $this->Database
-            ->table(new Identifier($this->table))
-            ->select(
-               new Identifier('id'),
-               new Identifier('verifier'),
-               new Identifier('user_id'),
-               new Identifier('expires')
-            )
-            ->filter(new Identifier('selector'), Operators::Equal, $selector)
-            ->filter(new Identifier('purpose'), Operators::Equal, $Purpose->value)
-            ->limit(1)
-      );
+      $Builder = $this->Database
+         ->table(new Identifier($this->table))
+         ->select(
+            new Identifier('id'),
+            new Identifier('verifier'),
+            new Identifier('user_id'),
+            new Identifier('expires')
+         )
+         ->filter(new Identifier('selector'), Operators::Equal, $selector)
+         ->filter(new Identifier('purpose'), Operators::Equal, $Purpose->value)
+         ->limit(1);
+      $Operation = $this->read($Builder);
 
       // ?
       if ($Operation->error !== null) {
@@ -371,15 +372,32 @@ class Tokens
    }
 
    /**
+    * Execute one token decision read without replica routing.
+    */
+   private function read (Builder $Builder): Operation
+   {
+      if ($this->Database instanceof Transaction) {
+         return $this->execute($Builder);
+      }
+
+      $Compiled = $Builder->compile();
+
+      return $this->execute(
+         new Query($Compiled->SQL, $Compiled->parameters, reading: false),
+         new stdClass
+      );
+   }
+
+   /**
     * Execute one token query through the configured async SQL surface.
     *
     * Recorded database errors stay on the returned Operation so this store
     * can fail closed. An infrastructure failure with no Operation error
     * propagates instead of manufacturing a token outcome.
     */
-   private function execute (Builder $Builder): Operation
+   private function execute (Builder|Query $Query, null|object $Scope = null): Operation
    {
-      $Operation = $this->Database->query($Builder);
+      $Operation = $this->Database->query($Query, Scope: $Scope);
       // ?
       if ($Operation->error !== null) {
          return $Operation;

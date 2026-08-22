@@ -14,11 +14,13 @@ namespace Bootgly\API\Security;
 use function is_numeric;
 use function is_string;
 use RuntimeException;
+use stdClass;
 
 use Bootgly\ADI\Databases\SQL as SQLDatabase;
 use Bootgly\ADI\Databases\SQL\Builder;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Operators;
 use Bootgly\ADI\Databases\SQL\Builder\Identifier;
+use Bootgly\ADI\Databases\SQL\Builder\Query;
 use Bootgly\ADI\Databases\SQL\Operation;
 use Bootgly\ADI\Databases\SQL\Transaction;
 use Bootgly\API\Security\Tokens\Clocked;
@@ -299,18 +301,17 @@ class Users
          return null;
       }
 
-      $Operation = $this->execute(
-         $this->Database
-            ->table(new Identifier($this->table))
-            ->select(
-               new Identifier($this->key),
-               new Identifier($this->identifier),
-               new Identifier($this->secret),
-               new Identifier($this->verified)
-            )
-            ->filter(new Identifier($this->identifier), Operators::Equal, $email)
-            ->limit(1)
-      );
+      $Builder = $this->Database
+         ->table(new Identifier($this->table))
+         ->select(
+            new Identifier($this->key),
+            new Identifier($this->identifier),
+            new Identifier($this->secret),
+            new Identifier($this->verified)
+         )
+         ->filter(new Identifier($this->identifier), Operators::Equal, $email)
+         ->limit(1);
+      $Operation = $this->read($Builder);
 
       // :
       return $this->cast($Operation);
@@ -328,21 +329,42 @@ class Users
          return null;
       }
 
-      $Operation = $this->execute(
-         $this->Database
-            ->table(new Identifier($this->table))
-            ->select(
-               new Identifier($this->key),
-               new Identifier($this->identifier),
-               new Identifier($this->secret),
-               new Identifier($this->verified)
-            )
-            ->filter(new Identifier($this->key), Operators::Equal, $user)
-            ->limit(1)
-      );
+      $Builder = $this->Database
+         ->table(new Identifier($this->table))
+         ->select(
+            new Identifier($this->key),
+            new Identifier($this->identifier),
+            new Identifier($this->secret),
+            new Identifier($this->verified)
+         )
+         ->filter(new Identifier($this->key), Operators::Equal, $user)
+         ->limit(1);
+      $Operation = $this->read($Builder);
 
       // :
       return $this->cast($Operation);
+   }
+
+   /**
+    * Execute one credential decision read without replica routing.
+    *
+    * Transactions retain their existing primary snapshot. A standalone SQL
+    * facade receives a write-classified compiled query so replica lag cannot
+    * decide credentials; the one-use scope prevents that classification from
+    * extending sticky routing to unrelated reads in the worker.
+    */
+   private function read (Builder $Builder): Operation
+   {
+      if ($this->Database instanceof Transaction) {
+         return $this->execute($Builder);
+      }
+
+      $Compiled = $Builder->compile();
+
+      return $this->execute(
+         new Query($Compiled->SQL, $Compiled->parameters, reading: false),
+         new stdClass
+      );
    }
 
    /**
@@ -392,9 +414,9 @@ class Users
     * can fail closed. An infrastructure failure with no Operation error
     * propagates instead of becoming a credential verdict.
     */
-   private function execute (Builder $Builder): Operation
+   private function execute (Builder|Query $Query, null|object $Scope = null): Operation
    {
-      $Operation = $this->Database->query($Builder);
+      $Operation = $this->Database->query($Query, Scope: $Scope);
       // ?
       if ($Operation->error !== null) {
          return $Operation;

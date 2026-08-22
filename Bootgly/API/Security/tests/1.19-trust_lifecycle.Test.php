@@ -27,6 +27,8 @@ return new Test(
          id INTEGER PRIMARY KEY AUTOINCREMENT,
          selector TEXT NOT NULL UNIQUE,
          verifier TEXT NOT NULL,
+         previous TEXT DEFAULT NULL,
+         rotated INTEGER DEFAULT NULL,
          user_id INTEGER NOT NULL,
          expires INTEGER NOT NULL,
          created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -55,7 +57,7 @@ return new Test(
          description: 'issue() starts a series persisting only the validator digest'
       );
 
-      // @ Rotate: series stable, validator replaced, old value dead
+      // @ Rotate: series stable, validator replaced, prior generation retained briefly
       $Rotated = $Trust->rotate($Issued->value, ttl: 3600);
 
       yield assert(
@@ -67,15 +69,25 @@ return new Test(
          description: 'rotate() keeps the series and replaces the validator'
       );
 
-      // @ Replay of the pre-rotation value = stolen-cookie signature
+      // @ Immediate duplicate of the pre-rotation value is benign.
       $Trust->issue('7', ttl: 3600); // second device of the same user
+      $Duplicate = $Trust->rotate($Issued->value);
+
+      yield assert(
+         assertion: $Duplicate === null
+            && $count() === 2,
+         description: 'an immediate duplicate declines without revoking any user series'
+      );
+
+      // @ Replay after grace = stolen-cookie signature.
+      $Trust->freeze(1000000 + 6);
       $Incident = $Trust->rotate($Issued->value);
 
       yield assert(
          assertion: $Incident instanceof Theft
             && $Incident->user === '7'
             && $count() === 0,
-         description: 'replaying a rotated validator revokes ALL user series and reports Theft'
+         description: 'replaying a rotated validator after grace revokes ALL user series and reports Theft'
       );
 
       // @ Unknown series and malformed tokens are rejected quietly
@@ -87,6 +99,7 @@ return new Test(
       );
 
       // @ Expired series is purged on contact
+      $Trust->freeze(1000000);
       $Expiring = $Trust->issue('7', ttl: 60);
       $Trust->freeze(1000000 + 61);
 
