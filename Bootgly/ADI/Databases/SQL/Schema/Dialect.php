@@ -17,7 +17,6 @@ use function is_bool;
 use function is_finite;
 use function is_float;
 use function is_int;
-use function is_nan;
 use function is_string;
 use function sprintf;
 use function str_replace;
@@ -177,6 +176,10 @@ abstract class Dialect
 
       // ? Floats — shortest round-trip rendering.
       if (is_float($value)) {
+         if (is_finite($value) === false) {
+            throw new InvalidArgumentException('Schema default float must be finite.');
+         }
+
          return $this->render($value);
       }
 
@@ -192,7 +195,7 @@ abstract class Dialect
    }
 
    /**
-    * Render one float as the shortest text that reads back identically.
+    * Render one finite float as the shortest text that reads back identically.
     *
     * Neither `var_export()` nor a `(string)` cast can be used here: their digit
     * counts follow the `serialize_precision` and `precision` inis, so the same
@@ -200,15 +203,6 @@ abstract class Dialect
     */
    private function render (float $value): string
    {
-      // ?: Non-finite values carry no digits to round.
-      if (is_finite($value) === false) {
-         if (is_nan($value)) {
-            return 'NaN';
-         }
-
-         return $value > 0 ? 'Infinity' : '-Infinity';
-      }
-
       // @@ Digits — 17 significant digits always round-trip a double; shorter
       //    renderings are tried first so ordinary values stay readable.
       foreach ([15, 16, 17] as $digits) {
