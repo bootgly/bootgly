@@ -130,5 +130,7 @@ return new Suite(
       '4.16-pool_retired_driver',
       '4.17-pool_reused_transaction_live',
       '8.10-kv_redis_push_frames',
+      '7.37-postgresql_tls_pending_write',
+      '7.38-postgresql_tls_pending_write_live',
    ]
 );

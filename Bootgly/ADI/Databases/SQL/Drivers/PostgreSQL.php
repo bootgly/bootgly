@@ -35,6 +35,7 @@ use function preg_match;
 use function sha1;
 use function spl_object_id;
 use function str_starts_with;
+use function stream_get_meta_data;
 use function stream_socket_client;
 use function strlen;
 use function strtolower;
@@ -88,15 +89,16 @@ class PostgreSQL extends Driver
    private array $pipeline = [];
    /** @var array<int,Operation> */
    private array $completed = [];
+   // @ True when the current stream completed TLS here or arrived encrypted.
+   private bool $encrypted = false;
    // @ This driver tore its session down and must never drive a replacement
    //   socket attached to the same Connection object.
    private bool $aborted = false;
    // @ Operation currently holding the socket write stream (co-located pipelining).
    private null|Operation $writing = null;
-   // @ Bytes of the holder's batch already on the wire. Zero means the backend
-   //   never saw the batch start: the stream can be withdrawn locally, while a
-   //   partial count means the backend is parsing a message only the remaining
-   //   buffer can complete.
+   // @ Holder bytes accepted by the stream. A positive count makes withdrawal
+   //   unsafe on every transport. Zero proves no reach only on plaintext: TLS
+   //   may retain an uncredited record that requires this exact buffer again.
    private int $wrote = 0;
    // @ Statement Closes riding the holder's batch — requeued if that batch is
    //   withdrawn before any byte reaches the wire, or the backend keeps names
@@ -319,10 +321,13 @@ class PostgreSQL extends Driver
             }
          }
 
+         $metadata = stream_get_meta_data($this->Connection->socket);
+         $this->encrypted = is_array($metadata['crypto'] ?? null);
          $Operation->state = OperationStates::Querying;
       }
 
       if ($Operation->state === OperationStates::Connecting) {
+         $this->encrypted = false;
          $mode = $this->Config->secure['mode'];
 
          if ($mode === Config::SECURE_DISABLE) {
@@ -356,6 +361,7 @@ class PostgreSQL extends Driver
          $encrypted = $this->Connection->encrypt();
 
          if ($encrypted === true) {
+            $this->encrypted = true;
             $this->Connection->transition(ConnectionStates::Startup);
             $this->Authentication->authenticated = false;
             $Operation->write = $this->Encoder->encode(Encoder::STARTUP, $this->Config);
@@ -419,28 +425,25 @@ class PostgreSQL extends Driver
                return $this->await($Operation, Scheduler::SCHEDULE_WRITE);
             }
 
-            // ? The caller withdrew this work, and part of it is already on the
-            //   wire. Finishing the flush would run exactly what was withdrawn,
-            //   and the backend is mid-message, so there is nothing left to
-            //   resynchronise with: the session goes instead.
-            if ($Holder->revoked && $this->wrote > 0) {
+            // ? The caller withdrew this work and its outcome is no longer safe
+            //   to discover by completing the batch. Credited plaintext bytes
+            //   prove reach; TLS can retain a pending record even at zero, so
+            //   both cases make the session impossible to resynchronise.
+            if ($Holder->revoked && ($this->wrote > 0 || $this->encrypted)) {
                $this->abort($Holder, 'PostgreSQL operation was withdrawn while writing its batch.');
             }
-            elseif ($this->wrote === 0) {
-               // ! Nothing reached the wire — nothing is owed: withdraw the
-               //   batch and leave the operation to its own pool. It is past its
-               //   deadline, so the pool expires it through the envelope that
-               //   settles its claim; finishing it here would hand the pool an
-               //   operation already failed, whose connection the fallback hop
-               //   then leaves reserved for nobody. Its bytes never ran, so it
-               //   is deliberately not revoked — a fallback retry stays legal.
+            elseif ($this->wrote === 0 && $this->encrypted === false) {
+               // ! Plaintext copied none of this batch into the stream — nothing
+               //   is owed: withdraw it and leave the operation to its own pool.
+               //   It is past its deadline, so the pool expires it through the
+               //   envelope that settles its claim. Its bytes never ran, so it
+               //   is deliberately not revoked and fallback remains legal.
                $this->withdraw($Holder);
             }
             elseif ($this->flush($Holder) === false) {
-               // ?: Still partial — the send buffer is full: park and retry on
-               //    the next pass. A hard failure routed through abort() and
-               //    freed the stream instead; the compose below then reports
-               //    the dead socket on this operation.
+               // ?: Still partial or held by TLS as an uncredited pending record:
+               //    preserve this exact buffer, park and retry on the next pass.
+               //    A hard failure routed through abort() and freed the stream.
                if ($this->writing === $Holder) {
                   return $this->await($Operation, Scheduler::SCHEDULE_WRITE);
                }
@@ -699,18 +702,22 @@ class PostgreSQL extends Driver
       // ? Not pipelined here — an operation only joins the pipeline once its
       //   batch is whole on the wire, so nothing is owed to this one.
       if ($index === null) {
-         // ? Unless it holds the write stream with bytes already on the wire: a
-         //   half-written batch leaves the backend parsing a message that only
-         //   the buffer the expiry just destroyed could complete.
-         if ($this->writing === $Operation && $this->wrote > 0) {
+         // ? Unless it still holds a stream that cannot safely forget its
+         //   buffer. Credited bytes are partial work on every transport; TLS
+         //   may retain an uncredited record too. Pool expiry has already
+         //   destroyed the only buffer either state could use to recover.
+         if (
+            $this->writing === $Operation
+            && ($this->wrote > 0 || $this->encrypted)
+         ) {
             $this->abort($Operation, 'PostgreSQL operation was abandoned while writing its batch.');
 
             return;
          }
 
-         // @ Nothing of this batch is on the wire: free whatever it claimed and
-         //   release the Parse name it composed, along with every sibling that
-         //   Bound that name warm.
+         // @ A plaintext zero-credit batch contributed nothing to the stream:
+         //   free its claim and release the Parse name it composed, along with
+         //   every sibling that Bound that name warm.
          if ($Operation instanceof Operation) {
             $this->withdraw($Operation);
          }
@@ -874,13 +881,13 @@ class PostgreSQL extends Driver
    }
 
    /**
-    * Withdraw a batch that never reached the wire.
+    * Withdraw a plaintext batch that the stream accepted no bytes from.
     */
    private function withdraw (Operation $Operation): void
    {
-      // ? Only a claim that put nothing on the wire may be freed: a batch with
-      //   bytes on the socket left the backend parsing a message that nothing
-      //   but its own remainder can complete.
+      // ? The callers admit only plaintext zero-credit claims. A batch with
+      //   accepted bytes — or any zero-return TLS write — may need this exact
+      //   remainder to complete the stream and must not be freed here.
       if ($this->writing === $Operation && $this->wrote === 0) {
          $this->writing = null;
 
