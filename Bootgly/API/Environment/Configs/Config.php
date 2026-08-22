@@ -173,6 +173,14 @@ class Config
 
    // # Accessing
    /**
+    * Check whether one direct child is declared without creating it.
+    */
+   public function check (string $name): bool
+   {
+      return array_key_exists($name, $this->children);
+   }
+
+   /**
     * Return this node's bound value, or `null` when unbound.
     */
    public function get (): mixed

@@ -33,5 +33,8 @@ return new Suite(
 
       '5.x-database_config_adapter',
       '5.x-kv_config_adapter',
+
+      '6.x-database_config_missing_driver_scope',
+      '6.x-configs_scope_identity',
    ]
 );

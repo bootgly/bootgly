@@ -23,6 +23,15 @@ return new Test(
          description: 'root has no parent'
       );
 
+      // @ Presence checks do not manufacture the child they inspect.
+      $beforeCheck = array_keys(iterator_to_array($Config->walk()));
+      $missing = $Config->check('Connections');
+      $afterCheck = array_keys(iterator_to_array($Config->walk()));
+      yield assert(
+         assertion: $missing === false && $beforeCheck === [] && $afterCheck === $beforeCheck,
+         description: 'check reports an absent child without mutating the walked tree'
+      );
+
       // @ __get creates child
       $Child = $Config->Connections;
       yield assert(
@@ -40,6 +49,18 @@ return new Test(
       yield assert(
          assertion: $Child->parent === $Config,
          description: 'child parent is root'
+      );
+      yield assert(
+         assertion: $Config->check('Connections'),
+         description: 'check reports a child after object navigation declares it'
+      );
+
+      // @ Presence is structural and independent from the bound value.
+      $Nullable = $Config->Nullable;
+      $Nullable->bind(default: null);
+      yield assert(
+         assertion: $Config->check('Nullable') && $Nullable->get() === null,
+         description: 'check reports an explicitly null-bound child as declared'
       );
 
       // @ Same child returned on repeated access

@@ -66,6 +66,9 @@ class DatabaseConfig
 
    /**
     * Build the ADI-native database configuration value.
+    *
+    * @throws InvalidArgumentException when the selected driver has no declared
+    *   canonical connection subtree or contains an invalid value.
     */
    public function configure (): ADIConfig
    {
@@ -270,12 +273,27 @@ class DatabaseConfig
     */
    private function select (string $driver): Config
    {
-      return match ($driver) {
-         ADIConfig::DEFAULT_DRIVER => $this->Config->Connections->PostgreSQL,
-         'mysql' => $this->Config->Connections->MySQL,
-         'sqlite' => $this->Config->Connections->SQLite,
+      $name = match ($driver) {
+         ADIConfig::DEFAULT_DRIVER => 'PostgreSQL',
+         'mysql' => 'MySQL',
+         'sqlite' => 'SQLite',
          default => throw new InvalidArgumentException("Unsupported database driver: {$driver}."),
       };
+
+      if ($this->Config->check('Connections') === false) {
+         throw new InvalidArgumentException(
+            "Database config is missing the selected connection scope: Connections->{$name}."
+         );
+      }
+
+      $Connections = $this->Config->Connections;
+      if ($Connections->check($name) === false) {
+         throw new InvalidArgumentException(
+            "Database config is missing the selected connection scope: Connections->{$name}."
+         );
+      }
+
+      return $Connections->{$name};
    }
 
    /**

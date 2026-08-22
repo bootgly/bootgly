@@ -57,6 +57,8 @@ class Configs
    private array $allowed = [];
    /** @var array<string,array<string,true>> */
    private array $locked = [];
+   /** @var array<string,true> Scope files rejected for declaring another identity. */
+   private array $mismatched = [];
 
    // * Metadata
    // ...
@@ -233,6 +235,9 @@ class Configs
     * This method accepts only scope names. Dot-notation is not supported;
     * use object navigation on the returned `Config` instead.
     *
+    * Identity-mismatched files are latched so repeated lazy reads do not
+    * execute them again; a later successful explicit load clears that latch.
+    *
     * @return mixed `Config` when the scope exists; `$default` otherwise.
     */
    public function get (string $key, mixed $default = null): mixed
@@ -243,7 +248,10 @@ class Configs
       }
 
       // ? Lazy load
-      if ($this->Scopes->check($key) === false) {
+      if (
+         $this->Scopes->check($key) === false
+         && isset($this->mismatched[$key]) === false
+      ) {
          $this->load($key);
       }
 
@@ -262,7 +270,9 @@ class Configs
     * Load and register one config scope.
     *
     * The loader reads `.env`, then `.env.<BOOTGLY_ENV>`, then executes the
-    * trusted PHP config file for the scope.
+    * trusted PHP config file for the scope. A declared scope-name mismatch
+    * returns false without registration. Explicit calls retry a latched
+    * mismatch; only a successful identity match clears the latch.
     */
    public function load (string $scope): bool
    {
@@ -308,6 +318,18 @@ class Configs
       if ($Config === null) {
          return false;
       }
+
+      // ! The directory/file identity owns the registry key. A trusted config
+      //   declaring another scope must neither report success nor replace it.
+      if ($Config->scope !== $scope) {
+         $this->mismatched[$scope] = true;
+
+         return false;
+      }
+
+      // @ A successful explicit retry recovers the requested identity and
+      //   re-enables ordinary lazy reads. Failed retries retain the latch.
+      unset($this->mismatched[$scope]);
 
       // @ Register
       $this->Scopes->add($Config);
