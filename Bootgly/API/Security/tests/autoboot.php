@@ -46,5 +46,8 @@ return new Suite(
       '1.30-trust_rotation_grace',
       '1.31-security_primary_verdicts',
       '1.32-trust_rotation_grace_live',
+      '1.33-security_transaction_snapshot_live',
+      '1.34-security_transaction_snapshot_sqlite',
+      '1.35-security_transaction_snapshot_pgsql_live',
    ]
 );

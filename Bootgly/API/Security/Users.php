@@ -18,7 +18,10 @@ use stdClass;
 
 use Bootgly\ADI\Databases\SQL as SQLDatabase;
 use Bootgly\ADI\Databases\SQL\Builder;
+use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Locks;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Operators;
+use Bootgly\ADI\Databases\SQL\Builder\Dialects\SQLite as SQLiteDialect;
+use Bootgly\ADI\Databases\SQL\Builder\Expression;
 use Bootgly\ADI\Databases\SQL\Builder\Identifier;
 use Bootgly\ADI\Databases\SQL\Builder\Query;
 use Bootgly\ADI\Databases\SQL\Operation;
@@ -348,15 +351,42 @@ class Users
    /**
     * Execute one credential decision read without replica routing.
     *
-    * Transactions retain their existing primary snapshot. A standalone SQL
-    * facade receives a write-classified compiled query so replica lag cannot
-    * decide credentials; the one-use scope prevents that classification from
+    * Transactions take a current locking read, or a zero-row SQLite writer
+    * barrier that rejects stale WAL snapshots before selection. A standalone
+    * SQL facade receives a write-classified compiled query so replica lag
+    * cannot decide credentials; one-use scopes keep both classifications from
     * extending sticky routing to unrelated reads in the worker.
     */
    private function read (Builder $Builder): Operation
    {
       if ($this->Database instanceof Transaction) {
-         return $this->execute($Builder);
+         $Scope = new stdClass;
+
+         if ($Builder->Dialect instanceof SQLiteDialect) {
+            // ! SQLite has no locking SELECT. A zero-row DML statement either
+            //   reserves the writer before the read or rejects an already stale
+            //   WAL snapshot with BUSY_SNAPSHOT; never continue after failure.
+            $Barrier = $this->execute(
+               $this->Database
+                  ->table(new Identifier($this->table))
+                  ->delete()
+                  ->filter(new Expression('1'), Operators::Equal, new Expression('0')),
+               $Scope
+            );
+            if ($Barrier->error !== null) {
+               return $Barrier;
+            }
+            if ($Barrier->affected !== 0) {
+               throw new RuntimeException('Database current-read barrier modified rows.');
+            }
+         }
+         else {
+            // ! A locking read is current in MySQL and either current or
+            //   serialization-failing (fail-closed) under PostgreSQL isolation.
+            $Builder->lock(Locks::Update);
+         }
+
+         return $this->execute($Builder, $Scope);
       }
 
       $Compiled = $Builder->compile();

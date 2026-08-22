@@ -28,7 +28,10 @@ use stdClass;
 
 use Bootgly\ADI\Databases\SQL as SQLDatabase;
 use Bootgly\ADI\Databases\SQL\Builder;
+use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Locks;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Operators;
+use Bootgly\ADI\Databases\SQL\Builder\Dialects\SQLite as SQLiteDialect;
+use Bootgly\ADI\Databases\SQL\Builder\Expression;
 use Bootgly\ADI\Databases\SQL\Builder\Identifier;
 use Bootgly\ADI\Databases\SQL\Builder\Query;
 use Bootgly\ADI\Databases\SQL\Operation;
@@ -372,12 +375,33 @@ class Tokens
    }
 
    /**
-    * Execute one token decision read without replica routing.
+    * Execute one token decision read without replica lag or a stale transaction verdict.
     */
    private function read (Builder $Builder): Operation
    {
       if ($this->Database instanceof Transaction) {
-         return $this->execute($Builder);
+         $Scope = new stdClass;
+
+         if ($Builder->Dialect instanceof SQLiteDialect) {
+            $Barrier = $this->execute(
+               $this->Database
+                  ->table(new Identifier($this->table))
+                  ->delete()
+                  ->filter(new Expression('1'), Operators::Equal, new Expression('0')),
+               $Scope
+            );
+            if ($Barrier->error !== null) {
+               return $Barrier;
+            }
+            if ($Barrier->affected !== 0) {
+               throw new RuntimeException('Database current-read barrier modified rows.');
+            }
+         }
+         else {
+            $Builder->lock(Locks::Update);
+         }
+
+         return $this->execute($Builder, $Scope);
       }
 
       $Compiled = $Builder->compile();

@@ -337,9 +337,9 @@ return new Test(
             'primary_rows' => (int) $Observer->querySingle('SELECT count(*) FROM tokens'),
          ];
 
-         // @ A transaction already owns its primary connection and database
-         //   isolation snapshot. Its read-only calls must remain valid without
-         //   being reclassified as writes on the outer SQL routing scope.
+         // @ A transaction already owns its primary connection. SQLite uses
+         //   one transient-scope write barrier per decision read so an old WAL
+         //   snapshot fails closed without polluting the outer routing scope.
          $touches = $Database->touches;
          $Transaction = $Database->begin();
          $Begin = $Transaction->Operation;
@@ -465,7 +465,7 @@ return new Test(
                'revoked_token_rejected' => true,
                'primary_token_accepted' => true,
                'unknown_trust_rejected' => true,
-               'touches' => 0,
+               'touches' => 4,
                'commit_error' => null,
             ],
          description: 'Fixture controls prove a stale replica, a no-write selector miss and a primary-pinned transaction; evidence='
