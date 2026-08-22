@@ -196,7 +196,8 @@ return new Test(
                . 'verifier VARCHAR(64) NOT NULL, '
                . 'user_id VARCHAR(191) NOT NULL, '
                . 'purpose VARCHAR(32) NOT NULL, '
-               . 'expires BIGINT NOT NULL'
+               . 'expires BIGINT NOT NULL, '
+               . 'UNIQUE (user_id, purpose)'
                . ') ENGINE=InnoDB'
          );
          $Await(

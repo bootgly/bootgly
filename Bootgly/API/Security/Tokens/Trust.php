@@ -44,7 +44,8 @@ use Bootgly\ADI\Databases\SQL\Transaction;
  * Each trusted device holds one series: the selector stays stable while
  * the validator rotates on every successful use. A known series presented
  * with a wrong validator is the stolen-cookie signature — every trusted
- * device of the user is revoked and a `Theft` incident is returned.
+ * device of the user is revoked and a `Theft` incident is returned only when
+ * that revocation succeeds.
  */
 class Trust
 {
@@ -132,9 +133,10 @@ class Trust
     * The series (selector) stays stable; a fresh validator replaces the
     * presented one atomically. A delayed sibling carrying the immediately
     * previous validator is declined for five seconds without authenticating
-    * or revoking. Any other wrong validator revokes ALL of the user's devices
-    * and returns a `Theft` incident. A concurrent rotation losing the
-    * conditional-update race also returns `null`.
+    * or revoking. Any other wrong validator returns a `Theft` incident only
+    * after revoking ALL of the user's devices; a revocation failure returns
+    * `null`. A concurrent rotation losing the conditional-update race also
+    * returns `null`.
     *
     * @return null|Theft|Token
     * @throws InvalidArgumentException When the ttl is not positive.
@@ -197,7 +199,9 @@ class Trust
             return null;
          }
 
-         $this->revoke($row['user']);
+         if ($this->revoke($row['user']) === null) {
+            return null;
+         }
 
          return new Theft($row['user']);
       }
@@ -266,10 +270,10 @@ class Trust
    /**
     * Drop all device series of a user (logout everywhere / password change).
     *
-    * @return int Revoked rows.
+    * @return null|int Revoked rows, or `null` on a recorded database failure.
     * @throws RuntimeException When a database wait fails without a recorded Operation error.
     */
-   public function revoke (string $user): int
+   public function revoke (string $user): null|int
    {
       // ?
       if ($user === '') {
@@ -285,7 +289,7 @@ class Trust
       );
       // ?
       if ($Operation->error !== null) {
-         return 0;
+         return null;
       }
 
       // :

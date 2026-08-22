@@ -17,6 +17,7 @@ use function ctype_xdigit;
 use function explode;
 use function hash;
 use function hash_equals;
+use function in_array;
 use function is_numeric;
 use function is_string;
 use function random_bytes;
@@ -30,6 +31,7 @@ use Bootgly\ADI\Databases\SQL as SQLDatabase;
 use Bootgly\ADI\Databases\SQL\Builder;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Locks;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Operators;
+use Bootgly\ADI\Databases\SQL\Builder\Dialects\MySQL as MySQLDialect;
 use Bootgly\ADI\Databases\SQL\Builder\Dialects\SQLite as SQLiteDialect;
 use Bootgly\ADI\Databases\SQL\Builder\Expression;
 use Bootgly\ADI\Databases\SQL\Builder\Identifier;
@@ -101,9 +103,6 @@ class Tokens
          throw new InvalidArgumentException('Token ttl must be positive.');
       }
 
-      // ! One live token per user + purpose.
-      $this->revoke($user, $Purpose);
-
       // ?: Probabilistic GC — expired rows also purge on contact
       if (random_int(1, static::$gcProbability[1]) <= static::$gcProbability[0]) {
          $this->sweep();
@@ -115,19 +114,20 @@ class Tokens
       $expires = $this->time + $ttl;
 
       // @
-      $Operation = $this->execute(
-         $this->Database
-            ->table(new Identifier($this->table))
-            ->insert()
-            ->set(new Identifier('selector'), $selector)
-            ->set(new Identifier('verifier'), hash('sha256', $verifier))
-            ->set(new Identifier('user_id'), $user)
-            ->set(new Identifier('purpose'), $Purpose->value)
-            ->set(new Identifier('expires'), $expires)
+      $Operation = $this->persist(
+         $selector,
+         hash('sha256', $verifier),
+         $user,
+         $Purpose,
+         $expires
       );
 
       // ?
-      if ($Operation->error !== null) {
+      if (
+         $Operation->error !== null
+         || $Operation->finished === false
+         || in_array($Operation->affected, [1, 2], true) === false
+      ) {
          throw new RuntimeException('Token could not be stored.');
       }
 
@@ -172,7 +172,8 @@ class Tokens
             $this->Database
                ->table(new Identifier($this->table))
                ->delete()
-               ->filter(new Identifier('id'), Operators::Equal, $row['id'])
+               ->filter(new Identifier('selector'), Operators::Equal, $selector)
+               ->filter(new Identifier('verifier'), Operators::Equal, $row['verifier'])
          );
 
          return null;
@@ -239,10 +240,10 @@ class Tokens
    /**
     * Drop live tokens for a user — optionally scoped to one purpose.
     *
-    * @return int Revoked rows.
+    * @return null|int Revoked rows, or `null` on a recorded database failure.
     * @throws RuntimeException When a database wait fails without a recorded Operation error.
     */
-   public function revoke (string $user, null|Purposes $Purpose = null): int
+   public function revoke (string $user, null|Purposes $Purpose = null): null|int
    {
       // ?
       if ($user === '') {
@@ -262,11 +263,62 @@ class Tokens
       $Operation = $this->execute($Builder);
       // ?
       if ($Operation->error !== null) {
-         return 0;
+         return null;
       }
 
       // :
       return $Operation->affected;
+   }
+
+   /**
+    * Persist one token as the sole live credential for its user and purpose.
+    *
+    * MySQL reacts to every unique-key collision in ON DUPLICATE KEY UPDATE,
+    * not only the conflict columns requested by Builder::upsert(). Guard each
+    * update so a selector collision owned by another user-purpose pair is a
+    * no-op that mint() rejects from its zero affected-row result.
+    */
+   private function persist (
+      string $selector,
+      string $verifier,
+      string $user,
+      Purposes $Purpose,
+      int $expires
+   ): Operation
+   {
+      $Builder = $this->Database
+         ->table(new Identifier($this->table))
+         ->insert()
+         ->set(new Identifier('selector'), $selector)
+         ->set(new Identifier('verifier'), $verifier)
+         ->set(new Identifier('user_id'), $user)
+         ->set(new Identifier('purpose'), $Purpose->value)
+         ->set(new Identifier('expires'), $expires);
+
+      if ($Builder->Dialect instanceof MySQLDialect) {
+         $Compiled = $Builder->compile();
+         $Dialect = $Builder->Dialect;
+         $selectorColumn = $Dialect->quote('selector');
+         $verifierColumn = $Dialect->quote('verifier');
+         $userColumn = $Dialect->quote('user_id');
+         $purposeColumn = $Dialect->quote('purpose');
+         $expiresColumn = $Dialect->quote('expires');
+         $guard = "{$userColumn} = VALUES({$userColumn})"
+            . " AND {$purposeColumn} = VALUES({$purposeColumn})";
+         $SQL = $Compiled->SQL
+            . " ON DUPLICATE KEY UPDATE {$selectorColumn} = IF({$guard}, VALUES({$selectorColumn}), {$selectorColumn})"
+            . ", {$verifierColumn} = IF({$guard}, VALUES({$verifierColumn}), {$verifierColumn})"
+            . ", {$expiresColumn} = IF({$guard}, VALUES({$expiresColumn}), {$expiresColumn})";
+
+         return $this->execute(new Query($SQL, $Compiled->parameters, reading: false));
+      }
+
+      return $this->execute(
+         $Builder->upsert(
+            new Identifier('user_id'),
+            new Identifier('purpose')
+         )
+      );
    }
 
    /**

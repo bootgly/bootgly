@@ -205,8 +205,8 @@ return new Test(
       yield assert(
          assertion: $recorded === [
             'users' => ['exception' => null, 'value' => null],
-            'tokens' => ['exception' => null, 'value' => 0],
-            'trust' => ['exception' => null, 'value' => 0],
+            'tokens' => ['exception' => null, 'value' => null],
+            'trust' => ['exception' => null, 'value' => null],
          ]
             && $Recorded->awaits === 0
             && $recordedErrors === [
@@ -225,8 +225,8 @@ return new Test(
       yield assert(
          assertion: $recordedAwait === [
             'users' => ['exception' => null, 'value' => null],
-            'tokens' => ['exception' => null, 'value' => 0],
-            'trust' => ['exception' => null, 'value' => 0],
+            'tokens' => ['exception' => null, 'value' => null],
+            'trust' => ['exception' => null, 'value' => null],
          ]
             && $RecordedAwait->awaits === 3
             && $RecordedAwait->awaitedErrors === [null, null, null],

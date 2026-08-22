@@ -40,7 +40,8 @@ return new Test(
          user_id INTEGER NOT NULL,
          purpose TEXT NOT NULL,
          expires INTEGER NOT NULL,
-         created_at TEXT DEFAULT CURRENT_TIMESTAMP
+         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+         UNIQUE (user_id, purpose)
       )
       SQL);
       $Database->query(<<<SQL
@@ -101,11 +102,13 @@ return new Test(
 
       // @ Rotation + full invalidation (the documented orchestration contract)
       $rotated = $Users->rotate($user, 'secret-two');
-      $Tokens->revoke($user);
-      $Trust->revoke($user);
+      $tokensRevoked = $Tokens->revoke($user);
+      $trustsRevoked = $Trust->revoke($user);
 
       yield assert(
          assertion: $rotated === true
+            && $tokensRevoked === 1
+            && $trustsRevoked === 1
             && $Users->verify('ana@bootgly.com', 'secret-one') === null
             && $Users->verify('ana@bootgly.com', 'secret-two') instanceof Identity
             && $Tokens->redeem($Pending->value, Purposes::Verification) === null

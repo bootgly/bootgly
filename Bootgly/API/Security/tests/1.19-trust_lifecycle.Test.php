@@ -156,7 +156,7 @@ return new Test(
          assertion: $thrown === true
             && $Trust->rotate($Second->value) === null
             && $Trust->forget($Second->value) === false
-            && $Trust->revoke('7') === 0
+            && $Trust->revoke('7') === null
             && $Trust->sweep() === 0,
          description: 'database errors fail closed (issue throws; reads/writes reject)'
       );

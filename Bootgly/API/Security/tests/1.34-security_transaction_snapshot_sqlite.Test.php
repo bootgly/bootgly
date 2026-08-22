@@ -173,7 +173,8 @@ return new Test(
             verifier TEXT NOT NULL,
             user_id TEXT NOT NULL,
             purpose TEXT NOT NULL,
-            expires INTEGER NOT NULL
+            expires INTEGER NOT NULL,
+            UNIQUE (user_id, purpose)
          );
          CREATE TABLE trusts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

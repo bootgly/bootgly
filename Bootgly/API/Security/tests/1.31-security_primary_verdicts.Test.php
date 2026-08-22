@@ -141,7 +141,8 @@ return new Test(
             user_id INTEGER NOT NULL,
             purpose TEXT NOT NULL,
             expires INTEGER NOT NULL,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (user_id, purpose)
          );
          CREATE TABLE trusts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

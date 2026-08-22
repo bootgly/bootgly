@@ -29,7 +29,8 @@ return new Test(
          user_id INTEGER NOT NULL,
          purpose TEXT NOT NULL,
          expires INTEGER NOT NULL,
-         created_at TEXT DEFAULT CURRENT_TIMESTAMP
+         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+         UNIQUE (user_id, purpose)
       )
       SQL);
 
@@ -173,7 +174,7 @@ return new Test(
          assertion: $thrown === true
             && $Tokens->redeem($Valid, Purposes::Recovery) === null
             && $Tokens->check($Valid, Purposes::Recovery) === false
-            && $Tokens->revoke('7') === 0
+            && $Tokens->revoke('7') === null
             && $Tokens->sweep() === 0,
          description: 'database errors fail closed (mint throws; reads/writes reject)'
       );

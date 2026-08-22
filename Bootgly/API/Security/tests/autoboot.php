@@ -49,5 +49,9 @@ return new Suite(
       '1.33-security_transaction_snapshot_live',
       '1.34-security_transaction_snapshot_sqlite',
       '1.35-security_transaction_snapshot_pgsql_live',
+      '1.36-tokens_supersede_failure',
+      '1.37-tokens_atomic_supersede_live',
+      '1.38-tokens_upsert_mysql_live',
+      '1.39-tokens_expired_supersede_race',
    ]
 );
