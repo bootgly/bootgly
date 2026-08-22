@@ -40,5 +40,8 @@ return new Suite(
       '1.24-jwt_remote_redirect_chain',
       '1.25-jwt_remote_redirect_downgrade',
       '1.26-jwt_remote_redirect_references',
+      '1.27-security_store_unrecorded_failure',
+      '1.28-users_wait_interruption_live',
+      '1.29-tokens_wait_interruption_live',
    ]
 );

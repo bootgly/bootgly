@@ -11,13 +11,18 @@
 namespace Bootgly\ADI\Database;
 
 
+use const E_WARNING;
 use function array_key_first;
 use function array_shift;
 use function count;
+use function is_callable;
 use function is_resource;
 use function microtime;
 use function mt_rand;
+use function restore_error_handler;
+use function set_error_handler;
 use function spl_object_id;
+use function str_contains;
 use function stream_select;
 use RuntimeException;
 use WeakMap;
@@ -194,80 +199,140 @@ class Pool
          return $Pool->wait($Operation);
       }
 
-      while (true) {
-         $this->advance($Operation);
+      $handling = false;
+      $interrupted = false;
+      $selecting = false;
+      $PreviousHandler = null;
 
-         $Readiness = $Operation->Readiness;
-         if ($Operation->finished) {
-            break;
-         }
+      try {
+         while (true) {
+            $this->advance($Operation);
 
-         // ? `Pending` is a legitimate parked state, not a missing one: assign()
-         //   found no capacity and parked the operation, so it carries no
-         //   Connection, Protocol or Readiness BY DESIGN. Reading that as a hard
-         //   failure and throwing left the operation in `$pending` with the pool
-         //   still holding a strong reference — and promote() then put the
-         //   command on the wire once capacity freed, AFTER the caller's
-         //   compensating rollback and outside its transaction.
-         //
-         //   Waiting for capacity instead is not available here. wait() is the
-         //   synchronous API: while it blocks, nothing advances the operations
-         //   holding the connections, and only they can free one. Measured on a
-         //   saturated pool, a select() over `$busy` returns immediately on every
-         //   readable undrained reply and burns the whole deadline at ~50% CPU
-         //   before failing anyway, while a synchronous driver has no selectable
-         //   socket at all. So the operation leaves the pool here and fails with
-         //   the cause the caller can act on.
-         if ($Operation->state === OperationStates::Pending) {
-            $Pool = $Operation->Pool;
-
-            // ?: Fallback re-dispatched this operation to another pool mid-wait —
-            //    it is that pool's to satisfy or refuse, and `$this->pending`
-            //    describes the old one.
-            if ($Pool !== null && $Pool !== $this) {
-               return $Pool->wait($Operation);
+            $Readiness = $Operation->Readiness;
+            if ($Operation->finished) {
+               break;
             }
 
-            $this->forget($Operation);
-            $Operation->fail('Database pool has no capacity for the operation.');
+            // ? `Pending` is a legitimate parked state, not a missing one: assign()
+            //   found no capacity and parked the operation, so it carries no
+            //   Connection, Protocol or Readiness BY DESIGN. Reading that as a hard
+            //   failure and throwing left the operation in `$pending` with the pool
+            //   still holding a strong reference — and promote() then put the
+            //   command on the wire once capacity freed, AFTER the caller's
+            //   compensating rollback and outside its transaction.
+            //
+            //   Waiting for capacity instead is not available here. wait() is the
+            //   synchronous API: while it blocks, nothing advances the operations
+            //   holding the connections, and only they can free one. Measured on a
+            //   saturated pool, a select() over `$busy` returns immediately on every
+            //   readable undrained reply and burns the whole deadline at ~50% CPU
+            //   before failing anyway, while a synchronous driver has no selectable
+            //   socket at all. So the operation leaves the pool here and fails with
+            //   the cause the caller can act on.
+            if ($Operation->state === OperationStates::Pending) {
+               $Pool = $Operation->Pool;
 
-            continue;
-         }
+               // ?: Fallback re-dispatched this operation to another pool mid-wait —
+               //    it is that pool's to satisfy or refuse, and `$this->pending`
+               //    describes the old one.
+               if ($Pool !== null && $Pool !== $this) {
+                  return $Pool->wait($Operation);
+               }
 
-         if ($Readiness === null) {
-            $Pool = $Operation->Pool;
+               $this->forget($Operation);
+               $Operation->fail('Database pool has no capacity for the operation.');
 
-            // ?: Fallback re-dispatched this operation to another pool mid-wait —
-            //    the new pool arms readiness on its next advance.
-            if ($Pool !== null && $Pool !== $this) {
-               return $Pool->wait($Operation);
+               continue;
             }
 
-            throw new RuntimeException('Database operation did not provide readiness.');
+            if ($Readiness === null) {
+               $Pool = $Operation->Pool;
+
+               // ?: Fallback re-dispatched this operation to another pool mid-wait —
+               //    the new pool arms readiness on its next advance.
+               if ($Pool !== null && $Pool !== $this) {
+                  return $Pool->wait($Operation);
+               }
+
+               throw new RuntimeException('Database operation did not provide readiness.');
+            }
+
+            $read = [];
+            $write = [];
+            $except = [];
+
+            if ($Readiness->flag === Scheduler::SCHEDULE_READ) {
+               $read[] = $Readiness->socket;
+            }
+            else {
+               $write[] = $Readiness->socket;
+            }
+
+            // ! Signals are an ordinary part of the worker lifecycle. Linux
+            //   interrupts select() when a no-restart handler runs, but neither
+            //   the database operation nor its readiness changed: throwing here
+            //   handed API stores an unfinished write which the server later
+            //   committed. Install one handler lazily per wait(), rather than on
+            //   every readiness turn; synchronous drivers avoid handler setup,
+            //   and a multi-read result pays that setup only once.
+            if ($handling === false) {
+               $PreviousHandler = set_error_handler(
+                  static function (
+                     int $level,
+                     string $message,
+                     string $file,
+                     int $line
+                  ) use (&$interrupted, &$selecting, &$PreviousHandler): bool {
+                     if (
+                        $selecting // @phpstan-ignore-line: mutated around stream_select()
+                        && $level === E_WARNING
+                        && str_contains($message, 'stream_select()')
+                        && (
+                           str_contains($message, 'Unable to select [4]')
+                           || str_contains($message, 'Interrupted system call')
+                        )
+                     ) {
+                        $interrupted = true;
+
+                        return true;
+                     }
+
+                     if (is_callable($PreviousHandler)) {
+                        return (bool) $PreviousHandler($level, $message, $file, $line);
+                     }
+
+                     return false;
+                  }
+               );
+               $handling = true;
+            }
+
+            $interrupted = false;
+            $selecting = true;
+            $selected = stream_select($read, $write, $except, 1, 0);
+            $selecting = false;
+
+            if ($selected === false) {
+               // @phpstan-ignore-next-line The error handler mutates this captured flag during stream_select().
+               if ($interrupted) {
+                  continue;
+               }
+
+               throw new RuntimeException('Database operation readiness wait failed.');
+            }
          }
 
-         $read = [];
-         $write = [];
-         $except = [];
-
-         if ($Readiness->flag === Scheduler::SCHEDULE_READ) {
-            $read[] = $Readiness->socket;
-         }
-         else {
-            $write[] = $Readiness->socket;
+         if ($Operation->error !== null) {
+            throw new RuntimeException($Operation->error);
          }
 
-         $selected = stream_select($read, $write, $except, 1, 0);
-         if ($selected === false) {
-            throw new RuntimeException('Database operation readiness wait failed.');
+         return $Operation;
+      }
+      finally {
+         if ($handling) {
+            restore_error_handler();
          }
       }
-
-      if ($Operation->error !== null) {
-         throw new RuntimeException($Operation->error);
-      }
-
-      return $Operation;
    }
 
    /**

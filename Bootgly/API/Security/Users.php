@@ -103,6 +103,7 @@ class Users
     * duplicates fail there (no read-then-write race).
     *
     * @return null|string The new account id — `null` on duplicate or database error.
+    * @throws RuntimeException When a database wait fails without a recorded Operation error.
     */
    public function enroll (string $email, #[\SensitiveParameter] string $password): null|string
    {
@@ -143,6 +144,7 @@ class Users
     * policy transparently on successful verification.
     *
     * @return null|Identity Claims: `email` (string), `verified` (bool).
+    * @throws RuntimeException When a database wait fails without a recorded Operation error.
     */
    public function verify (string $email, #[\SensitiveParameter] string $password): null|Identity
    {
@@ -182,6 +184,8 @@ class Users
 
    /**
     * Check a password for an account id (current-password gate).
+    *
+    * @throws RuntimeException When a database wait fails without a recorded Operation error.
     */
    public function check (string $user, #[\SensitiveParameter] string $password): bool
    {
@@ -202,6 +206,7 @@ class Users
     * Look up an account by identifier WITHOUT credentials (reset-request flow).
     *
     * @return null|Identity Claims: `email` (string), `verified` (bool).
+    * @throws RuntimeException When a database wait fails without a recorded Operation error.
     */
    public function fetch (string $email): null|Identity
    {
@@ -225,6 +230,8 @@ class Users
     * Callers MUST follow a successful rotation with `Tokens->revoke()`,
     * `Trust->revoke()` and session regeneration — this store owns the
     * hash only, not the surrounding invalidation orchestration.
+    *
+    * @throws RuntimeException When a database wait fails without a recorded Operation error.
     */
    public function rotate (string $user, #[\SensitiveParameter] string $password): bool
    {
@@ -252,6 +259,8 @@ class Users
 
    /**
     * Stamp the account e-mail as verified (idempotent).
+    *
+    * @throws RuntimeException When a database wait fails without a recorded Operation error.
     */
    public function confirm (string $user): bool
    {
@@ -379,8 +388,9 @@ class Users
    /**
     * Execute one credential query through the configured async SQL surface.
     *
-    * Errors stay on the returned Operation — `await()` throws on errored
-    * operations, and this store fails closed instead.
+    * Recorded database errors stay on the returned Operation so this store
+    * can fail closed. An infrastructure failure with no Operation error
+    * propagates instead of becoming a credential verdict.
     */
    private function execute (Builder $Builder): Operation
    {
@@ -391,11 +401,31 @@ class Users
       }
 
       try {
-         return $this->Database->await($Operation);
-      }
-      catch (RuntimeException) {
-         // : The error is recorded on the Operation itself.
+         $Operation = $this->Database->await($Operation);
+
+         if ($Operation->finished === false && $Operation->error === null) {
+            throw new RuntimeException('Database operation did not finish.');
+         }
+
          return $Operation;
       }
+      catch (RuntimeException $Exception) {
+         // ? Only a recorded driver/database failure belongs to this store's
+         //   fail-closed return contract. Infrastructure failures without an
+         //   Operation error must stay distinguishable from a credential fact.
+         if ($this->detect($Operation) === false) {
+            throw $Exception;
+         }
+
+         return $Operation;
+      }
+   }
+
+   /**
+    * Detect a failure the driver recorded on the operation.
+    */
+   private function detect (Operation $Operation): bool
+   {
+      return $Operation->error !== null;
    }
 }

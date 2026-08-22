@@ -136,7 +136,8 @@ class Tokens
     * A tampered verifier never consumes the row — the legitimate link
     * stays redeemable. Expired rows are purged on contact.
     *
-    * @return null|string The owner user id, or `null` on any failure.
+    * @return null|string The owner user id, or `null` on any recorded failure.
+    * @throws RuntimeException When a database wait fails without a recorded Operation error.
     */
    public function redeem (string $token, Purposes $Purpose): null|string
    {
@@ -196,6 +197,8 @@ class Tokens
 
    /**
     * Check a token without consuming it (e.g. rendering a reset form).
+    *
+    * @throws RuntimeException When a database wait fails without a recorded Operation error.
     */
    public function check (string $token, Purposes $Purpose): bool
    {
@@ -232,6 +235,7 @@ class Tokens
     * Drop live tokens for a user — optionally scoped to one purpose.
     *
     * @return int Revoked rows.
+    * @throws RuntimeException When a database wait fails without a recorded Operation error.
     */
    public function revoke (string $user, null|Purposes $Purpose = null): int
    {
@@ -264,6 +268,7 @@ class Tokens
     * Drop expired tokens.
     *
     * @return int Swept rows.
+    * @throws RuntimeException When a database wait fails without a recorded Operation error.
     */
    public function sweep (): int
    {
@@ -368,8 +373,9 @@ class Tokens
    /**
     * Execute one token query through the configured async SQL surface.
     *
-    * Errors stay on the returned Operation — `await()` throws on errored
-    * operations, and this store fails closed instead.
+    * Recorded database errors stay on the returned Operation so this store
+    * can fail closed. An infrastructure failure with no Operation error
+    * propagates instead of manufacturing a token outcome.
     */
    private function execute (Builder $Builder): Operation
    {
@@ -380,11 +386,31 @@ class Tokens
       }
 
       try {
-         return $this->Database->await($Operation);
-      }
-      catch (RuntimeException) {
-         // : The error is recorded on the Operation itself.
+         $Operation = $this->Database->await($Operation);
+
+         if ($Operation->finished === false && $Operation->error === null) {
+            throw new RuntimeException('Database operation did not finish.');
+         }
+
          return $Operation;
       }
+      catch (RuntimeException $Exception) {
+         // ? Only a recorded driver/database failure belongs to this store's
+         //   fail-closed return contract. Infrastructure failures without an
+         //   Operation error must never manufacture a live-looking token.
+         if ($this->detect($Operation) === false) {
+            throw $Exception;
+         }
+
+         return $Operation;
+      }
+   }
+
+   /**
+    * Detect a failure the driver recorded on the operation.
+    */
+   private function detect (Operation $Operation): bool
+   {
+      return $Operation->error !== null;
    }
 }

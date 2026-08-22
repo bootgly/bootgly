@@ -130,6 +130,8 @@ class Trust
     * revoke every session.
     *
     * @return null|Theft|Token
+    * @throws InvalidArgumentException When the ttl is not positive.
+    * @throws RuntimeException When a database wait fails without a recorded Operation error.
     */
    public function rotate (string $token, int $ttl = 2592000): null|Theft|Token
    {
@@ -206,6 +208,8 @@ class Trust
 
    /**
     * Drop the presented device series (single-device logout).
+    *
+    * @throws RuntimeException When a database wait fails without a recorded Operation error.
     */
    public function forget (string $token): bool
    {
@@ -238,6 +242,7 @@ class Trust
     * Drop all device series of a user (logout everywhere / password change).
     *
     * @return int Revoked rows.
+    * @throws RuntimeException When a database wait fails without a recorded Operation error.
     */
    public function revoke (string $user): int
    {
@@ -266,6 +271,7 @@ class Trust
     * Drop expired device series.
     *
     * @return int Swept rows.
+    * @throws RuntimeException When a database wait fails without a recorded Operation error.
     */
    public function sweep (): int
    {
@@ -369,8 +375,9 @@ class Trust
    /**
     * Execute one trust query through the configured async SQL surface.
     *
-    * Errors stay on the returned Operation — `await()` throws on errored
-    * operations, and this store fails closed instead.
+    * Recorded database errors stay on the returned Operation so this store
+    * can fail closed. An infrastructure failure with no Operation error
+    * propagates instead of manufacturing a token outcome.
     */
    private function execute (Builder $Builder): Operation
    {
@@ -381,11 +388,31 @@ class Trust
       }
 
       try {
-         return $this->Database->await($Operation);
-      }
-      catch (RuntimeException) {
-         // : The error is recorded on the Operation itself.
+         $Operation = $this->Database->await($Operation);
+
+         if ($Operation->finished === false && $Operation->error === null) {
+            throw new RuntimeException('Database operation did not finish.');
+         }
+
          return $Operation;
       }
+      catch (RuntimeException $Exception) {
+         // ? Only a recorded driver/database failure belongs to this store's
+         //   fail-closed return contract. Infrastructure failures without an
+         //   Operation error must never manufacture a live-looking token.
+         if ($this->detect($Operation) === false) {
+            throw $Exception;
+         }
+
+         return $Operation;
+      }
+   }
+
+   /**
+    * Detect a failure the driver recorded on the operation.
+    */
+   private function detect (Operation $Operation): bool
+   {
+      return $Operation->error !== null;
    }
 }
