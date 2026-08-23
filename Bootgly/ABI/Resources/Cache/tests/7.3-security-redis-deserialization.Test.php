@@ -4,22 +4,34 @@ use Bootgly\ACI\Tests\Suite\Test;
 
 
 // ! The driver prefers ext-redis whenever it is loaded, which a plain socket stub cannot
-//   answer. Clearing the ini scan directory drops the extension — but a runner that
-//   installs pcntl through that same directory loses pcntl with it, and the stub forks.
-//   Probe both requirements through the very command shape the stub will be driven with.
+//   answer. Clearing the ini scan directory drops the extension — but it also drops what
+//   that directory configured: where the base ini disables functions and the scan dir is
+//   what re-enables them, pcntl_fork goes away with it, and the stub forks.
+//   Probe the requirements through the very command shape the stub will be driven with,
+//   restoring only what this machine actually lost.
 $PHP = PHP_BINARY;
 $command = 'PHP_INI_SCAN_DIR= ' . escapeshellarg($PHP);
 $inspect = ' -r ' . escapeshellarg(
    'echo extension_loaded("redis") ? "R" : "", function_exists("pcntl_fork") ? "F" : "";'
 ) . ' 2>/dev/null';
 
-// ? Ask for pcntl back only when the cleared scan dir carried it away — a build with pcntl
-//   compiled in answers an `extension=` request with a startup warning instead
+// @ Weakest shape first — a stronger one only earns its place when the probe still fails
 $options = '';
-if (trim((string) @shell_exec($command . $inspect)) !== 'F') {
-   $options = ' -d ' . escapeshellarg('extension=pcntl');
+$native = false;
+foreach ([
+   '',
+   ' -d ' . escapeshellarg('disable_functions='),
+   ' -d ' . escapeshellarg('disable_functions=') . ' -d ' . escapeshellarg('extension=pcntl')
+] as $attempt) {
+   if (trim((string) @shell_exec($command . $attempt . $inspect)) !== 'F') {
+      continue;
+   }
+
+   $options = $attempt;
+   $native = true;
+
+   break;
 }
-$native = trim((string) @shell_exec($command . $options . $inspect)) === 'F';
 
 return new Test(
    description: 'Cache(Redis): a hostile endpoint cannot inject an object the app never declared',
