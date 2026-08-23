@@ -14,6 +14,21 @@ return new Test(
          return;
       }
 
+      // ! The probe parses the HUMAN text coverage report, so its child must
+      //   not run as an agent — an agent-driven child emits the JSON results
+      //   document instead. Today this only holds because the outer wrapper
+      //   already exported BOOTGLY_AGENT_STDOUT_REDIRECTED into the harness;
+      //   scrub the markers so the probe states its own requirement.
+      $environment = getenv();
+      foreach ([
+         'AI_AGENT', 'AMP_CURRENT_THREAD_ID', 'ANTIGRAVITY_AGENT',
+         'AUGMENT_AGENT', 'CLAUDECODE', 'CLAUDE_CODE', 'CODEX_SANDBOX',
+         'CODEX_THREAD_ID', 'COPILOT_CLI', 'CURSOR_AGENT', 'GEMINI_CLI',
+         'OPENCODE', 'OPENCODE_CLIENT', 'REPL_ID',
+      ] as $variable) {
+         unset($environment[$variable]);
+      }
+
       $descriptors = [
          1 => ['pipe', 'w'],
          2 => ['pipe', 'w'],
@@ -32,7 +47,8 @@ return new Test(
          ],
          $descriptors,
          $pipes,
-         BOOTGLY_ROOT_DIR
+         BOOTGLY_ROOT_DIR,
+         $environment
       );
 
       if (! is_resource($process)) {

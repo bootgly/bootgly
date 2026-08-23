@@ -71,8 +71,11 @@ return new Suites(
       // Fuzz (property-based / structure-aware fuzzing)
       #'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/Fuzz/',
 
-      // ! Appended last so earlier suite indices stay stable (coverage probes
-      // ! in Bootgly/ACI/Tests/tests hardcode indices 4, 8 and 14-21).
+      // ! Appended last so earlier suite indices stay stable. The coverage
+      // ! probes in Bootgly/ACI/Tests/tests spawn `bootgly test <n>` with the
+      // ! 1-BASED indices the CLI takes: 5 (…/__String/Path/), 9 (…/IPC/Pipe/)
+      // ! and 15-22 (…/SQL/Schema/ through …/API/Security/). Inserting a
+      // ! directory above this line renumbers them and breaks those probes.
       'Bootgly/ABI/Data/RESP/',
       'Bootgly/ABI/Resources/Cache/',
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/Request/Session/',
@@ -113,7 +116,7 @@ return new Suites(
       // drive the real code as UID 0 through a mapped user namespace, which the
       // GitHub runner refuses (`newuidmap` fails), so those cases report a
       // capability gap as a regression. The late slot is kept — re-enabling it
-      // here preserves the coverage-probe indices 4, 8 and 14-21.
+      // here preserves the coverage-probe indices 5, 9 and 15-22.
       #'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/Security/',
       // # HTTP/2 (RFC 9113) — protocol primitive unit suites
       'Bootgly/WPI/Modules/HTTP2/tests/',
