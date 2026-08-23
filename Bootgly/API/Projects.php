@@ -35,13 +35,13 @@ use function ksort;
 use function mkdir;
 use function preg_match;
 use function rawurlencode;
+use function realpath;
 use function rename;
 use function rtrim;
 use function scandir;
 use function str_contains;
 use function str_ends_with;
 use function str_pad;
-use function str_replace;
 use function str_starts_with;
 use function strlen;
 use function strtolower;
@@ -336,6 +336,46 @@ abstract class Projects
    }
 
    /**
+    * Screen a path and its metadata against every write-path gate.
+    *
+    * The gates `register()` enforces — path-safety, the naming alphabet, the
+    * reserved platform roots and a non-empty interfaces list — are pure, so
+    * the mutators run them BEFORE copying anything: a refused path never
+    * reaches the disk, and a registration can then only fail on I/O.
+    *
+    * @param string $path
+    * @param array{interfaces?:array<string>,default?:bool} $meta
+    *
+    * @return bool
+    */
+   private static function screen (string $path, array $meta): bool
+   {
+      // ? Path-safety
+      if (self::check($path) === false) {
+         return false;
+      }
+      // ? Naming alphabet — registry keys are emitted into PHP source
+      if (self::vet($path) === false) {
+         return false;
+      }
+      // ? Reserved platform namespace root (Bootgly, Console, Web)
+      $root = strtolower($path);
+      foreach (self::RESERVED as $reserved) {
+         $reserved = strtolower($reserved);
+         if ($root === $reserved || str_starts_with($root, "{$reserved}/")) {
+            return false;
+         }
+      }
+      // ? Interfaces are required
+      if (($meta['interfaces'] ?? []) === []) {
+         return false;
+      }
+
+      // :
+      return true;
+   }
+
+   /**
     * Register a project path in the registry allow-list (`Bootgly.projects.php`).
     *
     * The whole registry file is deterministically re-emitted: current entries
@@ -351,29 +391,13 @@ abstract class Projects
     */
    public static function register (string $path, array $meta, null|string $file = null): bool
    {
-      // ? Path-safety
-      if (self::check($path) === false) {
-         return false;
-      }
-      // ? Naming alphabet — registry keys are emitted into PHP source
-      if (self::vet($path) === false) {
-         return false;
-      }
-      // ? Reserved platform namespace root (Bootgly, Console, Web) — backstop
-      $root = strtolower($path);
-      foreach (self::RESERVED as $reserved) {
-         $reserved = strtolower($reserved);
-         if ($root === $reserved || str_starts_with($root, "{$reserved}/")) {
-            return false;
-         }
-      }
-      // ? Interfaces are required
-      $interfaces = $meta['interfaces'] ?? [];
-      if ($interfaces === []) {
+      // ? Every write-path gate, before the registry is touched
+      if (self::screen($path, $meta) === false) {
          return false;
       }
 
       // !
+      $interfaces = $meta['interfaces'] ?? [];
       $file ??= self::CONSUMER_DIR . 'Bootgly.projects.php';
 
       // @ Load the current registry
@@ -407,14 +431,22 @@ abstract class Projects
     * file is renamed to the new leaf and the path is registered in the
     * registry allow-list. The imported content is kept as-is.
     *
+    * Every gate `register()` applies runs BEFORE anything is copied, the copy
+    * is built in a staging sibling and swapped into place only once it is
+    * complete, and whatever stops the call after that removes what the call
+    * made — a refused or failed import leaves no tree behind.
+    *
     * @param string $source Source project directory (platform project or fetched clone).
     * @param string $path Canonical target project path (e.g. `App/API`).
     * @param array{interfaces?:array<string>,default?:bool} $meta
     * @param null|string $base Projects base directory (defaults to the consumer directory).
+    * @param bool $refresh Replace an existing copy at the target — it is kept until the new one is complete.
     *
     * @return bool
     */
-   public static function import (string $source, string $path, array $meta, null|string $base = null): bool
+   public static function import (
+      string $source, string $path, array $meta, null|string $base = null, bool $refresh = false
+   ): bool
    {
       // !
       $source = rtrim($source, '/');
@@ -430,41 +462,83 @@ abstract class Projects
       }
       $leaf = basename($signatures[0], '.Project.php');
 
-      // ? Target path-safety + collision
-      if (self::check($path) === false) {
+      // ? Every write-path gate, before anything is copied — the path becomes
+      //   a registry key
+      if (self::screen($path, $meta) === false) {
          return false;
       }
-      // ? Naming alphabet — the path becomes a registry key
-      if (self::vet($path) === false) {
-         return false;
-      }
+      // ? Target collision — unless the caller asked for a refresh
       $target = "{$base}{$path}";
-      if (is_dir($target) === true) {
+      $registry = "{$base}Bootgly.projects.php";
+      if (is_dir($target) === true && $refresh === false) {
          return false;
       }
-
-      // @ Copy the project
-      $parent = dirname($target);
-      if (is_dir($parent) === false) {
-         mkdir($parent, 0755, true);
-      }
-      copy_recursively($source, $target);
-
-      // @ Rename the signature file to the new leaf
-      $newLeaf = basename($path);
-      $file = "{$target}/{$newLeaf}.Project.php";
-      if ($leaf !== $newLeaf) {
-         rename("{$target}/{$leaf}.Project.php", $file);
-
-         // @ Best-effort: rename old leaf references inside the project file
-         $content = file_get_contents($file);
-         if ($content !== false) {
-            file_put_contents($file, str_replace($leaf, $newLeaf, $content));
+      // ?: Source and target are one directory (the framework checkout, where
+      //    the platform folder IS the working one): nothing to copy, and a
+      //    refresh would erase the source out from under itself. A path the
+      //    registry already lists is left alone — re-registering would rebuild
+      //    its entry and drop a `default` flag.
+      if (realpath($source) === realpath($target)) {
+         $loaded = is_file($registry) ? include $registry : [];
+         if (is_array($loaded) && array_key_exists($path, $loaded) === true) {
+            return true;
          }
+
+         return self::register($path, $meta, $registry);
       }
 
-      // : Register in the allow-list
-      return self::register($path, $meta, "{$base}Bootgly.projects.php");
+      // @ Build the copy in a staging sibling — dot-prefixed, so neither the
+      //   import picker's globs nor the autoloader can see it — and swap it in
+      //   only once it is complete
+      $newLeaf = basename($path);
+      $staging = dirname($target) . "/.{$newLeaf}.staging";
+      $done = false;
+      try {
+         remove_recursively($staging);
+         $parent = dirname($target);
+         if (is_dir($parent) === false) {
+            mkdir($parent, 0755, true);
+         }
+         copy_recursively($source, $staging);
+
+         // @ Rename the signature file to the new leaf — the content is kept
+         //   as-is: rewriting the old leaf inside it would also hit the
+         //   namespaces, identifiers and enum cases that merely contain it
+         if ($leaf !== $newLeaf) {
+            rename("{$staging}/{$leaf}.Project.php", "{$staging}/{$newLeaf}.Project.php");
+         }
+
+         // @ Refresh: register first — an entry rewrite, so a registry that
+         //   cannot be written leaves the old copy untouched — then swap
+         if (is_dir($target) === true) {
+            if (self::register($path, $meta, $registry) === false) {
+               return false;
+            }
+            remove_recursively($target);
+
+            // :
+            return rename($staging, $target);
+         }
+
+         // @ New path: place it, then register — a registry that cannot be
+         //   written rolls the placed copy back
+         rename($staging, $target);
+         try {
+            $done = self::register($path, $meta, $registry);
+         }
+         finally {
+            if ($done === false) {
+               remove_recursively($target);
+            }
+         }
+
+         // :
+         return $done;
+      }
+      finally {
+         // ! The staging copy never outlives the call
+         remove_recursively($staging);
+      }
    }
 
    /**
@@ -499,17 +573,9 @@ abstract class Projects
       if (is_dir($source) === false) {
          return false;
       }
-      // ? Target path-safety
-      if (self::check($path) === false) {
-         return false;
-      }
-      // ? Naming alphabet — the path lands in stub literals and the registry
-      if (self::vet($path) === false) {
-         return false;
-      }
-      // ? Interfaces are required
-      $interfaces = $meta['interfaces'] ?? [];
-      if ($interfaces === []) {
+      // ? Every write-path gate, before anything is copied — the path lands in
+      //   stub literals and becomes a registry key
+      if (self::screen($path, $meta) === false) {
          return false;
       }
       // ? Metadata must not carry control characters — a literal would hold
@@ -541,37 +607,44 @@ abstract class Projects
          '__PORT__'        => addcslashes((string) ($meta['port'] ?? 8080), "\\'"),
       ];
 
-      // @ Copy the stub + fill the tokens
-      $parent = dirname($target);
-      if (is_dir($parent) === false) {
-         mkdir($parent, 0755, true);
-      }
-      copy_recursively($source, $target);
-      self::fill($target, $tokens);
-
-      // ? Defense-in-depth: never register a project whose emitted signature
-      //   does not parse (a broken or adversarial stub source). Nothing
-      //   user-authored is in the tree yet — it is the stub copy this call
-      //   just made — so it leaves with the refusal instead of blocking the
-      //   next attempt or showing up in the import picker.
-      $signature = "{$target}/{$leaf}.Project.php";
-      if (is_file($signature) === true) {
-         try {
-            token_get_all((string) file_get_contents($signature), TOKEN_PARSE);
+      // @ Copy the stub + fill the tokens — whatever stops this call from here
+      //   on (a refused signature, a registry that could not be written, an
+      //   I/O warning the framework escalated) removes the tree it made:
+      //   nothing in it is user-authored yet, and a leftover would block every
+      //   retry of the path and show up in the import picker.
+      $done = false;
+      try {
+         $parent = dirname($target);
+         if (is_dir($parent) === false) {
+            mkdir($parent, 0755, true);
          }
-         catch (ParseError) {
+         copy_recursively($source, $target);
+         self::fill($target, $tokens);
+
+         // ? Defense-in-depth: never register a project whose emitted signature
+         //   does not parse (a broken or adversarial stub source)
+         $signature = "{$target}/{$leaf}.Project.php";
+         if (is_file($signature) === true) {
+            token_get_all((string) file_get_contents($signature), TOKEN_PARSE); // @phpstan-ignore function.resultUnused
+         }
+
+         // : Register in the allow-list
+         $entry = ['interfaces' => array_values($meta['interfaces'] ?? [])];
+         if (($meta['default'] ?? false) === true) {
+            $entry['default'] = true;
+         }
+         $done = self::register($path, $entry, "{$base}Bootgly.projects.php");
+
+         return $done;
+      }
+      catch (ParseError) {
+         return false;
+      }
+      finally {
+         if ($done === false) {
             remove_recursively($target);
-
-            return false;
          }
       }
-
-      // : Register in the allow-list
-      $entry = ['interfaces' => array_values($interfaces)];
-      if (($meta['default'] ?? false) === true) {
-         $entry['default'] = true;
-      }
-      return self::register($path, $entry, "{$base}Bootgly.projects.php");
    }
 
    /**

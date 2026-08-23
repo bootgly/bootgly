@@ -84,9 +84,34 @@ return new Test(
          description: 'an existing target directory is refused'
       );
       yield assert(
-         assertion: Projects::generate(BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/CLI', 'App/None', [], $base) === false,
-         description: 'entries without interfaces are rejected'
+         assertion: Projects::generate(BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/CLI', 'App/None', [], $base) === false
+            && is_dir("{$base}App/None") === false,
+         description: 'entries without interfaces are rejected before anything is copied'
       );
+      yield assert(
+         assertion: Projects::generate(BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/CLI', 'Data', ['interfaces' => ['CLI']], $base) === false
+            && is_dir("{$base}Data") === false,
+         description: 'a reserved root is rejected before anything is copied'
+      );
+
+      // @ A registry that cannot be written rolls the generated tree back
+      $broken = sys_get_temp_dir() . '/bootgly-test-generate-broken-' . getmypid() . '/';
+      $erase(rtrim($broken, '/'));
+      mkdir("{$broken}Bootgly.projects.php", 0755, true);
+      file_put_contents("{$broken}Bootgly.projects.php/occupant", 'x');
+      $threw = false;
+      $returned = null;
+      try {
+         $returned = Projects::generate(BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/CLI', 'Fresh', ['interfaces' => ['CLI']], $broken);
+      }
+      catch (Throwable) {
+         $threw = true;
+      }
+      yield assert(
+         assertion: ($returned === false || $threw === true) && is_dir("{$broken}Fresh") === false,
+         description: 'a generation whose registration fails leaves no tree behind'
+      );
+      $erase(rtrim($broken, '/'));
 
       $erase(rtrim($base, '/'));
    }

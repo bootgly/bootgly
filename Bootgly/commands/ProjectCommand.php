@@ -480,14 +480,13 @@ class ProjectCommand extends Command
 
          return false;
       }
-      // ? Naming alphabet — the naming half of assess() (the other routes run
-      //   all of it), and it must refuse BEFORE the user-level copy below is
-      //   erased for the refresh
-      if (Projects::vet($path) === false) {
+      // ? Name — the naming half of assess(); a collision is what a refresh
+      //   replaces, so the other half does not apply here
+      $result = $this->screen($path);
+      if ($result !== true) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = "Invalid project path: @#cyan:{$path}@;. Segments must start "
-            . 'uppercase and use only letters, numbers, `_` or `-` (e.g. `App` or `App/API`).';
+         $Alert->message = $result;
          $Alert->render();
 
          return false;
@@ -516,18 +515,15 @@ class ProjectCommand extends Command
          return false;
       }
 
-      // ? User-level copies overwrite the platform ones on load — refresh them
-      if (is_dir(Projects::CONSUMER_DIR . $path) === true) {
-         $this->erase(Projects::CONSUMER_DIR . $path);
-      }
-
       $interfaces = $this->detect($from)
          ?? [strtoupper((string) ($options['interfaces'] ?? 'WPI'))];
 
+      // @ User-level copies overwrite the platform ones on load — an existing
+      //   one is refreshed, and import() keeps it until the new copy is complete
       $done = Projects::import($source, $path, [
          'interfaces' => $interfaces,
          'default'    => isSet($options['default']),
-      ]);
+      ], refresh: true);
 
       return $this->report($done, $path);
    }
@@ -2183,35 +2179,25 @@ class ProjectCommand extends Command
       foreach ($imports as $import) {
          $path = $import['path'];
 
-         // ? Naming alphabet — import() refuses it, so refuse HERE, before the
-         //   user-level copy below is erased for a refresh that cannot happen
-         if (Projects::vet($path) === false) {
+         // ? Name — import() refuses it anyway; refusing here names the reason
+         $result = $this->screen($path);
+         if ($result !== true) {
             $Alert = new Alert($Output);
             $Alert->Type::Failure->set();
-            $Alert->message = "Invalid project path: @#cyan:{$path}@;. Segments must start "
-               . 'uppercase and use only letters, numbers, `_` or `-` (e.g. `App` or `App/API`).';
+            $Alert->message = $result;
             $Alert->render();
 
             continue;
          }
-         // ? In the framework checkout the platform folder IS the working
-         //   projects folder — a project picked there is already in place, and
-         //   erasing the copy would erase the source
-         $target = Projects::CONSUMER_DIR . $path;
-         if (realpath($import['source']) === realpath($target)) {
-            $paths[] = $path;
 
-            continue;
-         }
-         // ? User-level copies overwrite the platform ones on load — refresh them
-         if (is_dir($target) === true) {
-            $this->erase($target);
-         }
-
+         // @ User-level copies overwrite the platform ones on load — an
+         //   existing one is refreshed, and import() keeps it until the new
+         //   copy is complete (a project that is its own source, as in the
+         //   framework checkout, is left in place)
          $imported = Projects::import($import['source'], $path, [
             'interfaces' => $this->detect($path) ?? ['CLI'],
             'default'    => false,
-         ]);
+         ], refresh: true);
 
          // ? Failures render at the failure site — the wizard keeps them on screen
          if ($imported === false) {
@@ -2413,13 +2399,17 @@ class ProjectCommand extends Command
    }
 
    /**
-    * Assess a new project path: naming pattern, registry and directory collisions.
+    * Screen a project path's name: the naming pattern and the reserved roots.
+    *
+    * The half of `assess()` every minting route needs BEFORE it touches the
+    * disk — the refresh routes (`--from`, the platform import) run only this
+    * half, since a collision is exactly what a refresh replaces.
     *
     * @param string $path
     *
     * @return true|string True when usable; an error message otherwise.
     */
-   private function assess (string $path): true|string
+   private function screen (string $path): true|string
    {
       // ? Naming pattern (the alphabet lives once, in the API layer)
       if (Projects::vet($path) === false) {
@@ -2433,6 +2423,25 @@ class ProjectCommand extends Command
             return "Invalid project path: `{$path}`. `{$reserved}` is a reserved Bootgly "
                . 'namespace root (framework/platform) and cannot be used as a project name.';
          }
+      }
+
+      // :
+      return true;
+   }
+
+   /**
+    * Assess a new project path: naming pattern, registry and directory collisions.
+    *
+    * @param string $path
+    *
+    * @return true|string True when usable; an error message otherwise.
+    */
+   private function assess (string $path): true|string
+   {
+      // ? Name
+      $result = $this->screen($path);
+      if ($result !== true) {
+         return $result;
       }
       // ? Registry collision
       if (array_key_exists($path, Projects::read()) === true) {
