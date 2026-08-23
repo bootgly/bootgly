@@ -35,6 +35,7 @@ use function sem_acquire;
 use function sem_get;
 use function sem_release;
 use function sem_remove;
+use function serialize;
 use function shm_attach;
 use function shm_detach;
 use function shm_get_var;
@@ -86,6 +87,16 @@ class Shared extends Driver
    private const int TAG_BAND = 8589934592;
    /** Internal RuntimeException code identifying fixed-segment capacity. */
    private const int CAPACITY_ERROR = 1;
+   /**
+    * Variable id carrying the record-format marker. Sits above every band the
+    * driver derives from a key hash, so it can never collide with a record.
+    */
+   private const int FORMAT_ID = 12884901888;
+   /**
+    * Current stored-record format. Bump it whenever the representation changes:
+    * a segment carrying anything else is discarded when it is attached.
+    */
+   private const int FORMAT = 2;
 
    // * Metadata
    /** @var array<int,int> Last automatic reclaim tick per segment in this worker. */
@@ -121,7 +132,7 @@ class Shared extends Driver
             return null;
          }
 
-         $stored = shm_get_var($this->Segment, $id);
+         $stored = $this->load($id);
       }
       finally {
          sem_release($this->Semaphore);
@@ -191,7 +202,7 @@ class Shared extends Driver
          $expiry = $TTL > 0 ? $now + $TTL : 0;
          $existed = shm_has_var($this->Segment, $id);
          $stored = $existed === true
-            ? shm_get_var($this->Segment, $id)
+            ? $this->load($id)
             : null;
          $current = $this->find($stored, $key);
          $live = $current !== null
@@ -239,7 +250,7 @@ class Shared extends Driver
             return false;
          }
 
-         $stored = shm_get_var($this->Segment, $id);
+         $stored = $this->load($id);
          $record = $this->find($stored, $key);
          if (
             $record === null
@@ -280,7 +291,7 @@ class Shared extends Driver
             return false;
          }
 
-         $stored = shm_get_var($this->Segment, $id);
+         $stored = $this->load($id);
          $record = $this->find($stored, $key);
          if (
             $record === null
@@ -308,7 +319,7 @@ class Shared extends Driver
       sem_acquire($this->Semaphore);
       try {
          if (shm_has_var($this->Segment, $id) === true) {
-            $stored = shm_get_var($this->Segment, $id);
+            $stored = $this->load($id);
             $updated = $this->erase($stored, $key);
 
             if ($updated === null) {
@@ -339,7 +350,7 @@ class Shared extends Driver
                continue;
             }
 
-            $bucket = shm_get_var($this->Segment, $bucketId);
+            $bucket = $this->load($bucketId);
             if (is_array($bucket) === true) {
                foreach (array_keys($bucket) as $id) {
                   $id = (int) $id;
@@ -373,7 +384,7 @@ class Shared extends Driver
             return false;
          }
 
-         $stored = shm_get_var($this->Segment, $id);
+         $stored = $this->load($id);
       }
       finally {
          sem_release($this->Semaphore);
@@ -447,7 +458,7 @@ class Shared extends Driver
             return -2;
          }
 
-         $stored = shm_get_var($this->Segment, $id);
+         $stored = $this->load($id);
       }
       finally {
          sem_release($this->Semaphore);
@@ -481,7 +492,7 @@ class Shared extends Driver
       sem_acquire($this->Semaphore);
       try {
          if (shm_has_var($this->Segment, $tagId) === true) {
-            $storedTags = shm_get_var($this->Segment, $tagId);
+            $storedTags = $this->load($tagId);
             $tagBuckets = null;
             if (
                is_array($storedTags) === true
@@ -508,7 +519,7 @@ class Shared extends Driver
                   continue;
                }
 
-               $stored = shm_get_var($this->Segment, $member);
+               $stored = $this->load($member);
                $records = $this->expand($stored);
                foreach ($records as $key => $record) {
                   $tags = $record['t'] ?? null;
@@ -842,6 +853,7 @@ class Shared extends Driver
 
          try {
             $this->guard($key, 'shm');
+            $Segment = $this->migrate($Segment, $key);
          }
          catch (Throwable $Throwable) {
             shm_detach($Segment);
@@ -858,6 +870,67 @@ class Shared extends Driver
    }
 
    /**
+    * Adopt a segment only when it carries the current record format.
+    *
+    * Records used to be stored as live PHP values, which `shm_get_var()`
+    * reconstructs with no allow-list at all — that is precisely why this driver
+    * could not honor `Config::$classes`. Bytes left by that format cannot be
+    * read safely, and an absent marker means either an old segment or a new
+    * one, which want the same answer: start clean. Sessions and rate-limit
+    * counters are exactly the data these consumers are built to lose.
+    *
+    * Runs under the creation semaphore, so only one worker ever resets.
+    *
+    * @param SysvSharedMemory $Segment The freshly attached segment.
+    */
+   private function migrate (SysvSharedMemory $Segment, int $key): SysvSharedMemory
+   {
+      // ?: Already ours
+      if (
+         shm_has_var($Segment, self::FORMAT_ID) === true
+         && shm_get_var($Segment, self::FORMAT_ID) === self::FORMAT
+      ) {
+         return $Segment;
+      }
+
+      // @ Drop whatever is there and take the key back
+      shm_remove($Segment);
+
+      $Segment = shm_attach($key, $this->Config->size, $this->Config->permissions);
+      if ($Segment === false) {
+         throw new RuntimeException(
+            'Failed to re-attach the shared-memory segment after a format reset.'
+         );
+      }
+
+      @shm_put_var($Segment, self::FORMAT_ID, self::FORMAT);
+
+      // :
+      return $Segment;
+   }
+
+   /**
+    * Read one variable back through this driver's deserialization allow-list.
+    *
+    * Every record is stored as an opaque string so the extension has nothing to
+    * reconstruct on its own — `shm_get_var()` takes no options, so this is the
+    * only shape `Config::$classes` can reach.
+    */
+   private function load (int $id): mixed
+   {
+      $stored = shm_get_var($this->Segment, $id);
+
+      // ? Anything that is not a string predates the current format, and this
+      //   driver refuses to hydrate it rather than trusting the segment
+      if (is_string($stored) === false) {
+         return false;
+      }
+
+      // :
+      return $this->decode($stored);
+   }
+
+   /**
     * Execute one atomic counter mutation (caller holds the semaphore).
     */
    private function advance (string $key, int $by, int $TTL, int $now): int
@@ -868,7 +941,7 @@ class Shared extends Driver
       $live = false;
       $existed = shm_has_var($this->Segment, $id);
       $stored = $existed === true
-         ? shm_get_var($this->Segment, $id)
+         ? $this->load($id)
          : null;
       $record = $this->find($stored, $key);
 
@@ -918,7 +991,7 @@ class Shared extends Driver
             continue;
          }
 
-         $bucket = shm_get_var($this->Segment, $bucketId);
+         $bucket = $this->load($bucketId);
          if (is_array($bucket) === false) {
             continue;
          }
@@ -938,7 +1011,7 @@ class Shared extends Driver
                continue;
             }
 
-            $stored = shm_get_var($this->Segment, $id);
+            $stored = $this->load($id);
             $records = $this->expand($stored);
             $slotChanged = false;
             foreach ($records as $key => $record) {
@@ -1039,12 +1112,17 @@ class Shared extends Driver
    /** Persist one variable, rolling back PHP's destructive capacity failure. */
    private function put (int $id, mixed $value): void
    {
+      // ! The stored representation is an opaque string, so the extension never
+      //   reconstructs anything by itself. restore() below deals in that same
+      //   representation, which is why it is captured raw.
+      $bytes = serialize($value);
+
       $existed = shm_has_var($this->Segment, $id);
       $previous = $existed === true
          ? shm_get_var($this->Segment, $id)
          : null;
 
-      if ($this->commit($id, $value) === true) {
+      if ($this->commit($id, $bytes) === true) {
          return;
       }
 
@@ -1098,7 +1176,7 @@ class Shared extends Driver
       $bucketId = self::INDEX_BAND + ($id % self::INDEX_BUCKETS);
 
       $bucket = shm_has_var($this->Segment, $bucketId) === true
-         ? shm_get_var($this->Segment, $bucketId)
+         ? $this->load($bucketId)
          : [];
       if (is_array($bucket) === false) {
          $bucket = [];
@@ -1129,7 +1207,7 @@ class Shared extends Driver
          return;
       }
 
-      $bucket = shm_get_var($this->Segment, $bucketId);
+      $bucket = $this->load($bucketId);
       if (is_array($bucket) === false) {
          return;
       }
@@ -1152,7 +1230,7 @@ class Shared extends Driver
 
       $existed = shm_has_var($this->Segment, $tagId);
       $stored = $existed === true
-         ? shm_get_var($this->Segment, $tagId)
+         ? $this->load($tagId)
          : null;
 
       if (

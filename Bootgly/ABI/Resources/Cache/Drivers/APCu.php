@@ -25,6 +25,8 @@ use function is_array;
 use function is_int;
 use function is_string;
 use function preg_quote;
+use function serialize;
+use function substr;
 use function time;
 use APCUIterator;
 use RuntimeException;
@@ -42,14 +44,26 @@ use Bootgly\ABI\Resources\Cache\Driver;
  */
 class APCu extends Driver
 {
+   /**
+    * Current stored-value format. Bump it whenever the representation changes:
+    * everything under this cache's prefix is dropped when the store carries
+    * anything else.
+    */
+   private const int FORMAT = 2;
+
+   // * Metadata
+   /** Whether this instance has already reconciled the store's format. */
+   private bool $reconciled = false;
+
+
    public function fetch (string $key): mixed
    {
       $this->guard();
 
-      $value = apcu_fetch($key, $success);
+      $raw = apcu_fetch($key, $success);
 
       // :
-      return $success === true ? $value : null;
+      return $success === true ? $this->unpack($raw) : null;
    }
 
    /**
@@ -60,7 +74,7 @@ class APCu extends Driver
       $this->guard();
 
       // @ Store the value with native TTL (0 = forever)
-      if (apcu_store($key, $value, $TTL) === false) {
+      if (apcu_store($key, $this->pack($value), $TTL) === false) {
          return false;
       }
 
@@ -77,7 +91,7 @@ class APCu extends Driver
    {
       $this->guard();
 
-      if (apcu_add($key, $value, $TTL) === false) {
+      if (apcu_add($key, $this->pack($value), $TTL) === false) {
          return false;
       }
 
@@ -166,7 +180,7 @@ class APCu extends Driver
    {
       $this->guard();
 
-      $members = apcu_fetch($this->index($tag), $success);
+      $members = $this->unpack(apcu_fetch($this->index($tag), $success));
       if ($success === true && is_array($members) === true) {
          foreach ($members as $member) {
             if (is_string($member) === true) {
@@ -198,6 +212,89 @@ class APCu extends Driver
       if (extension_loaded('apcu') === false) {
          throw new RuntimeException('The APCu cache driver requires ext-apcu.');
       }
+
+      $this->reconcile();
+   }
+
+   /**
+    * Drop everything under this cache's prefix when the store predates the
+    * current value format.
+    *
+    * `apcu_fetch()` takes no options, so it reconstructs whatever the store
+    * holds before this driver can refuse it — which is why values are kept as
+    * opaque strings now. Anything left by the older format is a live object
+    * waiting to be built, and dropping it is the only answer that does not
+    * involve constructing it first. The iterator yields KEYS only, so nothing
+    * is reconstructed on the way out, and the sweep is scoped to this cache's
+    * prefix rather than the whole store, which other applications share.
+    */
+   private function reconcile (): void
+   {
+      // ?: Already reconciled by this instance
+      if ($this->reconciled === true) {
+         return;
+      }
+      // ! Set before the work: clear() below calls guard(), and a second pass
+      //   would drop the marker this one is about to write
+      $this->reconciled = true;
+
+      $marker = "{$this->Config->prefix}@format";
+
+      // ?: The store is already ours
+      if (apcu_fetch($marker, $success) === self::FORMAT && $success === true) {
+         return;
+      }
+
+      $prefix = $this->Config->prefix;
+      $pattern = '/^' . preg_quote($prefix, '/') . '/';
+      apcu_delete(new APCUIterator($pattern, APC_ITER_KEY));
+
+      apcu_store($marker, self::FORMAT);
+   }
+
+   /**
+    * Encode a value for storage: integers stay raw so `apcu_inc()` keeps
+    * working on them natively, everything else is serialized behind a marker
+    * byte so the extension has no object graph to rebuild on the way out.
+    */
+   private function pack (mixed $value): mixed
+   {
+      if (is_int($value) === true) {
+         return $value;
+      }
+
+      return "\x01" . serialize($value);
+   }
+
+   /**
+    * Decode a stored value through this driver's deserialization allow-list.
+    *
+    * A value that is neither a raw counter nor a marked payload was written by
+    * an older format, and reads as a miss rather than being trusted.
+    */
+   private function unpack (mixed $raw): mixed
+   {
+      // ?: Raw counter
+      if (is_int($raw) === true) {
+         return $raw;
+      }
+
+      // ?
+      if (is_string($raw) === false || ($raw[0] ?? '') !== "\x01") {
+         return null;
+      }
+
+      $payload = substr($raw, 1);
+      $value = $this->decode($payload);
+
+      // ? Undecodable bytes. `false` is also a legitimate stored value, so the
+      //   one payload that encodes it is the only `false` accepted here
+      if ($value === false && $payload !== 'b:0;') {
+         return null;
+      }
+
+      // :
+      return $value;
    }
 
    /**
@@ -215,7 +312,7 @@ class APCu extends Driver
    {
       $index = $this->index($tag);
 
-      $members = apcu_fetch($index, $success);
+      $members = $this->unpack(apcu_fetch($index, $success));
       if ($success !== true || is_array($members) === false) {
          $members = [];
       }
@@ -226,6 +323,6 @@ class APCu extends Driver
       }
 
       $members[] = $key;
-      apcu_store($index, array_values($members), $TTL);
+      apcu_store($index, $this->pack(array_values($members)), $TTL);
    }
 }

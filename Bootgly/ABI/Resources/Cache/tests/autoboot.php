@@ -43,5 +43,6 @@ return new Suite(
       '7.1-security-file-deserialization',
       '7.2-security-classes-optin',
       '7.3-security-redis-deserialization',
+      '7.4-security-extension-drivers',
    ]
 );

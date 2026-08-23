@@ -28,6 +28,16 @@ return new Test(
    skip: $available === false,
 
    test: function () {
+      // ! The Shared driver keeps records as opaque serialized strings so the
+      //   extension has nothing to reconstruct on its own. A raw attacker reads
+      //   that format directly — teaching it to is what keeps this a real
+      //   attacker rather than one defeated by an encoding change.
+      $Peek = static function (mixed $Segment, int $id): mixed {
+         $stored = shm_get_var($Segment, $id);
+
+         return is_string($stored) ? @unserialize($stored, ['allowed_classes' => false]) : $stored;
+      };
+
       $Find = static function (string $path, int $key): null|array {
          $lines = @file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
          if (is_array($lines) === false) {
@@ -149,7 +159,7 @@ return new Test(
                         continue;
                      }
 
-                     $index = shm_get_var($AttackerSegment, $bucketID);
+                     $index = $Peek($AttackerSegment, $bucketID);
                      if (is_array($index) === false) {
                         continue;
                      }
@@ -160,7 +170,7 @@ return new Test(
                            continue;
                         }
 
-                        $record = shm_get_var($AttackerSegment, $recordID);
+                        $record = $Peek($AttackerSegment, $recordID);
                         if (is_array($record) === false) {
                            continue;
                         }
@@ -185,23 +195,23 @@ return new Test(
                      SysvSharedMemory $Segment,
                      string $key,
                      mixed $value
-                  ): void {
+                  ) use ($Peek): void {
                      $recordID = crc32($key);
-                     shm_put_var($Segment, $recordID, [
+                     shm_put_var($Segment, $recordID, serialize([
                         'k' => $key,
                         'e' => time() + 3_600,
                         'v' => $value,
-                     ]);
+                     ]));
 
                      $bucketID = 4_294_967_296 + ($recordID % 256);
                      $index = shm_has_var($Segment, $bucketID)
-                        ? shm_get_var($Segment, $bucketID)
+                        ? $Peek($Segment, $bucketID)
                         : [];
                      if (is_array($index) === false) {
                         $index = [];
                      }
                      $index[$recordID] = true;
-                     shm_put_var($Segment, $bucketID, $index);
+                     shm_put_var($Segment, $bucketID, serialize($index));
                   };
 
                   $Inject(
