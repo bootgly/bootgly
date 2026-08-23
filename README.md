@@ -134,7 +134,7 @@ Your sponsorship will keep this project always **up to date** with **new feature
 
 ### 📦 Install (one command)
 
-The canonical way to start: the installer clones the [bootgly.kit](https://github.com/bootgly/bootgly.kit/) starter template, initializes the Bootgly platform and opens the **project wizard**:
+The canonical way to start: the installer gets the [bootgly.kit](https://github.com/bootgly/bootgly.kit/) starter template — offering to create it as **a repository of your own** from the GitHub template when the GitHub CLI is signed in, cloning it otherwise — initializes the Bootgly platform and opens the **project wizard**:
 
 ```bash
 curl -fsSL https://bootgly.com/install | bash
