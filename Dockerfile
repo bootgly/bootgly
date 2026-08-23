@@ -19,7 +19,7 @@
 # ============================================================================
 
 ARG PHP_IMAGE=php:8.4-cli-bookworm
-ARG BOOTGLY_VERSION=1.0.0-beta.2
+ARG BOOTGLY_VERSION=1.0.0-beta.3
 ARG BOOTGLY_FRAMEWORK_SHA=unknown
 ARG BOOTGLY_FRAMEWORK_DIRTY=unknown
 ARG BOOTGLY_FRAMEWORK_TRACKED_DIFF_SHA256=unknown
