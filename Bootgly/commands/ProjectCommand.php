@@ -42,6 +42,7 @@ use function explode;
 use function fclose;
 use function fgets;
 use function file_get_contents;
+use function function_exists;
 use function getmypid;
 use function glob;
 use function implode;
@@ -85,6 +86,7 @@ use function strtoupper;
 use function substr;
 use function sys_get_temp_dir;
 use function time;
+use function trim;
 use function unlink;
 use function usleep;
 use Exception;
@@ -2361,6 +2363,28 @@ class ProjectCommand extends Command
 
                return false;
             }
+
+            // @ Land each platform on a real release: a gitlink left on an
+            //   untagged commit ships whatever the kit last recorded, which in
+            //   the worst case is an unreleased development build
+            foreach ($targets as $target) {
+               $release = $this->align(BOOTGLY_WORKING_DIR, $target);
+
+               // ?
+               if ($release !== null) {
+                  // ! `@` is this Output's markup introducer and is a legal
+                  //   character in a tag name — stripping it keeps a careless
+                  //   tag from injecting resets into the row. The row is also
+                  //   kept short on purpose: a long one hard-wraps at the
+                  //   terminal edge and escapes the Wizard's region gutter.
+                  $named = str_replace('@', '', $release);
+
+                  $Output->render(
+                     "@#yellow:{$target}@;: pinned past a release — "
+                     . "using @#cyan:{$named}@;.@.;"
+                  );
+               }
+            }
          }
       }
 
@@ -2375,6 +2399,130 @@ class ProjectCommand extends Command
 
       // :
       return true;
+   }
+
+   /**
+    * Move a platform submodule onto the newest release reachable from the
+    * commit the kit pinned — a stable tag when there is one, the newest
+    * pre-release otherwise.
+    *
+    * `--merged` is what makes this safe: the correction can only ever walk
+    * BACKWARDS, so a project never pairs a platform with a kit that was built
+    * against something else.
+    *
+    * Ordering is git's own version sort with `versionsort.suffix` correcting
+    * it: bare `-v:refname` ranks `v1.0.0` BELOW `v1.0.0-beta.1`, and declaring
+    * `-` a pre-release suffix restores SemVer precedence in ONE pass
+    * (`v1.1.0-beta.1` > `v1.0.0` > `v1.0.0-rc.1` > `v1.0.0-beta.9`). Preferring
+    * every stable over every pre-release instead reads like "prefer stable" but
+    * downgrades a kit pinned at `v1.1.0-beta.1` all the way back to `v1.0.0` —
+    * and moves a pin that was already sitting exactly on a release.
+    *
+    * `--no-column` because `column.ui = always` in a user's config makes
+    * `git tag` emit space-padded columns even into a pipe, which no anchored
+    * pattern can match — the correction would then silently never fire.
+    *
+    * Mirrored in POSIX sh by `release ()` in the installer served at
+    * `bootgly.com/install`, which does the same for `Bootgly`. The duplication
+    * is structural: the installer runs before any PHP can, because the
+    * framework that PHP would load IS that submodule. Keep both in step.
+    *
+    * @param string $working The kit directory holding the submodule, with a trailing separator.
+    * @param string $module  The submodule path in the kit, e.g. `Console`.
+    *
+    * @return null|string The release checked out, or null when nothing moved.
+    */
+   private function align (string $working, string $module): null|string
+   {
+      // ? A host with `shell_exec` disabled must lose the correction, not the
+      //   install — `prepare()` had no dependency on it before this method
+      if (function_exists('shell_exec') === false) {
+         return null;
+      }
+
+      $root = escapeshellarg($working);
+      $path = escapeshellarg($module);
+      $sub = escapeshellarg($working . $module);
+
+      // ? Only ever a submodule this run placed. Three things have to agree:
+      //   the commit `git submodule update` actually followed (the INDEX), the
+      //   commit the kit records (the HEAD tree), and where the submodule now
+      //   stands. Staging a gitlink is how someone says "this is the commit I
+      //   want", so any disagreement means the pin is not ours to correct.
+      //   The width is 40 or 64 — a SHA-256 repository would otherwise capture
+      //   40 of 64 characters and disable the guard silently.
+      $pinned = trim((string) shell_exec("git -C {$root} ls-files -s {$path} 2>/dev/null"));
+      if (preg_match('/^160000 ([0-9a-f]{40,64})/', $pinned, $matches) !== 1) {
+         return null;
+      }
+      $committed = trim((string) shell_exec(
+         "git -C {$root} rev-parse " . escapeshellarg("HEAD:{$module}") . ' 2>/dev/null'
+      ));
+      $head = trim((string) shell_exec("git -C {$sub} rev-parse HEAD 2>/dev/null"));
+      if ($head === '' || $head !== $matches[1] || $head !== $committed) {
+         return null;
+      }
+
+      // ? Nothing of the user's may be at risk: tracked edits, staged changes,
+      //   or an untracked file the release's tree would overwrite — `diff`
+      //   cannot see that last one, and `checkout` would refuse it loudly
+      $clean = trim((string) shell_exec(
+         "git -C {$sub} diff --quiet 2>/dev/null"
+         . " && git -C {$sub} diff --cached --quiet 2>/dev/null"
+         . " && test -z \"$(git -C {$sub} ls-files --others --exclude-standard 2>/dev/null)\""
+         . ' && echo clean'
+      ));
+      if ($clean !== 'clean') {
+         return null;
+      }
+
+      // ---
+
+      // @ Newest release first, so the first entry shaped like one is the pick
+      $tags = trim((string) shell_exec(
+         "git -C {$sub} -c versionsort.suffix=- tag --no-column --merged {$head}"
+         . ' --sort=-v:refname 2>/dev/null'
+      ));
+
+      $release = null;
+      foreach (explode("\n", $tags) as $tag) {
+         $tag = trim($tag);
+
+         if (preg_match('/^v\d+\.\d+\.\d+(-|$)/', $tag) === 1) {
+            $release = $tag;
+
+            break;
+         }
+      }
+
+      // ? Nothing released to land on
+      if ($release === null) {
+         return null;
+      }
+
+      // ! Fully-qualified `refs/tags/`: `rev-parse` resolves a bare name to the
+      //   TAG but `checkout` resolves it to a BRANCH, so a branch sharing the
+      //   tag's name would pass the guard below and then check out something
+      //   else — possibly ahead of the pin, which this must never do
+      $reference = escapeshellarg("refs/tags/{$release}");
+
+      // ? Already standing on it — the normal case, and it must stay silent
+      $target = trim((string) shell_exec(
+         "git -C {$sub} rev-parse " . escapeshellarg("refs/tags/{$release}^{commit}")
+         . ' 2>/dev/null'
+      ));
+      if ($target === '' || $target === $head) {
+         return null;
+      }
+
+      // ---
+
+      $status = $this->execute(
+         "git -C {$sub} -c advice.detachedHead=false checkout --quiet {$reference}"
+      );
+
+      // :
+      return $status === 0 ? $release : null;
    }
 
    /**
