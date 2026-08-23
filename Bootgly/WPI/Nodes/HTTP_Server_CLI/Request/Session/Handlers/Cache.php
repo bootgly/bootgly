@@ -111,9 +111,16 @@ class Cache implements Committing
 
       $cache = $config;
       unset($cache['secret'], $cache['secret_path']);
+      // ! `file`, not `shared`. Both are shared across workers, but ext-sysvshm
+      //   deserializes a record inside `shm_get_var()` before any Bootgly code
+      //   can refuse it, so a process able to write the segment can fire a
+      //   planted destructor in the session worker. The File driver hands its
+      //   bytes to the allow-list first, so nothing is built until the record
+      //   has been accepted. A deployment that wants the shared-memory speed
+      //   can still ask for it explicitly.
       $cache['driver'] = is_string($cache['driver'] ?? null)
          ? $cache['driver']
-         : 'shared';
+         : 'file';
       $cache['prefix'] = is_string($cache['prefix'] ?? null)
          ? $cache['prefix']
          : "session:{$this->context}:";

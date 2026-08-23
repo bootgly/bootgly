@@ -11,7 +11,9 @@
 namespace Bootgly\ABI\Resources\Cache\Drivers;
 
 
+use const APC_ITER_CTIME;
 use const APC_ITER_KEY;
+use const APC_ITER_TTL;
 use function apcu_add;
 use function apcu_delete;
 use function apcu_exists;
@@ -41,6 +43,13 @@ use Bootgly\ABI\Resources\Cache\Driver;
  * its own APCu segment in CLI/forked deployments. Not suitable as the shared
  * cross-worker backend (use Shared-memory or Redis for that). TTL is native;
  * tag membership is tracked in a companion set entry.
+ *
+ * **Deserialization caveat.** Values are stored behind a marker byte so this
+ * driver's own writes carry no object graph, and reads are decoded under
+ * `Config::$classes`. `apcu_fetch()` still reconstructs whatever the store
+ * holds before that check runs, so a process able to write the store can fire a
+ * planted `__wakeup`/`__destruct`. APCu memory is shared across the SAPI: the
+ * boundary is who can execute in that pool.
  */
 class APCu extends Driver
 {
@@ -152,7 +161,7 @@ class APCu extends Driver
       $now = $this->Config->clock === null ? time() : (int) ($this->Config->clock)();
       $pattern = '/^' . preg_quote($key, '/') . '$/';
 
-      foreach (new APCUIterator($pattern) as $info) {
+      foreach (new APCUIterator($pattern, APC_ITER_TTL | APC_ITER_CTIME) as $info) {
          if (is_array($info) === false) {
             continue;
          }
@@ -238,16 +247,29 @@ class APCu extends Driver
       //   would drop the marker this one is about to write
       $this->reconciled = true;
 
-      $marker = "{$this->Config->prefix}@format";
+      // ! Outside the user keyspace on purpose: built from the prefix but not
+      //   under it, so clear() cannot delete the marker it depends on and an
+      //   application key can never collide with it. The version is part of the
+      //   name, so recognising the format never reads a value
+      $marker = "\0bootgly-cache-format-" . self::FORMAT . ":{$this->Config->prefix}";
 
       // ?: The store is already ours
-      if (apcu_fetch($marker, $success) === self::FORMAT && $success === true) {
+      if (apcu_exists($marker) === true) {
          return;
       }
 
       $prefix = $this->Config->prefix;
-      $pattern = '/^' . preg_quote($prefix, '/') . '/';
-      apcu_delete(new APCUIterator($pattern, APC_ITER_KEY));
+
+      // ? An empty prefix owns no keyspace of its own, so there is no sweep that
+      //   reaches this cache's records without also reaching every other
+      //   tenant's — APCu memory is shared across the whole SAPI. Refusing to
+      //   sweep leaves older records unreadable rather than destroying data
+      //   this driver does not own
+      if ($prefix !== '') {
+         // ! Keys only: materializing values here would reconstruct the very
+         //   objects this sweep exists to get rid of
+         apcu_delete(new APCUIterator('/^' . preg_quote($prefix, '/') . '/', APC_ITER_KEY));
+      }
 
       apcu_store($marker, self::FORMAT);
    }

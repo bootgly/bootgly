@@ -61,9 +61,13 @@ return new Test(
       };
 
       if ($shared === true) {
+         // ! A per-run key: a fixed one leaks a segment between runs and makes
+         //   the spec fail hard the moment anything else holds it
+         $segment = 1_600_000_000 + (crc32(uniqid('', true)) % 100_000_000);
+
          $Shared = new Cache([
             'driver' => 'shared',
-            'segment' => 1589239861,
+            'segment' => $segment,
             'size' => 2 * 1024 * 1024,
             'prefix' => 'x' . uniqid('', true) . ':',
          ]);
@@ -80,7 +84,7 @@ return new Test(
          //   in-tree consumers actually store
          $Open = new Cache([
             'driver' => 'shared',
-            'segment' => 1589239861,
+            'segment' => $segment,
             'size' => 2 * 1024 * 1024,
             'prefix' => 'y' . uniqid('', true) . ':',
             'classes' => [CacheGadget_7_4::class],
@@ -97,8 +101,44 @@ return new Test(
             description: 'Shared still round-trips declared objects, counters and scalars'
          );
 
+         // @ The shape the driver genuinely CANNOT defend against: a raw
+         //   live-value plant into an already-marked segment. shm_get_var()
+         //   rebuilds it before any code here runs, so the canary DOES die —
+         //   what the allow-list still buys is that the object never reaches
+         //   the caller. Pinning the real limit here keeps a future reader from
+         //   believing the stronger claim.
+         $victim = sys_get_temp_dir() . '/bootgly-ext-raw-' . uniqid('', true) . '.probe';
+         file_put_contents($victim, 'SECRET');
+         $Planted = new CacheGadget_7_4;
+         $Planted->target = $victim;
+         $Segment = shm_attach($segment, 2 * 1024 * 1024, 0600);
+         shm_put_var($Segment, crc32("{$Shared->Config->prefix}raw"), [
+            'k' => "{$Shared->Config->prefix}raw",
+            'e' => 0,
+            'v' => $Planted,
+         ]);
+         $Planted->target = '';
+         unset($Planted);
+         CacheGadget_7_4::$fired = 0;
+
+         $handed = $Shared->fetch('raw');
+
+         yield assert(
+            assertion: $handed === null,
+            description: 'A raw live-value plant is never handed to the caller, '
+               . 'though shm_get_var() has already built it: constructed='
+               . CacheGadget_7_4::$fired
+         );
+
+         @unlink($victim);
+         shm_detach($Segment);
+
          $Shared->clear();
          $Open->clear();
+
+         // ! Both caches share the key, so one destroy() releases the segment
+         //   and its semaphore rather than leaving them for the next run
+         $Shared->Driver->destroy();
       }
 
       if ($apcu === true) {

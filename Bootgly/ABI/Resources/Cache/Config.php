@@ -62,11 +62,15 @@ class Config
     * cannot run an object-injection gadget while a record is being read. An
     * object cached without being declared reads back as a miss, at any depth.
     *
-    * It does not reach `Shared` or `APCu`: those deserialize inside
-    * `shm_get_var()` and `apcu_fetch()`, which accept no options, so both trust
-    * their backing store completely. Enums are restored regardless of this
-    * list — PHP restores them outside `allowed_classes` — though an enum can
-    * carry no destructor, so none is a gadget.
+    * `Shared` and `APCu` apply the same list, but later: their extension
+    * functions deserialize before any driver code runs, so the list governs
+    * what those two hand back rather than what gets built. A store an attacker
+    * can write is still able to fire a destructor on them — protect the SysV
+    * segment and the APCu store by their permissions, not by this option.
+    *
+    * Enums are restored regardless of this list — PHP restores them outside
+    * `allowed_classes` — though an enum can carry no destructor, so none is a
+    * gadget.
     *
     * @var array<int,string>
     */

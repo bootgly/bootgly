@@ -71,10 +71,20 @@ return new Test(
       $childReaped = false;
 
       try {
-         // @ Actual default: per-install key, derived segment/namespace and
-         //   owner-only IPC. The default segment is never enumerated or written
-         //   by the attacker portion of this test.
-         $DefaultHandler = new Cache();
+         // @ The shipped default is the File driver, which owns no IPC at all —
+         //   ext-sysvshm rebuilds a record inside shm_get_var() before any
+         //   Bootgly code can refuse it, so sessions do not ride it by default.
+         //   Everything below still exercises the shared backend, because a
+         //   deployment may still ask for it, and asks for it explicitly.
+         $ShippedHandler = new Cache();
+         $ShippedReflection = new ReflectionObject($ShippedHandler);
+         $ShippedCache = $ShippedReflection->getProperty('Cache')->getValue($ShippedHandler);
+         $Evidence['shipped'] = [
+            'driver' => $ShippedCache->Config->driver,
+            'segment' => $ShippedCache->Config->segment,
+         ];
+
+         $DefaultHandler = new Cache(['driver' => 'shared']);
          $HandlerReflection = new ReflectionObject($DefaultHandler);
          $CacheProperty = $HandlerReflection->getProperty('Cache');
          /** @var CacheResource $DefaultCache */
@@ -407,12 +417,18 @@ return new Test(
 
       $Attacker = $Evidence['attacker'] ?? null;
       yield assert(
+         assertion: ($Evidence['shipped']['driver'] ?? null) === 'file'
+            && ($Evidence['shipped']['segment'] ?? null) === 0,
+         description: 'Sessions default to a driver that decodes before it constructs: '
+            . json_encode($Evidence['shipped'] ?? null)
+      );
+      yield assert(
          assertion: ($Evidence['default']['key'] ?? 0) > 0
             && ($Evidence['default']['prefix'] ?? '') !== 'session:'
             && ($Evidence['default']['shm']['permissions'] ?? null) === '600'
             && ($Evidence['default']['sem']['permissions'] ?? null) === '600'
             && ($Evidence['default']['key_mode'] ?? null) === 0600,
-         description: 'Default sessions use a derived namespace, owner-only IPC and an owner-only key: '
+         description: 'A shared-backed session still gets a derived namespace, owner-only IPC and key: '
             . json_encode($Evidence['default'] ?? null)
       );
       yield assert(

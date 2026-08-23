@@ -69,6 +69,14 @@ use Bootgly\ABI\Resources\Cache\Driver;
  * writes, counters, deletion, expiry and tag invalidation remain independent.
  * Reads hold the semaphore because the SysV variable table is mutated in-place.
  * The segment is fixed-size, so Redis remains the choice for unbounded caches.
+ *
+ * **Deserialization caveat.** Records are kept as opaque strings so this
+ * driver's own writes can never carry an object graph, and reads are decoded
+ * under `Config::$classes`. That is defence in depth, not containment:
+ * `shm_get_var()` reconstructs whatever the segment holds before any code here
+ * runs, and ext-sysvshm exposes no read that does not. A process able to write
+ * the segment can still fire a planted `__wakeup`/`__destruct`. The boundary is
+ * the segment's `permissions` (default `0600`) — keep it there.
  */
 class Shared extends Driver
 {
@@ -88,13 +96,19 @@ class Shared extends Driver
    /** Internal RuntimeException code identifying fixed-segment capacity. */
    private const int CAPACITY_ERROR = 1;
    /**
-    * Variable id carrying the record-format marker. Sits above every band the
+    * Base variable id for the record-format marker. Sits above every band the
     * driver derives from a key hash, so it can never collide with a record.
     */
-   private const int FORMAT_ID = 12884901888;
+   private const int FORMAT_BAND = 12884901888;
    /**
     * Current stored-record format. Bump it whenever the representation changes:
-    * a segment carrying anything else is discarded when it is attached.
+    * a segment that does not carry this exact marker is discarded on attach.
+    *
+    * The version is part of the marker's ID rather than its value, so telling
+    * the formats apart is a `shm_has_var()` and never a read. Reading it would
+    * mean deserializing a variable an attacker can write — the check meant to
+    * decide whether the segment is trustworthy would be the thing that fires a
+    * planted destructor.
     */
    private const int FORMAT = 2;
 
@@ -644,6 +658,17 @@ class Shared extends Driver
     */
    private function write (mixed $stored, string $key, array $record): array
    {
+      // ? `false` from load() means "this slot holds bytes this instance cannot
+      //   decode", not "this slot is free". Treating it as free replaces the
+      //   whole crc32 slot and takes every colliding neighbour with it — and
+      //   caches with different `classes` lists routinely share one segment,
+      //   so a neighbour being undecodable *here* is ordinary
+      if ($stored === false) {
+         throw new RuntimeException(
+            'Refusing to overwrite a shared-memory slot this cache cannot decode.'
+         );
+      }
+
       $record = $this->normalize($record);
       if (is_array($stored) === false) {
          return $this->encode($key, $record);
@@ -684,6 +709,14 @@ class Shared extends Driver
     */
    private function erase (mixed $stored, string $key): null|array
    {
+      // ? Same reasoning as write(): an undecodable slot is occupied, and
+      //   answering null here would drop it whole
+      if ($stored === false) {
+         throw new RuntimeException(
+            'Refusing to drop a shared-memory slot this cache cannot decode.'
+         );
+      }
+
       if (is_array($stored) === false) {
          return null;
       }
@@ -885,11 +918,9 @@ class Shared extends Driver
     */
    private function migrate (SysvSharedMemory $Segment, int $key): SysvSharedMemory
    {
-      // ?: Already ours
-      if (
-         shm_has_var($Segment, self::FORMAT_ID) === true
-         && shm_get_var($Segment, self::FORMAT_ID) === self::FORMAT
-      ) {
+      // ?: Already ours — presence alone answers it, because the version lives
+      //    in the id
+      if (shm_has_var($Segment, self::FORMAT_BAND + self::FORMAT) === true) {
          return $Segment;
       }
 
@@ -903,7 +934,16 @@ class Shared extends Driver
          );
       }
 
-      @shm_put_var($Segment, self::FORMAT_ID, self::FORMAT);
+      // ! shm_remove() frees the key immediately, so the segment adopted here is
+      //   not necessarily the one just dropped — it faces the same ownership
+      //   and permission check the first attach did
+      $this->guard($key, 'shm');
+
+      if (@shm_put_var($Segment, self::FORMAT_BAND + self::FORMAT, true) === false) {
+         throw new RuntimeException(
+            'Failed to stamp the shared-memory segment format after a reset.'
+         );
+      }
 
       // :
       return $Segment;
@@ -1112,10 +1152,16 @@ class Shared extends Driver
    /** Persist one variable, rolling back PHP's destructive capacity failure. */
    private function put (int $id, mixed $value): void
    {
-      // ! The stored representation is an opaque string, so the extension never
-      //   reconstructs anything by itself. restore() below deals in that same
-      //   representation, which is why it is captured raw.
       $bytes = serialize($value);
+
+      // ! `shm_get_var()` returns a DESERIALIZED value, never raw bytes, so
+      //   capturing the previous record rebuilds whatever the segment holds —
+      //   objects included. There is no read primitive in ext-sysvshm that does
+      //   not, which is why this driver cannot promise the allow-list runs
+      //   first (see the class docblock). It is captured anyway because the
+      //   rollback below is what keeps a capacity failure from destroying a
+      //   live record, and it is captured raw because restore() writes it back
+      //   in the same representation.
 
       $existed = shm_has_var($this->Segment, $id);
       $previous = $existed === true

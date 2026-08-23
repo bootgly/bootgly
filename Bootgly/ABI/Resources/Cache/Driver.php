@@ -186,10 +186,14 @@ abstract class Driver
     * anywhere in its graph, so a tampered store reads as a miss instead of
     * raising or handing back a half-built object.
     *
-    * This is the gate for drivers that serialize in PHP: `File` and `Redis`.
-    * `Shared` and `APCu` never reach it — `shm_get_var()` and `apcu_fetch()`
-    * deserialize inside the extension, which accepts no options — so on those
-    * two the allow-list does not apply at all.
+    * **When it runs differs by driver, and the difference is the guarantee.**
+    * `File` and `Redis` hand this method the stored bytes, so nothing is built
+    * until the allow-list has decided. `Shared` and `APCu` cannot: their
+    * `shm_get_var()`/`apcu_fetch()` deserialize inside the extension, which
+    * takes no options, so a record has already been reconstructed by the time
+    * this runs. On those two the allow-list decides what is handed BACK — it
+    * keeps a hostile record out of the application, but it cannot stop a
+    * planted `__wakeup`/`__destruct` from firing first.
     *
     * @param string $bytes The serialized record bytes.
     */
