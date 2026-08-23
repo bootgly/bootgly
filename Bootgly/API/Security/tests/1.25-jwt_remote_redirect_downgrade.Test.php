@@ -242,7 +242,7 @@ return new Test(
       $clientCode = <<<'PHP'
 $root = (string) getenv('BOOTGLY_JWT13_ROOT');
 $fixture = (string) getenv('BOOTGLY_JWT13_KEYS');
-require $root . '/vendor/autoload.php';
+require $root . 'autoboot.php';
 $fixtures = require $fixture;
 $first = $fixtures['first'];
 $second = $fixtures['second'];
