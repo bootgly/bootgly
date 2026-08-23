@@ -13,8 +13,11 @@ namespace Bootgly\ABI\Resources\Cache;
 
 use const BOOTGLY_STORAGE_DIR;
 use function defined;
+use function is_array;
 use function is_bool;
 use function is_scalar;
+use function is_string;
+use function ltrim;
 use function rtrim;
 use function sys_get_temp_dir;
 use Closure;
@@ -31,6 +34,7 @@ class Config
    public const string DEFAULT_DRIVER = 'file';
    public const string DEFAULT_PREFIX = '';
    public const int DEFAULT_TTL = 0;
+   public const array DEFAULT_CLASSES = [];
    public const int DEFAULT_SEGMENT = 0;
    public const int DEFAULT_SIZE = 16777216;
    public const int DEFAULT_PERMISSIONS = 0600;
@@ -49,6 +53,24 @@ class Config
     * Default time-to-live in seconds applied when store()/increment() receive 0.
     */
    public int $TTL;
+   /**
+    * Classes the cache is allowed to reconstruct from a stored record.
+    *
+    * The `File` and `Redis` drivers decode records through a fail-closed
+    * `unserialize()` allow-list: each permits its own record wrapper, and no
+    * other class is reconstructed unless it is named here — so a tampered store
+    * cannot run an object-injection gadget while a record is being read. An
+    * object cached without being declared reads back as a miss, at any depth.
+    *
+    * It does not reach `Shared` or `APCu`: those deserialize inside
+    * `shm_get_var()` and `apcu_fetch()`, which accept no options, so both trust
+    * their backing store completely. Enums are restored regardless of this
+    * list — PHP restores them outside `allowed_classes` — though an enum can
+    * carry no destructor, so none is a gadget.
+    *
+    * @var array<int,string>
+    */
+   public array $classes;
    /**
     * Base directory used by the File driver.
     */
@@ -115,6 +137,7 @@ class Config
       $driver = $config['driver'] ?? self::DEFAULT_DRIVER;
       $prefix = $config['prefix'] ?? self::DEFAULT_PREFIX;
       $TTL = $config['ttl'] ?? self::DEFAULT_TTL;
+      $classes = $config['classes'] ?? self::DEFAULT_CLASSES;
       $path = $config['path'] ?? self::locate();
       $segment = $config['segment'] ?? self::DEFAULT_SEGMENT;
       $size = $config['size'] ?? self::DEFAULT_SIZE;
@@ -132,6 +155,7 @@ class Config
       $this->driver = is_scalar($driver) ? (string) $driver : self::DEFAULT_DRIVER;
       $this->prefix = is_scalar($prefix) ? (string) $prefix : self::DEFAULT_PREFIX;
       $this->TTL = is_scalar($TTL) ? (int) $TTL : self::DEFAULT_TTL;
+      $this->classes = self::filter($classes);
       $this->path = rtrim(is_scalar($path) ? (string) $path : self::locate(), '/');
       $this->segment = is_scalar($segment) ? (int) $segment : self::DEFAULT_SEGMENT;
       $this->size = is_scalar($size) ? (int) $size : self::DEFAULT_SIZE;
@@ -160,5 +184,41 @@ class Config
 
       // :
       return sys_get_temp_dir() . '/bootgly-cache';
+   }
+
+   /**
+    * Normalize a configured deserialization allow-list to plain class names.
+    *
+    * `class_exists()` is deliberately not called: it would autoload every
+    * declared class at config time, and a class a later autoloader resolves is
+    * still a valid rule. Only the shape is enforced, and an entry
+    * `unserialize()` could not honor is dropped rather than widening the guard.
+    *
+    * @return array<int,string>
+    */
+   private static function filter (mixed $classes): array
+   {
+      // ?
+      if (is_array($classes) === false) {
+         return self::DEFAULT_CLASSES;
+      }
+
+      // @
+      $filtered = [];
+      foreach ($classes as $class) {
+         // ! `unserialize()` matches against the name as serialized, which never
+         //   carries a leading separator — while `\App\Product` is exactly how
+         //   a plain-array config file tends to spell it. Left as written it
+         //   would be kept, never match, and turn every read of that class into
+         //   a silent miss. Case needs no normalizing: PHP folds it already
+         $class = is_string($class) ? ltrim($class, '\\') : '';
+
+         if ($class !== '') {
+            $filtered[] = $class;
+         }
+      }
+
+      // :
+      return $filtered;
    }
 }

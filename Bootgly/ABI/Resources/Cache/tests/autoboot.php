@@ -40,5 +40,8 @@ return new Suite(
       '5.5-shared-expired-capacity',
       '5.6-redis-desync',
       '5.7-redis-persistent-identity',
+      '7.1-security-file-deserialization',
+      '7.2-security-classes-optin',
+      '7.3-security-redis-deserialization',
    ]
 );

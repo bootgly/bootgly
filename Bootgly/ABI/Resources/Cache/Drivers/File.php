@@ -31,6 +31,7 @@ use function is_array;
 use function is_dir;
 use function is_file;
 use function is_int;
+use function is_string;
 use function mkdir;
 use function rename;
 use function rewind;
@@ -42,7 +43,6 @@ use function time;
 use function trim;
 use function uniqid;
 use function unlink;
-use function unserialize;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use RuntimeException;
@@ -63,6 +63,11 @@ use Bootgly\ABI\Resources\Cache\Item;
 class File extends Driver
 {
    private const string LOCK = '.cache.lock';
+   /**
+    * The record wrapper this driver writes — the only class it reconstructs
+    * beyond the ones the application declared in `Config::$classes`.
+    */
+   protected const array WRAPPERS = [Item::class];
 
 
    public function fetch (string $key): mixed
@@ -94,7 +99,12 @@ class File extends Driver
       try {
          $clock = $this->Config->clock;
          $now = $clock === null ? time() : (int) $clock();
-         if ($this->read($key, $now, true)[0]) {
+         // ? Occupied — or occupied by bytes THIS cache cannot decode. read()
+         //   removes an expired record, so a file still standing after it means
+         //   the slot is taken by a live record that merely names a class this
+         //   instance did not declare. Reporting the slot free would let create()
+         //   overwrite data another reader still owns
+         if ($this->read($key, $now, true)[0] || is_file($this->locate($key)) === true) {
             return false;
          }
 
@@ -288,7 +298,7 @@ class File extends Driver
          $live = false;
          $bytes = stream_get_contents($handle);
          if ($bytes !== false && $bytes !== '') {
-            $record = @unserialize($bytes);
+            $record = $this->decode($bytes);
             if (is_array($record) === true && ($record['key'] ?? null) === $key) {
                $Item = $record['Item'] ?? null;
                if ($Item instanceof Item === true && ($Item->expiry === 0 || $Item->expiry > $now)) {
@@ -338,7 +348,7 @@ class File extends Driver
          return -2;
       }
 
-      $record = @unserialize($bytes);
+      $record = $this->decode($bytes);
       if (is_array($record) === false || ($record['key'] ?? null) !== $key) {
          return -2;
       }
@@ -412,8 +422,17 @@ class File extends Driver
                continue;
             }
 
-            $record = @unserialize($bytes);
+            $record = $this->decode($bytes);
             if (is_array($record) === false) {
+               continue;
+            }
+
+            // ? A record only belongs to the file its own key hashes to — the
+            //   same binding the keyed reads assert, expressed for a
+            //   path-driven scan. Without it this sink accepts any blob merely
+            //   shaped like a record, including one persist() could never write
+            $key = $record['key'] ?? null;
+            if (is_string($key) === false || $this->locate($key) !== $file) {
                continue;
             }
 
@@ -515,7 +534,7 @@ class File extends Driver
          return [false, null, []];
       }
 
-      $record = @unserialize($bytes);
+      $record = $this->decode($bytes);
       if (is_array($record) === false || ($record['key'] ?? null) !== $key) {
          return [false, null, []];
       }

@@ -14,20 +14,23 @@ namespace Bootgly\ABI\Resources\Cache;
 /**
  * One cache entry: value plus expiry and tags metadata.
  *
- * Drivers without native TTL/tag support (File, Shared-memory) serialize this
- * record so a single stored blob carries everything needed to evaluate expiry
- * and tag membership.
+ * The File driver, which has no native TTL/tag support, serializes this record
+ * so a single stored blob carries everything needed to evaluate expiry and tag
+ * membership.
  */
 class Item
 {
    // * Data
-   public mixed $value;
+   // ! Every property carries a default: a forged record naming this class with
+   //   no properties at all hydrates fine, and reading an uninitialized typed
+   //   property would raise instead of reporting the record as a miss.
+   public mixed $value = null;
    /**
     * Unix timestamp when the entry expires; 0 means it never expires.
     */
-   public int $expiry;
+   public int $expiry = 0;
    /** @var array<int,string> */
-   public array $tags;
+   public array $tags = [];
 
 
    /**

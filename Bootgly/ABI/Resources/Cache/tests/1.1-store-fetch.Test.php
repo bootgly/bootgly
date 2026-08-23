@@ -9,7 +9,14 @@ return new Test(
    description: 'Cache(File): store/fetch round-trips for scalars, arrays and objects',
    test: function () {
       $dir = sys_get_temp_dir() . '/bootgly-cache-test-' . uniqid();
-      $Cache = new Cache(['driver' => 'file', 'path' => $dir, 'prefix' => 't:']);
+      // ! Objects are opt-in: the driver reconstructs only the classes the
+      //   application declared, so a tampered store cannot revive a gadget
+      $Cache = new Cache([
+         'driver' => 'file',
+         'path' => $dir,
+         'prefix' => 't:',
+         'classes' => [stdClass::class],
+      ]);
 
       $Cache->store('s', 'string');
       $Cache->store('i', 42);
@@ -35,7 +42,7 @@ return new Test(
       $Fetched = $Cache->fetch('o');
       yield assert(
          assertion: $Fetched instanceof stdClass && $Fetched->name === 'bootgly',
-         description: 'Object value round-trips'
+         description: 'Declared object value round-trips'
       );
       yield assert(
          assertion: $Cache->fetch('missing') === null,

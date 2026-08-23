@@ -37,7 +37,6 @@ use function stream_set_timeout;
 use function stream_socket_client;
 use function strlen;
 use function substr;
-use function unserialize;
 use Redis as RedisClient;
 use RuntimeException;
 use Throwable;
@@ -366,14 +365,30 @@ LUA;
    /**
     * Decode a stored value: marker byte means serialized, otherwise it is a
     * raw integer (from pack() or INCRBY).
+    *
+    * There is no record wrapper on this path — the blob IS the application's
+    * value — so nothing is reconstructed unless the application declared it in
+    * `Config::$classes`, and a value this driver cannot hand back is a miss.
     */
    private function unpack (string $raw): mixed
    {
-      if (($raw[0] ?? '') === "\x01") {
-         return unserialize(substr($raw, 1));
+      // ?: Raw integer
+      if (($raw[0] ?? '') !== "\x01") {
+         return (int) $raw;
       }
 
-      return (int) $raw;
+      $payload = substr($raw, 1);
+      $value = $this->decode($payload);
+
+      // ? Undecodable bytes — malformed, over-deep, or naming a class the
+      //   allow-list refused anywhere in the graph. `false` is also a
+      //   legitimate stored value, so the one payload that encodes it is the
+      //   only `false` accepted here
+      if ($value === false && $payload !== 'b:0;') {
+         return null;
+      }
+      // :
+      return $value;
    }
 
    /**
