@@ -98,6 +98,7 @@ use function str_repeat;
 use function str_replace;
 use function str_starts_with;
 use function stream_get_meta_data;
+use function stream_isatty;
 use function strlen;
 use function strtolower;
 use function substr;
@@ -136,6 +137,7 @@ use Bootgly\ACI\Tests\Coverage\Drivers\PCOV;
 use Bootgly\ACI\Tests\Coverage\Drivers\XDebug;
 use Bootgly\ACI\Tests\Results;
 use Bootgly\ACI\Tests\Suite;
+use Bootgly\ACI\Tests\Suites;
 use Bootgly\ACI\Tests\Temporaries;
 use Bootgly\API\Environment;
 use Bootgly\API\Environment\Agent;
@@ -172,15 +174,36 @@ class TestCommand extends Command
       'Native driver mode: @#Cyan:strict | parity@; @#Black:(default: strict)@;' => ['--coverage-native-mode=MODE'],
       'Coverage report: @#Cyan:text | html | clover@; @#Black:(default: text)@;' => ['--coverage-report=FORMAT[:PATH]'],
       'Restrict the coverage report to changed lines' => ['--coverage-diff'],
-      'Output view: @#Cyan:list | heatmap@; @#Black:(default: heatmap on full runs)@;' => ['--view=MODE'],
+      'Output view: @#Cyan:list | heatmap@; @#Black:(default: heatmap on full runs in a terminal)@;' => ['--view=MODE'],
       'Show help information' => ['--help', '-h'],
    ];
 
    // * Metadata
-   /** Output view resolved from --view (list | heatmap) */
+   /** Output view resolved from --view — RENDERING only (list | heatmap) */
    private string $view = 'list';
+   /**
+    * Run every suite instead of stopping at the first failing case.
+    *
+    * The run's contract, decided by its shape and an explicit `--view`. Kept
+    * apart from `$view` so that rendering a log instead of a dashboard — which
+    * depends on where stdout points — can never change what the run measures.
+    */
+   private bool $sweeping = false;
    /** Failed test cases accumulated across heatmap-mode suites */
    private int $failures = 0;
+   /** Set once the sweep reached its own end — an abrupt end leaves it false */
+   private bool $completed = false;
+   /** The running sweep — the verdict handler reads its tally after an abrupt end */
+   private null|Suites $Suites = null;
+   /**
+    * The Suite currently under the runner.
+    *
+    * Its own tally is the only failure record that survives the exit() that
+    * exit-on-failure performs mid-sweep — `Suites::iterate()` never gets to
+    * count it. Self-test probes build throwaway Suites of their own and fail
+    * them deliberately; those are different objects and never land here.
+    */
+   private null|Suite $Suite = null;
    // # Live card
    /** Rows painted by the previous live card frame */
    private int $rows = 0;
@@ -273,25 +296,106 @@ class TestCommand extends Command
          Results::$agent = $Agent->name;
       }
 
+      // ! Verdict
+      // The status must never depend on the renderer, and a sweep that dies
+      // mid-run must never read as green: an end that did not pass through
+      // run()'s own return IS a failure. Registered after the `benchmark`
+      // subcommand branch, so a measurement run is never touched.
+      $owner = getmypid();
+      register_shutdown_function(function () use ($owner): void {
+         // ? Forked children (E2E server workers) never decide the status
+         if (getmypid() !== $owner) {
+            return;
+         }
+
+         $Suites = $this->Suites;
+
+         // ! The suite the runner was inside when the run ended. Its own tally
+         //   is the only record of a failure that stopped the sweep: exit-on-
+         //   failure exits from within, so Suites::iterate() never counts it.
+         //   Self-test probes build throwaway Suites and fail them on purpose;
+         //   those are different objects and never land here.
+         $stopped = ($this->Suite->failed ?? 0) > 0 && $this->completed === false;
+         $failed = ($Suites->failed ?? 0) + ($stopped ? 1 : 0) + $this->failures;
+
+         // ! A verdict on STDERR — immune to stdout draining, to Display
+         //   muting and to a stdout buffer the process never got to flush, so
+         //   a redirected run is never silent. Agents read the JSON document
+         //   instead, so their pure-stdout contract stays intact.
+         if (Results::$enabled === false) {
+            $tally = $Suites === null
+               ? 'no suite ran'
+               : "{$Suites->total} suites: {$failed} failed,"
+                  . " {$Suites->skipped} skipped, {$Suites->passed} passed";
+            // ? A sweep that ended early because a case failed is FAILED, not
+            //   incomplete — exit-on-failure is a deliberate end, not a hijack.
+            $verdict = match (true) {
+               $failed > 0 => 'FAILED',
+               $this->completed === false => 'INCOMPLETE',
+               default => 'PASSED',
+            };
+
+            fwrite(STDERR, "[test] {$verdict} — {$tally}" . PHP_EOL);
+         }
+
+         // ?: run() returned — Commands::route() already maps its verdict
+         if ($this->completed === true) {
+            return;
+         }
+
+         // : The sweep never reached its own end, so the status has to be
+         //   corrected — but calling exit() here would cancel every shutdown
+         //   callback registered after this one, and the suites register the
+         //   ones that reap forked server workers and restore the terminal.
+         //   Registering the correction as its OWN callback appends it to the
+         //   end of the queue, so everything else still runs first.
+         register_shutdown_function(static fn () => exit(1));
+      });
+
       // ! View
-      // ? Contextual default: full runs dashboard as heatmap; targeted runs
-      //   (suite/case index) keep the list view for assertion-level debugging.
+      // The view decides TWO things that must not be confused: how results are
+      // RENDERED, and whether the run sweeps every suite or stops at the first
+      // failing case. Only the first may depend on where stdout points.
+      //
+      // ? Contract — the run shape and an explicit `--view` decide it alone.
+      //   A full run sweeps (heatmap semantics); a targeted run (suite/case
+      //   index) stops at the failure it was asked to debug.
       $targeted = ((int) ($arguments[0] ?? 0)) > 0;
-      $view = strtolower((string) ($options['view'] ?? ($targeted ? 'list' : 'heatmap')));
-      if (in_array($view, ['list', 'heatmap'], true) === false) {
+      $contract = strtolower((string) ($options['view'] ?? ($targeted ? 'list' : 'heatmap')));
+      if (in_array($contract, ['list', 'heatmap'], true) === false) {
          $Output = CLI->Terminal->Output;
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = "Invalid --view '{$view}'. Use: list | heatmap.@.;";
+         $Alert->message = "Invalid --view '{$contract}'. Use: list | heatmap.@.;";
          $Alert->render();
 
          return false;
       }
       // ? Agents consume the JSON results document — views only shape human output
       if (Results::$enabled) {
-         $view = 'list';
+         $contract = 'list';
       }
-      $this->view = $view;
+      // ? Sweep every suite unless something asked for the fail-fast contract
+      $this->sweeping = $contract === 'heatmap';
+
+      // ? Rendering — the heatmap is a LIVE dashboard, so it only earns the
+      //   IMPLICIT default when stdout is a terminal that can paint it. A
+      //   redirected or piped run is a log (CI, `> out.log`) and renders the
+      //   list, which reports every case as it happens — without giving up the
+      //   sweep, because the contract above already settled that. An explicit
+      //   `--view=heatmap` still renders the cards anywhere.
+      // ? BOOTGLY_TTY answers for STDIN, so it cannot decide this alone; the
+      //   env override still wins for emulated terminals (e.g. WASM/xterm.js).
+      $interactive = match (getenv('BOOTGLY_TTY')) {
+         '1' => true,
+         '0' => false,
+         default => defined('STDOUT') && function_exists('stream_isatty') && stream_isatty(STDOUT),
+      };
+      $this->view = $contract === 'heatmap'
+         && $interactive === false
+         && isSet($options['view']) === false
+            ? 'list'
+            : $contract;
 
       // ! Reap temporaries orphaned by interrupted past runs (age- and
       //   ownership-guarded; production surfaces are never matched). Silent:
@@ -305,10 +409,9 @@ class TestCommand extends Command
 
       // ! Tester
       // * Config
-      // ? Heatmap view: dashboards run every suite and list failures under
-      //   each card — quiet mutes the ACI per-case output and disables the
-      //   exit-on-first-failure contract.
-      Suite::$exitOnFailure = $this->view !== 'heatmap';
+      // ? A sweeping run visits every suite; quiet mutes the ACI per-case
+      //   output because the heatmap card renders it instead.
+      Suite::$exitOnFailure = $this->sweeping === false;
       Suite::$quiet = $this->view === 'heatmap';
       // ? Global -v/-vv/-vvv raises the detail of assertion failure Fallbacks
       Assertion::$verbosity = $this->verbosity;
@@ -418,6 +521,7 @@ class TestCommand extends Command
 
       // @
       $Tests = new Tests($registry, $prefix);
+      $this->Suites = $Tests->Suites;
 
       if ($suite_index > 0 && ! isset($Tests->Suites->directories[$suite_index - 1])) {
          $Output = CLI->Terminal->Output;
@@ -517,6 +621,9 @@ class TestCommand extends Command
          echo Results::toJSON();
       }
 
+      $this->completed = true;
+
+      // :
       return $Tests->Suites->failed === 0 && $this->failures === 0;
    }
 
@@ -659,17 +766,23 @@ class TestCommand extends Command
          throw new LogicException("Test suite index {$suite} did not load a valid Suite: {$suite_dir}");
       }
 
+      $this->Suite = $Suite;
+
       // ! Title — the suite's tests directory path
       $title = rtrim(str_replace('\\', '/', $suite_dir), '/');
       if ($hasTests === false) {
          $title .= '/tests';
       }
 
-      // ? Heatmap view — a suite autoboot may re-enable exit-on-failure
+      // ? A suite autoboot may re-enable exit-on-failure — a sweeping run
+      //   overrides it back, whichever view is being rendered
+      if ($this->sweeping) {
+         Suite::$exitOnFailure = false;
+      }
+
       $Meter = null;
       $Heatmap = null;
       if ($this->view === 'heatmap') {
-         Suite::$exitOnFailure = false;
 
          // ! Card pieces — the Meter gauges CASES (their count is known
          //   upfront, so progress is deterministic); the Heatmap cells are the

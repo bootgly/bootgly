@@ -17,5 +17,6 @@ return new Suite(
       'Commands-help-01',
       'TestCommand-help-01',
       'TestCommand-view-01',
+      'TestCommand-verdict-01',
    ]
 );
