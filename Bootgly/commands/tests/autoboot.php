@@ -15,5 +15,6 @@ return new Suite(
    suiteName: __NAMESPACE__,
    tests: [
       '1.1-project-execute',
+      '1.2-project-option-guard',
    ]
 );

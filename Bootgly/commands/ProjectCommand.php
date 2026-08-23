@@ -281,6 +281,64 @@ class ProjectCommand extends Command
 
    // # Subcommands
    /**
+    * Refuse an option this subcommand does not implement.
+    *
+    * The parser accepts any `--flag` (`CLI/Commands/Arguments.php`) and a
+    * command's option table only renders help, so an inapplicable flag used to
+    * be taken and silently dropped: `--dry-run` — this command's SEEDER flag —
+    * made `project create` write the project for real while the caller read the
+    * run as a preview, and the create that followed was then refused for a name
+    * the preview had consumed. Naming where the flag does apply keeps the
+    * refusal actionable instead of merely loud.
+    *
+    * @param array<int,string> $accepted
+    * @param array<string,bool|int|string> $options
+    */
+   private function admit (array $accepted, array $options): bool
+   {
+      // ! The global flags every command carries are always admitted.
+      $accepted = [...$accepted, 'help', 'h', 'v'];
+
+      foreach ($options as $option => $value) {
+         $option = (string) $option;
+
+         if (in_array($option, $accepted, true) === true) {
+            continue;
+         }
+
+         // ! Where the flag DOES apply, when this command declares it elsewhere.
+         $applies = '';
+         foreach ($this->options as $description => $flags) {
+            foreach ($flags as $flag) {
+               if (ltrim((string) strtok($flag, '='), '-') === $option) {
+                  $applies = $description;
+
+                  break 2;
+               }
+            }
+         }
+
+         $Output = CLI->Terminal->Output;
+
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Unknown option @#cyan:--{$option}@; for this command.";
+         $Alert->render();
+
+         // ! The Alert clips a long line, so the actionable half gets its own —
+         //   knowing the flag is refused is loud, knowing where it applies is
+         //   what lets the caller fix the command.
+         if ($applies !== '') {
+            $Output->render("@#Green:Note:@; @#Black:--{$option}@; is: {$applies}.@.;");
+         }
+
+         return false;
+      }
+
+      return true;
+   }
+
+   /**
     * Create a new project — the canonical (one-way) project creation entry.
     *
     * On interactive terminals a wizard fills the missing inputs (platform
@@ -296,6 +354,17 @@ class ProjectCommand extends Command
    public function create (array $arguments = [], array $options = []): bool
    {
       $Output = CLI->Terminal->Output;
+
+      // ? Refuse before anything is written — a flag this command does not
+      //   implement must never be accepted and dropped.
+      if (
+         $this->admit(
+            ['platform', 'from', 'interfaces', 'description', 'version', 'author', 'port', 'default', 'yes'],
+            $options
+         ) === false
+      ) {
+         return false;
+      }
 
       // ! Inputs
       $path = $arguments[0] ?? null;
@@ -438,6 +507,11 @@ class ProjectCommand extends Command
    public function import (array $arguments = [], array $options = []): bool
    {
       $Output = CLI->Terminal->Output;
+
+      // ? Refuse before anything is written, as create() does.
+      if ($this->admit(['platform', 'interfaces', 'default', 'yes'], $options) === false) {
+         return false;
+      }
 
       // ? No URL — interactive terminals choose the import source
       $url = $arguments[0] ?? null;
