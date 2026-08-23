@@ -84,10 +84,12 @@ return new Test(
 
       // @ A refresh keeps the old copy until the new one is complete, then
       //   replaces it whole — and the staging sibling never outlives the call
-      //   (a stale one left by a crash is cleared too)
+      //   (a stale staging or backup left by a crash is cleared too)
       file_put_contents("{$base}Imported/stale.txt", 'from the previous copy');
       mkdir("{$base}.Imported.staging", 0755, true);
       file_put_contents("{$base}.Imported.staging/junk", 'crash leftover');
+      mkdir("{$base}.Imported.backup", 0755, true);
+      file_put_contents("{$base}.Imported.backup/junk", 'previous remainder');
       $done = Projects::import("{$fixtures}/Sample", 'Imported', ['interfaces' => ['CLI']], $base, refresh: true);
       $registry = include "{$base}Bootgly.projects.php";
       yield assert(
@@ -98,8 +100,8 @@ return new Test(
          description: 'a refresh replaces the existing copy whole and re-registers it'
       );
       yield assert(
-         assertion: is_dir("{$base}.Imported.staging") === false,
-         description: 'no staging sibling is left behind'
+         assertion: is_dir("{$base}.Imported.staging") === false && is_dir("{$base}.Imported.backup") === false,
+         description: 'no staging or backup sibling is left behind'
       );
 
       // @ A source that IS the target is left in place (the framework checkout)
@@ -141,39 +143,72 @@ return new Test(
          description: 'a refresh whose source lives inside the target is refused'
       );
 
-      // @ The old copy holds something the process cannot remove — the
-      //   refresh still completes, consistently: the new copy is in place,
-      //   the registry matches it, and only the undeletable remainder stays
-      //   aside as the backup directory
-      mkdir("{$base}Stuck", 0755, true);
+      // @ The old copy holds a subtree the process cannot remove — the refresh
+      //   still completes, consistently: the new copy is in place, the
+      //   registry matches it, and only the undeletable remainder stays aside
+      //   as the backup directory. And the NEXT refresh of the same path must
+      //   not choke on that remainder: it backs up beside it and completes too.
+      mkdir("{$base}Stuck/locked", 0755, true);
       file_put_contents("{$base}Stuck/Stuck.Project.php", "<?php\nreturn ['name' => 'old'];\n");
-      if (function_exists('posix_mkfifo') === true) {
-         posix_mkfifo("{$base}Stuck/server.fifo", 0600);
-      }
-      else {
-         mkdir("{$base}Stuck/locked", 0755, true);
-         file_put_contents("{$base}Stuck/locked/inside.txt", 'x');
-         chmod("{$base}Stuck/locked", 0555);
-      }
-      $threw = false;
-      $returned = null;
-      try {
-         $returned = Projects::import("{$fixtures}/Sample", 'Stuck', ['interfaces' => ['WPI']], $base, refresh: true);
-      }
-      catch (Throwable) {
-         $threw = true;
+      file_put_contents("{$base}Stuck/locked/inside.txt", 'x');
+      chmod("{$base}Stuck/locked", 0555);
+      $rounds = [];
+      foreach ([1, 2] as $round) {
+         $threw = false;
+         $returned = null;
+         try {
+            $returned = Projects::import("{$fixtures}/Sample", 'Stuck', ['interfaces' => ['WPI']], $base, refresh: true);
+         }
+         catch (Throwable) {
+            $threw = true;
+         }
+         $rounds[$round] = $returned === true && $threw === false;
       }
       $registry = include "{$base}Bootgly.projects.php";
       yield assert(
-         assertion: $returned === true && $threw === false
+         assertion: $rounds === [1 => true, 2 => true]
             && (string) file_get_contents("{$base}Stuck/Stuck.Project.php") !== "<?php\nreturn ['name' => 'old'];\n"
             && ($registry['Stuck']['interfaces'] ?? null) === ['WPI']
-            && is_dir("{$base}.Stuck.staging") === false,
-         description: 'a refresh over a copy with an undeletable file still completes consistently'
+            && is_dir("{$base}.Stuck.staging") === false
+            && is_file("{$base}.Stuck.backup/locked/inside.txt") === true
+            && count(glob("{$base}.Stuck.backup*", GLOB_ONLYDIR) ?: []) === 1,
+         description: 'a refresh over a copy with an undeletable subtree completes twice, the remainder aside, found: '
+            . json_encode($rounds)
       );
-      if (is_dir("{$base}.Stuck.backup/locked") === true) {
-         chmod("{$base}.Stuck.backup/locked", 0755);
+      chmod("{$base}.Stuck.backup/locked", 0755);
+
+      // @ A special file in the old copy (a leftover FIFO or socket) is
+      //   removed with it — nothing of the old copy stays behind
+      if (function_exists('posix_mkfifo') === true) {
+         mkdir("{$base}Fifo", 0755, true);
+         file_put_contents("{$base}Fifo/Fifo.Project.php", "<?php\nreturn ['name' => 'old'];\n");
+         posix_mkfifo("{$base}Fifo/server.fifo", 0600);
+         $done = Projects::import("{$fixtures}/Sample", 'Fifo', ['interfaces' => ['WPI']], $base, refresh: true);
+         yield assert(
+            assertion: $done === true
+               && is_dir("{$base}.Fifo.backup") === false
+               && file_exists("{$base}Fifo/server.fifo") === false,
+            description: 'a refresh over a copy holding a FIFO removes the old copy whole'
+         );
       }
+
+      // @ A backup with no project beside it is a refresh that died between
+      //   its two renames — it is the user's project, and it goes back first
+      mkdir("{$base}.Crash.backup", 0755, true);
+      file_put_contents("{$base}.Crash.backup/Crash.Project.php", "<?php\nreturn ['name' => 'mine'];\n");
+      $done = Projects::import("{$fixtures}/Sample", 'Crash', ['interfaces' => ['WPI']], $base);
+      yield assert(
+         assertion: $done === false
+            && (string) file_get_contents("{$base}Crash/Crash.Project.php") === "<?php\nreturn ['name' => 'mine'];\n"
+            && is_dir("{$base}.Crash.backup") === false,
+         description: 'an interrupted refresh is put back before a new import can claim the path'
+      );
+      $done = Projects::import("{$fixtures}/Sample", 'Crash', ['interfaces' => ['WPI']], $base, refresh: true);
+      yield assert(
+         assertion: $done === true
+            && (string) file_get_contents("{$base}Crash/Crash.Project.php") !== "<?php\nreturn ['name' => 'mine'];\n",
+         description: '…and a refresh then replaces it as usual'
+      );
 
       // @ A registry that cannot be written rolls the import back — the parent
       //   directory a nested path created included — and on a refresh the OLD

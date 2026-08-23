@@ -20,8 +20,10 @@ use function array_key_exists;
 use function array_map;
 use function array_values;
 use function basename;
+use function bin2hex;
 use function count;
 use function dirname;
+use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
 use function glob;
@@ -34,6 +36,7 @@ use function is_string;
 use function ksort;
 use function mkdir;
 use function preg_match;
+use function random_bytes;
 use function rawurlencode;
 use function realpath;
 use function rename;
@@ -469,9 +472,21 @@ abstract class Projects
       if (self::screen($path, $meta) === false) {
          return false;
       }
-      // ? Target collision — unless the caller asked for a refresh
+      // !
       $target = "{$base}{$path}";
       $registry = "{$base}Bootgly.projects.php";
+      $newLeaf = basename($path);
+      $parent = dirname($target);
+      $staging = "{$parent}/.{$newLeaf}.staging";
+      $backup = "{$parent}/.{$newLeaf}.backup";
+
+      // ? A backup with no project beside it is a refresh that died between
+      //   its two renames — the user's project, whole, under a hidden name.
+      //   It goes back first, so no later call can mistake the path for free
+      if (is_dir($target) === false && is_dir($backup) === true) {
+         rename($backup, $target);
+      }
+      // ? Target collision — unless the caller asked for a refresh
       if (is_dir($target) === true && $refresh === false) {
          return false;
       }
@@ -506,10 +521,6 @@ abstract class Projects
       // @ Build the copy in a staging sibling — dot-prefixed, so neither the
       //   import picker's globs nor the autoloader can see it — and swap it in
       //   only once it is complete
-      $newLeaf = basename($path);
-      $parent = dirname($target);
-      $staging = "{$parent}/.{$newLeaf}.staging";
-      $backup = "{$parent}/.{$newLeaf}.backup";
       $ancestor = self::ascend($parent);
       $done = false;
       try {
@@ -531,7 +542,17 @@ abstract class Projects
          //   and a failure puts it back. The registry is written last, so it
          //   never advertises a copy that is not there.
          if (is_dir($target) === true) {
-            remove_recursively($backup);
+            // ! A backup a previous refresh could not remove must not refuse
+            //   this one: whatever of it still cannot go stays, under its own
+            //   name, and this refresh backs up beside it
+            try {
+               remove_recursively($backup);
+            }
+            catch (Throwable) {
+            }
+            if (file_exists($backup) === true) {
+               $backup = "{$parent}/.{$newLeaf}.backup-" . bin2hex(random_bytes(4));
+            }
             rename($target, $backup);
             $placed = false;
             try {

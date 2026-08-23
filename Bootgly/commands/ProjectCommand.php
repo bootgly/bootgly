@@ -36,6 +36,7 @@ use function array_slice;
 use function array_values;
 use function basename;
 use function count;
+use function dirname;
 use function escapeshellarg;
 use function explode;
 use function fclose;
@@ -2227,6 +2228,7 @@ class ProjectCommand extends Command
             continue;
          }
 
+         $this->remind($path);
          $paths[] = $path;
       }
 
@@ -2713,6 +2715,38 @@ class ProjectCommand extends Command
    }
 
    /**
+    * Remind the user of a previous copy a refresh could not remove.
+    *
+    * A refresh keeps the replaced copy beside the project until the new one
+    * is registered, then removes it — whatever the process could not delete
+    * (a read-only tree, a file it does not own) stays under a hidden name.
+    *
+    * @param string $path
+    *
+    * @return void
+    */
+   private function remind (string $path): void
+   {
+      $leaf = basename($path);
+      $parent = dirname(Projects::CONSUMER_DIR . $path);
+
+      // ?
+      $leftovers = glob("{$parent}/.{$leaf}.backup*", GLOB_ONLYDIR) ?: [];
+      if ($leftovers === []) {
+         return;
+      }
+
+      $Output = CLI->Terminal->Output;
+      foreach ($leftovers as $leftover) {
+         $relative = substr($leftover, strlen(Projects::CONSUMER_DIR));
+         $Output->render(
+            "@#Yellow:Note:@; the previous copy could not be fully removed — what remains is at "
+            . "@#Black:projects/{$relative}@;; delete it once you no longer need it.@.;"
+         );
+      }
+   }
+
+   /**
     * Report the create/import outcome.
     *
     * @param bool $done
@@ -2731,6 +2765,7 @@ class ProjectCommand extends Command
          $Alert->message = "Project @#cyan:{$path}@; created!";
          $Alert->render();
 
+         $this->remind($path);
          $this->advise([$path]);
       }
       else {

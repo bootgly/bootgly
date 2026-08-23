@@ -66,8 +66,10 @@ namespace Bootgly\ABI {
    if (\function_exists('\Bootgly\ABI\remove_recursively') === false) {
       function remove_recursively (string $target): void
       {
-         // ? A symlink is removed as the link, never followed into its target
-         if (\is_link($target) === true || \is_file($target) === true) {
+         // ? A symlink is removed as the link, never followed into its target;
+         //   any other non-directory entry (a FIFO, a socket, a device node)
+         //   is unlinked too — a tree is removed whole or not at all
+         if (\is_link($target) === true || (\file_exists($target) === true && \is_dir($target) === false)) {
             \unlink($target);
 
             return;
