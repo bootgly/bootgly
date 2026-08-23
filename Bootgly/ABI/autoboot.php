@@ -63,6 +63,31 @@ namespace Bootgly\ABI {
          }
       }
    }
+   if (\function_exists('\Bootgly\ABI\remove_recursively') === false) {
+      function remove_recursively (string $target): void
+      {
+         // ? A symlink is removed as the link, never followed into its target
+         if (\is_link($target) === true || \is_file($target) === true) {
+            \unlink($target);
+
+            return;
+         }
+         if (\is_dir($target) === false) {
+            return;
+         }
+
+         $paths = \scandir($target);
+         if ($paths !== false) {
+            foreach ($paths as $path) {
+               if ($path !== '.' && $path !== '..') {
+                  remove_recursively("$target/$path");
+               }
+            }
+         }
+
+         \rmdir($target);
+      }
+   }
 }
 
 // @ Global namespace

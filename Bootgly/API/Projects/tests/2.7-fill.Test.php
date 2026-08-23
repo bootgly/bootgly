@@ -1,5 +1,6 @@
 <?php
 
+use function Bootgly\ABI\remove_recursively;
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\API\Projects;
 use Bootgly\API\Projects\Project;
@@ -11,7 +12,8 @@ return new Test(
       // ! Scratch projects base
       $base = sys_get_temp_dir() . '/bootgly-test-fill-' . getmypid() . '/';
       $erase = function (string $target) use (&$erase): void {
-         if (is_file($target) === true) {
+         // ? A link is removed as a link — never followed into its target
+         if (is_link($target) === true || is_file($target) === true) {
             unlink($target);
             return;
          }
@@ -86,8 +88,33 @@ return new Test(
          description: 'a hostile port value cannot break out of the port literal'
       );
 
-      // @ Control characters cannot be escaped into a single-quoted literal
-      //   faithfully — they are refused, and NOTHING lands on disk
+      // @ Every string token is escaped, not just the author — a payload in
+      //   all four fields must come back byte-exact from the signature
+      $done = Projects::generate(
+         BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/CLI',
+         'Quad',
+         [
+            'interfaces'  => ['CLI'],
+            'name'        => $payload,
+            'description' => $payload,
+            'version'     => $payload,
+            'author'      => $payload,
+         ],
+         $base
+      );
+      $Generated = $done === true ? include "{$base}Quad/Quad.Project.php" : null;
+      yield assert(
+         assertion: $Generated instanceof Project
+            && $Generated->name === $payload
+            && $Generated->description === $payload
+            && $Generated->version === $payload
+            && $Generated->author === $payload,
+         description: 'name, description, version and author all round-trip byte-exact'
+      );
+
+      // @ Control characters would survive the literal byte for byte — they
+      //   are refused because every listing that renders them would break,
+      //   and NOTHING lands on disk
       $done = Projects::generate(
          BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/CLI',
          'CtrlProbe',
@@ -105,7 +132,7 @@ return new Test(
       );
 
       // @ Defense-in-depth: a stub whose signature emits unparseable PHP is
-      //   refused BEFORE registration (the copied tree stays, inert)
+      //   refused BEFORE registration, and the stub copy leaves with it
       $stub = "{$base}broken-stub";
       mkdir($stub, 0755, true);
       file_put_contents("{$stub}/__LEAF__.Project.php", "<?php return [\n");
@@ -116,6 +143,25 @@ return new Test(
       yield assert(
          assertion: $done === false && array_key_exists('Broken', $registry) === false,
          description: 'an unparseable emitted signature is never registered'
+      );
+      yield assert(
+         assertion: is_dir("{$base}Broken") === false,
+         description: 'the refused copy is removed with the refusal'
+      );
+
+      // @ The helper that removal relies on treats a DIRECTORY symlink as a
+      //   link — following it would recurse into a tree the refusal never
+      //   created. (copy_recursively() dereferences links, so the shape can
+      //   only be planted directly.)
+      $outside = "{$base}outside-dir/keep.txt";
+      mkdir("{$base}outside-dir", 0755, true);
+      file_put_contents($outside, 'must survive');
+      mkdir("{$base}linked", 0755, true);
+      symlink("{$base}outside-dir", "{$base}linked/link");
+      remove_recursively("{$base}linked");
+      yield assert(
+         assertion: is_dir("{$base}linked") === false && file_get_contents($outside) === 'must survive',
+         description: 'remove_recursively() removes a directory symlink as a link, never following it'
       );
 
       $erase(rtrim($base, '/'));

@@ -25,6 +25,7 @@ return new Test(
          $P2 = new Project(boot: static function (): void {}, exportable: false, name: 'Two');
 
          $verdicts = [];
+         $verdicts['index() before any add() is refused'] = Projects::index('Early') === false;
          $verdicts['first add fills slot 0'] = Projects::add($P1) === 0;
          $verdicts['index() records the name'] = Projects::index('One') === true;
          $verdicts['select() by name resolves the added project'] = Projects::select('One') === $P1;

@@ -122,8 +122,8 @@ use Bootgly\commands\BootCommand;
 class ProjectCommand extends Command
 {
    // * Config
-   /** The wizard Validator and the non-interactive create enforce the same port rule. */
-   private const string PORT_PATTERN = '#^\d{1,5}$#';
+   /** The wizard Validator and the non-interactive create enforce the same port rule: 1–65535, no leading zeros. */
+   private const string PORT_PATTERN = '#^(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5])$#';
    public bool $separate = true;
    public int $group = 2;
 
@@ -440,6 +440,19 @@ class ProjectCommand extends Command
             return false;
          }
 
+         // ? Control characters — generate() refuses them too, but its refusal
+         //   is generic; here the caller learns which flag was rejected
+         foreach (['description', 'version', 'author'] as $field) {
+            if (preg_match('#[\x00-\x1F]#', (string) ($options[$field] ?? '')) === 1) {
+               $Alert = new Alert($Output);
+               $Alert->Type::Failure->set();
+               $Alert->message = "Invalid @#cyan:--{$field}@;: control characters are not allowed.";
+               $Alert->render();
+
+               return false;
+            }
+         }
+
          $done = Projects::generate(
             BOOTGLY_ROOT_DIR . "Bootgly/commands/stubs/{$interface}",
             $path,
@@ -467,8 +480,9 @@ class ProjectCommand extends Command
 
          return false;
       }
-      // ? Naming alphabet — the same rule assess() applies on the other routes,
-      //   and it must refuse BEFORE the user-level copy below is erased
+      // ? Naming alphabet — the naming half of assess() (the other routes run
+      //   all of it), and it must refuse BEFORE the user-level copy below is
+      //   erased for the refresh
       if (Projects::vet($path) === false) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
@@ -2169,9 +2183,29 @@ class ProjectCommand extends Command
       foreach ($imports as $import) {
          $path = $import['path'];
 
+         // ? Naming alphabet — import() refuses it, so refuse HERE, before the
+         //   user-level copy below is erased for a refresh that cannot happen
+         if (Projects::vet($path) === false) {
+            $Alert = new Alert($Output);
+            $Alert->Type::Failure->set();
+            $Alert->message = "Invalid project path: @#cyan:{$path}@;. Segments must start "
+               . 'uppercase and use only letters, numbers, `_` or `-` (e.g. `App` or `App/API`).';
+            $Alert->render();
+
+            continue;
+         }
+         // ? In the framework checkout the platform folder IS the working
+         //   projects folder — a project picked there is already in place, and
+         //   erasing the copy would erase the source
+         $target = Projects::CONSUMER_DIR . $path;
+         if (realpath($import['source']) === realpath($target)) {
+            $paths[] = $path;
+
+            continue;
+         }
          // ? User-level copies overwrite the platform ones on load — refresh them
-         if (is_dir(Projects::CONSUMER_DIR . $path) === true) {
-            $this->erase(Projects::CONSUMER_DIR . $path);
+         if (is_dir($target) === true) {
+            $this->erase($target);
          }
 
          $imported = Projects::import($import['source'], $path, [

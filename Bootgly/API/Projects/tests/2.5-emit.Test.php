@@ -69,6 +69,52 @@ return new Test(
          description: 'no .tmp file is left beside the registry'
       );
 
+      // @ Interfaces are literals too — an apostrophe there is the same hole
+      Projects::register('App/Quote', ['interfaces' => ["C'LI"]], $file);
+      $registry = include $file;
+      yield assert(
+         assertion: ($registry['App/Quote']['interfaces'] ?? null) === ["C'LI"],
+         description: 'a quoted interface name round-trips through the emission'
+      );
+
+      // @ A hand-edited registry with a malformed interfaces list is degraded,
+      //   never allowed to abort the only way the CLI has of rewriting it
+      file_put_contents(
+         $file,
+         "<?php\nreturn [\n   'Bare'  => ['interfaces' => 'CLI'],\n"
+            . "   'Loose' => ['interfaces' => ['CLI', null, ['WPI']]],\n];\n"
+      );
+      $registered = Projects::register('App/API', ['interfaces' => ['WPI']], $file);
+      $registry = include $file;
+      yield assert(
+         assertion: $registered === true
+            && ($registry['Bare']['interfaces'] ?? null) === ['CLI']
+            && ($registry['Loose']['interfaces'] ?? null) === ['CLI'],
+         description: 'malformed interfaces lists are degraded to their string members'
+      );
+
+      // @ A refused install never strands the temp file — the registry path
+      //   made a non-empty directory forces rename() to fail, and under the
+      //   framework's handler that failure is an exception, not a false
+      $blocked = sys_get_temp_dir() . '/bootgly-test-emit-blocked-' . getmypid() . '.php';
+      @mkdir($blocked);
+      file_put_contents("{$blocked}/occupant", 'x');
+      $returned = null;
+      $threw = false;
+      try {
+         $returned = Projects::register('App/API', ['interfaces' => ['CLI']], $blocked);
+      }
+      catch (Throwable) {
+         $threw = true;
+      }
+      yield assert(
+         assertion: ($returned === false || $threw === true) && is_file("{$blocked}.tmp") === false,
+         description: 'a failed install is reported and leaves no .tmp behind'
+      );
+      @unlink("{$blocked}/occupant");
+      @rmdir($blocked);
+      @unlink("{$blocked}.tmp");
+
       @unlink($file);
       @unlink("{$file}.tmp");
    }

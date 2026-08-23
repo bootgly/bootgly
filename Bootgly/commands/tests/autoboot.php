@@ -18,5 +18,6 @@ return new Suite(
       '1.2-project-option-guard',
       // ! Appended last so earlier case indexes stay stable.
       '1.3-project-metadata-guard',
+      '1.4-project-transfer-guard',
    ]
 );

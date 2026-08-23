@@ -11,6 +11,7 @@ use function file_get_contents;
 use function file_put_contents;
 use function is_dir;
 use function is_file;
+use function json_encode;
 use function mkdir;
 use function rmdir;
 use function scandir;
@@ -60,6 +61,33 @@ return new Test(
          yield assert(
             assertion: $returned === false && is_dir(Projects::CONSUMER_DIR . 'PortProbe') === false,
             description: 'create() refuses a non-numeric --port before writing'
+         );
+
+         // ? …and the rule means what its message says: 1–65535, no leading zeros
+         $leaked = [];
+         foreach (['0', '65536', '080'] as $port) {
+            $returned = $Command->create(
+               ['PortProbe'],
+               ['yes' => true, 'platform' => 'none', 'interfaces' => 'WPI', 'port' => $port]
+            );
+            if ($returned !== false || is_dir(Projects::CONSUMER_DIR . 'PortProbe') === true) {
+               $leaked[] = $port;
+               $erase(Projects::CONSUMER_DIR . 'PortProbe');
+            }
+         }
+         yield assert(
+            assertion: $leaked === [],
+            description: 'out-of-range ports are refused, accepted: ' . json_encode($leaked)
+         );
+
+         // # Control characters in metadata are refused with their own message
+         $returned = $Command->create(
+            ['CtrlProbe'],
+            ['yes' => true, 'platform' => 'none', 'interfaces' => 'CLI', 'description' => "bad\x01desc"]
+         );
+         yield assert(
+            assertion: $returned === false && is_dir(Projects::CONSUMER_DIR . 'CtrlProbe') === false,
+            description: 'create() refuses a control character in --description before writing'
          );
 
          // # A path outside the naming alphabet is refused on BOTH routes
@@ -125,7 +153,7 @@ return new Test(
          // ! A regression writes; leave the repository as it was found —
          //   every probe is erased, including the ones a refusal never creates,
          //   because the refusal is exactly what a regression removes.
-         foreach (['PortProbe', "Bad'Path", "Bad'Two", 'AuthorProbe'] as $probe) {
+         foreach (['PortProbe', 'CtrlProbe', "Bad'Path", "Bad'Two", 'AuthorProbe'] as $probe) {
             $erase(Projects::CONSUMER_DIR . $probe);
          }
          if ($snapshot !== null && $snapshot !== false) {

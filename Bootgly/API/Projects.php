@@ -15,6 +15,7 @@ use const BOOTGLY_ROOT_BASE;
 use const BOOTGLY_WORKING_BASE;
 use const TOKEN_PARSE;
 use function addcslashes;
+use function array_filter;
 use function array_key_exists;
 use function array_map;
 use function array_values;
@@ -51,6 +52,7 @@ use function var_export;
 use ParseError;
 
 use function Bootgly\ABI\copy_recursively;
+use function Bootgly\ABI\remove_recursively;
 use Bootgly\ABI\Resources;
 use Bootgly\API\Projects\Project;
 
@@ -127,6 +129,10 @@ abstract class Projects
          return false;
       }
       if (isSet(self::$indexes[$project]) === true) {
+         return false;
+      }
+      // ? Nothing has been added yet — there is no slot to name
+      if (self::$projects === []) {
          return false;
       }
 
@@ -469,11 +475,13 @@ abstract class Projects
     * caller's decision — this layer only copies, fills and registers.
     *
     * String metadata is escaped for the single-quoted literals the stubs place
-    * it in, so quotes and backslashes round-trip exactly; metadata carrying
-    * control characters is refused. A generation whose emitted signature file
-    * does not parse is refused before registration — the copied tree then
-    * stays on disk but is inert, since `validate()` refuses any path that is
-    * not a registry key.
+    * it in, so quotes and backslashes round-trip exactly. Metadata carrying
+    * control characters is refused — not because a literal could not hold
+    * them (it can, byte for byte) but because a name or description with a
+    * newline or an escape sequence is unreadable in every consumer, from the
+    * registry listing to the terminal. A generation whose emitted signature
+    * does not parse is refused before registration, and the stub copy that
+    * call made is removed with it.
     *
     * @param string $source Stub directory to copy.
     * @param string $path Canonical target project path (e.g. `App/API`).
@@ -504,7 +512,8 @@ abstract class Projects
       if ($interfaces === []) {
          return false;
       }
-      // ? Metadata must not carry control characters — it lands in PHP source
+      // ? Metadata must not carry control characters — a literal would hold
+      //   them byte for byte, and every listing that renders them would break
       foreach (['name', 'description', 'version', 'author', 'port'] as $field) {
          if (preg_match('#[\x00-\x1F]#', (string) ($meta[$field] ?? '')) === 1) {
             return false;
@@ -541,15 +550,18 @@ abstract class Projects
       self::fill($target, $tokens);
 
       // ? Defense-in-depth: never register a project whose emitted signature
-      //   does not parse (a broken or adversarial stub source). The copied
-      //   tree then stays on disk but is inert — validate() refuses any path
-      //   that is not a registry key.
+      //   does not parse (a broken or adversarial stub source). Nothing
+      //   user-authored is in the tree yet — it is the stub copy this call
+      //   just made — so it leaves with the refusal instead of blocking the
+      //   next attempt or showing up in the import picker.
       $signature = "{$target}/{$leaf}.Project.php";
       if (is_file($signature) === true) {
          try {
             token_get_all((string) file_get_contents($signature), TOKEN_PARSE);
          }
          catch (ParseError) {
+            remove_recursively($target);
+
             return false;
          }
       }
@@ -565,8 +577,11 @@ abstract class Projects
    /**
     * Re-emit the registry file with the canonical header, atomically.
     *
+    * The entries come back from a file a human may have edited, so the shape
+    * of each one is trusted no further than the emission needs.
+    *
     * @param string $file
-    * @param array<string,array{interfaces?:array<string>,default?:bool}> $registry
+    * @param array<int|string,array<string,mixed>> $registry
     *
     * @return bool
     */
@@ -592,9 +607,12 @@ abstract class Projects
       $entries = '';
       foreach ($registry as $path => $meta) {
          $key = str_pad($keys[$path], $width);
+         // ! A hand-edited registry may carry a malformed list — degrade it,
+         //   never abort the CLI's only way of rewriting the file
+         $list = array_filter((array) ($meta['interfaces'] ?? []), is_string(...));
          $interfaces = implode(', ', array_map(
             static fn (string $interface): string => var_export($interface, true),
-            $meta['interfaces'] ?? []
+            $list
          ));
          $default = ($meta['default'] ?? false) === true ? ", 'default' => true" : '';
 
@@ -631,36 +649,31 @@ abstract class Projects
 
       // @ Write atomically (tmp + rename) behind a parse gate
       $tmp = "{$file}.tmp";
-      if (file_put_contents($tmp, $content) !== strlen($content)) {
-         // ? A partial write may still have created the tmp
+      try {
+         if (file_put_contents($tmp, $content) !== strlen($content)) {
+            return false;
+         }
+         // ? A registry the engine cannot parse must never be installed —
+         //   `register()` and `read()` both `include` this file, so a broken
+         //   emission would take the whole CLI down with it. `token_get_all`
+         //   alone is a lexer; TOKEN_PARSE runs the real parser.
+         token_get_all($content, TOKEN_PARSE); // @phpstan-ignore function.resultUnused
+
+         // :
+         return rename($tmp, $file);
+      }
+      catch (ParseError) {
+         return false;
+      }
+      finally {
+         // ! Whatever ended the install — a short write, an unparseable
+         //   emission, a refused rename, or a warning the framework escalated
+         //   into an exception before any `=== false` could run — the temp
+         //   file never outlives it. A rename that succeeded already took it.
          if (is_file($tmp) === true) {
             unlink($tmp);
          }
-
-         return false;
       }
-      // ? A registry the engine cannot parse must never be installed —
-      //   `register()` and `read()` both `include` this file, so a broken
-      //   emission would take the whole CLI down with it. `token_get_all`
-      //   alone is a lexer; TOKEN_PARSE runs the real parser.
-      try {
-         token_get_all($content, TOKEN_PARSE); // @phpstan-ignore function.resultUnused
-      }
-      catch (ParseError) {
-         unlink($tmp);
-
-         return false;
-      }
-
-      // ? Install
-      if (rename($tmp, $file) === false) {
-         unlink($tmp);
-
-         return false;
-      }
-
-      // :
-      return true;
    }
 
    /**
