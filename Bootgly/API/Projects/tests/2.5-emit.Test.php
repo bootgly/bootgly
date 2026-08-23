@@ -115,6 +115,20 @@ return new Test(
       @rmdir($blocked);
       @unlink("{$blocked}.tmp");
 
+      // @ The shipped registry is the emitter's own output, byte for byte —
+      //   so a machine rewrite of the framework checkout's tracked file is a
+      //   no-op, and the emitted header is the standard license block
+      $Write = new ReflectionMethod(Projects::class, 'write');
+      $shipped = BOOTGLY_ROOT_DIR . 'projects/Bootgly.projects.php';
+      $canonical = sys_get_temp_dir() . '/bootgly-test-emit-canonical-' . getmypid() . '.php';
+      @unlink($canonical);
+      $Write->invoke(null, $canonical, (array) include $shipped);
+      yield assert(
+         assertion: file_get_contents($canonical) === file_get_contents($shipped),
+         description: 'the shipped registry is byte-identical to what write() emits for it'
+      );
+      @unlink($canonical);
+
       @unlink($file);
       @unlink("{$file}.tmp");
    }

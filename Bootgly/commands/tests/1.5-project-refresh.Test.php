@@ -77,22 +77,37 @@ return new Test(
             description: 'importing a platform project onto itself keeps the source in place'
          );
 
-         // # A refresh replaces a stale copy whole, leaving no staging behind
+         // # A refresh replaces a stale project copy whole, leaving no staging
+         //   or backup behind
          $refreshed = Projects::CONSUMER_DIR . 'Refreshed';
          mkdir($refreshed, 0755, true);
+         file_put_contents("{$refreshed}/Refreshed.Project.php", "<?php\nreturn null;\n");
          file_put_contents("{$refreshed}/stale.txt", 'from the previous copy');
          $returned = $Command->create(['Refreshed'], $options);
          yield assert(
             assertion: $returned === true
                && is_file("{$refreshed}/stale.txt") === false
-               && is_file("{$refreshed}/Refreshed.Project.php") === true
-               && is_dir(Projects::CONSUMER_DIR . '.Refreshed.staging') === false,
+               && (string) file_get_contents("{$refreshed}/Refreshed.Project.php") !== "<?php\nreturn null;\n"
+               && is_dir(Projects::CONSUMER_DIR . '.Refreshed.staging') === false
+               && is_dir(Projects::CONSUMER_DIR . '.Refreshed.backup') === false,
             description: 'a refresh replaces the existing copy whole and leaves no staging sibling'
+         );
+
+         // # A directory without a signature is not a project copy — never replaced
+         $handmade = Projects::CONSUMER_DIR . 'Handmade';
+         mkdir($handmade, 0755, true);
+         file_put_contents("{$handmade}/USER_WORK.txt", 'survives');
+         $returned = $Command->create(['Handmade'], $options);
+         yield assert(
+            assertion: $returned === false
+               && is_file("{$handmade}/USER_WORK.txt") === true
+               && is_file("{$handmade}/Handmade.Project.php") === false,
+            description: 'a hand-made directory at the target is refused, not replaced'
          );
       }
       finally {
          // ! A regression erases or strands; leave the repository as it was found.
-         foreach (['PlantedSrc', 'Data', 'Refreshed', '.Refreshed.staging'] as $probe) {
+         foreach (['PlantedSrc', 'Data', 'Refreshed', '.Refreshed.staging', '.Refreshed.backup', 'Handmade'] as $probe) {
             $erase(Projects::CONSUMER_DIR . $probe);
          }
          if ($snapshot !== null && $snapshot !== false) {

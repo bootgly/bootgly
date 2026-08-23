@@ -37,6 +37,7 @@ use function preg_match;
 use function rawurlencode;
 use function realpath;
 use function rename;
+use function rmdir;
 use function rtrim;
 use function scandir;
 use function str_contains;
@@ -50,6 +51,7 @@ use function token_get_all;
 use function unlink;
 use function var_export;
 use ParseError;
+use Throwable;
 
 use function Bootgly\ABI\copy_recursively;
 use function Bootgly\ABI\remove_recursively;
@@ -486,16 +488,32 @@ abstract class Projects
 
          return self::register($path, $meta, $registry);
       }
+      // ? A refresh replaces a PROJECT. A target without a signature at its
+      //   root is a group of projects or a hand-made tree — never a copy to
+      //   replace — and a source inside the target (or a target inside the
+      //   source) would be destroyed, or copied into itself, on the way.
+      if (is_dir($target) === true) {
+         if ((glob("{$target}/*.Project.php") ?: []) === []) {
+            return false;
+         }
+         $inner = realpath($source) . '/';
+         $outer = realpath($target) . '/';
+         if (str_starts_with($inner, $outer) === true || str_starts_with($outer, $inner) === true) {
+            return false;
+         }
+      }
 
       // @ Build the copy in a staging sibling — dot-prefixed, so neither the
       //   import picker's globs nor the autoloader can see it — and swap it in
       //   only once it is complete
       $newLeaf = basename($path);
-      $staging = dirname($target) . "/.{$newLeaf}.staging";
+      $parent = dirname($target);
+      $staging = "{$parent}/.{$newLeaf}.staging";
+      $backup = "{$parent}/.{$newLeaf}.backup";
+      $ancestor = self::ascend($parent);
       $done = false;
       try {
          remove_recursively($staging);
-         $parent = dirname($target);
          if (is_dir($parent) === false) {
             mkdir($parent, 0755, true);
          }
@@ -508,16 +526,40 @@ abstract class Projects
             rename("{$staging}/{$leaf}.Project.php", "{$staging}/{$newLeaf}.Project.php");
          }
 
-         // @ Refresh: register first — an entry rewrite, so a registry that
-         //   cannot be written leaves the old copy untouched — then swap
+         // @ Refresh: move the old copy aside, place the new one, register —
+         //   every step that can fail runs while the old copy still exists,
+         //   and a failure puts it back. The registry is written last, so it
+         //   never advertises a copy that is not there.
          if (is_dir($target) === true) {
-            if (self::register($path, $meta, $registry) === false) {
-               return false;
+            remove_recursively($backup);
+            rename($target, $backup);
+            $placed = false;
+            try {
+               rename($staging, $target);
+               $placed = true;
+               $done = self::register($path, $meta, $registry);
             }
-            remove_recursively($target);
+            finally {
+               if ($done === false) {
+                  if ($placed === true) {
+                     remove_recursively($target);
+                  }
+                  rename($backup, $target);
+               }
+            }
+
+            // ! The old copy goes last and best-effort: a file inside it the
+            //   process cannot remove (a socket, a read-only tree) is no reason
+            //   to fail a refresh that already completed — the remainder stays
+            //   beside the project as the backup directory
+            try {
+               remove_recursively($backup);
+            }
+            catch (Throwable) {
+            }
 
             // :
-            return rename($staging, $target);
+            return $done;
          }
 
          // @ New path: place it, then register — a registry that cannot be
@@ -536,8 +578,53 @@ abstract class Projects
          return $done;
       }
       finally {
-         // ! The staging copy never outlives the call
+         // ! The staging copy never outlives the call, and neither does a
+         //   parent directory the call created for nothing
          remove_recursively($staging);
+         if ($done === false) {
+            self::prune($parent, $ancestor);
+         }
+      }
+   }
+
+   /**
+    * Ascend from a directory to its nearest existing ancestor.
+    *
+    * @param string $directory
+    *
+    * @return string
+    */
+   private static function ascend (string $directory): string
+   {
+      // @@
+      while (is_dir($directory) === false) {
+         $directory = dirname($directory);
+      }
+
+      // :
+      return $directory;
+   }
+
+   /**
+    * Prune the empty directories a failed call created, from `$directory` up
+    * to (never including) `$until` — the ancestor that already existed.
+    *
+    * @param string $directory
+    * @param string $until
+    *
+    * @return void
+    */
+   private static function prune (string $directory, string $until): void
+   {
+      // @@
+      while ($directory !== $until && is_dir($directory) === true) {
+         // ? Anything inside means it is in use — stop there
+         if ((array) scandir($directory) !== ['.', '..']) {
+            return;
+         }
+         rmdir($directory);
+
+         $directory = dirname($directory);
       }
    }
 
@@ -612,9 +699,10 @@ abstract class Projects
       //   I/O warning the framework escalated) removes the tree it made:
       //   nothing in it is user-authored yet, and a leftover would block every
       //   retry of the path and show up in the import picker.
+      $parent = dirname($target);
+      $ancestor = self::ascend($parent);
       $done = false;
       try {
-         $parent = dirname($target);
          if (is_dir($parent) === false) {
             mkdir($parent, 0755, true);
          }
@@ -643,6 +731,7 @@ abstract class Projects
       finally {
          if ($done === false) {
             remove_recursively($target);
+            self::prune($parent, $ancestor);
          }
       }
    }
@@ -698,7 +787,7 @@ abstract class Projects
        * --------------------------------------------------------------------------
        * Bootgly PHP Framework
        * Developed by Rodrigo Vieira (@rodrigoslayertech)
-       * Copyright 2023-present
+       * Copyright (c) 2023-present Bootgly and contributors
        * Licensed under MIT
        * --------------------------------------------------------------------------
        */

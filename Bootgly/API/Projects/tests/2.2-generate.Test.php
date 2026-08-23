@@ -83,18 +83,37 @@ return new Test(
          assertion: Projects::generate(BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/WPI', 'App/Web', ['interfaces' => ['WPI']], $base) === false,
          description: 'an existing target directory is refused'
       );
+      // ! A stub whose only file cannot be read — the witness that a refused
+      //   path never reaches the copy: copying it would throw, so a clean
+      //   `false` proves the gates ran first. (Vacuous for root, which reads
+      //   anything; the suites do not run as root.)
+      $unreadable = "{$base}unreadable-stub";
+      mkdir($unreadable, 0755, true);
+      file_put_contents("{$unreadable}/__LEAF__.Project.php", "<?php\nreturn null;\n");
+      chmod("{$unreadable}/__LEAF__.Project.php", 0000);
+      $refused = [];
+      foreach ([['Lib/None', []], ['Data/Sub', ['interfaces' => ['CLI']]]] as [$path, $meta]) {
+         try {
+            if (Projects::generate($unreadable, $path, $meta, $base) !== false) {
+               $refused[] = "{$path}: accepted";
+            }
+         }
+         catch (Throwable $Throwable) {
+            $refused[] = "{$path}: " . $Throwable::class;
+         }
+         if (is_dir("{$base}" . explode('/', $path)[0]) === true) {
+            $refused[] = "{$path}: parent created";
+         }
+      }
+      chmod("{$unreadable}/__LEAF__.Project.php", 0644);
       yield assert(
-         assertion: Projects::generate(BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/CLI', 'App/None', [], $base) === false
-            && is_dir("{$base}App/None") === false,
-         description: 'entries without interfaces are rejected before anything is copied'
-      );
-      yield assert(
-         assertion: Projects::generate(BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/CLI', 'Data', ['interfaces' => ['CLI']], $base) === false
-            && is_dir("{$base}Data") === false,
-         description: 'a reserved root is rejected before anything is copied'
+         assertion: $refused === [],
+         description: 'an empty interfaces list and a reserved root are refused before the stub is even read, found: '
+            . json_encode($refused)
       );
 
-      // @ A registry that cannot be written rolls the generated tree back
+      // @ A registry that cannot be written rolls the generated tree back —
+      //   including the parent directory the call created for a nested path
       $broken = sys_get_temp_dir() . '/bootgly-test-generate-broken-' . getmypid() . '/';
       $erase(rtrim($broken, '/'));
       mkdir("{$broken}Bootgly.projects.php", 0755, true);
@@ -102,14 +121,14 @@ return new Test(
       $threw = false;
       $returned = null;
       try {
-         $returned = Projects::generate(BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/CLI', 'Fresh', ['interfaces' => ['CLI']], $broken);
+         $returned = Projects::generate(BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/CLI', 'Nested/Fresh', ['interfaces' => ['CLI']], $broken);
       }
       catch (Throwable) {
          $threw = true;
       }
       yield assert(
-         assertion: ($returned === false || $threw === true) && is_dir("{$broken}Fresh") === false,
-         description: 'a generation whose registration fails leaves no tree behind'
+         assertion: ($returned === false || $threw === true) && is_dir("{$broken}Nested") === false,
+         description: 'a generation whose registration fails leaves no tree behind, parent included'
       );
       $erase(rtrim($broken, '/'));
 

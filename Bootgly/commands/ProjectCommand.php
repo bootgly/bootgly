@@ -491,6 +491,18 @@ class ProjectCommand extends Command
 
          return false;
       }
+      // ? The refresh replaces a project copy — never a group of projects or a
+      //   tree the user made by hand, which carry no signature at their root
+      $existing = Projects::CONSUMER_DIR . $path;
+      if (is_dir($existing) === true && (glob("{$existing}/*.Project.php") ?: []) === []) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Project directory @#cyan:projects/{$path}@; exists and carries no "
+            . 'project signature — it is not replaced.';
+         $Alert->render();
+
+         return false;
+      }
 
       $source = $this->trace($from);
       // ?
@@ -1733,7 +1745,7 @@ class ProjectCommand extends Command
 
       // ! Flow state (closure-captured across steps)
       $branch = '';
-      /** @var array<array{path: string, source: string}> $imports */
+      /** @var array<array{path: string, source: string, from?: string}> $imports */
       $imports = [];
       /** @var array<string> $transferred */
       $transferred = [];
@@ -2059,7 +2071,7 @@ class ProjectCommand extends Command
 
       // # Start mode — resolves the branch and appends its steps
       $Wizard->add('Mode', function (Wizard $Wizard)
-         use (&$branch, &$imports, $from, $scratch, $platforms, $git): string {
+         use (&$branch, &$imports, $path, $from, $scratch, $platforms, $git): string {
          // ? A source option picks the platform-import branch with no menu
          if ($from !== null && $from !== 'scratch') {
             $source = $this->trace($from);
@@ -2074,7 +2086,13 @@ class ProjectCommand extends Command
                throw new Exception('source not found');
             }
 
-            $imports[] = ['path' => $from, 'source' => $source];
+            // ! A `<Name>` argument names the target, exactly as it does on
+            //   the non-interactive route; without one the source path is kept
+            $imports[] = [
+               'path'   => $path !== null && $path !== '' ? $path : $from,
+               'source' => $source,
+               'from'   => $from,
+            ];
 
             $branch = 'platforms';
             $platforms($Wizard, pick: false);
@@ -2166,7 +2184,7 @@ class ProjectCommand extends Command
     * feedback is the caller's (it must survive the wizard completion screen);
     * only failures render Alerts here.
     *
-    * @param array<array{path: string, source: string}> $imports
+    * @param array<array{path: string, source: string, from?: string}> $imports
     *
     * @return array<string> The imported project paths.
     */
@@ -2195,7 +2213,7 @@ class ProjectCommand extends Command
          //   copy is complete (a project that is its own source, as in the
          //   framework checkout, is left in place)
          $imported = Projects::import($import['source'], $path, [
-            'interfaces' => $this->detect($path) ?? ['CLI'],
+            'interfaces' => $this->detect($import['from'] ?? $path) ?? ['CLI'],
             'default'    => false,
          ], refresh: true);
 

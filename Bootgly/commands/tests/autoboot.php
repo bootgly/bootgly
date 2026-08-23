@@ -20,5 +20,6 @@ return new Suite(
       '1.3-project-metadata-guard',
       '1.4-project-transfer-guard',
       '1.5-project-refresh',
+      '1.6-project-wizard-name',
    ]
 );
