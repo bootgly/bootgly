@@ -13,7 +13,10 @@ namespace Bootgly\API;
 
 use const BOOTGLY_ROOT_BASE;
 use const BOOTGLY_WORKING_BASE;
+use const TOKEN_PARSE;
+use function addcslashes;
 use function array_key_exists;
+use function array_map;
 use function array_values;
 use function basename;
 use function count;
@@ -29,6 +32,7 @@ use function is_file;
 use function is_string;
 use function ksort;
 use function mkdir;
+use function preg_match;
 use function rawurlencode;
 use function rename;
 use function rtrim;
@@ -41,6 +45,10 @@ use function str_starts_with;
 use function strlen;
 use function strtolower;
 use function strtr;
+use function token_get_all;
+use function unlink;
+use function var_export;
+use ParseError;
 
 use function Bootgly\ABI\copy_recursively;
 use Bootgly\ABI\Resources;
@@ -122,7 +130,7 @@ abstract class Projects
          return false;
       }
 
-      // @
+      // @ Name the slot the most recent add() filled — never the next one
       $index = count(self::$projects);
       self::$index = $index;
       self::$indexes[$project] = $index;
@@ -281,6 +289,25 @@ abstract class Projects
    }
 
    /**
+    * Vet a project path against the write-path naming alphabet.
+    *
+    * Registry keys and stub tokens are emitted into PHP source, so paths the
+    * framework mints (`register()`/`generate()`/`import()`) come from a closed
+    * alphabet: segments start uppercase and use only letters, numbers, `_` or
+    * `-`. The read path (`check()`/`validate()`) intentionally stays wider —
+    * a legacy hand-registered path keeps booting and is re-emitted as-is.
+    *
+    * @param string $path
+    *
+    * @return bool
+    */
+   public static function vet (string $path): bool
+   {
+      // :
+      return preg_match('#^[A-Z][A-Za-z0-9_-]*(?:/[A-Z][A-Za-z0-9_-]*)*$#', $path) === 1;
+   }
+
+   /**
     * Validate a project path against the security boundary.
     *
     * Applies the path-safety rules (`check()`), then requires the path to be
@@ -320,6 +347,10 @@ abstract class Projects
    {
       // ? Path-safety
       if (self::check($path) === false) {
+         return false;
+      }
+      // ? Naming alphabet — registry keys are emitted into PHP source
+      if (self::vet($path) === false) {
          return false;
       }
       // ? Reserved platform namespace root (Bootgly, Console, Web) — backstop
@@ -397,6 +428,10 @@ abstract class Projects
       if (self::check($path) === false) {
          return false;
       }
+      // ? Naming alphabet — the path becomes a registry key
+      if (self::vet($path) === false) {
+         return false;
+      }
       $target = "{$base}{$path}";
       if (is_dir($target) === true) {
          return false;
@@ -433,6 +468,13 @@ abstract class Projects
     * registers the path in the registry allow-list. Which stub to use is the
     * caller's decision — this layer only copies, fills and registers.
     *
+    * String metadata is escaped for the single-quoted literals the stubs place
+    * it in, so quotes and backslashes round-trip exactly; metadata carrying
+    * control characters is refused. A generation whose emitted signature file
+    * does not parse is refused before registration — the copied tree then
+    * stays on disk but is inert, since `validate()` refuses any path that is
+    * not a registry key.
+    *
     * @param string $source Stub directory to copy.
     * @param string $path Canonical target project path (e.g. `App/API`).
     * @param array{interfaces?:array<string>,default?:bool,name?:string,description?:string,version?:string,author?:string,port?:int|string} $meta
@@ -453,10 +495,20 @@ abstract class Projects
       if (self::check($path) === false) {
          return false;
       }
+      // ? Naming alphabet — the path lands in stub literals and the registry
+      if (self::vet($path) === false) {
+         return false;
+      }
       // ? Interfaces are required
       $interfaces = $meta['interfaces'] ?? [];
       if ($interfaces === []) {
          return false;
+      }
+      // ? Metadata must not carry control characters — it lands in PHP source
+      foreach (['name', 'description', 'version', 'author', 'port'] as $field) {
+         if (preg_match('#[\x00-\x1F]#', (string) ($meta[$field] ?? '')) === 1) {
+            return false;
+         }
       }
       // ? Target collision
       $target = "{$base}{$path}";
@@ -464,16 +516,20 @@ abstract class Projects
          return false;
       }
 
-      // ! Metadata tokens
+      // ! Metadata tokens — the stubs own the quotes: metadata values land
+      //   inside single-quoted literals, so their quote-body characters are
+      //   escaped here. __PATH__/__LEAF__ stay raw: vet() confines them to
+      //   the naming alphabet, and __LEAF__ also names files and identifiers,
+      //   where an escape would corrupt.
       $leaf = basename($path);
       $tokens = [
-         '__NAME__'        => (string) ($meta['name'] ?? $leaf),
+         '__NAME__'        => addcslashes((string) ($meta['name'] ?? $leaf), "\\'"),
          '__PATH__'        => $path,
          '__LEAF__'        => $leaf,
-         '__DESCRIPTION__' => (string) ($meta['description'] ?? ''),
-         '__VERSION__'     => (string) ($meta['version'] ?? '1.0.0'),
-         '__AUTHOR__'      => (string) ($meta['author'] ?? ''),
-         '__PORT__'        => (string) ($meta['port'] ?? 8080),
+         '__DESCRIPTION__' => addcslashes((string) ($meta['description'] ?? ''), "\\'"),
+         '__VERSION__'     => addcslashes((string) ($meta['version'] ?? '1.0.0'), "\\'"),
+         '__AUTHOR__'      => addcslashes((string) ($meta['author'] ?? ''), "\\'"),
+         '__PORT__'        => addcslashes((string) ($meta['port'] ?? 8080), "\\'"),
       ];
 
       // @ Copy the stub + fill the tokens
@@ -483,6 +539,20 @@ abstract class Projects
       }
       copy_recursively($source, $target);
       self::fill($target, $tokens);
+
+      // ? Defense-in-depth: never register a project whose emitted signature
+      //   does not parse (a broken or adversarial stub source). The copied
+      //   tree then stays on disk but is inert — validate() refuses any path
+      //   that is not a registry key.
+      $signature = "{$target}/{$leaf}.Project.php";
+      if (is_file($signature) === true) {
+         try {
+            token_get_all((string) file_get_contents($signature), TOKEN_PARSE);
+         }
+         catch (ParseError) {
+            return false;
+         }
+      }
 
       // : Register in the allow-list
       $entry = ['interfaces' => array_values($interfaces)];
@@ -502,10 +572,17 @@ abstract class Projects
     */
    private static function write (string $file, array $registry): bool
    {
-      // ! Key column width
+      // ! Key literals + column width — a path is emitted as an escaped PHP
+      //   literal and escaping can widen it, so the width comes from the
+      //   literal, never from the raw path
+      /** @var array<int|string,string> $keys */
+      $keys = [];
       $width = 0;
       foreach ($registry as $path => $meta) {
-         $length = strlen($path) + 2;
+         $key = var_export((string) $path, true);
+         $keys[$path] = $key;
+
+         $length = strlen($key);
          if ($length > $width) {
             $width = $length;
          }
@@ -514,11 +591,14 @@ abstract class Projects
       // @ Emit the entries
       $entries = '';
       foreach ($registry as $path => $meta) {
-         $key = str_pad("'{$path}'", $width);
-         $interfaces = implode("', '", $meta['interfaces'] ?? []);
+         $key = str_pad($keys[$path], $width);
+         $interfaces = implode(', ', array_map(
+            static fn (string $interface): string => var_export($interface, true),
+            $meta['interfaces'] ?? []
+         ));
          $default = ($meta['default'] ?? false) === true ? ", 'default' => true" : '';
 
-         $entries .= "   {$key} => ['interfaces' => ['{$interfaces}']{$default}],\n";
+         $entries .= "   {$key} => ['interfaces' => [{$interfaces}]{$default}],\n";
       }
 
       $content = <<<REGISTRY
@@ -549,14 +629,38 @@ abstract class Projects
 
       REGISTRY;
 
-      // @ Write atomically (tmp + rename)
+      // @ Write atomically (tmp + rename) behind a parse gate
       $tmp = "{$file}.tmp";
-      if (file_put_contents($tmp, $content) === false) {
+      if (file_put_contents($tmp, $content) !== strlen($content)) {
+         // ? A partial write may still have created the tmp
+         if (is_file($tmp) === true) {
+            unlink($tmp);
+         }
+
+         return false;
+      }
+      // ? A registry the engine cannot parse must never be installed —
+      //   `register()` and `read()` both `include` this file, so a broken
+      //   emission would take the whole CLI down with it. `token_get_all`
+      //   alone is a lexer; TOKEN_PARSE runs the real parser.
+      try {
+         token_get_all($content, TOKEN_PARSE); // @phpstan-ignore function.resultUnused
+      }
+      catch (ParseError) {
+         unlink($tmp);
+
+         return false;
+      }
+
+      // ? Install
+      if (rename($tmp, $file) === false) {
+         unlink($tmp);
+
          return false;
       }
 
       // :
-      return rename($tmp, $file);
+      return true;
    }
 
    /**

@@ -55,6 +55,7 @@ use function is_numeric;
 use function is_resource;
 use function is_string;
 use function json_encode;
+use function ltrim;
 use function max;
 use function microtime;
 use function min;
@@ -77,6 +78,7 @@ use function str_repeat;
 use function str_replace;
 use function str_starts_with;
 use function strlen;
+use function strtok;
 use function strtolower;
 use function strtoupper;
 use function substr;
@@ -120,6 +122,8 @@ use Bootgly\commands\BootCommand;
 class ProjectCommand extends Command
 {
    // * Config
+   /** The wizard Validator and the non-interactive create enforce the same port rule. */
+   private const string PORT_PATTERN = '#^\d{1,5}$#';
    public bool $separate = true;
    public int $group = 2;
 
@@ -424,6 +428,18 @@ class ProjectCommand extends Command
             return false;
          }
 
+         // ? Port validity — the same rule the wizard Validator enforces;
+         //   `(int) 'not-a-port'` would otherwise bind the server on port 0
+         $port = (string) ($options['port'] ?? '8080');
+         if (preg_match(self::PORT_PATTERN, $port) !== 1) {
+            $Alert = new Alert($Output);
+            $Alert->Type::Failure->set();
+            $Alert->message = "Invalid port: @#cyan:{$port}@;. Use a number between 1 and 65535.";
+            $Alert->render();
+
+            return false;
+         }
+
          $done = Projects::generate(
             BOOTGLY_ROOT_DIR . "Bootgly/commands/stubs/{$interface}",
             $path,
@@ -434,7 +450,7 @@ class ProjectCommand extends Command
                'description' => (string) ($options['description'] ?? ''),
                'version'     => (string) ($options['version'] ?? '1.0.0'),
                'author'      => (string) ($options['author'] ?? ''),
-               'port'        => (string) ($options['port'] ?? '8080'),
+               'port'        => $port,
             ]
          );
 
@@ -447,6 +463,17 @@ class ProjectCommand extends Command
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
          $Alert->message = "Invalid project path: @#cyan:{$path}@;.";
+         $Alert->render();
+
+         return false;
+      }
+      // ? Naming alphabet — the same rule assess() applies on the other routes,
+      //   and it must refuse BEFORE the user-level copy below is erased
+      if (Projects::vet($path) === false) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Invalid project path: @#cyan:{$path}@;. Segments must start "
+            . 'uppercase and use only letters, numbers, `_` or `-` (e.g. `App` or `App/API`).';
          $Alert->render();
 
          return false;
@@ -1770,7 +1797,7 @@ class ProjectCommand extends Command
                $Textbox->default = (string) ($options['port'] ?? '8080');
                $Textbox->Validator = static function (string $answer): true|string {
                   // ?:
-                  if (preg_match('#^\d{1,5}$#', $answer) !== 1) {
+                  if (preg_match(self::PORT_PATTERN, $answer) !== 1) {
                      return 'Invalid port: use a number between 1 and 65535.';
                   }
 
@@ -2360,8 +2387,8 @@ class ProjectCommand extends Command
     */
    private function assess (string $path): true|string
    {
-      // ? Naming pattern
-      if (preg_match('#^[A-Z][A-Za-z0-9_-]*(?:/[A-Z][A-Za-z0-9_-]*)*$#', $path) !== 1) {
+      // ? Naming pattern (the alphabet lives once, in the API layer)
+      if (Projects::vet($path) === false) {
          return "Invalid project path: `{$path}`. Segments must start uppercase and use "
             . 'only letters, numbers, `_` or `-` (e.g. `App` or `App/API`).';
       }

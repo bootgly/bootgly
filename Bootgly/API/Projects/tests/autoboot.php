@@ -21,5 +21,9 @@ return new Suite(
       '2.2-generate',
       '2.3-import',
       '2.4-project-exportable',
+      // ! Appended last so earlier case indexes stay stable.
+      '2.5-emit',
+      '2.6-vet',
+      '2.7-fill',
    ]
 );
