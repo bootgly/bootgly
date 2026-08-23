@@ -1415,6 +1415,23 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             "Auto-TLS storage tree `{$AutoTLS->path}` could not be handed to the runtime identity safely."
          );
       }
+      // ! configure() calls forge() while this process is still root, and for a
+      //   configuration whose identity changed — a flipped `staging`, an edited
+      //   `domains` — that mints a store the previous boot never saw. It lands
+      //   root-owned INSIDE a tree an earlier boot already handed over, and
+      //   walk() refuses to descend into a directory the runtime identity can
+      //   rewrite (correctly: that is the check/use window it exists to close).
+      //   So the new subtree is reachable only by naming it. Left behind, the
+      //   demoted workers cannot read the startup credential and the readiness
+      //   barrier expires reporting readiness rather than permissions.
+      $store = $AutoTLS->Certificates->path;
+
+      if (is_dir($store) && $this->own($store) === false) {
+         throw new RuntimeException(
+            "Auto-TLS certificate store `{$store}` could not be handed to the runtime identity safely."
+         );
+      }
+
       if (str_starts_with($AutoTLS->challenges, $AutoTLS->path) === false) {
          if (is_dir($AutoTLS->challenges) === false && mkdir($AutoTLS->challenges, 0700, true) === false) {
             throw new RuntimeException(

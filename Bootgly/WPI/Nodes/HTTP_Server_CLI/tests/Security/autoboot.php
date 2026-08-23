@@ -687,5 +687,10 @@ return new Suite(
       // A pre-wire listener failure becomes one bounded 500 and must never
       // escape the request boundary or terminate the serving worker.
       '102.09-handled_listener_worker_crash',
+      // # Auto-TLS privileged store handoff (beta.2 field report BG-1)
+      // A certificate store minted for a NEW configuration identity lands
+      // root-owned inside a tree an earlier boot already handed over; prime()
+      // must name it, or the demoted workers cannot read the credential.
+      '58.02-autotls_privileged_store_handoff',
    ],
 );
