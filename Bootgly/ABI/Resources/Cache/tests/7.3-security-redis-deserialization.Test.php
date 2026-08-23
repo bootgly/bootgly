@@ -4,14 +4,22 @@ use Bootgly\ACI\Tests\Suite\Test;
 
 
 // ! The driver prefers ext-redis whenever it is loaded, which a plain socket stub cannot
-//   answer. Clearing the ini scan directory usually drops the extension; probe a child to
-//   find out whether this machine can reach the native path at all.
+//   answer. Clearing the ini scan directory drops the extension — but a runner that
+//   installs pcntl through that same directory loses pcntl with it, and the stub forks.
+//   Probe both requirements through the very command shape the stub will be driven with.
 $PHP = PHP_BINARY;
-$probe = @shell_exec(
-   'PHP_INI_SCAN_DIR= ' . escapeshellarg($PHP)
-      . ' -r ' . escapeshellarg('echo extension_loaded("redis") ? "1" : "0";') . ' 2>/dev/null'
-);
-$native = trim((string) $probe) === '0';
+$command = 'PHP_INI_SCAN_DIR= ' . escapeshellarg($PHP);
+$inspect = ' -r ' . escapeshellarg(
+   'echo extension_loaded("redis") ? "R" : "", function_exists("pcntl_fork") ? "F" : "";'
+) . ' 2>/dev/null';
+
+// ? Ask for pcntl back only when the cleared scan dir carried it away — a build with pcntl
+//   compiled in answers an `extension=` request with a startup warning instead
+$options = '';
+if (trim((string) @shell_exec($command . $inspect)) !== 'F') {
+   $options = ' -d ' . escapeshellarg('extension=pcntl');
+}
+$native = trim((string) @shell_exec($command . $options . $inspect)) === 'F';
 
 return new Test(
    description: 'Cache(Redis): a hostile endpoint cannot inject an object the app never declared',
@@ -19,11 +27,11 @@ return new Test(
       || function_exists('shell_exec') === false
       || function_exists('pcntl_fork') === false
       || $native === false,
-   test: function () use ($PHP) {
+   test: function () use ($command, $options) {
       // ! A hostile stub Redis, driven in a child process without ext-redis
       $script = __DIR__ . '/redis-injection.php';
       $output = @shell_exec(
-         'PHP_INI_SCAN_DIR= ' . escapeshellarg($PHP)
+         $command . $options
             . ' -r ' . escapeshellarg('require $_SERVER["argv"][1] ?? "";')
             . ' ' . escapeshellarg($script) . ' 2>/dev/null'
       );
