@@ -131,7 +131,7 @@ abstract class Projects
       }
 
       // @ Name the slot the most recent add() filled — never the next one
-      $index = count(self::$projects);
+      $index = count(self::$projects) - 1;
       self::$index = $index;
       self::$indexes[$project] = $index;
 

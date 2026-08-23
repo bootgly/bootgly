@@ -25,5 +25,6 @@ return new Suite(
       '2.5-emit',
       '2.6-vet',
       '2.7-fill',
+      '3.1-index',
    ]
 );
