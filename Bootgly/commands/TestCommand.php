@@ -676,6 +676,14 @@ class TestCommand extends Command
       $this->Suites = $Suites;
       Tests::$scope = $scope;
 
+      // ! How many suites this run is ACCOUNTABLE for — a fact of the run, not
+      //   of how far it got. A fail-fast end (an agent run, an explicit
+      //   `--view=list`) exits from inside the failing suite, so the tally
+      //   Suite::summarize() feeds incrementally would report only the suites
+      //   that ran: the ones the run never reached would vanish from the
+      //   document instead of showing up as skipped.
+      Results::$suitesTotal = $Suites->total;
+
       if ($suite_index > 0 && isSet($Suites->directories[$suite_index - 1]) === false) {
          $Output = CLI->Terminal->Output;
          $Alert = new Alert($Output);

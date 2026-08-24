@@ -253,6 +253,15 @@ return new Test(
             description: 'An explicit --view=heatmap still renders a card on a pipe'
          );
 
+         // @ A green agent run accounts for every registered suite — the
+         //   control for the fail-fast tally measured below
+         [$status, $output] = $run($entry, [], $agent, $app);
+         yield assert(
+            assertion: $status === 0
+               && str_contains($output, '"suites":{"total":2,"failed":0,"skipped":0,"passed":2}'),
+            description: 'A green agent run counts every registered suite'
+         );
+
          // @@ Rendering a log instead of a dashboard must NOT change what the
          //    run measures. A redirected full run still visits every suite —
          //    tying exit-on-failure to the rendered view silently turned CI
@@ -277,6 +286,18 @@ return new Test(
             assertion: $status === 1 && str_contains($error, '[test] FAILED')
                && str_contains($output, 'Second') === false,
             description: 'An explicit --view=list keeps the fail-fast contract'
+         );
+
+         // @ Agents keep the fail-fast contract, so the document has to say
+         //   what the run did NOT do: the suites after the failing one never
+         //   report an outcome. Feeding the total incrementally shrank it to
+         //   the suites that ran, and `skipped: 0` then read as "everything
+         //   was covered" over a run that stopped at the first red suite.
+         [$status, $output] = $run($entry, ['--view=list'], $agent, $app);
+         yield assert(
+            assertion: $status === 1
+               && str_contains($output, '"suites":{"total":2,"failed":1,"skipped":1,"passed":0}'),
+            description: 'A fail-fast agent run reports the suites it never reached as skipped'
          );
 
          // @ A cleanup callback armed DURING the sweep still runs on a red

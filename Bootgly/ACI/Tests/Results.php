@@ -114,13 +114,23 @@ class Results
       // ! A suite may fail without any failed CASE recorded (an Error thrown
       //   inside a test body aborts the suite before its cases register) —
       //   the aggregate must not report "passed" over a failed suite
+      // ! Every registered suite is accounted for. A fail-fast run ends
+      //   inside the failing suite, so the ones after it never report an
+      //   outcome — they are SKIPPED, and reporting only what ran made a
+      //   partial run look like a complete one (`skipped: 0` over a total
+      //   that had silently shrunk to the suites the run got to).
+      $suitesSkipped = self::$suitesTotal - self::$suitesFailed - self::$suitesPassed;
+      if ($suitesSkipped < 0) {
+         $suitesSkipped = self::$suitesSkipped;
+      }
+
       $result = [
          'result'     => ($casesFailed > 0 || self::$suitesFailed > 0) ? 'failed' : 'passed',
          'agent'      => self::$agent,
          'suites'     => [
             'total'   => self::$suitesTotal,
             'failed'  => self::$suitesFailed,
-            'skipped' => self::$suitesSkipped,
+            'skipped' => $suitesSkipped,
             'passed'  => self::$suitesPassed,
          ],
          'cases'      => [

@@ -457,8 +457,9 @@ class Suite
          // @ Feed incremental stats to Results so the JSON reflects what
          // actually ran (Suites::summarize() may never run if a case fails
          // and exitOnFailure triggers exit(1) before reaching the outer
-         // iterator's summarize()).
-         Results::$suitesTotal++;
+         // iterator's summarize()). The TOTAL is not fed here: the runner
+         // publishes the registered count up front, and the suites this one
+         // never reached are the difference.
          if ($this->failed > 0) {
             Results::$suitesFailed++;
          } else if ($this->passed === 0 && $this->skipped > 0) {
