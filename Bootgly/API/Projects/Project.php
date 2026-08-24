@@ -152,6 +152,14 @@ class Project
          Language::load($catalogsDir);
       }
 
+      // @ Per-project Composer autoload — the fallback for boots that never
+      //   pass through a require site (tests, embedded boots); the inline
+      //   include keeps this entity off its parent-directory sibling
+      $autoload = "{$this->path}vendor/autoload.php";
+      if (is_file($autoload) === true) {
+         require_once $autoload;
+      }
+
       // @
       ($this->boot)($arguments, $options);
 

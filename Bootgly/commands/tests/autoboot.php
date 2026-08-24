@@ -22,5 +22,9 @@ return new Suite(
       '1.5-project-refresh',
       '1.6-project-wizard-name',
       '1.7-project-platform-release',
+      '1.8-project-track',
+      '1.9-project-import-clone',
+      '1.10-project-stock',
+      '2.1-setup-wrapper',
    ]
 );

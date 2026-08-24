@@ -236,6 +236,31 @@ abstract class Projects
    }
 
    /**
+    * Load a project's Composer autoloader when present.
+    *
+    * Composer is per project: dependencies live in `<project>/vendor/`, never
+    * at the kit root — a root vendor tree could shadow the pinned framework.
+    * Runs BEFORE the project signature file is required, so third-party
+    * classes referenced at the signature's top level resolve. `require_once`
+    * plus Composer's own re-entry guard make repeated calls safe.
+    *
+    * @param string $dir Project directory, with a trailing separator.
+    *
+    * @return void
+    */
+   public static function load (string $dir): void
+   {
+      // ?
+      $autoload = "{$dir}vendor/autoload.php";
+      if (is_file($autoload) === false) {
+         return;
+      }
+
+      // @
+      require_once $autoload;
+   }
+
+   /**
     * Pick the default project path for one interface (`CLI`|`WPI`).
     *
     * Returns the entry flagged `'default' => true`; when none is flagged it
@@ -665,21 +690,27 @@ abstract class Projects
     * does not parse is refused before registration, and the stub copy that
     * call made is removed with it.
     *
-    * @param string $source Stub directory to copy.
+    * @param array<string>|string $sources Stub directories layered onto the target, in order.
     * @param string $path Canonical target project path (e.g. `App/API`).
     * @param array{interfaces?:array<string>,default?:bool,name?:string,description?:string,version?:string,author?:string,port?:int|string} $meta
     * @param null|string $base Projects base directory (defaults to the consumer directory).
     *
     * @return bool
     */
-   public static function generate (string $source, string $path, array $meta, null|string $base = null): bool
+   public static function generate (array|string $sources, string $path, array $meta, null|string $base = null): bool
    {
       // !
       $base ??= self::CONSUMER_DIR;
+      $sources = (array) $sources;
 
-      // ? Stub source must exist
-      if (is_dir($source) === false) {
+      // ? Every stub source must exist
+      if ($sources === []) {
          return false;
+      }
+      foreach ($sources as $source) {
+         if (is_dir($source) === false) {
+            return false;
+         }
       }
       // ? Every write-path gate, before anything is copied — the path lands in
       //   stub literals and becomes a registry key
@@ -727,7 +758,11 @@ abstract class Projects
          if (is_dir($parent) === false) {
             mkdir($parent, 0755, true);
          }
-         copy_recursively($source, $target);
+         // @@ Layered, in order — later sources may add files, never replace
+         //   the signature the first one owns
+         foreach ($sources as $source) {
+            copy_recursively($source, $target);
+         }
          self::fill($target, $tokens);
 
          // ? Defense-in-depth: never register a project whose emitted signature

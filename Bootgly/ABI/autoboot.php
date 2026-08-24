@@ -44,7 +44,10 @@ namespace Bootgly\ABI {
       function copy_recursively (string $source, string $destination): void
       {
          if (\is_dir($source) === true) {
-            \mkdir($destination);
+            // ? Layered copies land on a destination an earlier source made
+            if (\is_dir($destination) === false) {
+               \mkdir($destination);
+            }
 
             $paths = \scandir($source);
             if ($paths === false) {
@@ -60,6 +63,14 @@ namespace Bootgly\ABI {
          else if (\is_file($source) === true) {
             // regular files only — sockets, FIFOs and devices are not copyable
             \copy($source, $destination);
+
+            // ! PHP's copy() drops the mode: without it a kept `.git` (hooks,
+            //   packed refs) reports spurious 100755 -> 100644 dirt. The umask
+            //   still governs who else may read or write the copy.
+            $mode = \fileperms($source);
+            if ($mode !== false) {
+               \chmod($destination, $mode & 0777 & ~\umask());
+            }
          }
       }
    }

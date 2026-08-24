@@ -75,23 +75,10 @@ class BootCommand extends Command
             $Alert->render();
          }
 
-         // # tests/ — seeded with the registry template + the example suite
-         // (a running tour of the test API): the framework suites are never
-         // listed in a kit; the user registers project suites
-         if (is_dir(BOOTGLY_WORKING_DIR . 'tests') === false) {
-            copy_recursively(
-               BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/tests',
-               BOOTGLY_WORKING_DIR . 'tests'
-            );
-
-            $Alert->Type::Success->set();
-            $Alert->message = 'Resource dir created: @#cyan:tests/@;';
-            $Alert->render();
-         }
-
-         // TODO get resources dirs dynamically
+         // ! No kit-level `public/`: the serving APIs (`Response->upload()`,
+         //   Views) are jailed to the PROJECT directory — a workspace-level
+         //   asset dir would be unservable by design. Assets live per project.
          $resource_dirs = [
-            'public/',
             'scripts/',
             'storage/',
          ];

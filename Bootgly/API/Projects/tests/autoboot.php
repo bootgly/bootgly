@@ -26,5 +26,6 @@ return new Suite(
       '2.6-vet',
       '2.7-fill',
       '3.1-index',
+      '3.2-load',
    ]
 );

@@ -78,6 +78,45 @@ return new Test(
          description: 'the port token is substituted'
       );
 
+      // @ Layered sources — the interface stub plus the per-project overlay
+      $done = Projects::generate(
+         [
+            BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/CLI',
+            BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/project',
+         ],
+         'App/Layered',
+         ['interfaces' => ['CLI'], 'name' => 'Layered'],
+         $base
+      );
+
+      yield assert(
+         assertion: $done === true
+            && is_file("{$base}App/Layered/Layered.Project.php") === true
+            && is_file("{$base}App/Layered/tests/autoboot.php") === true
+            && is_file("{$base}App/Layered/tests/example/autoboot.php") === true
+            && is_file("{$base}App/Layered/.gitignore") === true,
+         description: 'layered sources land the signature AND the project overlay (tests + .gitignore)'
+      );
+
+      $registry_stub = (string) file_get_contents("{$base}App/Layered/tests/autoboot.php");
+      yield assert(
+         assertion: str_contains($registry_stub, 'App/Layered') === true
+            && str_contains($registry_stub, '__PATH__') === false
+            && str_contains($registry_stub, '__NAME__') === false,
+         description: 'the overlay files pass through the token fill'
+      );
+
+      // ? A missing source in the layer list refuses the whole generation
+      yield assert(
+         assertion: Projects::generate(
+            [BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/CLI', "{$base}no-such-stub"],
+            'App/Broken',
+            ['interfaces' => ['CLI']],
+            $base
+         ) === false && is_dir("{$base}App/Broken") === false,
+         description: 'a missing layered source is refused before anything is copied'
+      );
+
       // ! Rejections
       yield assert(
          assertion: Projects::generate(BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/WPI', 'App/Web', ['interfaces' => ['WPI']], $base) === false,

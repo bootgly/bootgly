@@ -150,6 +150,12 @@ class ProjectCommand extends Command
             '[name]' => 'Project path to import as (defaults to the repository name)'
          ]
       ],
+      'boot' => [
+         'description' => 'Boot a project — initialize its own resources (create runs this as a hook)',
+         'arguments'   => [
+            '<name>' => 'Project path to boot (e.g. App or Blog)'
+         ]
+      ],
       'list' => [
          'description' => 'List all registered projects',
          'arguments'   => []
@@ -221,6 +227,7 @@ class ProjectCommand extends Command
       'New project metadata (create)' => ['--description=', '--version=', '--author=', '--port='],
       'Flag the new project as the web default (create/import)' => ['--default'],
       'Skip confirmations (create/import)' => ['--yes'],
+      'Do not create a git repository for the new project (create)' => ['--no-git'],
    ];
 
 
@@ -257,6 +264,10 @@ class ProjectCommand extends Command
             $options
          ),
          'import'  => $this->import(
+            array_slice($arguments, 1),
+            $options
+         ),
+         'boot'    => $this->boot(
             array_slice($arguments, 1),
             $options
          ),
@@ -366,7 +377,7 @@ class ProjectCommand extends Command
       //   implement must never be accepted and dropped.
       if (
          $this->admit(
-            ['platform', 'from', 'interfaces', 'description', 'version', 'author', 'port', 'default', 'yes'],
+            ['platform', 'from', 'interfaces', 'description', 'version', 'author', 'port', 'default', 'yes', 'no-git'],
             $options
          ) === false
       ) {
@@ -457,7 +468,10 @@ class ProjectCommand extends Command
          }
 
          $done = Projects::generate(
-            BOOTGLY_ROOT_DIR . "Bootgly/commands/stubs/{$interface}",
+            [
+               BOOTGLY_ROOT_DIR . "Bootgly/commands/stubs/{$interface}",
+               BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/project',
+            ],
             $path,
             [
                'interfaces'  => [$interface],
@@ -469,6 +483,10 @@ class ProjectCommand extends Command
                'port'        => $port,
             ]
          );
+         // ?
+         if ($done === true) {
+            $this->track(Projects::CONSUMER_DIR, $path, $options);
+         }
 
          return $this->report($done, $path);
       }
@@ -530,11 +548,22 @@ class ProjectCommand extends Command
          return false;
       }
 
-      $interfaces = $this->detect($from)
+      $interfaces = $this->detect($source)
          ?? [strtoupper((string) ($options['interfaces'] ?? 'WPI'))];
 
+      // ? A refresh replaces the whole copy — committed history inside it
+      //   dies with the directory, and that is worth a line before it does
+      if (is_dir("{$existing}/.git") === true) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Attention->set();
+         $Alert->message = "Refreshing @#cyan:projects/{$path}@; replaces it, git history included.";
+         $Alert->render();
+      }
+
       // @ User-level copies overwrite the platform ones on load — an existing
-      //   one is refreshed, and import() keeps it until the new copy is complete
+      //   one is refreshed, and import() keeps it until the new copy is
+      //   complete. Platform copies arrive UNBOOTED (no repository of their
+      //   own) — adopt one with `bootgly project <Name> boot`.
       $done = Projects::import($source, $path, [
          'interfaces' => $interfaces,
          'default'    => isSet($options['default']),
@@ -577,102 +606,9 @@ class ProjectCommand extends Command
             return false;
          }
 
-         // ! Import sources (platform import only when exportable sources exist)
-         $sources = $this->survey();
-
-         $froms = [];
-         if ($sources !== []) {
-            $available = count($sources);
-            $froms[] = "Import projects from Platforms ({$available} available)";
-         }
-         $froms[] = 'Import project from Git remote (URL)';
-
-         $from = $froms[$this->choose('Import from where?', $froms)] ?? $froms[0];
-
-         // ?: Platforms — pick, confirm and transfer
-         if (str_starts_with($from, 'Import projects from Platforms') === true) {
-            // @ Kit setup (platform submodules + resource dirs) when needed
-            if ($this->prepare($options) === false) {
-               return false;
-            }
-
-            // ! Pick
-            $labels = array_keys($sources);
-            $picked = $this->select('Pick the projects to import:', $labels);
-            // ?
-            if ($picked === []) {
-               $Alert = new Alert($Output);
-               $Alert->Type::Attention->set();
-               $Alert->message = 'No projects selected.';
-               $Alert->render();
-
-               return false;
-            }
-
-            $imports = [];
-            foreach ($picked as $index) {
-               $imports[] = $sources[(string) $labels[$index]];
-            }
-
-            // ! Summary (existing user-level copies are flagged as overwrite)
-            $content = '@#Green:' . str_pad('Mode', 12) . ' @; Import projects from Platforms';
-            foreach ($imports as $import) {
-               $path = $import['path'];
-
-               // ! Platform of origin (traced from the source directory)
-               $platform = match (true) {
-                  str_starts_with($import['source'], BOOTGLY_WORKING_DIR . 'Console/') => 'Console',
-                  str_starts_with($import['source'], BOOTGLY_WORKING_DIR . 'Web/') => 'Web',
-                  default => 'Bootgly'
-               };
-
-               $content .= PHP_EOL
-                  . '@#Green:' . str_pad('Import', 12) . ' @; ' . $path
-                  . " @#Cyan:(from {$platform})@;"
-                  . (is_dir(Projects::CONSUMER_DIR . $path) ? ' @#Yellow:(overwrite)@;' : '');
-            }
-
-            $Output->write(PHP_EOL);
-            $Fieldset = new Fieldset($Output);
-            $Fieldset->title = '@#Cyan: Import projects @;';
-            $Fieldset->content = $content;
-            $Fieldset->render();
-            $Output->write(PHP_EOL);
-
-            // ? Confirm (Yes by default — first-party sources, same as the wizard)
-            if (isSet($options['yes']) === false) {
-               if ($this->confirm('Import the selected projects?', default: true) === false) {
-                  $Alert = new Alert($Output);
-                  $Alert->Type::Attention->set();
-                  $Alert->message = 'Import aborted.';
-                  $Alert->render();
-
-                  return false;
-               }
-            }
-
-            // @ Transfer
-            $transferred = $this->transfer($imports);
-            // ? Failure Alerts rendered at the failure site (transfer)
-            if (count($transferred) !== count($imports)) {
-               return false;
-            }
-
-            foreach ($transferred as $index => $imported) {
-               $Alert = new Alert($Output);
-               $Alert->spaced = $index === 0;
-               $Alert->Type::Success->set();
-               $Alert->message = "Project @#cyan:{$imported}@; imported!";
-               $Alert->render();
-            }
-
-            $this->advise($transferred);
-
-            // :
-            return true;
-         }
-
-         // # Git remote — ask the URL and continue with the direct flow
+         // # Git remote — the one interactive source (the shipped platform
+         //   projects are imported automatically when the kit is prepared):
+         //   ask the URL and continue with the direct flow
          $Textbox = new Textbox(CLI->Terminal->Input, $Output);
          $Textbox->prompt = 'Repository URL (git)';
          $Textbox->required = true;
@@ -715,7 +651,7 @@ class ProjectCommand extends Command
       $repository = escapeshellarg($url);
       $target = escapeshellarg($tmp);
 
-      $status = $this->execute("git clone --depth 1 {$repository} {$target}");
+      $status = $this->execute("git clone {$repository} {$target}");
       // ?
       if ($status !== 0 || is_dir($tmp) === false) {
          $Alert = new Alert($Output);
@@ -729,7 +665,8 @@ class ProjectCommand extends Command
       }
 
       // ? Bootgly project signature
-      if ((glob("{$tmp}/*.Project.php") ?: []) === []) {
+      $signatures = glob("{$tmp}/*.Project.php") ?: [];
+      if ($signatures === []) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
          $Alert->message = 'Not a Bootgly project: no @#cyan:*.Project.php@; signature file at the repository root.';
@@ -785,9 +722,9 @@ class ProjectCommand extends Command
          }
       }
 
-      // @ Strip VCS metadata + import
-      $this->erase("{$tmp}/.git");
-
+      // @ Import — VCS metadata KEPT: the copy stays a working clone, with
+      //   its history and its `origin`, so the user keeps committing and
+      //   pushing from `projects/` — the project is the unit of versioning
       $done = Projects::import($tmp, $path, [
          'interfaces' => [$interface],
          'default'    => isSet($options['default']),
@@ -795,8 +732,70 @@ class ProjectCommand extends Command
 
       $this->erase($tmp);
 
+      // ? The signature rename (source leaf -> target leaf) is a real,
+      //   uncommitted change inside the clone — the user's to review
+      $leaf = basename($signatures[0], '.Project.php');
+      if ($done === true && $leaf !== basename($path)) {
+         $Output->render(
+            "@#yellow:Note:@; the project signature was renamed for the target path — "
+            . "review and commit it inside @#cyan:projects/{$path}@;.@.;"
+         );
+      }
+
       // :
       return $this->report($done, $path);
+   }
+
+   /**
+    * Boot a project — initialize the resources a project of the user's own
+    * carries. Today that is version control (a git repository of its own,
+    * with the current tree as the initial commit); more responsibilities
+    * will land here as the project lifecycle grows.
+    *
+    * `create` runs the same hook for every project the user creates from
+    * scratch. The shipped platform examples arrive UNBOOTED on purpose — they
+    * are guides, not the user's work — and this subcommand is how the user
+    * adopts one.
+    *
+    * @param array<string> $arguments
+    * @param array<string, bool|int|string> $options
+    *
+    * @return bool
+    */
+   public function boot (array $arguments = [], array $options = []): bool
+   {
+      $Output = CLI->Terminal->Output;
+
+      // ? Refuse before anything is written, as create() does.
+      if ($this->admit([], $options) === false) {
+         return false;
+      }
+
+      // ! Target
+      $path = $arguments[0] ?? '';
+      if ($path === '' || Projects::check($path) === false) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = 'Usage: @#cyan:bootgly project <Name> boot@;';
+         $Alert->render();
+
+         return false;
+      }
+      // ? Only ever a project of this kit
+      if (is_dir(Projects::CONSUMER_DIR . $path) === false) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Project @#cyan:projects/{$path}@; was not found.";
+         $Alert->render();
+
+         return false;
+      }
+
+      // @
+      $this->track(Projects::CONSUMER_DIR, $path, $options);
+
+      // :
+      return true;
    }
 
    /**
@@ -924,6 +923,10 @@ class ProjectCommand extends Command
 
          return false;
       }
+
+      // ! Per-project Composer autoload — before the signature, so its
+      //   top-level third-party references resolve
+      Projects::load($projectDir);
 
       $Project = require $projectFile;
       if ($Project instanceof Project === false) {
@@ -1891,9 +1894,16 @@ class ProjectCommand extends Command
             return null;
          }, rows: 13);
 
-         $Wizard->add('Scaffold', function () use (&$path, &$meta, &$interface): string {
+         $Wizard->add('Scaffold', function () use (&$path, &$meta, &$interface, &$options): string {
             $stub = $interface === 'WPI' ? 'WPI' : 'CLI';
-            $done = Projects::generate(BOOTGLY_ROOT_DIR . "Bootgly/commands/stubs/{$stub}", (string) $path, $meta);
+            $done = Projects::generate(
+               [
+                  BOOTGLY_ROOT_DIR . "Bootgly/commands/stubs/{$stub}",
+                  BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/project',
+               ],
+               (string) $path,
+               $meta
+            );
             // ? The report renders the actionable failure Alert (permissions / registry)
             if ($done === false) {
                $this->report(false, (string) $path);
@@ -1901,38 +1911,15 @@ class ProjectCommand extends Command
                throw new Exception('generation failed');
             }
 
+            $this->track(Projects::CONSUMER_DIR, (string) $path, $options);
+
             // :
             return 'generated';
          });
       };
 
-      // # From Platforms: [Pick →] Confirm → Transfer
-      $platforms = function (Wizard $Wizard, bool $pick) use (&$imports, &$transferred, &$options): void {
-         if ($pick === true) {
-            $Wizard->add('Pick', function (Wizard $Wizard) use (&$imports): string {
-               $sources = $this->survey();
-               $labels = array_keys($sources);
-               $picked = $this->select('Pick the projects to import:', $labels);
-
-               // ? Nothing selected
-               if ($picked === []) {
-                  $Alert = new Alert($Wizard->Output);
-                  $Alert->Type::Attention->set();
-                  $Alert->message = 'No projects selected.';
-                  $Alert->render();
-
-                  throw new Exception('nothing selected');
-               }
-
-               foreach ($picked as $index) {
-                  $imports[] = $sources[(string) $labels[$index]];
-               }
-
-               // :
-               return count($imports) . ' project(s)';
-            }, rows: 9);
-         }
-
+      // # From a platform source (--from=<source>): Confirm → Transfer
+      $platforms = function (Wizard $Wizard) use (&$imports, &$transferred, &$options): void {
          $Wizard->add('Confirm', function (Wizard $Wizard) use (&$imports, &$options): null {
             // ! Summary (existing user-level copies are flagged as overwrite)
             $content = '@#Green:' . str_pad('Mode', 12) . ' @; Import projects from Platforms';
@@ -2098,7 +2085,7 @@ class ProjectCommand extends Command
             ];
 
             $branch = 'platforms';
-            $platforms($Wizard, pick: false);
+            $platforms($Wizard);
 
             // :
             return "from {$from}";
@@ -2113,24 +2100,15 @@ class ProjectCommand extends Command
             return 'scratch';
          }
 
-         // ! Start modes (platform import only when exportable sources exist)
-         $modes = ['Create project from scratch'];
-         $sources = $this->survey();
-         if ($sources !== []) {
-            $available = count($sources);
-            $modes[] = "Import projects from Platforms ({$available} available)";
-         }
-         $modes[] = 'Import project from Git remote';
+         // ! Start modes — the shipped platform projects are imported
+         //   automatically when the kit is prepared, so the wizard only asks
+         //   what only the user can answer
+         $modes = [
+            'Create project from scratch',
+            'Import project from Git remote',
+         ];
 
          $mode = $modes[$this->choose('How do you want to start?', $modes)] ?? $modes[0];
-
-         if (str_starts_with($mode, 'Import projects from Platforms') === true) {
-            $branch = 'platforms';
-            $platforms($Wizard, pick: true);
-
-            // :
-            return 'platforms';
-         }
 
          if ($mode === 'Import project from Git remote') {
             $branch = 'git';
@@ -2211,12 +2189,21 @@ class ProjectCommand extends Command
             continue;
          }
 
+         // ? A refresh replaces the whole copy — committed history inside it
+         //   dies with the directory, and that is worth a line before it does
+         if (is_dir(Projects::CONSUMER_DIR . "{$path}/.git") === true) {
+            $Alert = new Alert($Output);
+            $Alert->Type::Attention->set();
+            $Alert->message = "Refreshing @#cyan:projects/{$path}@; replaces it, git history included.";
+            $Alert->render();
+         }
+
          // @ User-level copies overwrite the platform ones on load — an
          //   existing one is refreshed, and import() keeps it until the new
          //   copy is complete (a project that is its own source, as in the
          //   framework checkout, is left in place)
          $imported = Projects::import($import['source'], $path, [
-            'interfaces' => $this->detect($import['from'] ?? $path) ?? ['CLI'],
+            'interfaces' => $this->detect($import['source']) ?? ['CLI'],
             'default'    => false,
          ], refresh: true);
 
@@ -2256,6 +2243,7 @@ class ProjectCommand extends Command
       $Output = CLI->Terminal->Output;
 
       // # Platform submodules (kit)
+      $initialized = [];
       $gitmodules = is_file(BOOTGLY_WORKING_DIR . '.gitmodules');
       $console = is_file(BOOTGLY_WORKING_DIR . 'Console/' . BOOTSTRAP_FILENAME);
       $web = is_file(BOOTGLY_WORKING_DIR . 'Web/' . BOOTSTRAP_FILENAME);
@@ -2385,11 +2373,14 @@ class ProjectCommand extends Command
                   );
                }
             }
+
+            $initialized = $targets;
          }
       }
 
       // # Resource directories
-      if (is_file(BOOTGLY_WORKING_DIR . 'projects/Bootgly.projects.php') === false) {
+      $fresh = is_file(BOOTGLY_WORKING_DIR . 'projects/Bootgly.projects.php') === false;
+      if ($fresh === true) {
          $Boot = new BootCommand;
 
          if ($Boot->run([], ['resources' => true]) === false) {
@@ -2397,8 +2388,174 @@ class ProjectCommand extends Command
          }
       }
 
+      // # Shipped example projects — the kit's living guides
+      $this->stock($fresh, $initialized);
+
       // :
       return true;
+   }
+
+   /**
+    * Stock the kit with the shipped platform projects.
+    *
+    * The Demos, the Console games and the Web examples are not optional: a
+    * fresh kit carries them as living guides — for people and for AI agents
+    * alike. One-shot by trigger: the whole exportable set on the kit's FIRST
+    * boot, and a platform's set when that platform is initialized — never on
+    * ordinary runs, so an example the user deleted stays deleted.
+    *
+    * @param bool $fresh First boot — no project registry yet.
+    * @param array<string> $initialized Platform folders initialized this run (e.g. `Console`).
+    *
+    * @return void
+    */
+   private function stock (bool $fresh, array $initialized): void
+   {
+      // ?
+      if ($fresh === false && $initialized === []) {
+         return;
+      }
+
+      // ! The exportable platform projects, filtered to this run's triggers
+      $imports = [];
+      foreach ($this->survey() as $import) {
+         // ? A fresh boot takes everything; a platform init takes its own
+         if ($fresh === false) {
+            $granted = false;
+            foreach ($initialized as $platform) {
+               if (str_starts_with($import['source'], BOOTGLY_WORKING_DIR . "{$platform}/") === true) {
+                  $granted = true;
+
+                  break;
+               }
+            }
+            // ?
+            if ($granted === false) {
+               continue;
+            }
+         }
+         // ? Only ever the MISSING ones — an existing copy is the user's
+         if (is_dir(Projects::CONSUMER_DIR . $import['path']) === true) {
+            continue;
+         }
+
+         $imports[] = $import;
+      }
+      // ?
+      if ($imports === []) {
+         return;
+      }
+
+      $Output = CLI->Terminal->Output;
+      $count = count($imports);
+      $Output->render("@.;@#green:Importing@; @#cyan:{$count}@; shipped example projects...@.;");
+
+      // @ The regular transfer: screened, staged and registered. Examples
+      //   arrive UNBOOTED — no repository of their own — and are adopted
+      //   with `bootgly project <Name> boot`.
+      $this->transfer($imports);
+   }
+
+   /**
+    * Track a freshly minted project in a git repository of its own.
+    *
+    * Projects are the unit of versioning — the kit is never committed to —
+    * so every project starts as a repository of its own, with the scaffold
+    * as its first commit. Best-effort by design: whatever refuses here (a
+    * disabled shell, a missing git, an unset identity) degrades to a note
+    * and never fails the create that already succeeded.
+    *
+    * @param string $base Projects base directory, with a trailing separator.
+    * @param string $path Canonical project path (e.g. `App/API`).
+    * @param array<string, bool|int|string> $options
+    *
+    * @return void
+    */
+   private function track (string $base, string $path, array $options): void
+   {
+      // ? Opt-out
+      if (isSet($options['no-git']) === true) {
+         return;
+      }
+      // ? Author context: the framework checkout tracks `projects/` itself —
+      //   an embedded repository would dirty the author tree
+      if (BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR && $base === Projects::CONSUMER_DIR) {
+         return;
+      }
+
+      $Output = CLI->Terminal->Output;
+
+      // ? A host with `shell_exec` disabled loses the repository, not the project
+      if (function_exists('shell_exec') === false) {
+         $Output->render("@#yellow:Note:@; shell access is disabled — initialize git in @#cyan:projects/{$path}@; yourself.@.;");
+
+         return;
+      }
+      // ? git availability
+      if (trim((string) shell_exec('command -v git 2>/dev/null')) === '') {
+         $Output->render("@#yellow:Note:@; git was not found — initialize a repository in @#cyan:projects/{$path}@; yourself.@.;");
+
+         return;
+      }
+
+      // ! Paths — every shell line quotes them; comparisons normalize slashes
+      $target = "{$base}{$path}";
+      $dir = escapeshellarg($target);
+
+      // ? An existing project repository below the projects base already
+      //   governs this directory — a nested project belongs to its parent's
+      //   repository. The kit repository ABOVE the base proves nothing: the
+      //   kit is always a repository, which is exactly why a bare
+      //   "inside a repo?" check would never init anything.
+      $toplevel = trim((string) shell_exec("git -C {$dir} rev-parse --show-toplevel 2>/dev/null"));
+      if ($toplevel !== '') {
+         $projects = str_replace('\\', '/', (string) realpath($base));
+         $governor = str_replace('\\', '/', (string) realpath($toplevel));
+         if ($projects !== '' && str_starts_with("{$governor}/", rtrim($projects, '/') . '/') === true) {
+            return;
+         }
+      }
+
+      // @ Init — `init.defaultBranch` is the user's to set
+      shell_exec("git -C {$dir} init --quiet 2>/dev/null");
+      // ?
+      if (is_dir("{$target}/.git") === false) {
+         $Output->render("@#yellow:Note:@; could not initialize a git repository in @#cyan:projects/{$path}@;.@.;");
+
+         return;
+      }
+
+      // @ Stage — an anchored pathspec inside a directory this command just
+      //   minted in full: nothing user-authored can exist in it yet
+      shell_exec("git -C {$dir} add . 2>/dev/null");
+
+      // ? Identity — never fabricated
+      $name = trim((string) shell_exec("git -C {$dir} config user.name 2>/dev/null"));
+      $email = trim((string) shell_exec("git -C {$dir} config user.email 2>/dev/null"));
+      if ($name === '' || $email === '') {
+         $Output->render(
+            '@#yellow:Note:@; git identity unset — repository initialized, initial commit skipped. '
+            . 'Set @#cyan:git config user.name/user.email@; and commit.@.;'
+         );
+
+         return;
+      }
+
+      // @ Commit — machine-authored, so it ships unsigned: a configured
+      //   signing key would park the CLI behind a pinentry prompt
+      $message = escapeshellarg("chore: create {$path} project scaffold");
+      $committed = trim((string) shell_exec(
+         "git -C {$dir} -c commit.gpgsign=false commit --quiet -m {$message} 2>/dev/null && echo committed"
+      ));
+      // ?
+      if ($committed !== 'committed') {
+         $Output->render("@#yellow:Note:@; repository initialized, but the initial commit failed in @#cyan:projects/{$path}@;.@.;");
+
+         return;
+      }
+
+      // :
+      $Output->render("@#green:Initialized@; a git repository in @#cyan:projects/{$path}@;.@.;");
    }
 
    /**
@@ -2741,21 +2898,40 @@ class ProjectCommand extends Command
    }
 
    /**
-    * Detect the interfaces bound to a platform project in the author registry.
+    * Detect the interfaces a shipped project is registered with, read from
+    * the registry of the platform that ships it — the `projects/` directory
+    * the source lives in — so a Web or Console example keeps its own binding
+    * instead of the core's.
     *
-    * @param null|string $sourcePath
+    * @param null|string $source Absolute path of the source project directory
     *
     * @return null|array<string>
     */
-   private function detect (null|string $sourcePath): null|array
+   private function detect (null|string $source): null|array
    {
       // ?
-      if ($sourcePath === null) {
+      if ($source === null) {
          return null;
       }
 
-      $file = Projects::AUTHOR_DIR . 'Bootgly.projects.php';
-      if (is_file($file) === false) {
+      // ! The registry of the platform that ships the source
+      $bases = [
+         Projects::AUTHOR_DIR,
+         BOOTGLY_WORKING_DIR . 'Console/projects/',
+         BOOTGLY_WORKING_DIR . 'Web/projects/',
+      ];
+      $file = null;
+      $key = null;
+      foreach ($bases as $base) {
+         if (str_starts_with($source, $base) === true) {
+            $file = "{$base}Bootgly.projects.php";
+            $key = rtrim(substr($source, strlen($base)), '/');
+
+            break;
+         }
+      }
+      // ?
+      if ($file === null || is_file($file) === false) {
          return null;
       }
 
@@ -2764,7 +2940,7 @@ class ProjectCommand extends Command
          return null;
       }
 
-      $meta = $registry[$sourcePath] ?? null;
+      $meta = $registry[$key] ?? null;
       if (is_array($meta) === false) {
          return null;
       }
@@ -2964,9 +3140,9 @@ class ProjectCommand extends Command
          $Output->render("@#Green:Tip:@; Use @#Black:{$prefix}bootgly project {$path} {$action}@; to {$goal}.@.;");
       }
 
-      // ? Example tests — imported projects ship them as a writing guide
+      // ? Example tests — projects ship them as a writing guide
       if (is_dir(Projects::CONSUMER_DIR . "{$path}/tests") === true) {
-         $Output->render("@#Green:Tip:@; Register @#Black:'projects/{$path}/'@; in @#cyan:tests/autoboot.php@; and run @#Black:{$prefix}bootgly test@;.@.;");
+         $Output->render("@#Green:Tip:@; Run @#Black:cd projects/{$path} && {$prefix}bootgly test@; to run its suites.@.;");
       }
 
       $Output->write(PHP_EOL);
@@ -3024,6 +3200,10 @@ class ProjectCommand extends Command
 
          return null;
       }
+
+      // ! Per-project Composer autoload — before the signature, so its
+      //   top-level third-party references resolve
+      Projects::load($projectDir);
 
       $Project = require $projectFile;
       if ($Project instanceof Project === false) {
@@ -3393,6 +3573,8 @@ class ProjectCommand extends Command
       ];
 
       // @
+      Projects::load(dirname($file) . '/');
+
       $Project = require $file;
       if ($Project instanceof Project === false) {
          return $defaults;

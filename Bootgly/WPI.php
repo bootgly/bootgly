@@ -78,6 +78,9 @@ class WPI extends Projects // Web Programming Interface
             $projectFile = $projectDir . $leaf . '.Project.php';
 
             if (is_file($projectFile)) {
+               // ! Per-project Composer autoload — before the signature
+               self::load($projectDir);
+
                $result = require $projectFile;
                if ($result instanceof Project) {
                   $result->boot();

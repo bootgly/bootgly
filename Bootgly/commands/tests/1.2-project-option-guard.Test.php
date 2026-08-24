@@ -25,7 +25,7 @@ return new Test(
       $Admit = new ReflectionMethod(ProjectCommand::class, 'admit');
       $Command = new ProjectCommand;
 
-      $create = ['platform', 'from', 'interfaces', 'description', 'version', 'author', 'port', 'default', 'yes'];
+      $create = ['platform', 'from', 'interfaces', 'description', 'version', 'author', 'port', 'default', 'yes', 'no-git'];
       $import = ['platform', 'interfaces', 'default', 'yes'];
 
       // # A flag this command declares for ANOTHER subcommand is refused

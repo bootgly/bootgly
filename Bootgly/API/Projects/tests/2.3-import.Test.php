@@ -55,6 +55,28 @@ return new Test(
          description: 'the imported project is registered in the allow-list'
       );
 
+      // @ Dotted directories and file modes survive the staged copy — a kept
+      //   `.git` must arrive whole and without spurious mode dirt
+      $dotted = "{$base}DotSource";
+      mkdir("{$dotted}/.git/refs/heads", 0755, true);
+      file_put_contents("{$dotted}/.git/config", "[core]\n");
+      file_put_contents("{$dotted}/Dot.Project.php", "<?php\nreturn null;\n");
+      file_put_contents("{$dotted}/hook.sh", "#!/bin/sh\n");
+      chmod("{$dotted}/hook.sh", 0755);
+
+      $done = Projects::import($dotted, 'Dotted', ['interfaces' => ['CLI']], $base);
+
+      yield assert(
+         assertion: $done === true
+            && is_file("{$base}Dotted/.git/config") === true
+            && is_dir("{$base}Dotted/.git/refs/heads") === true,
+         description: 'dotted directories (a kept .git, empty subdirs included) survive the import copy'
+      );
+      yield assert(
+         assertion: (fileperms("{$base}Dotted/hook.sh") & 0111) !== 0,
+         description: 'the execute bit survives the import copy'
+      );
+
       // ! Rejections
       yield assert(
          assertion: Projects::import("{$fixtures}/Invalid", 'Invalid2', ['interfaces' => ['WPI']], $base) === false,
