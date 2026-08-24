@@ -29,7 +29,6 @@ use Throwable;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\WPI\Connections\Peer;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI as Client;
-use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Packages;
 
 
@@ -161,8 +160,9 @@ class Connection extends Packages
       }
 
       // @ Destroy itself
-      // ! Local handle: an array write chained through the protected(set)
-      //   property would propagate write context and fatal from this scope
+      // ! Local handle: PHP rejects this array write when chained through the
+      //   client's protected(set) $Connections ("Cannot indirectly modify...",
+      //   verified on 8.4/8.5 against this class); a local read sidesteps it
       if ($Client !== null) {
          $Connections = $Client->Connections;
          unset($Connections->Connections[$this->id]);

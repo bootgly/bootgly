@@ -91,7 +91,6 @@ return new Test(
          pcntl_waitpid($pid, $status);
       }
 
-      new HTTP_Client_CLI(HTTP_Client_CLI::MODE_TEST);
 
       yield assert(
          assertion: ($seen[0] ?? null) === "127.0.0.1:{$portA}",

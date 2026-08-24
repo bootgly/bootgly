@@ -62,7 +62,7 @@ return new Project(
             );
 
             // @ Set Data raw to write
-            $Connection::$output = "GET / HTTP/1.1\r\nHost: localhost:8080\r\n\r\n";
+            $Connection->output = "GET / HTTP/1.1\r\nHost: localhost:8080\r\n\r\n";
 
             // @ Add Package write to Event loop
             $Connection->Client->Event->add($Socket, $Connection->Client->Event::EVENT_WRITE, $Connection);

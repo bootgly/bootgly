@@ -132,7 +132,8 @@ class Packages implements WPI\Connections\Packages
          $this->Connection->close();
       }
 
-      // ! Local handle — array writes must not chain through protected(set)
+      // ! Local handle — PHP rejects array writes chained through the client's
+      //   protected(set) $Connections (verified), and ?-> cannot open a write chain
       $Connections = $this->Connection->Client?->Connections;
       if ($Connections !== null) {
          $Connections->errors[$operation]++;

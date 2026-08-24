@@ -3,7 +3,6 @@
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test;
-use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
 use Bootgly\WPI\Nodes\WS_Client_CLI;
 use Bootgly\WPI\Nodes\WS_Client_CLI\Session;

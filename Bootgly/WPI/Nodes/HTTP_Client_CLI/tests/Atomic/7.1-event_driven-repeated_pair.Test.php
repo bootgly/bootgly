@@ -89,8 +89,6 @@ return new Test(
       posix_kill($forked, SIGTERM);
       pcntl_waitpid($forked, $status);
 
-      // ! Leave event-driven mode behind for the rest of the suite
-      new HTTP_Client_CLI(HTTP_Client_CLI::MODE_TEST);
 
       $mismatches = [];
       foreach ($paths as $leg => $path) {

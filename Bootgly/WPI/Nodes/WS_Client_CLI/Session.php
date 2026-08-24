@@ -30,7 +30,6 @@ use DeflateContext;
 use InflateContext;
 
 use Bootgly\ACI\Events\Timer;
-use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
 use Bootgly\WPI\Modules\WS;
 use Bootgly\WPI\Nodes\WS_Client_CLI;

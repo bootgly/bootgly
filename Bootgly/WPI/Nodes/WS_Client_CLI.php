@@ -25,6 +25,7 @@ use InvalidArgumentException;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI\Event;
+use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\WPI\Modules\WS;
 use Bootgly\WPI\Modules\WS\Client;
@@ -100,6 +101,8 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
    protected static int $open = 0;          // live concurrently-opened connections
    /** First open()ed client — later ones adopt its reactor so run() pumps ONE loop. */
    protected static null|self $Leader = null;
+   /** True while this client runs on an adopted (leader) reactor instead of its own. */
+   protected bool $adopted = false;
 
 
    public function __construct (int $mode = self::MODE_DEFAULT)
@@ -230,6 +233,12 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
       //   graceful close tears down the whole loop so this call returns.
       self::$multi = false;
 
+      // ? A former follower must never pump (or destroy) the old shared loop
+      if ($this->adopted) {
+         $this->adopted = false;
+         $this->Event = new Select($this->Connections); // @phpstan-ignore-line
+      }
+
       // ! Arm the handshake template — re-used on every (re)dial.
       $this->URI = $URI;
       $this->headers = $headers;
@@ -284,6 +293,7 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
          self::$Leader = $this;
       }
       else if (self::$Leader !== $this) {
+         $this->adopted = true;
          $this->Event = self::$Leader->Event;
       }
 
@@ -302,6 +312,16 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
       if ($Socket !== false) {
          self::$open++;
       }
+      else if (self::$Leader === $this && self::$open === 0) {
+         // ? A failed leader with no live followers must not stay pinned:
+         //   a later, unrelated open() group would adopt a dead reactor
+         self::$Leader = null;
+      }
+      else if ($this->adopted) {
+         // ? A failed follower releases the adopted reactor immediately
+         $this->adopted = false;
+         $this->Event = new Select($this->Connections); // @phpstan-ignore-line
+      }
 
       // :
       return $Socket;
@@ -313,8 +333,10 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
     */
    public static function run (): void
    {
-      // ? Nothing opened — nothing to run.
+      // ? Nothing opened — nothing to run; release the concurrency latch.
       if (self::$open <= 0 || self::$Leader === null) {
+         self::$multi = false;
+         self::$Leader = null;
          return;
       }
 
@@ -645,9 +667,10 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
    }
 
    /**
-    * Tear down this client for reuse / test isolation: drop the current session
-    * and clear the (process-wide static) transport callbacks this client wired.
-    * Instance hooks (`on*`) and policy persist — a subsequent `connect()` re-wires.
+    * Tear down this client for reuse / test isolation: drop the current session,
+    * clear the transport callbacks this client wired and leave any adopted
+    * shared reactor. Instance hooks (`on*`) and policy persist — a subsequent
+    * `connect()` re-wires.
     */
    public function reset (): void
    {
@@ -658,5 +681,11 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
       $this->onClientDisconnect = null;
       $this->onDataRead = null;
       $this->onDataWrite = null;
+
+      // ? A former follower gets its own reactor back
+      if ($this->adopted) {
+         $this->adopted = false;
+         $this->Event = new Select($this->Connections); // @phpstan-ignore-line
+      }
    }
 }

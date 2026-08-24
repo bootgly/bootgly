@@ -26,8 +26,8 @@ return new Test(
          return $Client;
       };
 
-      // @ Construct ALL clients, THEN open each (the shared loop is the last-constructed),
-      //   THEN run once. Both connections live on one loop simultaneously.
+      // @ Construct ALL clients, THEN open each (the FIRST opened leads the
+      //   shared loop), THEN run once. Both connections live on one loop simultaneously.
       $ClientA = $make('A');
       $ClientB = $make('B');
       $ClientA->open('/');

@@ -93,7 +93,6 @@ return new Test(
       posix_kill($forked, SIGTERM);
       pcntl_waitpid($forked, $status);
 
-      new HTTP_Client_CLI(HTTP_Client_CLI::MODE_TEST);
 
       $expected = [];
       foreach ($bodies as $body) {

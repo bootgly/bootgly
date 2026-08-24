@@ -105,7 +105,6 @@ return new Test(
       $sawB = $drive($portB, 'payload-B');
       pcntl_waitpid($pidB, $statusB);
 
-      new HTTP_Client_CLI(HTTP_Client_CLI::MODE_TEST);
 
       yield assert(
          assertion: $sawA === "host=[127.0.0.1:{$portA}] body=[secret-A]",
