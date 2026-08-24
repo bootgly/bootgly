@@ -35,7 +35,7 @@ class BootCommand extends Command
       'Increase the verbosity of the command' => ['-v', '-vv', '-vvv'],
       'Show help information' => ['--help', '-h'],
       // Local options
-      'Boot Bootgly resource directories (projects, tests, public, ...)' => ['--resources'],
+      'Boot Bootgly resource directories (projects, scripts, storage)' => ['--resources'],
    ];
 
    public string $name = 'boot';

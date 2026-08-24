@@ -15,6 +15,7 @@ use const BOOTGLY_ROOT_DIR;
 use function array_diff;
 use function assert;
 use function fclose;
+use function file_get_contents;
 use function file_put_contents;
 use function function_exists;
 use function getenv;
@@ -30,6 +31,8 @@ use function scandir;
 use function str_contains;
 use function stream_get_contents;
 use function unlink;
+
+use const Bootgly\ABI\BOOTSTRAP_FILENAME;
 
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\ACI\Tests\Temporaries;
@@ -114,6 +117,10 @@ return new Test(
             . "define('BOOTGLY_WORKING_BASE', __DIR__);\n"
             . "define('BOOTGLY_WORKING_DIR', BOOTGLY_WORKING_BASE . DIRECTORY_SEPARATOR);\n"
             . "(include '{$root}autoboot.php') || exit(1);\n",
+         "{$directory}/.gitmodules" => "[submodule \"Web\"]\n"
+            . "\tpath = Web\n"
+            . "\turl = https://example.invalid/web.git\n",
+         "{$directory}/Web/" . BOOTSTRAP_FILENAME => "<?php\n\nreturn true;\n",
          "{$directory}/Web/projects/Bootgly.projects.php" => "<?php\n\n"
             . "return [\n"
             . "   'Fake' => ['interfaces' => ['WPI'], 'default' => true],\n"
@@ -129,9 +136,11 @@ return new Test(
             . "   boot: static function (): void {}\n"
             . ");\n",
       ];
-      $create = static fn (string $name): array => [
+      // ! The platform is explicit on every run: `none` keeps the fresh-boot
+      //   trigger alone, `web` asks for that platform (and its examples)
+      $create = static fn (string $name, string $platform = 'none'): array => [
          $entry, 'project', 'create', $name,
-         '--from=scratch', '--interfaces=CLI', '--yes', '--no-git',
+         '--from=scratch', '--interfaces=CLI', '--yes', '--no-git', "--platform={$platform}",
       ];
 
       try {
@@ -183,6 +192,31 @@ return new Test(
                && is_file("{$directory}/projects/Fake/mine.txt")
                && is_dir("{$directory}/projects/Demo/CLI") === false,
             description: 'a prepared kit imports nothing more — user copies are kept, deleted examples stay deleted'
+               . " (status {$status})"
+         );
+
+         // @ The platform trigger reaches the guard the fresh-boot triggers
+         //   never do: an explicit `--platform=web` on a prepared kit stocks
+         //   that platform's set, and an existing copy — the user's, edits
+         //   included — is skipped, never replaced
+         [$status, $output] = $run($create('Third', 'web'), $environment, $directory);
+         yield assert(
+            assertion: $status === 0
+               && is_file("{$directory}/projects/Fake/mine.txt")
+               && (string) file_get_contents("{$directory}/projects/Fake/mine.txt") === "kept\n",
+            description: 'an explicit --platform stocks its set without touching an existing copy'
+               . " (status {$status})"
+         );
+
+         // @ ...and it is the only way back: an example the user deleted
+         //   returns when that platform is asked for again
+         $erase("{$directory}/projects/Fake");
+         [$status, $output] = $run($create('Fourth', 'web'), $environment, $directory);
+         yield assert(
+            assertion: $status === 0
+               && is_file("{$directory}/projects/Fake/Fake.Project.php")
+               && is_file("{$directory}/projects/Fake/mine.txt") === false,
+            description: 'asking for the platform again restocks the example the user deleted'
                . " (status {$status})"
          );
       }

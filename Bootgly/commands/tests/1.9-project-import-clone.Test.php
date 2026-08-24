@@ -80,7 +80,10 @@ return new Test(
 
       try {
          // @ Import under a NEW leaf — the rename is the one legitimate dirt
-         $done = $Command->import([$fixture, 'ImportClone'], ['yes' => true]);
+         // ! file:// on purpose: git DISCARDS --depth for a plain local path
+         //   ("--depth is ignored in local clones"), so a path fixture could
+         //   not tell a shallow clone from a full one
+         $done = $Command->import(["file://{$fixture}", 'ImportClone'], ['yes' => true]);
          $target = Projects::CONSUMER_DIR . 'ImportClone';
 
          yield assert(

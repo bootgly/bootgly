@@ -228,6 +228,7 @@ class ProjectCommand extends Command
       'Flag the new project as the web default (create/import)' => ['--default'],
       'Skip confirmations (create/import)' => ['--yes'],
       'Do not create a git repository for the new project (create)' => ['--no-git'],
+      'Replace an existing project, git history included (create --from)' => ['--refresh'],
    ];
 
 
@@ -377,7 +378,7 @@ class ProjectCommand extends Command
       //   implement must never be accepted and dropped.
       if (
          $this->admit(
-            ['platform', 'from', 'interfaces', 'description', 'version', 'author', 'port', 'default', 'yes', 'no-git'],
+            ['platform', 'from', 'interfaces', 'description', 'version', 'author', 'port', 'default', 'yes', 'no-git', 'refresh'],
             $options
          ) === false
       ) {
@@ -393,8 +394,10 @@ class ProjectCommand extends Command
          return $this->wizard($path, $from, $options);
       }
 
-      // @ Kit setup (platform submodules + resource dirs) when needed
-      if ($this->prepare($options) === false) {
+      // @ Kit setup (platform submodules + resource dirs) when needed. The target
+      //   is reserved: an example stocked by this very run must never take the
+      //   name the user just asked for, and then refuse the command that stocked it
+      if ($this->prepare($options, $path) === false) {
          return false;
       }
 
@@ -551,13 +554,18 @@ class ProjectCommand extends Command
       $interfaces = $this->detect($source)
          ?? [strtoupper((string) ($options['interfaces'] ?? 'WPI'))];
 
-      // ? A refresh replaces the whole copy — committed history inside it
-      //   dies with the directory, and that is worth a line before it does
-      if (is_dir("{$existing}/.git") === true) {
+      // ? A refresh replaces the whole copy, and a repository inside it is the
+      //   user's only copy of that history — so replacing it is asked for,
+      //   never assumed: a warning would arrive after the decision was made
+      if (is_dir("{$existing}/.git") === true && isSet($options['refresh']) === false) {
          $Alert = new Alert($Output);
-         $Alert->Type::Attention->set();
-         $Alert->message = "Refreshing @#cyan:projects/{$path}@; replaces it, git history included.";
+         $Alert->Type::Failure->set();
+         $Alert->message = "Project @#cyan:projects/{$path}@; is a git repository — replacing it "
+            . 'destroys its history. Pass @#cyan:--refresh@; to replace it, or remove the '
+            . 'directory yourself.';
          $Alert->render();
+
+         return false;
       }
 
       // @ User-level copies overwrite the platform ones on load — an existing
@@ -786,6 +794,17 @@ class ProjectCommand extends Command
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
          $Alert->message = "Project @#cyan:projects/{$path}@; was not found.";
+         $Alert->render();
+
+         return false;
+      }
+      // ? A directory is not a project — booting one would version a folder
+      //   nothing can start, and the mistake is invisible (projects/ is ignored)
+      if ((glob(Projects::CONSUMER_DIR . "{$path}/*.Project.php") ?: []) === []) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Directory @#cyan:projects/{$path}@; carries no project signature "
+            . '(@#cyan:<Name>.Project.php@;).';
          $Alert->render();
 
          return false;
@@ -2233,7 +2252,7 @@ class ProjectCommand extends Command
     *
     * @return bool
     */
-   private function prepare (array $options): bool
+   private function prepare (array $options, null|string $reserve = null): bool
    {
       // ? Framework repo: nothing to prepare
       if (BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR) {
@@ -2376,6 +2395,22 @@ class ProjectCommand extends Command
 
             $initialized = $targets;
          }
+
+         // @@ An explicit `--platform=` asks for that platform's examples too.
+         //   Without this, a platform initialized any other way (by hand, as
+         //   the framework's own messages suggest, or by an earlier run) can
+         //   never stock them: no other command does, and `$targets` is empty
+         //   the moment the folder exists.
+         foreach ($platforms as $platform) {
+            $folder = $platform === 'console' ? 'Console' : 'Web';
+
+            if (
+               is_file(BOOTGLY_WORKING_DIR . "{$folder}/" . BOOTSTRAP_FILENAME) === true
+               && in_array($folder, $initialized, true) === false
+            ) {
+               $initialized[] = $folder;
+            }
+         }
       }
 
       // # Resource directories
@@ -2389,7 +2424,7 @@ class ProjectCommand extends Command
       }
 
       // # Shipped example projects — the kit's living guides
-      $this->stock($fresh, $initialized);
+      $this->stock($fresh, $initialized, $reserve);
 
       // :
       return true;
@@ -2409,7 +2444,7 @@ class ProjectCommand extends Command
     *
     * @return void
     */
-   private function stock (bool $fresh, array $initialized): void
+   private function stock (bool $fresh, array $initialized, null|string $reserve = null): void
    {
       // ?
       if ($fresh === false && $initialized === []) {
@@ -2436,6 +2471,11 @@ class ProjectCommand extends Command
          }
          // ? Only ever the MISSING ones — an existing copy is the user's
          if (is_dir(Projects::CONSUMER_DIR . $import['path']) === true) {
+            continue;
+         }
+         // ? The path this run is creating belongs to the user: an example
+         //   must never claim it and refuse the very command that stocked it
+         if ($reserve !== null && $import['path'] === $reserve) {
             continue;
          }
 
@@ -2512,6 +2552,15 @@ class ProjectCommand extends Command
          $projects = str_replace('\\', '/', (string) realpath($base));
          $governor = str_replace('\\', '/', (string) realpath($toplevel));
          if ($projects !== '' && str_starts_with("{$governor}/", rtrim($projects, '/') . '/') === true) {
+            // ! Silence here reads as success: `project <Name> boot` would
+            //   print nothing and exit 0 after declining to do anything
+            $owner = str_replace(str_replace('\\', '/', (string) realpath($base)) . '/', '', $governor);
+
+            CLI->Terminal->Output->render(
+               "@#yellow:Note:@; @#cyan:projects/{$path}@; is versioned by "
+               . "@#cyan:projects/{$owner}@; — nothing to initialize.@.;"
+            );
+
             return;
          }
       }
@@ -3572,9 +3621,10 @@ class ProjectCommand extends Command
          'author'      => ''
       ];
 
-      // @
-      Projects::load(dirname($file) . '/');
-
+      // @ The signature is read for its metadata only — never load the
+      //   project's Composer autoloader here: `list`/`info` read EVERY
+      //   project, and stacking N vendor bootstraps in one process makes a
+      //   read-only listing run everyone's dependency code
       $Project = require $file;
       if ($Project instanceof Project === false) {
          return $defaults;
