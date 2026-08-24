@@ -52,7 +52,7 @@ class Tests
       $count = Assertions::$count;
       $exit = Suite::$exitOnFailure;
 
-      $registry ??= BOOTGLY_ROOT_DIR . '/tests/' . BOOTSTRAP_FILENAME;
+      $registry ??= BOOTGLY_ROOT_DIR . 'tests/' . BOOTSTRAP_FILENAME;
       self::$registry = $registry;
 
       // !

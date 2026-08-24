@@ -132,8 +132,9 @@ return new Test(
 
          // @ The chain ends by itself, and says why
          yield assert(
-            assertion: $generations > 0 && $generations <= 4,
-            description: "a self-re-execing suite is bounded at 4 generations — ran {$generations}"
+            assertion: $generations >= 2 && $generations <= 4,
+            description: 'the chain is bounded at 4 generations AND one legitimate re-exec still'
+               . " runs (the E2E pattern) — ran {$generations}"
          );
          yield assert(
             assertion: str_contains($nested, 'refusing to nest deeper'),

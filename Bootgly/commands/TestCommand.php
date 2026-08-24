@@ -551,7 +551,7 @@ class TestCommand extends Command
 
          if ($situation === '') {
             // # Every registered project, one merged run
-            [$Suites, $executed, $missing] = $this->merge($paths);
+            [$Suites, $executed, $missing, $broken] = $this->merge($paths);
             Tests::$registry = '';
             $scope = 'projects/';
             $selector = 'projects/ (all projects)';
@@ -568,10 +568,17 @@ class TestCommand extends Command
             }
 
             // ! The set, before anything runs — totals say registered vs
-            //   executed, so a partial merge can never read as the whole
+            //   executed, so a partial merge can never read as the whole.
+            //   Agents consume the JSON document on stdout, so their copy of
+            //   the same fact goes to stderr: `suites.total` counts what RAN,
+            //   and a run that silently drops a registered project reads as
+            //   a complete one otherwise.
+            $stream = Results::$enabled === true ? STDERR : STDOUT;
+
+            fwrite($stream, "[test] scope: {$selector}" . PHP_EOL);
+            fwrite($stream, '[test] projects: ' . count($paths) . ' registered, ' . count($executed) . ' executed' . PHP_EOL);
+
             if (Results::$enabled === false) {
-               fwrite(STDOUT, "[test] scope: {$selector}" . PHP_EOL);
-               fwrite(STDOUT, '[test] projects: ' . count($paths) . ' registered, ' . count($executed) . ' executed' . PHP_EOL);
                $index = 1;
                foreach ($executed as $path => $suites) {
                   $last = $index + $suites - 1;
@@ -579,9 +586,12 @@ class TestCommand extends Command
                   fwrite(STDOUT, "   projects/{$path} — {$range}" . PHP_EOL);
                   $index = $last + 1;
                }
-               foreach ($missing as $path) {
-                  fwrite(STDOUT, "   projects/{$path} — no tests/" . BOOTSTRAP_FILENAME . ' (not executed)' . PHP_EOL);
-               }
+            }
+            foreach ($missing as $path) {
+               fwrite($stream, "   projects/{$path} — no tests/" . BOOTSTRAP_FILENAME . ' (not executed)' . PHP_EOL);
+            }
+            foreach ($broken as $path) {
+               fwrite($stream, "   projects/{$path} — registry unreadable (not executed)" . PHP_EOL);
             }
          }
          else {
@@ -790,8 +800,16 @@ class TestCommand extends Command
       // !
       $file = BOOTGLY_WORKING_DIR . 'projects/Bootgly.projects.php';
       $loaded = is_file($file) === true ? include $file : [];
-      // ?
+      // ? A registry that returns something else is NOT an empty kit: saying
+      //   "no registered projects" would send the user to register what is
+      //   already there, in the file the runner just discarded
       if (is_array($loaded) === false) {
+         fwrite(
+            STDERR,
+            '[test] projects/Bootgly.projects.php did not return an array — the project registry'
+            . ' cannot be read.' . PHP_EOL
+         );
+
          return [];
       }
 
@@ -861,9 +879,10 @@ class TestCommand extends Command
     *
     * @param array<string> $paths Registered project paths, registry order.
     *
-    * @return array{null|Suites, array<string, int>, array<string>} The merged
-    * Suites (`null` when nothing is executable), the executed paths mapped to
-    * their suite counts, and the registered-but-registry-less paths.
+    * @return array{null|Suites, array<string, int>, array<string>, array<string>}
+    * The merged Suites (`null` when nothing is executable), the executed paths
+    * mapped to their suite counts, the registered-but-registry-less paths, and
+    * the paths whose registry could not be read.
     */
    private function merge (array $paths): array
    {
@@ -871,6 +890,7 @@ class TestCommand extends Command
       $directories = [];
       $executed = [];
       $missing = [];
+      $broken = [];
 
       // @@ Reusing Tests per project buys the prefixing AND the bare-Suite
       //   tolerance uniformly; the throwaway instances only build directories
@@ -883,7 +903,25 @@ class TestCommand extends Command
             continue;
          }
 
-         $Project = new Tests($file, "projects/{$path}/");
+         // ? A registry that throws or returns the wrong shape is ONE
+         //   project's problem: without this, the first broken registry ends
+         //   the merged run before any other project's suites are scheduled,
+         //   and the message never names the file
+         try {
+            $Project = new Tests($file, "projects/{$path}/");
+         }
+         catch (Throwable $Throwable) {
+            fwrite(
+               STDERR,
+               "[test] projects/{$path}/tests/" . BOOTSTRAP_FILENAME . ' could not be read: '
+               . $Throwable->getMessage() . ' (skipped)' . PHP_EOL
+            );
+
+            $broken[] = $path;
+
+            continue;
+         }
+
          foreach ($Project->Suites->directories as $directory) {
             $directories[] = $directory;
          }
@@ -892,11 +930,11 @@ class TestCommand extends Command
 
       // ?:
       if ($directories === []) {
-         return [null, $executed, $missing];
+         return [null, $executed, $missing, $broken];
       }
 
       // :
-      return [new Suites($directories), $executed, $missing];
+      return [new Suites($directories), $executed, $missing, $broken];
    }
 
    /**
