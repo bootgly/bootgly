@@ -18,5 +18,9 @@ return new Suite(
       'TestCommand-help-01',
       'TestCommand-view-01',
       'TestCommand-verdict-01',
+      // ! Appended last so earlier case indexes stay stable.
+      'TestCommand-scope-01',
+      'TestCommand-scope-02',
+      'TestCommand-nesting-01',
    ]
 );

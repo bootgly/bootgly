@@ -12,11 +12,12 @@ namespace Bootgly\ACI;
 
 
 use const BOOTGLY_ROOT_DIR;
-use const BOOTGLY_WORKING_DIR;
 use RuntimeException;
 
 use const Bootgly\ABI\BOOTSTRAP_FILENAME;
 use Bootgly\ABI\Resources;
+use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Tests\Suites;
 
 
@@ -27,26 +28,45 @@ class Tests
 
    public Suites $Suites;
 
+   // * Metadata
+   // # Scope — recorded for suites that re-exec the runner (E2E children):
+   // the registry a suite belongs to and the selector that picks it are facts
+   // of the RUN, not of the working directory the child would guess from.
+   /** The registry file the current run included — absolute path; empty
+    *  before a run and on merged multi-project runs (no single registry). */
+   public static string $registry = '';
+   /** The scope selector the run used — a platform flag (`--web`), a project
+    *  prefix (`projects/App/`), `projects/` (merged) or empty (context). */
+   public static string $scope = '';
+
 
    /**
-    * @param null|string $registry Registry file override (`null` = the context registry).
-    * @param string $prefix Directory prefix for nested registries (e.g. a platform run from a kit).
+    * @param null|string $registry Registry file override (`null` = the author context registry).
+    * @param string $prefix Directory prefix for nested registries (e.g. a platform or project run from a kit).
     */
    public function __construct (null|string $registry = null, string $prefix = '')
    {
-      // !
-      /** @var Suites|false $Suites */
-      $Suites = match (true) {
-         $registry !== null
-            // Explicit registry (e.g. a platform registry from a kit)
-            => include $registry,
-         BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR
-            // Author (Bootgly) Test Suites
-            => include BOOTGLY_ROOT_DIR . '/tests/' . BOOTSTRAP_FILENAME,
-         // Consumer (User) Test Suites
-         default => include BOOTGLY_WORKING_DIR . '/tests/' . BOOTSTRAP_FILENAME
-      };
+      // ! Snapshot — a registry that turns out to be a one-suite project is
+      //   included AGAIN by the runner as the suite bootstrap, and a Suite
+      //   constructor has side effects; the probe include must not count
+      $count = Assertions::$count;
+      $exit = Suite::$exitOnFailure;
 
+      $registry ??= BOOTGLY_ROOT_DIR . '/tests/' . BOOTSTRAP_FILENAME;
+      self::$registry = $registry;
+
+      // !
+      /** @var Suite|Suites|false $Suites */
+      $Suites = include $registry;
+
+      // ? A one-suite project: the registry file IS the suite bootstrap —
+      //   the shipped platform demos have exactly this shape
+      if ($Suites instanceof Suite === true) {
+         Assertions::$count = $count;
+         Suite::$exitOnFailure = $exit;
+
+         $Suites = new Suites(directories: ['tests/']);
+      }
       // ?
       if ($Suites instanceof Suites === false) {
          throw new RuntimeException('Invalid Test Suites Specification');

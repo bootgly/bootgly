@@ -71,7 +71,7 @@ return new Test(
 
       // ! Runner — stdout and stderr are drained separately, so neither can
       //   stand in for the other (which is the whole point of the verdict line)
-      $run = static function (string $entry, array $arguments, array $environment): array {
+      $run = static function (string $entry, array $arguments, array $environment, null|string $cwd = null): array {
          $descriptors = [
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
@@ -81,7 +81,7 @@ return new Test(
             [PHP_BINARY, $entry, 'test', ...$arguments],
             $descriptors,
             $pipes,
-            BOOTGLY_ROOT_DIR,
+            $cwd ?? BOOTGLY_ROOT_DIR,
             $environment
          );
          if (is_resource($Process) === false) {
@@ -160,7 +160,8 @@ return new Test(
       //   the run.
       $directory = Temporaries::reserve('testcommand-verdict');
       $entry = "{$directory}/bootgly";
-      $probe = "{$directory}/Probe/tests/1.1-probe.Test.php";
+      $app = "{$directory}/projects/App";
+      $probe = "{$app}/Probe/tests/1.1-probe.Test.php";
       $marker = "{$directory}/cleanup.log";
       $root = BOOTGLY_ROOT_DIR;
       $files = [
@@ -168,10 +169,14 @@ return new Test(
             . "define('BOOTGLY_WORKING_BASE', __DIR__);\n"
             . "define('BOOTGLY_WORKING_DIR', BOOTGLY_WORKING_BASE . DIRECTORY_SEPARATOR);\n"
             . "(include '{$root}autoboot.php') || exit(1);\n",
-         "{$directory}/tests/autoboot.php" => "<?php\n\n"
+         // ! A kit fixture is a REGISTERED-project kit: the kit-level test
+         //   registry is gone, and the scope comes from the child's cwd
+         "{$directory}/projects/Bootgly.projects.php" => "<?php\n\n"
+            . "return ['App' => ['interfaces' => ['CLI']]];\n",
+         "{$app}/tests/autoboot.php" => "<?php\n\n"
             . "use Bootgly\\ACI\\Tests\\Suites;\n\n"
             . "return new Suites(directories: ['Probe/', 'Second/']);\n",
-         "{$directory}/Probe/tests/autoboot.php" => "<?php\n\n"
+         "{$app}/Probe/tests/autoboot.php" => "<?php\n\n"
             . "use Bootgly\\ACI\\Tests\\Suite;\n\n"
             . "return new Suite(\n"
             . "   autoBoot: __DIR__,\n"
@@ -181,7 +186,7 @@ return new Test(
             . "   suiteName: 'Probe',\n"
             . "   tests: ['1.1-probe']\n"
             . ");\n",
-         "{$directory}/Second/tests/autoboot.php" => "<?php\n\n"
+         "{$app}/Second/tests/autoboot.php" => "<?php\n\n"
             . "use Bootgly\\ACI\\Tests\\Suite;\n\n"
             . "return new Suite(\n"
             . "   autoBoot: __DIR__,\n"
@@ -191,7 +196,7 @@ return new Test(
             . "   suiteName: 'Second',\n"
             . "   tests: ['1.1-second']\n"
             . ");\n",
-         "{$directory}/Second/tests/1.1-second.Test.php" => "<?php\n\n"
+         "{$app}/Second/tests/1.1-second.Test.php" => "<?php\n\n"
             . "use Bootgly\\ACI\\Tests\\Suite\\Test;\n\n"
             . "return new Test(\n"
             . "   description: 'The sweep witness',\n"
@@ -213,9 +218,10 @@ return new Test(
       $red = $case("      yield assert(assertion: false, description: 'the case fails');\n");
 
       try {
-         mkdir("{$directory}/tests", 0o700, true);
-         mkdir("{$directory}/Probe/tests", 0o700, true);
-         mkdir("{$directory}/Second/tests", 0o700, true);
+         mkdir("{$directory}/projects", 0o700, true);
+         mkdir("{$app}/tests", 0o700, true);
+         mkdir("{$app}/Probe/tests", 0o700, true);
+         mkdir("{$app}/Second/tests", 0o700, true);
          foreach ($files as $file => $contents) {
             file_put_contents($file, $contents);
          }
@@ -223,7 +229,7 @@ return new Test(
 
          // @ A redirected full run is a LOG: the list view, never the live
          //   dashboard. This is the CI default the heatmap used to take.
-         [$status, $output] = $run($entry, [], $human);
+         [$status, $output] = $run($entry, [], $human, $app);
          yield assert(
             assertion: $status === 0 && str_contains($output, ' PASS ')
                && str_contains($output, '╭') === false,
@@ -231,7 +237,7 @@ return new Test(
          );
 
          // @ ...and the same full run on a terminal keeps the dashboard
-         [$status, $output] = $run($entry, [], ['BOOTGLY_TTY' => '1'] + $human);
+         [$status, $output] = $run($entry, [], ['BOOTGLY_TTY' => '1'] + $human, $app);
          yield assert(
             assertion: $status === 0 && str_contains($output, '╭')
                && str_contains($output, '■'),
@@ -240,7 +246,7 @@ return new Test(
 
          // @ An explicit --view=heatmap still renders the cards anywhere —
          //   the fallback only ever governs the IMPLICIT default
-         [$status, $output] = $run($entry, ['--view=heatmap'], $human);
+         [$status, $output] = $run($entry, ['--view=heatmap'], $human, $app);
          yield assert(
             assertion: $status === 0 && str_contains($output, '╭')
                && str_contains($output, '■'),
@@ -253,7 +259,7 @@ return new Test(
          //    into a fail-fast run that stopped at the first red suite.
          file_put_contents($probe, $red);
 
-         [$status, $output, $error] = $run($entry, [], $human);
+         [$status, $output, $error] = $run($entry, [], $human, $app);
          yield assert(
             assertion: $status === 1 && str_contains($output, 'Ran all test suites')
                && str_contains($output, 'Second'),
@@ -266,7 +272,7 @@ return new Test(
 
          // @ ...while an EXPLICIT --view=list keeps the fail-fast contract, so
          //   the witness never runs
-         [$status, $output, $error] = $run($entry, ['--view=list'], $human);
+         [$status, $output, $error] = $run($entry, ['--view=list'], $human, $app);
          yield assert(
             assertion: $status === 1 && str_contains($error, '[test] FAILED')
                && str_contains($output, 'Second') === false,
@@ -283,7 +289,7 @@ return new Test(
             . "      yield assert(assertion: false, description: 'the case fails');\n"
          ));
 
-         [$status] = $run($entry, ['--view=list'], $human);
+         [$status] = $run($entry, ['--view=list'], $human, $app);
          yield assert(
             assertion: $status === 1 && file_exists($marker)
                && str_contains((string) file_get_contents($marker), 'cleanup ran'),
@@ -307,7 +313,7 @@ return new Test(
             . "   }\n"
             . ");\n");
 
-         [$status, $output, $error] = $run($entry, [], $human);
+         [$status, $output, $error] = $run($entry, [], $human, $app);
          yield assert(
             assertion: $status === 0
                && str_contains($error, '[test] PASSED — 2 suites: 0 failed, 0 skipped, 2 passed'),
@@ -322,7 +328,7 @@ return new Test(
             . "      exit(0);\n"
          ));
 
-         [$status, $output, $error] = $run($entry, [], $human);
+         [$status, $output, $error] = $run($entry, [], $human, $app);
          yield assert(
             assertion: $status === 1 && str_contains($error, '[test] INCOMPLETE'),
             description: 'A sweep ended from inside a case exits 1 and says INCOMPLETE'
@@ -334,11 +340,13 @@ return new Test(
          foreach ($files as $file => $contents) {
             @unlink($file);
          }
-         @rmdir("{$directory}/Second/tests");
-         @rmdir("{$directory}/Second");
-         @rmdir("{$directory}/Probe/tests");
-         @rmdir("{$directory}/Probe");
-         @rmdir("{$directory}/tests");
+         @rmdir("{$app}/Second/tests");
+         @rmdir("{$app}/Second");
+         @rmdir("{$app}/Probe/tests");
+         @rmdir("{$app}/Probe");
+         @rmdir("{$app}/tests");
+         @rmdir($app);
+         @rmdir("{$directory}/projects");
          @rmdir($directory);
       }
    }

@@ -141,6 +141,7 @@ use Bootgly\ACI\Tests\Suites;
 use Bootgly\ACI\Tests\Temporaries;
 use Bootgly\API\Environment;
 use Bootgly\API\Environment\Agent;
+use Bootgly\API\Projects;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\UI\Base\Fieldset;
@@ -149,11 +150,19 @@ use Bootgly\CLI\UI\Components\Chart\Gradient;
 use Bootgly\CLI\UI\Components\Charts\Bars;
 use Bootgly\CLI\UI\Components\Charts\Meter;
 use Bootgly\CLI\UI\Components\Heatmap;
+use Bootgly\CLI\UI\Components\Select;
 
 
 class TestCommand extends Command
 {
    use Formattable;
+
+   /**
+    * How many generations of nested `bootgly test` runs may exist at once.
+    * A suite that re-execs the runner for a clean process is legitimate and
+    * nests one level; a suite that re-enters ITSELF would nest forever.
+    */
+   private const int GENERATIONS = 4;
 
    // * Config
    public int $group = 1;
@@ -254,6 +263,24 @@ class TestCommand extends Command
          passthru($line, $code);
          exit($code);
       }
+
+      // ? A suite may re-exec `bootgly test` to get a process of its own (the
+      //   E2E pattern). Nothing in that child stops it from re-entering the
+      //   same suite — same working directory, same scope, same index — so
+      //   the generation travels in the environment and the chain is refused
+      //   here. A runaway re-exec is a fork bomb, not a test failure.
+      $generation = (int) getenv('BOOTGLY_TEST_DEPTH');
+      if ($generation >= self::GENERATIONS) {
+         fwrite(
+            STDERR,
+            '[test] refusing to nest deeper: ' . self::GENERATIONS
+            . ' generations of `bootgly test` are already running — a suite is re-executing'
+            . ' the runner in a loop.' . PHP_EOL
+         );
+
+         return false;
+      }
+      putenv('BOOTGLY_TEST_DEPTH=' . ($generation + 1));
 
       // ! Socket teardown
       // Suites that drive a live server keep TLS sessions open by design (the
@@ -442,6 +469,152 @@ class TestCommand extends Command
       $suite_index = (int) ($arguments[0] ?? 0);
       // # case index
       $case_index = (int) ($arguments[1] ?? 0);
+
+      // ! Suite source — a platform flag (`--bootgly`, `--console`, `--web`)
+      //   overrides everything; with none, the author context runs its own
+      //   registry and a kit resolves the scope from the WORKING DIRECTORY.
+      //   Whatever resolves, the run's FIRST line states it: the executed set
+      //   may depend on where the user stands only if the run says so.
+      $registry = null;
+      $prefix = '';
+      $scope = '';
+      $selector = BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR ? 'Bootgly (author)' : 'workspace';
+      $Suites = null;
+      foreach (['bootgly' => 'Bootgly/', 'console' => 'Console/', 'web' => 'Web/'] as $flag => $folder) {
+         if (isSet($options[$flag]) === false) {
+            continue;
+         }
+
+         // ? The author context already runs its own registry natively
+         if ($flag === 'bootgly' && BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR) {
+            break;
+         }
+
+         $file = BOOTGLY_WORKING_DIR . "{$folder}tests/" . BOOTSTRAP_FILENAME;
+         if (is_file($file) === false) {
+            // ? STDERR — immune to the test wrapper's stdout draining
+            $platform = rtrim($folder, '/');
+            fwrite(
+               STDERR,
+               "No {$folder} test registry found — initialize the platform first "
+               . "(project wizard or `git submodule update --init {$platform}`)." . PHP_EOL
+            );
+
+            return false;
+         }
+
+         $registry = $file;
+         $prefix = $folder;
+         $scope = "--{$flag}";
+         $selector = $scope;
+
+         break;
+      }
+
+      // ? Platform checkouts (bootgly-web / bootgly-console developing
+      //   themselves) are consumer contexts whose working registry IS the
+      //   platform registry — the kit contract below must not swallow them
+      $checkout = (defined('WEB_ROOT_BASE') === true && constant('WEB_ROOT_BASE') === BOOTGLY_WORKING_BASE)
+         || (defined('CONSOLE_ROOT_BASE') === true && constant('CONSOLE_ROOT_BASE') === BOOTGLY_WORKING_BASE);
+      if ($registry === null && BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR && $checkout === true) {
+         $registry = BOOTGLY_WORKING_DIR . 'tests/' . BOOTSTRAP_FILENAME;
+      }
+      elseif ($registry === null && BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
+         // # Kit — the working directory decides the scope
+         $paths = $this->survey();
+         $situation = $this->situate($paths);
+
+         // ? Standing outside projects/ — ask on a terminal, instruct headless
+         if ($situation === null) {
+            if (BOOTGLY_TTY === true && Results::$enabled === false) {
+               $situation = $this->pick($paths);
+            }
+
+            if ($situation === null) {
+               $this->instruct($paths);
+
+               return false;
+            }
+         }
+         // ? Under projects/ but owned by no registered project — running
+         //   EVERYTHING from inside something that looks like a project would
+         //   hide a registration problem
+         if ($situation === false) {
+            fwrite(
+               STDERR,
+               '[test] ' . (string) getcwd() . ' is under projects/ but no registered project owns it'
+               . ' — register it in projects/Bootgly.projects.php (bootgly project create/import).' . PHP_EOL
+            );
+
+            return false;
+         }
+
+         if ($situation === '') {
+            // # Every registered project, one merged run
+            [$Suites, $executed, $missing] = $this->merge($paths);
+            Tests::$registry = '';
+            $scope = 'projects/';
+            $selector = 'projects/ (all projects)';
+
+            // ?
+            if ($Suites === null) {
+               fwrite(
+                  STDERR,
+                  '[test] no registered project carries a tests/' . BOOTSTRAP_FILENAME
+                  . ' — scaffold one with `bootgly project create <Name> --yes`.' . PHP_EOL
+               );
+
+               return false;
+            }
+
+            // ! The set, before anything runs — totals say registered vs
+            //   executed, so a partial merge can never read as the whole
+            if (Results::$enabled === false) {
+               fwrite(STDOUT, "[test] scope: {$selector}" . PHP_EOL);
+               fwrite(STDOUT, '[test] projects: ' . count($paths) . ' registered, ' . count($executed) . ' executed' . PHP_EOL);
+               $index = 1;
+               foreach ($executed as $path => $suites) {
+                  $last = $index + $suites - 1;
+                  $range = $suites === 1 ? "suite {$index}" : "suites {$index}-{$last}";
+                  fwrite(STDOUT, "   projects/{$path} — {$range}" . PHP_EOL);
+                  $index = $last + 1;
+               }
+               foreach ($missing as $path) {
+                  fwrite(STDOUT, "   projects/{$path} — no tests/" . BOOTSTRAP_FILENAME . ' (not executed)' . PHP_EOL);
+               }
+            }
+         }
+         else {
+            // # One project
+            $file = BOOTGLY_WORKING_DIR . "projects/{$situation}/tests/" . BOOTSTRAP_FILENAME;
+            if (is_file($file) === false) {
+               fwrite(
+                  STDERR,
+                  "[test] projects/{$situation} carries no tests/" . BOOTSTRAP_FILENAME
+                  . ' — scaffold one (see any `bootgly project create` project) and register its suites.' . PHP_EOL
+               );
+
+               return false;
+            }
+
+            $registry = $file;
+            $prefix = "projects/{$situation}/";
+            $scope = $prefix;
+            $selector = $prefix;
+         }
+      }
+
+      // ! The scope line — the first line of every human run (agents read the
+      //   pure-JSON results document instead; the merged branch printed its
+      //   own fuller set above). Written to the stream directly, as Output
+      //   does: `echo` goes through PHP's output layer and marks the headers
+      //   as sent, which breaks every `ini_set('session.*')` in the suites
+      //   that follow.
+      if (Results::$enabled === false && $Suites === null) {
+         $where = $registry ?? BOOTGLY_ROOT_DIR . 'tests/' . BOOTSTRAP_FILENAME;
+         $where = str_replace([BOOTGLY_WORKING_DIR, BOOTGLY_ROOT_DIR], '', $where);
+         fwrite(STDOUT, "[test] scope: {$selector} — {$where}" . PHP_EOL);
+      }
       // options
       // # coverage
       $coverageEnabled = isset($options['coverage']);
@@ -485,45 +658,15 @@ class TestCommand extends Command
       }
 
 
-      // ! Suite source — the context registry by default; `--bootgly`,
-      //   `--console` and `--web` run the framework/platform registries
-      //   from a kit (their directories resolve behind the platform folder)
-      $registry = null;
-      $prefix = '';
-      foreach (['bootgly' => 'Bootgly/', 'console' => 'Console/', 'web' => 'Web/'] as $flag => $folder) {
-         if (isSet($options[$flag]) === false) {
-            continue;
-         }
-
-         // ? The author context already runs its own registry natively
-         if ($flag === 'bootgly' && BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR) {
-            break;
-         }
-
-         $file = BOOTGLY_WORKING_DIR . "{$folder}tests/" . BOOTSTRAP_FILENAME;
-         if (is_file($file) === false) {
-            // ? STDERR — immune to the test wrapper's stdout draining
-            $platform = rtrim($folder, '/');
-            fwrite(
-               STDERR,
-               "No {$folder} test registry found — initialize the platform first "
-               . "(project wizard or `git submodule update --init {$platform}`)." . PHP_EOL
-            );
-
-            return false;
-         }
-
-         $registry = $file;
-         $prefix = $folder;
-
-         break;
-      }
-
       // @
-      $Tests = new Tests($registry, $prefix);
-      $this->Suites = $Tests->Suites;
+      if ($Suites === null) {
+         $Tests = new Tests($registry, $prefix);
+         $Suites = $Tests->Suites;
+      }
+      $this->Suites = $Suites;
+      Tests::$scope = $scope;
 
-      if ($suite_index > 0 && ! isset($Tests->Suites->directories[$suite_index - 1])) {
+      if ($suite_index > 0 && isSet($Suites->directories[$suite_index - 1]) === false) {
          $Output = CLI->Terminal->Output;
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
@@ -534,12 +677,12 @@ class TestCommand extends Command
       }
 
       // $Tester = new Tester;
-      $Tests->Suites->iterate(
+      $Suites->iterate(
          suite: $suite_index,
          case: $case_index,
          iterator: fn (string $suite_dir, int $index, int $suite) => $this->test($suite_dir, $index, $suite)
       );
-      $Tests->Suites->summarize();
+      $Suites->summarize();
 
       // @ Coverage report
       if ($Coverage !== null) {
@@ -548,7 +691,7 @@ class TestCommand extends Command
          $includes = [];
          $targets = [];
 
-         foreach ($Tests->Suites->directories as $index => $dir) {
+         foreach ($Suites->directories as $index => $dir) {
             if ($suite_index > 0 && $suite_index !== $index + 1) {
                continue;
             }
@@ -624,7 +767,7 @@ class TestCommand extends Command
       $this->completed = true;
 
       // :
-      return $Tests->Suites->failed === 0 && $this->failures === 0;
+      return $Suites->failed === 0 && $this->failures === 0;
    }
 
    // # Help
@@ -633,6 +776,203 @@ class TestCommand extends Command
     *
     * @return bool
     */
+   /**
+    * Survey the kit's registered project paths, registry order.
+    *
+    * Reads the consumer registry file DIRECTLY: `Projects::read()` falls back
+    * to the author registry, which would hand a registry-less kit the
+    * framework's own Demo entries — poisoning both the matcher and the picker.
+    *
+    * @return array<string>
+    */
+   private function survey (): array
+   {
+      // !
+      $file = BOOTGLY_WORKING_DIR . 'projects/Bootgly.projects.php';
+      $loaded = is_file($file) === true ? include $file : [];
+      // ?
+      if (is_array($loaded) === false) {
+         return [];
+      }
+
+      // @@ Defense against a hand-edited registry: only path-safe keys count
+      $paths = [];
+      foreach (array_keys($loaded) as $path) {
+         if (is_string($path) === true && Projects::check($path) === true) {
+            $paths[] = $path;
+         }
+      }
+
+      // :
+      return $paths;
+   }
+
+   /**
+    * Situate the working directory against the kit's registered projects.
+    *
+    * @param array<string> $paths Registered project paths, registry order.
+    *
+    * @return null|false|string `null` = outside `projects/` (the kit root or
+    * anywhere else); an empty string = `projects/` itself (every project); a
+    * registered path (e.g. `App/API`) = the LONGEST registered owner of the
+    * working directory; `false` = under `projects/` but owned by none.
+    */
+   private function situate (array $paths): null|false|string
+   {
+      // ! Both sides canonical — a symlinked kit or cwd must compare equal
+      $projects = realpath(BOOTGLY_WORKING_DIR . 'projects');
+      $cwd = getcwd();
+      $cwd = $cwd === false ? false : realpath($cwd);
+      // ?
+      if ($projects === false || $cwd === false) {
+         return null;
+      }
+      $projects = str_replace(chr(92), '/', $projects);
+      $cwd = str_replace(chr(92), '/', $cwd);
+
+      // ?: `projects/` itself
+      if ($cwd === $projects) {
+         return '';
+      }
+      // ?: outside `projects/`
+      if (str_starts_with("{$cwd}/", "{$projects}/") === false) {
+         return null;
+      }
+
+      // @@ Longest registered owner wins: `projects/App/API/x` with both
+      //   `App` and `App/API` registered belongs to `App/API`
+      $relative = substr($cwd, strlen($projects) + 1);
+      $owner = false;
+      foreach ($paths as $path) {
+         if ($relative !== $path && str_starts_with($relative, "{$path}/") === false) {
+            continue;
+         }
+         if ($owner === false || strlen($path) > strlen($owner)) {
+            $owner = $path;
+         }
+      }
+
+      // :
+      return $owner;
+   }
+
+   /**
+    * Merge every registered project registry into one Suites run.
+    *
+    * @param array<string> $paths Registered project paths, registry order.
+    *
+    * @return array{null|Suites, array<string, int>, array<string>} The merged
+    * Suites (`null` when nothing is executable), the executed paths mapped to
+    * their suite counts, and the registered-but-registry-less paths.
+    */
+   private function merge (array $paths): array
+   {
+      // !
+      $directories = [];
+      $executed = [];
+      $missing = [];
+
+      // @@ Reusing Tests per project buys the prefixing AND the bare-Suite
+      //   tolerance uniformly; the throwaway instances only build directories
+      foreach ($paths as $path) {
+         $file = BOOTGLY_WORKING_DIR . "projects/{$path}/tests/" . BOOTSTRAP_FILENAME;
+         // ? Informational, not a failure — the caller prints the set
+         if (is_file($file) === false) {
+            $missing[] = $path;
+
+            continue;
+         }
+
+         $Project = new Tests($file, "projects/{$path}/");
+         foreach ($Project->Suites->directories as $directory) {
+            $directories[] = $directory;
+         }
+         $executed[$path] = count($Project->Suites->directories);
+      }
+
+      // ?:
+      if ($directories === []) {
+         return [null, $executed, $missing];
+      }
+
+      // :
+      return [new Suites($directories), $executed, $missing];
+   }
+
+   /**
+    * Pick a test scope interactively — one registered project, or all.
+    *
+    * @param array<string> $paths Registered project paths, registry order.
+    *
+    * @return null|string The chosen path, an empty string for every project,
+    * `null` when aborted or with nothing to pick from.
+    */
+   private function pick (array $paths): null|string
+   {
+      // ?
+      if ($paths === []) {
+         return null;
+      }
+
+      $Terminal = CLI->Terminal;
+
+      $Select = new Select($Terminal->Input, $Terminal->Output);
+      $Select->title = "@#Cyan:Which test scope?@;\n@#Black:(↑/↓ to move, Enter to confirm)@;";
+      foreach ($paths as $path) {
+         $Select->options[] = "projects/{$path}";
+         $Select->details[] = is_file(BOOTGLY_WORKING_DIR . "projects/{$path}/tests/" . BOOTSTRAP_FILENAME) === true
+            ? ''
+            : 'no tests/' . BOOTSTRAP_FILENAME;
+      }
+      $Select->options[] = 'All projects';
+      $Select->details[] = '';
+
+      // @@ Render until Enter (EOF-safe: an empty selection aborts)
+      foreach ($Select->selecting() as $ignored);
+
+      // ?
+      $selected = $Select->selected[0] ?? null;
+      if ($selected === null) {
+         return null;
+      }
+
+      // :
+      return (int) $selected === count($paths) ? '' : $paths[(int) $selected];
+   }
+
+   /**
+    * Instruct a run that resolved no scope — state what would have been asked.
+    *
+    * On STDERR: immune to the agent wrapper's stdout draining, and the caller
+    * returns false, so a misconfigured CI job can never read as green.
+    *
+    * @param array<string> $paths Registered project paths, registry order.
+    *
+    * @return void
+    */
+   private function instruct (array $paths): void
+   {
+      // ?
+      if ($paths === []) {
+         fwrite(
+            STDERR,
+            '[test] no scope: this kit has no registered projects yet — create one with'
+            . ' `bootgly project create <Name> --yes`, then run `bootgly test` from its directory.' . PHP_EOL
+         );
+
+         return;
+      }
+
+      // :
+      fwrite(STDERR, '[test] no scope: `bootgly test` runs the suites of where you stand.' . PHP_EOL);
+      fwrite(STDERR, 'Registered projects:' . PHP_EOL);
+      foreach ($paths as $path) {
+         fwrite(STDERR, "   cd projects/{$path} && bootgly test" . PHP_EOL);
+      }
+      fwrite(STDERR, '   cd projects && bootgly test   (all projects)' . PHP_EOL);
+      fwrite(STDERR, 'Platform scopes: bootgly test --bootgly|--console|--web' . PHP_EOL);
+   }
+
    public function help (array $arguments = []): bool
    {
       // ? Benchmark subcommand help — delegate so `test benchmark [case] --help`
@@ -653,7 +993,7 @@ class TestCommand extends Command
 
       // # Arguments
       $arguments = [
-         '[suite]' => 'Suite index (1-based, tests/autoboot.php order); omit it to run all suites',
+         '[suite]' => 'Suite index (1-based, in the resolved scope); omit it to run all its suites',
          '[case]' => 'Test case index inside the selected suite (1-based)',
          'benchmark' => 'Benchmark subcommand; see: bootgly test benchmark --help',
       ];
