@@ -195,18 +195,16 @@ if (
          $exit = proc_close($proc);
 
          // Extract the last valid JSON document from the captured output.
-         // Results::toJSON() emits a single-line object ending with PHP_EOL.
-         // Other writes (ANSI cursor escapes, child process banners) may be
-         // interleaved, so we strip ANSI and scan backwards from every `{` for
-         // a substring that parses as JSON.
+         // Results::toJSON() emits a single-line object ending with PHP_EOL,
+         // so the scan is by LINE, newest first: anything written AFTER the
+         // document (an exception trace from a suite that threw) would hide
+         // it from a scan bounded by the end of the buffer.
          $json = '';
          if ($buffer !== '') {
             $clean = preg_replace('/\x1b\[[0-9;?]*[ -\/]*[@-~]/', '', $buffer) ?? $buffer;
-            $len = strlen($clean);
-            for ($i = $len - 1; $i >= 0; $i--) {
-               if ($clean[$i] !== '{')
-                  continue;
-               $candidate = trim(substr($clean, $i));
+            $lines = explode(PHP_EOL, $clean);
+            for ($i = count($lines) - 1; $i >= 0; $i--) {
+               $candidate = trim($lines[$i]);
                if ($candidate === '' || $candidate[0] !== '{')
                   continue;
                $decoded = json_decode($candidate, true);
