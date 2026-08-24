@@ -116,6 +116,13 @@ class TCP_Client_CLI
    public const int MODE_DEFAULT = 1;
    public const int MODE_MONITOR = 2;
    public const int MODE_TEST = 3;
+   /**
+    * Embedded/library mode: the client runs inside another process's runtime
+    * (a server worker, a certifier child, a host application). No Process
+    * state lock, no Commands/Terminal, no shutdown SIGINT broadcast and no
+    * debugging-vars overwrite — the host owns all of those.
+    */
+   public const int MODE_EMBEDDED = 4;
 
    // * Data
    /** @var array<string,true> */
@@ -178,9 +185,13 @@ class TCP_Client_CLI
 
 
       // @ Configure Debugging Vars
-      Vars::$debug = true;
-      Vars::$print = true;
-      Vars::$exit = false;
+      // ? An embedded client never flips process-wide debugging state: the
+      //   host process (e.g. a server worker) already configured it.
+      if ($this->mode !== self::MODE_EMBEDDED) {
+         Vars::$debug = true;
+         Vars::$print = true;
+         Vars::$exit = false;
+      }
 
       // @ Instance Bootables
       // ! Connection(s)
@@ -188,8 +199,8 @@ class TCP_Client_CLI
       // ! Web\@\Events
       static::$Event = new Select($this->Connections); // @phpstan-ignore-line
 
-      // @ Skip Process/Commands infrastructure in test mode
-      if ($this->mode === self::MODE_TEST) {
+      // @ Skip Process/Commands infrastructure in test and embedded modes
+      if ($this->mode === self::MODE_TEST || $this->mode === self::MODE_EMBEDDED) {
          return;
       }
 

@@ -985,10 +985,10 @@ class ACME_Client
             'peer_name' => $target['host']
          ];
 
-      // ! MODE_TEST = embedded/library mode: no Process state lock, no
-      //   signal handling and no shutdown SIGINT broadcast — the client
-      //   runs inside the certifier child beside a live server master
-      $Client = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_TEST);
+      // ! Embedded/library mode: no Process state lock, no signal handling
+      //   and no shutdown SIGINT broadcast — the client runs inside the
+      //   certifier child beside a live server master
+      $Client = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_EMBEDDED);
       // ! ACME speaks HTTP/1.1 by design: no ALPN h2 offer — directory
       //   endpoints and the local swap helpers are h1-only transports
       $Client->configure(
