@@ -26,6 +26,7 @@ use const SIGKILL;
 use const SIGSTOP;
 use const SIGTERM;
 use const SIGUSR2;
+use const STR_PAD_LEFT;
 use function array_filter;
 use function array_key_exists;
 use function array_key_first;
@@ -348,7 +349,7 @@ class ProjectCommand extends Command
          //   knowing the flag is refused is loud, knowing where it applies is
          //   what lets the caller fix the command.
          if ($applies !== '') {
-            $Output->render("@#Green:Note:@; @#Black:--{$option}@; is: {$applies}.@.;");
+            $Output->render("@#Green:Note:@; @#Blue:--{$option}@; is: {$applies}.@.;");
          }
 
          return false;
@@ -1880,7 +1881,7 @@ class ProjectCommand extends Command
             // ! Summary
             $content  = '@#Green:' . str_pad('Path', 12) . ' @; ' . $path . PHP_EOL;
             $content .= '@#Green:' . str_pad('Mode', 12) . ' @; From scratch' . PHP_EOL;
-            $content .= '@#Green:' . str_pad('Interfaces', 12) . ' @; ' . implode(', ', $meta['interfaces'] ?? []);
+            $content .= '@#Green:' . str_pad('Interface', 12) . ' @; ' . implode(', ', $meta['interfaces'] ?? []);
             if (isSet($meta['port'])) {
                $content .= PHP_EOL . '@#Green:' . str_pad('Port', 12) . ' @; ' . $meta['port'];
             }
@@ -2161,18 +2162,60 @@ class ProjectCommand extends Command
 
       // : Closing report — rendered after the completion screen, so it stays visible
       if ($branch === 'git') {
+         $this->summarize("Project {$target}", [
+            'Path'       => "projects/{$target}/",
+            'Interface'  => (string) ($options['interfaces'] ?? 'CLI'),
+            'Source'     => $url,
+            'History'    => 'kept — the clone carries its own origin',
+         ]);
+
          return $this->report(true, $target);
       }
 
       if ($branch === 'imported') {
+         // ! What the kit holds, by the platform that ships it. The names are
+         //   the point — a count alone does not tell anyone what to open.
+         $listed = 0;
+         $rows = [];
+         foreach ($this->gather() as $origin => $paths) {
+            $listed += count($paths);
+
+            // ! One row per origin, kept narrow by dropping whole names —
+            //   a path cut in half names no project anyone can open
+            $named = [];
+            $width = 0;
+            $hidden = 0;
+            foreach ($paths as $name) {
+               if ($named !== [] && $width + strlen($name) + 2 > 52) {
+                  $hidden++;
+
+                  continue;
+               }
+
+               $named[] = $name;
+               $width += strlen($name) + 2;
+            }
+
+            $listing = implode(', ', $named);
+            if ($hidden > 0) {
+               $listing .= " … +{$hidden}";
+            }
+
+            $rows[$origin] = str_pad((string) count($paths), 3, ' ', STR_PAD_LEFT) . '  ' . $listing;
+         }
+
+         $this->summarize("Imported projects ({$listed})", $rows);
+
          $prefix = shell_exec('command -v bootgly 2>/dev/null') ? '' : 'php ';
 
-         $Output->write(PHP_EOL);
          $Output->render(
-            "@#Green:Tip:@; Use @#Black:{$prefix}bootgly project list@; to see the imported projects.@.;"
+            "@#Green:Tip:@; Use @#Blue:{$prefix}bootgly project list@; to see them all.@.;"
          );
          $Output->render(
-            "@#Green:Tip:@; Use @#Black:{$prefix}bootgly project <Name> start@; to boot one.@.;"
+            "@#Green:Tip:@; Use @#Blue:{$prefix}bootgly project <Name> start@; to boot one.@.;"
+         );
+         $Output->render(
+            "@#Green:Tip:@; Run @#Blue:cd projects/<Name> && {$prefix}bootgly test@; to run its suites.@.;"
          );
          $Output->write(PHP_EOL);
 
@@ -2193,6 +2236,18 @@ class ProjectCommand extends Command
 
          return true;
       }
+
+      $this->summarize("Project {$path}", [
+         'Path'        => "projects/{$path}/",
+         'Interface'   => implode(', ', $meta['interfaces'] ?? []),
+         'Port'        => (string) ($meta['port'] ?? ''),
+         'Description' => (string) ($meta['description'] ?? ''),
+         'Version'     => (string) ($meta['version'] ?? ''),
+         'Author'      => (string) ($meta['author'] ?? ''),
+         'Repository'  => is_dir(Projects::CONSUMER_DIR . "{$path}/.git") === true
+            ? 'its own, with the scaffold as the first commit'
+            : '',
+      ]);
 
       return $this->report(true, (string) $path);
    }
@@ -3005,6 +3060,93 @@ class ProjectCommand extends Command
    }
 
    /**
+    * Summarize a finished wizard run in a titled Fieldset.
+    *
+    * Rendered after the completion screen, where the full terminal width is
+    * available again — the steps' own summaries live inside the wizard region
+    * and have to stay narrow.
+    *
+    * @param string $title
+    * @param array<string, string> $rows Label => value; an empty value is dropped.
+    *
+    * @return void
+    */
+   private function summarize (string $title, array $rows): void
+   {
+      $Output = CLI->Terminal->Output;
+
+      // !
+      $content = [];
+      foreach ($rows as $label => $value) {
+         // ? Nothing to say about it
+         if ($value === '') {
+            continue;
+         }
+
+         $content[] = '@#Green:' . str_pad($label, 12) . ' @; ' . $value;
+      }
+
+      // ?
+      if ($content === []) {
+         return;
+      }
+
+      // @
+      $Output->write(PHP_EOL);
+
+      $Fieldset = new Fieldset($Output);
+      $Fieldset->title = "@#Cyan: {$title} @;";
+      $Fieldset->content = implode(PHP_EOL, $content);
+      $Fieldset->render();
+
+      $Output->write(PHP_EOL);
+   }
+
+   /**
+    * Gather the shipped projects the working directory HOLDS, by origin.
+    *
+    * The kit imports every exportable project when it is prepared, so what
+    * the wizard reports is the shelf as it stands: an example the user
+    * deleted is gone from it, and a platform source that was never imported
+    * was never a project of theirs.
+    *
+    * @return array<string, array<string>> Origin (`Bootgly`, `Console`, `Web`) => project paths.
+    */
+   private function gather (): array
+   {
+      $Bootgly = [];
+      $Console = [];
+      $Web = [];
+
+      // @@
+      foreach ($this->survey() as $import) {
+         // ? Only what the working directory holds
+         if (is_dir(Projects::CONSUMER_DIR . $import['path']) === false) {
+            continue;
+         }
+
+         $source = $import['source'];
+
+         if (str_starts_with($source, BOOTGLY_WORKING_DIR . 'Console/') === true) {
+            $Console[] = $import['path'];
+         }
+         else if (str_starts_with($source, BOOTGLY_WORKING_DIR . 'Web/') === true) {
+            $Web[] = $import['path'];
+         }
+         else {
+            $Bootgly[] = $import['path'];
+         }
+      }
+
+      // :
+      return array_filter([
+         'Bootgly' => $Bootgly,
+         'Console' => $Console,
+         'Web'     => $Web,
+      ]);
+   }
+
+   /**
     * Offer the start modes, in the order a new user meets them.
     *
     * The first mode creates nothing: a prepared kit already carries the
@@ -3018,10 +3160,8 @@ class ProjectCommand extends Command
    {
       // @ Imported guides
       $imported = 0;
-      foreach ($this->survey() as $import) {
-         if (is_dir(Projects::CONSUMER_DIR . $import['path']) === true) {
-            $imported++;
-         }
+      foreach ($this->gather() as $paths) {
+         $imported += count($paths);
       }
 
       // :
@@ -3094,7 +3234,7 @@ class ProjectCommand extends Command
          $relative = substr($leftover, strlen(Projects::CONSUMER_DIR));
          $Output->render(
             "@#Yellow:Note:@; the previous copy could not be fully removed — what remains is at "
-            . "@#Black:projects/{$relative}@;; delete it once you no longer need it.@.;"
+            . "@#Cyan:projects/{$relative}@;; delete it once you no longer need it.@.;"
          );
       }
    }
@@ -3166,12 +3306,12 @@ class ProjectCommand extends Command
 
       $Output->write(PHP_EOL);
       foreach ($steps as [$action, $goal]) {
-         $Output->render("@#Green:Tip:@; Use @#Black:{$prefix}bootgly project {$path} {$action}@; to {$goal}.@.;");
+         $Output->render("@#Green:Tip:@; Use @#Blue:{$prefix}bootgly project {$path} {$action}@; to {$goal}.@.;");
       }
 
       // ? Example tests — projects ship them as a writing guide
       if (is_dir(Projects::CONSUMER_DIR . "{$path}/tests") === true) {
-         $Output->render("@#Green:Tip:@; Run @#Black:cd projects/{$path} && {$prefix}bootgly test@; to run its suites.@.;");
+         $Output->render("@#Green:Tip:@; Run @#Blue:cd projects/{$path} && {$prefix}bootgly test@; to run its suites.@.;");
       }
 
       $Output->write(PHP_EOL);
@@ -3303,7 +3443,7 @@ class ProjectCommand extends Command
          $Alert->render();
 
          $Output->render(
-            '@#Green:Tip:@; Register it in @#Black:projects/Bootgly.projects.php@; or use @#Black:bootgly project list@;.@..;'
+            '@#Green:Tip:@; Register it in @#Cyan:projects/Bootgly.projects.php@; or use @#Blue:bootgly project list@;.@..;'
          );
 
          return null;
@@ -3323,7 +3463,7 @@ class ProjectCommand extends Command
          $Alert->render();
 
          $Output->render(
-            '@#Green:Tip:@; Use @#Black:bootgly project list@; to see all available projects.@..;'
+            '@#Green:Tip:@; Use @#Blue:bootgly project list@; to see all available projects.@..;'
          );
 
          return null;
@@ -3549,7 +3689,7 @@ class ProjectCommand extends Command
 
       $prefix = shell_exec('command -v bootgly 2>/dev/null') ? '' : 'php ';
       CLI->Terminal->Output->render(
-         "@#Green:Tip:@; state files exist but could not be verified — if the project was started as @#cyan:root@;, retry with @#Black:sudo {$prefix}bootgly project {$projectName} {$action}@;.@..;"
+         "@#Green:Tip:@; state files exist but could not be verified — if the project was started as @#cyan:root@;, retry with @#Blue:sudo {$prefix}bootgly project {$projectName} {$action}@;.@..;"
       );
    }
 
@@ -3728,19 +3868,19 @@ class ProjectCommand extends Command
          $Fieldset->render();
 
          // # Examples
-         $exampleLines = '@#Black:bootgly project create@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project create App/API --from=scratch --interfaces=WPI --yes@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project import https://github.com/foo/project1 Project1@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project list@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project Demo/HTTP_Server_CLI start@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project Demo/HTTP_Server_CLI stop@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project Demo/HTTP_Server_CLI show@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project Demo/HTTP_Server_CLI restart@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project Demo/HTTP_Server_CLI info@;' . PHP_EOL;
+         $exampleLines = '@#Blue:bootgly project create@;' . PHP_EOL;
+         $exampleLines .= '@#Blue:bootgly project create App/API --from=scratch --interfaces=WPI --yes@;' . PHP_EOL;
+         $exampleLines .= '@#Blue:bootgly project import https://github.com/foo/project1 Project1@;' . PHP_EOL;
+         $exampleLines .= '@#Blue:bootgly project list@;' . PHP_EOL;
+         $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI start@;' . PHP_EOL;
+         $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI stop@;' . PHP_EOL;
+         $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI show@;' . PHP_EOL;
+         $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI restart@;' . PHP_EOL;
+         $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI info@;' . PHP_EOL;
          $exampleLines .= PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project start Demo/HTTP_Server_CLI@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project stop Demo/HTTP_Server_CLI@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project show Demo/HTTP_Server_CLI@;';
+         $exampleLines .= '@#Blue:bootgly project start Demo/HTTP_Server_CLI@;' . PHP_EOL;
+         $exampleLines .= '@#Blue:bootgly project stop Demo/HTTP_Server_CLI@;' . PHP_EOL;
+         $exampleLines .= '@#Blue:bootgly project show Demo/HTTP_Server_CLI@;';
          $Fieldset = new Fieldset($Output);
          $Fieldset->title = '@#green: Project examples @;';
          $Fieldset->content = $exampleLines;
@@ -3788,13 +3928,13 @@ class ProjectCommand extends Command
          // # Example
          $Fieldset = new Fieldset($Output);
          $Fieldset->title = '@#Cyan: Project ' . $subcommand . ' example @;';
-         $Fieldset->content = '@#Black:bootgly project Demo/HTTP_Server_CLI ' . $subcommand . '@;' . PHP_EOL
-            . '@#Black:bootgly project ' . $subcommand . ' Demo/HTTP_Server_CLI@;';
+         $Fieldset->content = '@#Blue:bootgly project Demo/HTTP_Server_CLI ' . $subcommand . '@;' . PHP_EOL
+            . '@#Blue:bootgly project ' . $subcommand . ' Demo/HTTP_Server_CLI@;';
          $Fieldset->render();
 
          // # Hint
          $Output->render(
-            '@.;@#Green:Tip:@; Use @#Black:bootgly project list@; to see all available projects.@.;'
+            '@.;@#Green:Tip:@; Use @#Blue:bootgly project list@; to see all available projects.@.;'
          );
       }
       else {

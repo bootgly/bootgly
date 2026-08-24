@@ -160,7 +160,7 @@ class HelpCommand extends Command
       if ($verbosity >= 1) {
          $usage .= <<<OUTPUT
             @..;Example:
-         @#Black:{$script} project start
+         @#Blue:{$script} project start
          OUTPUT;
       }
 
@@ -171,9 +171,9 @@ class HelpCommand extends Command
       $Fieldset4->render();
 
       // # Commands examples
-      $exampleLines = '@#Black:' . $script . ' project list@;' . PHP_EOL;
-      $exampleLines .= '@#Black:' . $script . ' project Demo/HTTP_Server_CLI start@;' . PHP_EOL;
-      $exampleLines .= '@#Black:' . $script . ' project Demo/HTTP_Server_CLI stop@;';
+      $exampleLines = '@#Blue:' . $script . ' project list@;' . PHP_EOL;
+      $exampleLines .= '@#Blue:' . $script . ' project Demo/HTTP_Server_CLI start@;' . PHP_EOL;
+      $exampleLines .= '@#Blue:' . $script . ' project Demo/HTTP_Server_CLI stop@;';
       $Fieldset5 = new Fieldset($Output);
       $Fieldset5->title = '@#green: Commands examples @;';
       $Fieldset5->content = $exampleLines;

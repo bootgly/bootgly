@@ -15,6 +15,8 @@ use const BOOTGLY_ROOT_DIR;
 use const GLOB_ONLYDIR;
 use function array_diff;
 use function assert;
+use function escapeshellarg;
+use function exec;
 use function fclose;
 use function file_get_contents;
 use function file_put_contents;
@@ -39,6 +41,7 @@ use function unlink;
 use ReflectionProperty;
 
 use Bootgly\ACI\Tests\Suite\Test;
+use Bootgly\ACI\Tests\Temporaries;
 use Bootgly\API\Projects;
 
 
@@ -100,9 +103,9 @@ return new Test(
       //   read WITHOUT its escape codes: the renderer paints a label and its
       //   parenthetical in different colors, so a raw match for the finished
       //   step would look for a substring the stream never carries.
-      $run = static function () use (&$output): int {
+      $run = static function (array $arguments = [], string $input = "\n") use (&$output): int {
          $Process = proc_open(
-            ['php', BOOTGLY_ROOT_DIR . 'bootgly', 'project', 'create'],
+            ['php', BOOTGLY_ROOT_DIR . 'bootgly', 'project', 'create', ...$arguments],
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             BOOTGLY_ROOT_DIR,
@@ -112,7 +115,7 @@ return new Test(
          $output = '';
          $status = -1;
          if (is_resource($Process) === true) {
-            fwrite($pipes[0], "\n");
+            fwrite($pipes[0], $input);
             fclose($pipes[0]);
             $output = (string) stream_get_contents($pipes[1]) . (string) stream_get_contents($pipes[2]);
             fclose($pipes[1]);
@@ -167,6 +170,18 @@ return new Test(
             description: 'the branch closes by pointing at the imported projects'
          );
 
+         yield assert(
+            assertion: str_contains($output, "Imported projects ({$available})")
+               && str_contains($output, 'Bootgly'),
+            description: 'the skip branch closes with a summary of what the kit holds'
+         );
+
+         yield assert(
+            assertion: str_contains($output, "Imported projects ({$available})")
+               && str_contains($output, 'Bootgly'),
+            description: 'the skip branch closes with a summary of what the kit holds'
+         );
+
          // # It creates NOTHING — the registry is the one the run started with
          $after = is_file($registry) ? file_get_contents($registry) : null;
          yield assert(
@@ -207,10 +222,56 @@ return new Test(
                && str_contains($output, 'PlantedGhost') === false,
             description: 'a platform source that was never imported is not counted'
          );
+         // # From scratch: the run closes with a receipt of what it generated,
+         //   and every next step names the project — a `<Name>` placeholder
+         //   belongs to the branch that created nothing, not to this one
+         $run(['--from=scratch', '--interfaces=CLI'], "WizSum\nA wizard summary\n2.0.0\nRodrigo\n\n");
+
+         yield assert(
+            assertion: str_contains($output, 'Project WizSum')
+               && str_contains($output, 'projects/WizSum/')
+               && str_contains($output, 'A wizard summary')
+               && str_contains($output, '2.0.0')
+               && str_contains($output, 'Rodrigo'),
+            description: 'a from-scratch run closes with a summary of what it generated'
+         );
+         yield assert(
+            assertion: str_contains($output, 'bootgly project WizSum start')
+               && str_contains($output, '<Name>') === false,
+            description: 'the from-scratch tips name the project, never a placeholder'
+         );
+
+         // # From a git remote: the same receipt, plus where it came from.
+         //   Driven through the Mode menu with two ↓ and Enter — `file://` on
+         //   purpose, git treats a plain local path differently.
+         $fixture = Temporaries::reserve('wizard-clone');
+         $identity = '-c user.email=probe@local -c user.name=probe -c commit.gpgsign=false';
+         file_put_contents(
+            "{$fixture}/WizClone.Project.php",
+            "<?php\n\nuse Bootgly\\API\\Projects\\Project;\n\n"
+               . "return new Project(boot: static function (): void {}, name: 'WizClone');\n"
+         );
+         exec('git -C ' . escapeshellarg($fixture) . ' init --quiet 2>/dev/null');
+         exec('git -C ' . escapeshellarg($fixture) . ' add WizClone.Project.php 2>/dev/null');
+         exec('git -C ' . escapeshellarg($fixture) . " {$identity} commit --quiet -m one 2>/dev/null");
+
+         $run([], "\033[B\033[B\nfile://{$fixture}\nWizClone\n\ny\n");
+
+         yield assert(
+            assertion: str_contains($output, 'Project WizClone')
+               && str_contains($output, 'projects/WizClone/')
+               && str_contains($output, "file://{$fixture}")
+               && str_contains($output, 'bootgly project WizClone start')
+               && str_contains($output, '<Name>') === false,
+            description: 'a git-remote run summarizes the clone and names it in the tips'
+         );
       }
       finally {
          // ! Leave the checkout exactly as it was found
          $erase($plant);
+         foreach (['WizSum', 'WizClone', '.WizClone.staging', '.WizClone.backup'] as $probe) {
+            $erase("{$consumer}{$probe}");
+         }
          $erase(BOOTGLY_ROOT_DIR . 'Console');
 
          if ($snapshot !== null && $snapshot !== false) {
