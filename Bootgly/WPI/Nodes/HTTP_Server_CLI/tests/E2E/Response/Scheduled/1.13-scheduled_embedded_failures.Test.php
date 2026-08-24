@@ -77,11 +77,11 @@ return new Test(
       ];
 
       yield new Assertion(
-         description: 'Every failure case resolved exactly once',
-         fallback: 'A parked failure terminal hung or produced no result!'
+         description: 'Every failure case resolved exactly once, in order',
+         fallback: 'A parked failure terminal hung, duplicated or produced no result!'
       )
-         ->expect(count($cases))
-         ->to->be(count($expected))
+         ->expect(array_column($cases, 'path'))
+         ->to->be(array_keys($expected))
          ->assert();
 
       foreach ($cases as $case) {

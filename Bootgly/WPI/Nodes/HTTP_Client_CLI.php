@@ -12,13 +12,13 @@ namespace Bootgly\WPI\Nodes;
 
 use const BOOTGLY_ROOT_DIR;
 use const SIGTERM;
-use const STREAM_IPPROTO_IP;
-use const STREAM_PF_UNIX;
-use const STREAM_SOCK_STREAM;
 use const STREAM_CRYPTO_METHOD_TLSv1_2_SERVER;
 use const STREAM_CRYPTO_METHOD_TLSv1_3_SERVER;
+use const STREAM_IPPROTO_IP;
+use const STREAM_PF_UNIX;
 use const STREAM_SERVER_BIND;
 use const STREAM_SERVER_LISTEN;
+use const STREAM_SOCK_STREAM;
 use function array_shift;
 use function array_unshift;
 use function basename;
@@ -38,14 +38,15 @@ use function parse_url;
 use function pcntl_fork;
 use function pcntl_waitpid;
 use function posix_kill;
+use function spl_object_id;
 use function str_replace;
 use function stream_context_create;
 use function stream_get_meta_data;
+use function stream_set_blocking;
 use function stream_socket_accept;
 use function stream_socket_enable_crypto;
-use function stream_socket_server;
-use function stream_set_blocking;
 use function stream_socket_pair;
+use function stream_socket_server;
 use function stripos;
 use function strlen;
 use function strpos;
@@ -77,8 +78,8 @@ use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Pool;
-use Bootgly\WPI\Modules\HTTP2\Errors;
 use Bootgly\WPI\Modules\HTTP;
+use Bootgly\WPI\Modules\HTTP2\Errors;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Events;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Encoder;
@@ -182,6 +183,8 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    /** Cached Request template for event-driven reuse (avoids allocation per cycle) */
    protected null|Request $cachedRequest = null;
    // # Parked drain (adopted reactor)
+   /** @var array<int,Request> Requests awaiting a scheduled retry backoff, keyed by object id. */
+   protected array $Retries = [];
    /** @var null|resource Episode notifier read end — the parked Fiber waits on it. */
    private $Notify = null;
    /** @var null|resource Episode notifier write end — wake() signals it. */
@@ -834,7 +837,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                $PendingRequest->completed = true;
                $HTTP_Client_CLI->unwatch($PendingRequest);
                $PendingRequest->connectionState = 'idle';
-
             }
             unset($HTTP_Client_CLI->pendingStreams[$Connection->id]);
 
@@ -914,7 +916,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                   $Request->completed = true;
                   $HTTP_Client_CLI->unwatch($Request);
                   $Request->connectionState = 'idle';
-
                }
             }
             else {
@@ -1585,7 +1586,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     *
     * @return void
     */
-   private function promote (): void
+   protected function promote (): void
    {
       // ? Reactor-stack code never dials on an adopted reactor — wake the
       //   owner Fiber: it services the queue between parks (BG-13)
@@ -1690,34 +1691,44 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     */
    private function scrap (): void
    {
+      // ! Snapshot-and-clear FIRST: Connection::close() fires the disconnect
+      //   hook synchronously, and a populated map would let its stale-reuse
+      //   replay re-dispatch (and its terminals rename) what is being scrapped
+      $Queued = $this->Queue;
+      $this->Queue = [];
+      $Pending = $this->pendingRequests;
+      $this->pendingRequests = [];
+      $Streams = $this->pendingStreams;
+      $this->pendingStreams = [];
+      $Retrying = $this->Retries;
+      $this->Retries = [];
+      $this->retrying = 0;
+
       // @ Queued — never dispatched
-      foreach ($this->Queue as $Request) {
+      foreach ($Queued as $Request) {
          $this->fail($Request);
       }
-      $this->Queue = [];
 
-      // @ h1 in flight — close their connections
-      foreach ($this->pendingRequests as $socketID => $Request) {
+      // @ Retry campaigns — fail() cancels the armed backoff deferral
+      foreach ($Retrying as $Request) {
+         $this->fail($Request);
+      }
+
+      // @ h1 in flight — fail, then close (the hook finds nothing to replay)
+      foreach ($Pending as $socketID => $Request) {
+         $this->fail($Request);
          $Connection = $this->Connections->Connections[$socketID] ?? null;
          $Connection?->close();
-         $this->fail($Request);
       }
-      $this->pendingRequests = [];
 
-      // @ h2 streams
-      foreach ($this->pendingStreams as $socketID => $Requests) {
-         $Session = $this->Sessions[$socketID] ?? null;
-         foreach ($Requests as $stream => $Request) {
-            if ($Session !== null) {
-               $Session->reset($stream, Errors::Cancel);
-               unset($Session->done[$stream]);
-            }
+      // @ h2 streams — closing the connection cancels every stream
+      foreach ($Streams as $socketID => $Requests) {
+         foreach ($Requests as $Request) {
             $this->fail($Request);
          }
          $Connection = $this->Connections->Connections[$socketID] ?? null;
          $Connection?->close();
       }
-      $this->pendingStreams = [];
    }
 
    /**
@@ -1959,8 +1970,19 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       // @ Schedule the re-dispatch on the event loop
       $this->retrying++;
-      $this->Event->defer(microtime(true) + $delay, function () use ($Request): void {
+      $this->Retries[spl_object_id($Request)] = $Request;
+      $Request->timers[] = $this->Event->defer(microtime(true) + $delay, function () use ($Request): void {
+         unset($this->Retries[spl_object_id($Request)]);
          $this->retrying--;
+
+         // ? A request scrapped or timed out while its backoff was armed must
+         //   never be re-dispatched: its Response was already handed back
+         //   (the flag mutates between scheduling and firing)
+         /** @phpstan-ignore if.alwaysFalse */
+         if ($Request->completed) {
+            $this->halt();
+            return;
+         }
 
          $Connection = $this->Pool->acquire();
          if ($Connection !== null && $this->dispatch($Request, $Connection)) {
@@ -1973,9 +1995,11 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             }
          }
          else {
-            // ? Pool momentarily full — queue for the next promotion
+            // ? Pool momentarily full — queue for the next promotion and let
+            //   the owner Fiber pair it with the idle capacity
             $this->Queue[] = $Request;
             $this->watch($Request, queued: true);
+            $this->wake();
 
             return;
          }
@@ -2002,7 +2026,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     *
     * @return bool True when the dial established a connection.
     */
-   private function dial (Request $Request): bool
+   protected function dial (Request $Request): bool
    {
       // ? Reactor-stack code never dials on an adopted reactor: queue the
       //   request and wake the owner Fiber — it dials between parks (BG-13)
@@ -2103,6 +2127,8 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $this->Notified = $Notified;
       $Wait = $this->Wait;
 
+      $Readiness = Readiness::read($Notify, microtime(true));
+
       $pending = fn (): bool => $this->pendingRequests !== []
          || $this->pendingStreams !== []
          || $this->Queue !== []
@@ -2131,11 +2157,19 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             $deadline = microtime(true) + max(1.0, (float) $this->connectTimeout);
             $before = hrtime(true);
             try {
-               $Wait(Readiness::read($Notify, $deadline));
+               $Wait($Readiness->renew($deadline));
             }
-            catch (RuntimeException) {
-               // ? Selector admission rejected the notifier (fd budget) — fail
-               //   every in-flight request deterministically and stop parking
+            catch (RuntimeException $Rejection) {
+               // ? Anything but the selector admission rejection is not ours
+               if (strpos($Rejection->getMessage(), 'selector admission') === false) {
+                  throw $Rejection;
+               }
+
+               // ? The reactor refused the notifier (fd budget) — fail every
+               //   in-flight request deterministically and stop parking
+               $this->Logger->log(
+                  warning: 'Parked drain aborted: selector admission rejected the episode notifier.@\\;'
+               );
                $this->scrap();
                break;
             }
@@ -2151,12 +2185,33 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             //   bridge return instantly forever — fail loud, never hot-spin
             if ($waited < 100_000 && $drained === false) {
                if (++$stalled >= 8) {
+                  $this->Logger->log(
+                     warning: 'Parked drain aborted: the wait bridge stopped suspending.@\\;'
+                  );
                   $this->scrap();
                   break;
                }
             }
             else {
                $stalled = 0;
+            }
+
+            // ? Capacity starvation: nothing is in flight, nothing is armed
+            //   and the full deadline elapsed — no event can ever pair the
+            //   queued requests with capacity, so fail them loud
+            if (
+               microtime(true) >= $deadline
+               && $this->Queue !== []
+               && $this->pendingRequests === []
+               && $this->pendingStreams === []
+               && $this->retrying === 0
+               && $this->dialing === 0
+            ) {
+               $this->Logger->log(
+                  warning: 'Parked drain aborted: queued requests starved for capacity.@\\;'
+               );
+               $this->scrap();
+               break;
             }
          }
       }

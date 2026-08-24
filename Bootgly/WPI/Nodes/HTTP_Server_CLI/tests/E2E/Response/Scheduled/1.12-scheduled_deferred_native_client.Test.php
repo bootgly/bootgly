@@ -2,7 +2,6 @@
 
 
 use Bootgly\ACI\Tests\Assertion;
-use Bootgly\ACI\Tests\Assertion\Auxiliaries\Op;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test\Separator;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
@@ -88,7 +87,8 @@ return new Test(
          description: 'The upstream really delayed',
          fallback: 'Upstream answered too fast - the fixture did not delay!'
       )
-         ->expect($body['elapsed'] ?? 0.0, Op::GreaterThan, 1.0)
+         ->expect($body['elapsed'] ?? 0.0)
+         ->to->delimit(1.0, 1.6)
          ->assert();
 
       // ! The BG-13 assertion: the worker reactor keeps spinning while the

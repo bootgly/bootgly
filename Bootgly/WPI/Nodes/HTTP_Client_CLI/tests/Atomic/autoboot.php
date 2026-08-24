@@ -58,6 +58,7 @@ return new Suite(
       '7.3-event_driven-two_origins',
       '7.4-follow-redirect_failed_veto',
       '7.5-event_driven-reconfigure_origin',
+      '8.1-embedded-reactor_gates',
       '7.6-construct-unconfigured_origin',
    ]
 );

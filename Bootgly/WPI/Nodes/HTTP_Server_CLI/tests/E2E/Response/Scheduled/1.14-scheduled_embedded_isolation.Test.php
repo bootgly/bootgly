@@ -57,11 +57,13 @@ return new Test(
       //   backoff closure runs on the host reactor stack and must not dial)
       yield $Router->route('/embedded/flaky', function (Request $Request, Response $Response) use ($embed) {
          return $Response->defer(function (Response $Response) use ($embed) {
+            $started = microtime(true);
             $Upstream = $embed($Response, ['maxRetries' => 2])->request(method: 'GET', URI: '/flaky');
 
             $Response->JSON->send([
                'code' => $Upstream->code,
-               'body' => $Upstream->body
+               'body' => $Upstream->body,
+               'elapsed' => microtime(true) - $started
             ]);
          });
       }, GET);
@@ -103,8 +105,16 @@ return new Test(
          description: 'A retried request resolves through the parked drain (D4)',
          fallback: 'The retry re-dial did not complete through the owner Fiber!'
       )
-         ->expect(($flaky['code'] ?? 0) === 200 && ($flaky['body'] ?? '') === 'flaky-ok')
+         ->expect(($flaky['code'] ?? 0) === 200 && ($flaky['body'] ?? '') === 'flaky-ok-2')
          ->to->be(true)
+         ->assert();
+
+      yield new Assertion(
+         description: 'The retry really waited its backoff (not a harness resend)',
+         fallback: 'The flaky leg resolved without paying the retry backoff!'
+      )
+         ->expect($flaky['elapsed'] ?? 0.0)
+         ->to->delimit(0.9, 1.9)
          ->assert();
 
       yield new Assertion(

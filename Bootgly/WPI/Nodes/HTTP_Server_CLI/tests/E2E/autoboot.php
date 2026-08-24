@@ -22,6 +22,7 @@ use function str_repeat;
 use function stream_set_blocking;
 use function stream_socket_accept;
 use function stream_socket_server;
+use function strlen;
 use function strpos;
 use function substr;
 use function usleep;
@@ -73,7 +74,7 @@ return new Suite(
          }
          $parent = posix_getppid();
 
-         $flaked = false;
+         $flakes = 0;
 
          // @@ Serial scripted responses — the E2E specs run serially
          while (true) {
@@ -135,12 +136,15 @@ return new Suite(
                   @fwrite($conn, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\nZZ\r\nbogus\r\n0\r\n\r\n");
                   break;
                case '/flaky':
-                  // ? Fails once (connection closed without a response), then answers
-                  if ($flaked === false) {
-                     $flaked = true;
+                  // ? Fails once (connection closed without a response), then
+                  //   answers with the hit count so specs can pin the retry
+                  $flakes++;
+                  if ($flakes === 1) {
                      break;
                   }
-                  @fwrite($conn, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 8\r\nConnection: close\r\n\r\nflaky-ok");
+                  $body = "flaky-ok-{$flakes}";
+                  $length = strlen($body);
+                  @fwrite($conn, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {$length}\r\nConnection: close\r\n\r\n{$body}");
                   break;
                default:
                   @fwrite($conn, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
