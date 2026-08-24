@@ -16,7 +16,6 @@ use RuntimeException;
 
 use const Bootgly\ABI\BOOTSTRAP_FILENAME;
 use Bootgly\ABI\Resources;
-use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Tests\Suites;
 
@@ -46,12 +45,6 @@ class Tests
     */
    public function __construct (null|string $registry = null, string $prefix = '')
    {
-      // ! Snapshot — a registry that turns out to be a one-suite project is
-      //   included AGAIN by the runner as the suite bootstrap, and a Suite
-      //   constructor has side effects; the probe include must not count
-      $count = Assertions::$count;
-      $exit = Suite::$exitOnFailure;
-
       $registry ??= BOOTGLY_ROOT_DIR . 'tests/' . BOOTSTRAP_FILENAME;
       self::$registry = $registry;
 
@@ -59,17 +52,22 @@ class Tests
       /** @var Suite|Suites|false $Suites */
       $Suites = include $registry;
 
-      // ? A one-suite project: the registry file IS the suite bootstrap —
-      //   the shipped platform demos have exactly this shape
+      // ? A registry LISTS suites; it is never one. A registry that returned a
+      //   Suite had to be evaluated twice — once here, and again as the
+      //   bootstrap of the `tests/` directory it stood for — which makes a
+      //   `class`, `function` or `define()` inside it fatal and runs every
+      //   `pretest()` twice. One file, one meaning.
       if ($Suites instanceof Suite === true) {
-         Assertions::$count = $count;
-         Suite::$exitOnFailure = $exit;
-
-         $Suites = new Suites(directories: ['tests/']);
+         throw new RuntimeException(
+            "Test registry must return Suites, not a Suite: {$registry}"
+            . ' — move the suite into a directory of its own'
+            . " (e.g. `tests/example/" . BOOTSTRAP_FILENAME . '`) and return'
+            . " `new Suites(directories: ['tests/example/'])` here."
+         );
       }
       // ?
       if ($Suites instanceof Suites === false) {
-         throw new RuntimeException('Invalid Test Suites Specification');
+         throw new RuntimeException("Invalid Test Suites Specification: {$registry}");
       }
 
       // ? Nested registries resolve their directories behind the given folder

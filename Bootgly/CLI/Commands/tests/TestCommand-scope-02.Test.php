@@ -108,6 +108,9 @@ return new Test(
          . "   suiteName: '{$name}',\n"
          . "   tests: ['{$case}']\n"
          . ");\n";
+      $list = static fn (string $suites): string => "<?php\n\n"
+         . "use Bootgly\\ACI\\Tests\\Suites;\n\n"
+         . "return new Suites(directories: ['{$suites}']);\n";
       $case = static fn (string $marker): string => "<?php\n\n"
          . "use Bootgly\\ACI\\Tests\\Suite\\Test;\n\n"
          . "return new Test(\n"
@@ -127,16 +130,18 @@ return new Test(
             . "   'App/API' => ['interfaces' => ['CLI']],\n"
             . "   'Zed' => ['interfaces' => ['CLI']],\n"
             . "];\n",
-         "{$directory}/projects/App/tests/autoboot.php" => $suite('AppSolo', '1.1-app'),
-         "{$directory}/projects/App/tests/1.1-app.Test.php" => $case('App ran'),
-         "{$directory}/projects/App/API/tests/autoboot.php" => $suite('APISolo', '1.1-api'),
-         "{$directory}/projects/App/API/tests/1.1-api.Test.php" => $case('API ran'),
+         "{$directory}/projects/App/tests/autoboot.php" => $list('tests/example/'),
+         "{$directory}/projects/App/tests/example/autoboot.php" => $suite('AppSolo', '1.1-app'),
+         "{$directory}/projects/App/tests/example/1.1-app.Test.php" => $case('App ran'),
+         "{$directory}/projects/App/API/tests/autoboot.php" => $list('tests/example/'),
+         "{$directory}/projects/App/API/tests/example/autoboot.php" => $suite('APISolo', '1.1-api'),
+         "{$directory}/projects/App/API/tests/example/1.1-api.Test.php" => $case('API ran'),
       ];
 
       try {
          foreach ([
-            "{$directory}/projects/App/tests",
-            "{$directory}/projects/App/API/tests",
+            "{$directory}/projects/App/tests/example",
+            "{$directory}/projects/App/API/tests/example",
             "{$directory}/projects/Zed",
             "{$directory}/projects/Rogue",
          ] as $path) {
@@ -211,8 +216,10 @@ return new Test(
             @unlink($file);
          }
          foreach ([
+            "{$directory}/projects/App/API/tests/example",
             "{$directory}/projects/App/API/tests",
             "{$directory}/projects/App/API",
+            "{$directory}/projects/App/tests/example",
             "{$directory}/projects/App/tests",
             "{$directory}/projects/App",
             "{$directory}/projects/Zed",

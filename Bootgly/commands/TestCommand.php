@@ -892,8 +892,8 @@ class TestCommand extends Command
       $missing = [];
       $broken = [];
 
-      // @@ Reusing Tests per project buys the prefixing AND the bare-Suite
-      //   tolerance uniformly; the throwaway instances only build directories
+      // @@ Reusing Tests per project buys the registry contract and the
+      //   prefixing uniformly; the throwaway instances only build directories
       foreach ($paths as $path) {
          $file = BOOTGLY_WORKING_DIR . "projects/{$path}/tests/" . BOOTSTRAP_FILENAME;
          // ? Informational, not a failure — the caller prints the set

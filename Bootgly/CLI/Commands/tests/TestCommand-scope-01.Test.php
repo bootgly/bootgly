@@ -84,7 +84,8 @@ return new Test(
       };
 
       // ! Fixture — a kit with `App` (Suites registry), a nested `App/API`
-      //   (bare-Suite registry: the shipped-demo shape) and `Zed` (no tests)
+      //   (its own Suites registry), `Zed` (no tests) and `Legacy` (a registry
+      //   that returns a Suite — the shape the runner refuses)
       $directory = Temporaries::reserve('testcommand-scope');
       $entry = "{$directory}/bootgly";
       $root = BOOTGLY_ROOT_DIR;
@@ -98,6 +99,7 @@ return new Test(
             . "   'App' => ['interfaces' => ['CLI']],\n"
             . "   'App/API' => ['interfaces' => ['CLI']],\n"
             . "   'Zed' => ['interfaces' => ['CLI']],\n"
+            . "   'Legacy' => ['interfaces' => ['CLI']],\n"
             . "];\n",
          "{$directory}/projects/App/tests/autoboot.php" => "<?php\n\n"
             . "use Bootgly\\ACI\\Tests\\Suites;\n\n"
@@ -121,9 +123,10 @@ return new Test(
             . "      yield assert(assertion: headers_sent() === false, description: 'the scope line left the output layer untouched');\n"
             . "   }\n"
             . ");\n",
-         // # The bare-Suite shape at the project registry — must be accepted
-         //   as a one-suite project, with the include side effects compensated
          "{$directory}/projects/App/API/tests/autoboot.php" => "<?php\n\n"
+            . "use Bootgly\\ACI\\Tests\\Suites;\n\n"
+            . "return new Suites(directories: ['tests/api/']);\n",
+         "{$directory}/projects/App/API/tests/api/autoboot.php" => "<?php\n\n"
             . "use Bootgly\\ACI\\Tests\\Suite;\n\n"
             . "return new Suite(\n"
             . "   autoBoot: __DIR__,\n"
@@ -133,7 +136,19 @@ return new Test(
             . "   suiteName: 'APISolo',\n"
             . "   tests: ['1.1-api']\n"
             . ");\n",
-         "{$directory}/projects/App/API/tests/1.1-api.Test.php" => "<?php\n\n"
+         // # A registry that returns a Suite: the file would be evaluated
+         //   twice (registry, then suite bootstrap), so the runner refuses it
+         "{$directory}/projects/Legacy/tests/autoboot.php" => "<?php\n\n"
+            . "use Bootgly\\ACI\\Tests\\Suite;\n\n"
+            . "return new Suite(\n"
+            . "   autoBoot: __DIR__,\n"
+            . "   autoInstance: true,\n"
+            . "   autoReport: true,\n"
+            . "   autoSummarize: true,\n"
+            . "   suiteName: 'LegacySolo',\n"
+            . "   tests: []\n"
+            . ");\n",
+         "{$directory}/projects/App/API/tests/api/1.1-api.Test.php" => "<?php\n\n"
             . "use Bootgly\\ACI\\Tests\\Suite\\Test;\n\n"
             . "return new Test(\n"
             . "   description: 'API case',\n"
@@ -146,7 +161,9 @@ return new Test(
       try {
          foreach ([
             "{$directory}/projects/App/tests/example",
+            "{$directory}/projects/App/API/tests/api",
             "{$directory}/projects/App/API/tests/deep",
+            "{$directory}/projects/Legacy/tests",
             "{$directory}/projects/Zed",
          ] as $path) {
             mkdir($path, 0o700, true);
@@ -166,15 +183,14 @@ return new Test(
             description: 'inside a project, only that project runs — and the scope line comes first'
          );
 
-         // @ Deep inside a NESTED project: the longest registered path wins,
-         //   and the bare-Suite registry runs as a one-suite project
+         // @ Deep inside a NESTED project: the longest registered path wins
          [$status, $output] = $run([$entry, 'test'], $human, "{$directory}/projects/App/API/tests/deep");
          yield assert(
             assertion: $status === 0
                && str_starts_with($output, '[test] scope: projects/App/API/')
                && str_contains($output, '1.1-api')
                && str_contains($output, '1.1-app') === false,
-            description: 'the longest registered owner wins, and a bare Suite is a one-suite project'
+            description: 'the longest registered owner wins'
          );
 
          // @ Suite indices index into the RESOLVED scope
@@ -192,6 +208,21 @@ return new Test(
             description: 'a registry-less project refuses and names the missing file'
          );
 
+         // @ A registry that returns a Suite is refused, naming the file and
+         //   the shape that replaces it. Tolerating it meant evaluating that
+         //   file TWICE — as the registry and as the suite bootstrap it stood
+         //   for — so a declaration inside it was fatal and every pretest()
+         //   ran twice.
+         [$status, $output, $error] = $run([$entry, 'test'], $human, "{$directory}/projects/Legacy");
+         $said = $output . $error;
+         yield assert(
+            assertion: $status !== 0
+               && str_contains($said, 'must return Suites, not a Suite')
+               && str_contains($said, 'projects/Legacy/tests/autoboot.php')
+               && str_contains($said, "new Suites(directories: ['tests/example/'])"),
+            description: 'a registry that returns a Suite is refused with the shape that replaces it'
+         );
+
          // @ Agents keep the pure-JSON stdout contract — no scope line
          [$status, $output] = $run([$entry, 'test'], $agent, "{$directory}/projects/App");
          yield assert(
@@ -206,11 +237,14 @@ return new Test(
          }
          foreach ([
             "{$directory}/projects/App/API/tests/deep",
+            "{$directory}/projects/App/API/tests/api",
             "{$directory}/projects/App/API/tests",
             "{$directory}/projects/App/API",
             "{$directory}/projects/App/tests/example",
             "{$directory}/projects/App/tests",
             "{$directory}/projects/App",
+            "{$directory}/projects/Legacy/tests",
+            "{$directory}/projects/Legacy",
             "{$directory}/projects/Zed",
             "{$directory}/projects",
             $directory,
