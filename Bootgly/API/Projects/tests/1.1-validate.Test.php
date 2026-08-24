@@ -7,46 +7,58 @@ use Bootgly\API\Projects;
 return new Test(
    description: 'Projects::validate() enforces path-safety and the registry allow-list',
    test: function () {
-      // ! Registered projects are accepted
-      yield assert(
-         assertion: Projects::validate('Demo/HTTP_Server_CLI') === true,
-         description: 'a registered nested path passes'
-      );
-      yield assert(
-         assertion: Projects::validate('Benchmark/TCP_Server_CLI') === true,
-         description: 'another registered nested path passes'
-      );
+      // ! The assertions describe the framework's own registry — in a kit the
+      //   consumer registry is the user's, so the memo is pinned to the author
+      //   file for the duration of the case and put back afterwards
+      $Memo = new ReflectionProperty(Projects::class, 'registry');
+      $previous = $Memo->getValue();
+      $Memo->setValue(null, (array) (include Projects::AUTHOR_DIR . 'Bootgly.projects.php'));
 
-      // ! Grouping containers are not registry keys → rejected
-      yield assert(
-         assertion: Projects::validate('Demo') === false,
-         description: 'the Demo container is not a registry key'
-      );
-      yield assert(
-         assertion: Projects::validate('Benchmark') === false,
-         description: 'the Benchmark container is not a registry key'
-      );
-      yield assert(
-         assertion: Projects::validate('Demo/Unregistered') === false,
-         description: 'an unregistered nested path is rejected'
-      );
-
-      // ! Unsafe inputs are rejected before any allow-list lookup
-      $unsafe = [
-         'traversal prefix'       => '../etc/passwd',
-         'traversal mid-path'     => 'Demo/../../etc',
-         'absolute path'          => '/etc/passwd',
-         'backslash separator'    => 'Demo\\HTTP_Server_CLI',
-         'null byte'              => "Demo/HTTP_Server_CLI\0",
-         'double slash'           => 'Demo//HTTP_Server_CLI',
-         'trailing slash'         => 'Demo/HTTP_Server_CLI/',
-         'empty string'           => '',
-      ];
-      foreach ($unsafe as $label => $input) {
+      try {
+         // ! Registered projects are accepted
          yield assert(
-            assertion: Projects::validate($input) === false,
-            description: "unsafe input rejected: {$label}"
+            assertion: Projects::validate('Demo/HTTP_Server_CLI') === true,
+            description: 'a registered nested path passes'
          );
+         yield assert(
+            assertion: Projects::validate('Benchmark/TCP_Server_CLI') === true,
+            description: 'another registered nested path passes'
+         );
+
+         // ! Grouping containers are not registry keys → rejected
+         yield assert(
+            assertion: Projects::validate('Demo') === false,
+            description: 'the Demo container is not a registry key'
+         );
+         yield assert(
+            assertion: Projects::validate('Benchmark') === false,
+            description: 'the Benchmark container is not a registry key'
+         );
+         yield assert(
+            assertion: Projects::validate('Demo/Unregistered') === false,
+            description: 'an unregistered nested path is rejected'
+         );
+
+         // ! Unsafe inputs are rejected before any allow-list lookup
+         $unsafe = [
+            'traversal prefix'       => '../etc/passwd',
+            'traversal mid-path'     => 'Demo/../../etc',
+            'absolute path'          => '/etc/passwd',
+            'backslash separator'    => 'Demo\\HTTP_Server_CLI',
+            'null byte'              => "Demo/HTTP_Server_CLI\0",
+            'double slash'           => 'Demo//HTTP_Server_CLI',
+            'trailing slash'         => 'Demo/HTTP_Server_CLI/',
+            'empty string'           => '',
+         ];
+         foreach ($unsafe as $label => $input) {
+            yield assert(
+               assertion: Projects::validate($input) === false,
+               description: "unsafe input rejected: {$label}"
+            );
+         }
+      }
+      finally {
+         $Memo->setValue(null, $previous);
       }
    }
 );

@@ -7,38 +7,50 @@ use Bootgly\API\Projects;
 return new Test(
    description: 'Projects::filter() groups registered projects by interface',
    test: function () {
-      $WPI = Projects::filter('WPI');
-      $CLI = Projects::filter('CLI');
+      // ! The assertions describe the framework's own registry — in a kit the
+      //   consumer registry is the user's, so the memo is pinned to the author
+      //   file for the duration of the case and put back afterwards
+      $Memo = new ReflectionProperty(Projects::class, 'registry');
+      $previous = $Memo->getValue();
+      $Memo->setValue(null, (array) (include Projects::AUTHOR_DIR . 'Bootgly.projects.php'));
 
-      yield assert(
-         assertion: in_array('Demo/HTTP_Server_CLI', $WPI, true),
-         description: 'WPI list contains the nested HTTP server'
-      );
-      yield assert(
-         assertion: in_array('Demo/CLI', $WPI, true) === false,
-         description: 'WPI list excludes a CLI-only project'
-      );
-      yield assert(
-         assertion: in_array('Demo/CLI', $CLI, true),
-         description: 'CLI list contains the registered console project'
-      );
-      yield assert(
-         assertion: in_array('Benchmark/HTTP_Server_CLI', $WPI, true),
-         description: 'WPI list contains the nested Benchmark server'
-      );
-      yield assert(
-         assertion: $WPI[0] === 'Benchmark/HTTP_Server_CLI',
-         description: 'registry (alphabetical) declaration order is preserved'
-      );
+      try {
+         $WPI = Projects::filter('WPI');
+         $CLI = Projects::filter('CLI');
 
-      // ! The Web default is the flagged entry, not the first WPI in file order
-      yield assert(
-         assertion: Projects::pick('WPI') === 'Demo/HTTP_Server_CLI',
-         description: 'pick() returns the flagged default, not the alphabetically first WPI'
-      );
-      yield assert(
-         assertion: Projects::pick('CLI') === 'Demo/CLI',
-         description: 'pick() falls back to the first registered when none is flagged'
-      );
+         yield assert(
+            assertion: in_array('Demo/HTTP_Server_CLI', $WPI, true),
+            description: 'WPI list contains the nested HTTP server'
+         );
+         yield assert(
+            assertion: in_array('Demo/CLI', $WPI, true) === false,
+            description: 'WPI list excludes a CLI-only project'
+         );
+         yield assert(
+            assertion: in_array('Demo/CLI', $CLI, true),
+            description: 'CLI list contains the registered console project'
+         );
+         yield assert(
+            assertion: in_array('Benchmark/HTTP_Server_CLI', $WPI, true),
+            description: 'WPI list contains the nested Benchmark server'
+         );
+         yield assert(
+            assertion: $WPI[0] === 'Benchmark/HTTP_Server_CLI',
+            description: 'registry (alphabetical) declaration order is preserved'
+         );
+
+         // ! The Web default is the flagged entry, not the first WPI in file order
+         yield assert(
+            assertion: Projects::pick('WPI') === 'Demo/HTTP_Server_CLI',
+            description: 'pick() returns the flagged default, not the alphabetically first WPI'
+         );
+         yield assert(
+            assertion: Projects::pick('CLI') === 'Demo/CLI',
+            description: 'pick() falls back to the first registered when none is flagged'
+         );
+      }
+      finally {
+         $Memo->setValue(null, $previous);
+      }
    }
 );

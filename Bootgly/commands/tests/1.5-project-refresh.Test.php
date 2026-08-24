@@ -51,6 +51,8 @@ return new Test(
       $options = ['yes' => true, 'platform' => 'none', 'from' => 'PlantedSrc'];
 
       try {
+         // ! A run killed before its cleanup leaves the plant behind — never trip on it
+         $erase($source);
          mkdir($source, 0755, true);
          file_put_contents(
             "{$source}/PlantedSrc.Project.php",
@@ -107,6 +109,9 @@ return new Test(
       }
       finally {
          // ! A regression erases or strands; leave the repository as it was found.
+         // ! The source was planted in the framework's own projects/ — in a kit
+         //   that is not the consumer dir, so it is erased where it was planted
+         $erase($source);
          foreach (['PlantedSrc', 'Data', 'Refreshed', '.Refreshed.staging', '.Refreshed.backup', 'Handmade'] as $probe) {
             $erase(Projects::CONSUMER_DIR . $probe);
          }

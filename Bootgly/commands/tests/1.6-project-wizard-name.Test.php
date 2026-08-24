@@ -38,7 +38,10 @@ return new Test(
       //   from the SOURCE path and drop <Name> — the same command created a
       //   different project depending on whether a TTY was attached. Driven
       //   here through the real binary with a forced TTY and piped answers.
-      $registry = Projects::CONSUMER_DIR . 'Bootgly.projects.php';
+      // ! The child runs the FRAMEWORK launcher, so it writes to the framework's
+      //   own projects/ — not this process's (a kit, when the framework is its submodule)
+      $consumer = BOOTGLY_ROOT_DIR . 'projects/';
+      $registry = "{$consumer}Bootgly.projects.php";
       $snapshot = is_file($registry) ? file_get_contents($registry) : null;
       $Memo = new ReflectionProperty(Projects::class, 'registry');
 
@@ -59,6 +62,8 @@ return new Test(
       $source = Projects::AUTHOR_DIR . 'PlantedWiz';
 
       try {
+         // ! A run killed before its cleanup leaves the plant behind — never trip on it
+         $erase($source);
          mkdir($source, 0755, true);
          file_put_contents(
             "{$source}/PlantedWiz.Project.php",
@@ -85,7 +90,7 @@ return new Test(
 
          $loaded = is_file($registry) ? include $registry : [];
          yield assert(
-            assertion: is_file(Projects::CONSUMER_DIR . 'WizName/WizName.Project.php') === true
+            assertion: is_file("{$consumer}WizName/WizName.Project.php") === true
                && is_array($loaded) && isset($loaded['WizName']),
             description: 'the wizard imports to <Name>, output: ' . substr(preg_replace('/\s+/', ' ', $output) ?? '', -200)
          );
@@ -121,7 +126,7 @@ return new Test(
       finally {
          // ! A regression imports elsewhere or erases; leave the repository as it was found.
          foreach (['PlantedWiz', 'WizName', '.WizName.staging', '.WizName.backup', 'WizWeb', '.WizWeb.staging', '.WizWeb.backup'] as $probe) {
-            $erase(Projects::CONSUMER_DIR . $probe);
+            $erase("{$consumer}{$probe}");
          }
          if ($snapshot !== null && $snapshot !== false) {
             file_put_contents($registry, $snapshot);
