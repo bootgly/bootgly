@@ -25,6 +25,7 @@ return new Suite(
       '1.8-project-track',
       '1.9-project-import-clone',
       '1.10-project-stock',
+      '1.11-project-wizard-mode',
       '2.1-setup-wrapper',
    ]
 );

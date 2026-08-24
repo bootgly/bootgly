@@ -221,7 +221,7 @@ class ProjectCommand extends Command
       'Increase the verbosity of the command' => ['-v', '-vv', '-vvv'],
       'Show help information' => ['--help', '-h'],
       'Preview seed run without executing SQL' => ['--dry-run'],
-      'Platforms to set up on first run (create/import)' => ['--platform=console', '--platform=web', '--platform=console,web', '--platform=none'],
+      'Platforms to set up — all of them on first run (create/import)' => ['--platform=console', '--platform=web', '--platform=console,web', '--platform=none'],
       'Creation source: from scratch or a platform project' => ['--from=scratch', '--from=<source>'],
       'Interface bound to the new project (create/import)' => ['--interfaces=CLI', '--interfaces=WPI'],
       'New project metadata (create)' => ['--description=', '--version=', '--author=', '--port='],
@@ -2121,15 +2121,22 @@ class ProjectCommand extends Command
 
          // ! Start modes — the shipped platform projects are imported
          //   automatically when the kit is prepared, so the wizard only asks
-         //   what only the user can answer
-         $modes = [
-            'Create project from scratch',
-            'Import project from Git remote',
-         ];
+         //   what only the user can answer. Creating nothing comes FIRST: a
+         //   prepared kit already carries the whole set of guides, and reading
+         //   one is how most people (and every AI agent) start.
+         $modes = $this->offer();
 
-         $mode = $modes[$this->choose('How do you want to start?', $modes)] ?? $modes[0];
+         $mode = $this->choose('How do you want to start?', $modes);
 
-         if ($mode === 'Import project from Git remote') {
+         if ($mode === 1) {
+            $branch = 'scratch';
+            $scratch($Wizard);
+
+            // :
+            return 'scratch';
+         }
+
+         if ($mode === 2) {
             $branch = 'git';
             $git($Wizard);
 
@@ -2137,11 +2144,11 @@ class ProjectCommand extends Command
             return 'git remote';
          }
 
-         $branch = 'scratch';
-         $scratch($Wizard);
+         // ! Nothing to create — the imported projects are the starting point
+         $branch = 'imported';
 
          // :
-         return 'scratch';
+         return 'imported projects';
       }, rows: 6);
 
       // @ Run the flow
@@ -2155,6 +2162,22 @@ class ProjectCommand extends Command
       // : Closing report — rendered after the completion screen, so it stays visible
       if ($branch === 'git') {
          return $this->report(true, $target);
+      }
+
+      if ($branch === 'imported') {
+         $prefix = shell_exec('command -v bootgly 2>/dev/null') ? '' : 'php ';
+
+         $Output->write(PHP_EOL);
+         $Output->render(
+            "@#Green:Tip:@; Use @#Black:{$prefix}bootgly project list@; to see the imported projects.@.;"
+         );
+         $Output->render(
+            "@#Green:Tip:@; Use @#Black:{$prefix}bootgly project <Name> start@; to boot one.@.;"
+         );
+         $Output->write(PHP_EOL);
+
+         // :
+         return true;
       }
 
       if ($branch === 'platforms') {
@@ -2292,51 +2315,21 @@ class ProjectCommand extends Command
             }
          }
 
-         // ? Fresh kit (no resources booted yet): select interactively (unless --yes)
+         // ? Fresh kit (no resources booted yet): EVERY platform is set up.
+         //   The kit is a guide before it is a workspace — it carries the whole
+         //   shelf so the user (or an AI agent reading it) can decide later what
+         //   to keep, and adding a platform in the future costs nobody a choice
+         //   at install time. A later run only ever sets up what `--platform=`
+         //   names: a platform the user removed stays removed.
          $fresh = is_file(BOOTGLY_WORKING_DIR . 'projects/Bootgly.projects.php') === false;
          if ($fresh === true && $platforms === null) {
-            // ! Offer only platforms not initialized yet — a resumed install
-            //   pre-marks the ones already present instead of re-asking
-            $available = [];
+            $platforms = [];
+
             if ($console === false) {
-               $available['console'] = 'Console — opinionated CLI extras (TUI apps)';
+               $platforms[] = 'console';
             }
             if ($web === false) {
-               $available['web'] = 'Web — opinionated WPI extras';
-            }
-
-            if (BOOTGLY_TTY === true && isSet($options['yes']) === false && $available !== []) {
-               // ? Two short rows — a single long row would hard-wrap at the
-               //   terminal edge, escaping the wizard's nested region gutter
-               $Output->render(
-                  "@.;The @#Cyan:Bootgly@; base platform is always included —\n"
-                  . 'unopinionated, it ships the @#Cyan:CLI@; and @#Cyan:WPI@; interfaces.@..;'
-               );
-
-               $pinned = ['Bootgly — base platform (always included)'];
-               if ($console === true) {
-                  $pinned[] = 'Console — already set up';
-               }
-               if ($web === true) {
-                  $pinned[] = 'Web — already set up';
-               }
-
-               $picked = $this->select(
-                  'Which extra platforms do you want to set up?',
-                  array_values($available),
-                  pinned: $pinned
-               );
-
-               $platforms = [];
-               $keys = array_keys($available);
-               foreach ($picked as $index) {
-                  if (isSet($keys[$index]) === true) {
-                     $platforms[] = $keys[$index];
-                  }
-               }
-            }
-            else {
-               $platforms = array_keys($available);
+               $platforms[] = 'web';
             }
          }
 
@@ -3012,6 +3005,34 @@ class ProjectCommand extends Command
    }
 
    /**
+    * Offer the start modes, in the order a new user meets them.
+    *
+    * The first mode creates nothing: a prepared kit already carries the
+    * shipped platform projects, so standing pat — and reading one of them —
+    * is a first-class way to start. The count is what the kit HOLDS, not what
+    * it could hold: an example the user deleted stops being offered.
+    *
+    * @return array<string>
+    */
+   private function offer (): array
+   {
+      // @ Imported guides
+      $imported = 0;
+      foreach ($this->survey() as $import) {
+         if (is_dir(Projects::CONSUMER_DIR . $import['path']) === true) {
+            $imported++;
+         }
+      }
+
+      // :
+      return [
+         "Only skip to imported from Platforms ({$imported} available)",
+         'Create project from scratch',
+         'Import project from Git remote',
+      ];
+   }
+
+   /**
     * Choose one option from a vertical, single-selection Select.
     *
     * @param string $prompt
@@ -3044,47 +3065,6 @@ class ProjectCommand extends Command
       $offset = count($pinned);
 
       return (int) ($Select->selected[0] ?? $default + $offset) - $offset;
-   }
-
-   /**
-    * Select options from a vertical, multiple-selection Select.
-    *
-    * @param string $prompt
-    * @param array<string> $labels
-    * @param array<string> $pinned Display-only labels rendered first — always marked, locked.
-    *
-    * @return array<int> The selected option indexes, relative to $labels (empty when none).
-    */
-   private function select (string $prompt, array $labels, array $pinned = []): array
-   {
-      $Terminal = CLI->Terminal;
-
-      $Select = new Select($Terminal->Input, $Terminal->Output);
-      $Select->multiple = true;
-      $Select->title = "@#Cyan:{$prompt}@;\n@#Black:(↑/↓ to move, Space to select multiple, Enter to confirm)@;";
-
-      // ! Pinned labels render first — always marked, locked out of the selection
-      foreach ($pinned as $label) {
-         $Select->locked[] = count($Select->options);
-         $Select->options[] = (string) $label;
-      }
-      foreach ($labels as $label) {
-         $Select->options[] = (string) $label;
-      }
-
-      // @@ Render until Enter
-      foreach ($Select->selecting() as $ignored);
-
-      // ! Integer-only index list, relative to $labels (pinned options never enter the selection)
-      $offset = count($pinned);
-
-      $indexes = [];
-      foreach ($Select->selected as $index) {
-         $indexes[] = (int) $index - $offset;
-      }
-
-      // :
-      return $indexes;
    }
 
    /**
