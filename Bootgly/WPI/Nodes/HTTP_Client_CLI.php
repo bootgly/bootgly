@@ -906,11 +906,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                if ($redispatched === false
                   && $HTTP_Client_CLI->Pool->created < $HTTP_Client_CLI->Pool->max
                ) {
-                  $HTTP_Client_CLI->nextRequest = $Request;
-                  $redispatched = $HTTP_Client_CLI->connect() !== false;
-                  if ($redispatched === false) {
-                     $HTTP_Client_CLI->nextRequest = null;
-                  }
+                  $redispatched = $HTTP_Client_CLI->dial($Request);
                }
                else if (
                   $redispatched === false
@@ -1488,11 +1484,9 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             }
 
             if ($this->Pool->created < $this->Pool->max) {
-               $this->nextRequest = $Request;
-               if ($this->connect() !== false) {
+               if ($this->dial($Request)) {
                   return;
                }
-               $this->nextRequest = null;
             }
             else {
                // ? Pool momentarily full — queue for the next promotion
@@ -1646,11 +1640,9 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
          if ($this->Pool->created < $this->Pool->max) {
             $Request = array_shift($this->Queue);
-            $this->nextRequest = $Request;
 
-            if ($this->connect() === false) {
+            if ($this->dial($Request) === false) {
                // ? Dial failed — surface the failure and try the next queued
-               $this->nextRequest = null;
                $Request->Response->code = 0;
                $Request->Response->status = 'Connection Failed';
                $Request->completed = true;
@@ -1774,15 +1766,12 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             // @ Reconfigure for the new target (retires the previous origin's pool)
             $this->configure($resolved['host'], $resolved['port'], secure: $secure);
 
-            $this->nextRequest = $Request;
             $this->wire();
 
-            $Socket = $this->connect();
-            if ($Socket === false) {
+            if ($this->dial($Request) === false) {
                // ? The leg could not be dialed. Retrying it would only re-dial
                //   the same unreachable target, so name the failure precisely
                //   and let retry() veto it.
-               $this->nextRequest = null;
                $Request->Response->code = 0;
                $Request->Response->status = 'Redirect Failed';
                $Request->connectionState = 'idle';
@@ -1941,11 +1930,9 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          }
 
          if ($this->Pool->created < $this->Pool->max) {
-            $this->nextRequest = $Request;
-            if ($this->connect() !== false) {
+            if ($this->dial($Request)) {
                return;
             }
-            $this->nextRequest = null;
          }
          else {
             // ? Pool momentarily full — queue for the next promotion
@@ -1970,6 +1957,36 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       return true;
    }
 
+   /**
+    * Dial a new connection with the request claimed as the connect handoff.
+    *
+    * The claim is the single `$nextRequest` slot the connect callback consumes;
+    * a failed dial releases it so no later dial can ship a stale request.
+    *
+    * @param Request $Request The request the new connection must carry.
+    *
+    * @return bool True when the dial established a connection.
+    */
+   private function dial (Request $Request): bool
+   {
+      // ! Claim — exactly one dial is ever in flight per client
+      $this->nextRequest = $Request;
+
+      $connected = false;
+      try {
+         $connected = $this->connect() !== false;
+      }
+      finally {
+         // ? A failed dial releases the claim; a successful one was already
+         //   consumed by the connect callback
+         if ($connected === false && $this->nextRequest === $Request) {
+            $this->nextRequest = null;
+         }
+      }
+
+      // :
+      return $connected;
+   }
    /**
     * Run the event loop until all pending requests complete.
     *
@@ -2080,11 +2097,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       if ($placed === false && $this->Pool->created < $this->Pool->max) {
          // @ Connect (fires connect callback which sends the request)
-         $this->nextRequest = $Request;
-         $Socket = $this->connect();
-         if ($Socket === false) {
-            $this->nextRequest = null;
-
+         if ($this->dial($Request) === false) {
             // @ Retry on connection failure — a scheduled retry continues
             //   through the normal drain/redirect/retry pipeline below
             if ($this->retry($Request) === false) {
