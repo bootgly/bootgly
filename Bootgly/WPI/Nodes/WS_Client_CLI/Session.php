@@ -253,9 +253,9 @@ class Session
       else if ($this->Connection->output !== '') {
          // ! Read dispatch precedes write dispatch in Select. Stop reading so
          //   a simultaneous peer EOF cannot discard the queued close frame.
-         TCP_Client_CLI::$Event->del(
+         $this->Client->Event->del(
             $this->Connection->Socket,
-            TCP_Client_CLI::$Event::EVENT_READ
+            $this->Client->Event::EVENT_READ
          );
          $this->arm();
       }
@@ -276,7 +276,7 @@ class Session
       }
 
       $nanoseconds = (int) max(1.0, $timeout * 1_000_000_000);
-      $this->closeTimer = TCP_Client_CLI::$Event->defer(
+      $this->closeTimer = $this->Client->Event->defer(
          (int) hrtime(true) + $nanoseconds,
          function (): void {
             // ! Select removes a one-shot before dispatching it.
@@ -307,7 +307,7 @@ class Session
          return;
       }
 
-      TCP_Client_CLI::$Event->cancel($this->closeTimer);
+      $this->Client->Event->cancel($this->closeTimer);
       $this->closeTimer = 0;
    }
 
@@ -342,9 +342,9 @@ class Session
       // ? Preserve the authoritative suffix from an earlier short write.
       if ($Connection->output !== '') {
          $Connection->output .= $frame;
-         if (TCP_Client_CLI::$Event->add(
+         if ($this->Client->Event->add(
             $Connection->Socket,
-            TCP_Client_CLI::$Event::EVENT_WRITE,
+            $this->Client->Event::EVENT_WRITE,
             $Connection
          ) === false) {
             $Connection->close();
@@ -364,9 +364,9 @@ class Session
       // ? Zero/short progress yields from writing(); keep the connection in
       //   the readiness loop. The completion hook removes this registration.
       if ($Connection->output !== '') {
-         if (TCP_Client_CLI::$Event->add(
+         if ($this->Client->Event->add(
             $Connection->Socket,
-            TCP_Client_CLI::$Event::EVENT_WRITE,
+            $this->Client->Event::EVENT_WRITE,
             $Connection
          ) === false) {
             $Connection->close();

@@ -84,7 +84,8 @@ class TCP_Client_CLI
    public $Socket;
 
    // ! Event
-   public static Events & Loops & Scheduler $Event;
+   /** Reactor in use by THIS instance (each client owns its own by default). */
+   public protected(set) Events & Loops & Scheduler $Event;
 
    // ! Process
    protected Process $Process;
@@ -129,15 +130,15 @@ class TCP_Client_CLI
    protected array $Events = [];
    // # On
    // on Worker
-   public static null|Closure $onWorkerStarted = null;
+   public null|Closure $onWorkerStarted = null;
    // on Client
-   public static null|Closure $onClientConnect = null;
-   public static null|Closure $onClientDisconnect = null;
+   public null|Closure $onClientConnect = null;
+   public null|Closure $onClientDisconnect = null;
    // on Data
-   public static null|Closure $onDataRead = null;
+   public null|Closure $onDataRead = null;
    /** Positive socket-write progress; receives accepted and total remaining bytes. */
-   public static null|Closure $onDataProgress = null;
-   public static null|Closure $onDataWrite = null;
+   public null|Closure $onDataProgress = null;
+   public null|Closure $onDataWrite = null;
 
    // * Metadata
    // # Error
@@ -147,9 +148,9 @@ class TCP_Client_CLI
    /** In-flight async EVENT_CONNECT dials awaiting their deadline. */
    public protected(set) int $dialing = 0;
    // # State
-   protected static int $started = 0;
+   protected int $started = 0;
    // # Status
-   protected static int $status = 0;
+   protected int $status = 0;
    protected const int STATUS_BOOTING = 1;
    protected const int STATUS_CONFIGURING = 2;
    protected const int STATUS_STARTING = 4;
@@ -159,7 +160,7 @@ class TCP_Client_CLI
 
 
    // / Connection(s)
-   protected Connections $Connections;
+   public protected(set) Connections $Connections;
 
 
    public function __construct (int $mode = self::MODE_DEFAULT)
@@ -179,9 +180,9 @@ class TCP_Client_CLI
       // # Error
       $this->error = [];
       // # State
-      static::$started = time();
+      $this->started = time();
       // # Status
-      self::$status = self::STATUS_BOOTING;
+      $this->status = self::STATUS_BOOTING;
 
 
       // @ Configure Debugging Vars
@@ -197,7 +198,7 @@ class TCP_Client_CLI
       // ! Connection(s)
       $this->Connections = new Connections($this);
       // ! Web\@\Events
-      static::$Event = new Select($this->Connections); // @phpstan-ignore-line
+      $this->Event = new Select($this->Connections); // @phpstan-ignore-line
 
       // @ Skip Process/Commands infrastructure in test and embedded modes
       if ($this->mode === self::MODE_TEST || $this->mode === self::MODE_EMBEDDED) {
@@ -239,9 +240,6 @@ class TCP_Client_CLI
             return $this->port;
          case 'secure':
             return $this->secure;
-
-         case 'Connections':
-            return $this->Connections;
       }
 
       return null;
@@ -252,7 +250,7 @@ class TCP_Client_CLI
     */
    public function configure (string $host, int $port, int $workers = 0, null|array $secure = null): self
    {
-      self::$status = self::STATUS_CONFIGURING;
+      $this->status = self::STATUS_CONFIGURING;
 
       // TODO validate configuration user data inputs
 
@@ -288,12 +286,12 @@ class TCP_Client_CLI
       $this->Events[$Event->value] = true;
 
       match ($Event) {
-         TCP_Client_CLI\Events::WorkerStarted => self::$onWorkerStarted = $Callback,
-         TCP_Client_CLI\Events::ClientConnect => self::$onClientConnect = $Callback,
-         TCP_Client_CLI\Events::ClientDisconnect => self::$onClientDisconnect = $Callback,
-         TCP_Client_CLI\Events::DataRead => self::$onDataRead = $Callback,
-         TCP_Client_CLI\Events::DataProgress => self::$onDataProgress = $Callback,
-         TCP_Client_CLI\Events::DataWrite => self::$onDataWrite = $Callback,
+         TCP_Client_CLI\Events::WorkerStarted => $this->onWorkerStarted = $Callback,
+         TCP_Client_CLI\Events::ClientConnect => $this->onClientConnect = $Callback,
+         TCP_Client_CLI\Events::ClientDisconnect => $this->onClientDisconnect = $Callback,
+         TCP_Client_CLI\Events::DataRead => $this->onDataRead = $Callback,
+         TCP_Client_CLI\Events::DataProgress => $this->onDataProgress = $Callback,
+         TCP_Client_CLI\Events::DataWrite => $this->onDataWrite = $Callback,
       };
 
       return $this;
@@ -334,7 +332,7 @@ class TCP_Client_CLI
    }
    public function start (): bool
    {
-      self::$status = self::STATUS_STARTING;
+      $this->status = self::STATUS_STARTING;
 
       if ($this->workers) {
          $this->Logger->log(info: 'Starting Client... ');
@@ -364,8 +362,8 @@ class TCP_Client_CLI
             Display::show(Display::MESSAGE, Display::TIMESTAMP, Display::CHANNEL, Display::SEVERITY);
 
             // @ Call On Worker instance
-            if (self::$onWorkerStarted) {
-               (self::$onWorkerStarted)($this);
+            if ($this->onWorkerStarted !== null) {
+               ($this->onWorkerStarted)($this);
             }
 
             $this->stop();
@@ -391,12 +389,12 @@ class TCP_Client_CLI
       switch ($this->mode) {
          case self::MODE_DEFAULT:
          case self::MODE_TEST:
-            if (self::$onWorkerStarted) {
-               (self::$onWorkerStarted)($this);
+            if ($this->onWorkerStarted !== null) {
+               ($this->onWorkerStarted)($this);
             }
             else {
                if ( $this->connect() ) {
-                  self::$Event->loop();
+                  $this->Event->loop();
                }
             }
             break;
@@ -410,7 +408,7 @@ class TCP_Client_CLI
 
    private function monitor (): void
    {
-      self::$status = self::STATUS_RUNNING;
+      $this->status = self::STATUS_RUNNING;
 
       if (Display::$segments !== Display::NONE) {
          Display::show(Display::MESSAGE);
@@ -540,14 +538,14 @@ class TCP_Client_CLI
     */
    protected function await ($Socket): void
    {
-      self::$Event->add($Socket, Select::EVENT_CONNECT, true);
+      $this->Event->add($Socket, Select::EVENT_CONNECT, true);
 
       // ! One absolute deadline bounds the dial (0 = unbounded, legacy behavior)
       $deadline = $this->deadline
          ?? ($this->connectTimeout > 0 ? microtime(true) + $this->connectTimeout : null);
       if ($deadline !== null) {
          $this->dialing++;
-         self::$Event->defer($deadline, function () use ($Socket): void {
+         $this->Event->defer($deadline, function () use ($Socket): void {
             $this->expire($Socket);
          });
       }
@@ -572,7 +570,7 @@ class TCP_Client_CLI
       // ? Dial already resolved — nothing to cancel
       if (
          is_resource($Socket) === false
-         || isSet(Connections::$Connections[(int) $Socket])
+         || isSet($this->Connections->Connections[(int) $Socket])
       ) {
          $this->halt();
 
@@ -580,9 +578,9 @@ class TCP_Client_CLI
       }
 
       // @ Cancel the dial: it never became writable before its deadline
-      self::$Event->del($Socket, Select::EVENT_CONNECT);
+      $this->Event->del($Socket, Select::EVENT_CONNECT);
       fclose($Socket);
-      Connections::$errors['connection']++;
+      $this->Connections->errors['connection']++;
       $this->Logger->log(warning: 'Unable to establish the TCP connection before its deadline.@\\;');
 
       $this->halt();
@@ -596,16 +594,16 @@ class TCP_Client_CLI
    protected function halt (): void
    {
       // ? Live connections or in-flight dials keep the loop running
-      if (Connections::$Connections !== [] || $this->dialing > 0) {
+      if ($this->Connections->Connections !== [] || $this->dialing > 0) {
          return;
       }
 
-      self::$Event->destroy();
+      $this->Event->destroy();
    }
 
    public function stop (): void
    {
-      self::$status = self::STATUS_STOPING;
+      $this->status = self::STATUS_STOPING;
 
       Display::show(Display::MESSAGE);
 

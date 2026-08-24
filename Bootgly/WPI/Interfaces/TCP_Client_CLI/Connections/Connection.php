@@ -128,8 +128,8 @@ class Connection extends Packages
       }
 
       // @ Call On Connection connect
-      if (Client::$onClientConnect) {
-         (Client::$onClientConnect)($Socket, $this);
+      if ($Client?->onClientConnect !== null) {
+         ($Client->onClientConnect)($Socket, $this);
       }
    }
 
@@ -141,8 +141,11 @@ class Connection extends Packages
 
       $this->status = self::STATUS_CLOSING;
 
-      Client::$Event->del($this->Socket, Client::$Event::EVENT_WRITE);
-      Client::$Event->del($this->Socket, Client::$Event::EVENT_READ);
+      $Client = $this->Client;
+      if ($Client !== null) {
+         $Client->Event->del($this->Socket, $Client->Event::EVENT_WRITE);
+         $Client->Event->del($this->Socket, $Client->Event::EVENT_READ);
+      }
 
       try {
          @fclose($this->Socket);
@@ -153,12 +156,17 @@ class Connection extends Packages
 
       $this->status = self::STATUS_CLOSED;
 
-      if (Client::$onClientDisconnect) {
-         (Client::$onClientDisconnect)($this);
+      if ($Client?->onClientDisconnect !== null) {
+         ($Client->onClientDisconnect)($this);
       }
 
       // @ Destroy itself
-      unset(Connections::$Connections[$this->id]);
+      // ! Local handle: an array write chained through the protected(set)
+      //   property would propagate write context and fatal from this scope
+      if ($Client !== null) {
+         $Connections = $Client->Connections;
+         unset($Connections->Connections[$this->id]);
+      }
 
       return true;
    }

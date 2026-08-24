@@ -75,21 +75,21 @@ return new Test(
 
          $Client->on(
             Events::ResponseReceive,
-            function ($Request, $Response) use (&$result): void {
+            function ($Request, $Response) use (&$result, $Client): void {
                $result = $Response->Body->raw;
-               HTTP_Client_CLI::$Event->loop = false; // @phpstan-ignore-line
+               $Client->Event->loop = false; // @phpstan-ignore-line
             }
          );
 
          $Client->request('POST', '/submit', body: $body);
          $Socket = $Client->connect();
 
-         HTTP_Client_CLI::$Event->defer(microtime(true) + 8.0, function (): void {
-            HTTP_Client_CLI::$Event->loop = false; // @phpstan-ignore-line
+         $Client->Event->defer(microtime(true) + 8.0, function () use ($Client): void {
+            $Client->Event->loop = false; // @phpstan-ignore-line
          });
 
          if ($Socket !== false) {
-            HTTP_Client_CLI::$Event->loop();
+            $Client->Event->loop();
          }
 
          return $result;

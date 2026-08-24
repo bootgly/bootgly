@@ -3358,7 +3358,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             Display::show(Display::MESSAGE);
 
             // @ Destroy Client Event Loop
-            $TCP_Client_CLI::$Event->destroy();
+            $TCP_Client_CLI->Event->destroy();
          }
       );
       $TCP_Client_CLI->start();

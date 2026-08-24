@@ -3,7 +3,6 @@
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test;
-use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\WPI\Nodes\WS_Client_CLI;
 
 
@@ -15,21 +14,21 @@ return new Test(
       $fired = false;
       $wallFired = false;
 
-      TCP_Client_CLI::$Event->defer(
+      $Client->Event->defer(
          microtime(true) + 1.0,
          static function () use (&$wallFired): void {
             $wallFired = true;
          }
       );
       $started = (int) hrtime(true);
-      TCP_Client_CLI::$Event->defer(
+      $Client->Event->defer(
          $started + 20_000_000,
-         static function () use (&$fired): void {
+         static function () use (&$fired, $Client): void {
             $fired = true;
-            TCP_Client_CLI::$Event->destroy();
+            $Client->Event->destroy();
          }
       );
-      TCP_Client_CLI::$Event->loop();
+      $Client->Event->loop();
       $elapsed = ((int) hrtime(true) - $started) / 1_000_000_000;
 
       yield new Assertion(description: 'the monotonic callback fires before the later wall timer')

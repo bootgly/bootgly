@@ -132,7 +132,11 @@ class Packages implements WPI\Connections\Packages
          $this->Connection->close();
       }
 
-      Connections::$errors[$operation]++;
+      // ! Local handle — array writes must not chain through protected(set)
+      $Connections = $this->Connection->Client?->Connections;
+      if ($Connections !== null) {
+         $Connections->errors[$operation]++;
+      }
 
       return false;
    }
@@ -201,8 +205,8 @@ class Packages implements WPI\Connections\Packages
             // ? Unlike DataWrite (full-buffer completion), this fires after
             //   every positive socket acceptance so request-boundary ledgers
             //   can timestamp requests completed by intermediate partial writes.
-            if (Client::$onDataProgress) {
-               (Client::$onDataProgress)(
+            if ($this->Connection->Client?->onDataProgress !== null) {
+               ($this->Connection->Client->onDataProgress)(
                   $Socket,
                   $this->Connection,
                   $this,
@@ -224,10 +228,12 @@ class Packages implements WPI\Connections\Packages
       $this->output = substr($buffer, $written);
 
       // @ Set Stats
-      if (Connections::$stats && $written > 0) {
+      $Client = $this->Connection->Client;
+      $Connections = $Client?->Connections;
+      if ($Connections !== null && $Connections->stats && $written > 0) {
          // Global
-         Connections::$writes++;
-         Connections::$written += $written;
+         $Connections->writes++;
+         $Connections->written += $written;
          // Per client — $this->Connection IS the registry entry for $Socket;
          // direct access skips two hash lookups + cast per write.
          $this->Connection->writes++;
@@ -240,8 +246,8 @@ class Packages implements WPI\Connections\Packages
       }
 
       // # Hook
-      if (Client::$onDataWrite) {
-         (Client::$onDataWrite)($Socket, $this->Connection, $this);
+      if ($Client?->onDataWrite !== null) {
+         ($Client->onDataWrite)($Socket, $this->Connection, $this);
       }
 
       return true;
@@ -309,17 +315,17 @@ class Packages implements WPI\Connections\Packages
       $this->input = $input;
 
       // @ Set Stats (disable to max performance in benchmarks)
-      if (Connections::$stats) {
+      $Client = $this->Connection->Client;
+      $Connections = $Client?->Connections;
+      if ($Connections !== null && $Connections->stats) {
          // Global
-         Connections::$reads++;
-         Connections::$read += $received;
-         // Per client
-         #Connections::$Connections[(int) $Socket]['reads']++;
+         $Connections->reads++;
+         $Connections->read += $received;
       }
 
       // # Hook
-      if (Client::$onDataRead) {
-         (Client::$onDataRead)($Socket, $this->Connection, $this);
+      if ($Client?->onDataRead !== null) {
+         ($Client->onDataRead)($Socket, $this->Connection, $this);
       }
 
       return true;

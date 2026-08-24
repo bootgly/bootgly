@@ -12,8 +12,8 @@ use Bootgly\WPI\Interfaces\TCP_Client_CLI\Pool;
 return new Test(
    description: 'It should park, reuse, release and drop pooled connections (idle-first lifecycle)',
    test: new Assertions(Case: function (): Generator {
-      // ! Boot the client statics (Client::$Event) that Connection->close() uses
-      new TCP_Client_CLI(TCP_Client_CLI::MODE_TEST);
+      // ! The owning client whose reactor Connection->close() deregisters from
+      $Client = new TCP_Client_CLI(TCP_Client_CLI::MODE_TEST);
 
       // ! A real established loopback pair — Connection requires a socket with
       //   a peer name (unix socketpairs have none and self-close on construct)
@@ -21,7 +21,7 @@ return new Test(
       $address = stream_socket_get_name($Server, false);
       $Socket = stream_socket_client("tcp://{$address}");
       $Peer = stream_socket_accept($Server);
-      $Connection = new Connection($Socket);
+      $Connection = new Connection($Socket, false, $Client);
 
       yield new Assertion(description: 'the loopback connection was established')
          ->expect($Connection->status === Connection::STATUS_ESTABLISHED)
@@ -85,7 +85,7 @@ return new Test(
       // ! A second pair whose remote end dies while the connection is parked
       $Socket2 = stream_socket_client("tcp://{$address}");
       $Peer2 = stream_socket_accept($Server);
-      $Connection2 = new Connection($Socket2);
+      $Connection2 = new Connection($Socket2, false, $Client);
 
       $Pool->attach($Connection2);
 

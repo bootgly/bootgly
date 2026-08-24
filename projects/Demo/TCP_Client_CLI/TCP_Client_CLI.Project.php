@@ -46,7 +46,7 @@ return new Project(
             $Socket = $TCP_Client_CLI->connect();
 
             if ($Socket) {
-               $TCP_Client_CLI::$Event->loop();
+               $TCP_Client_CLI->Event->loop();
             }
          })
          // on Client connect
@@ -65,7 +65,7 @@ return new Project(
             $Connection::$output = "GET / HTTP/1.1\r\nHost: localhost:8080\r\n\r\n";
 
             // @ Add Package write to Event loop
-            TCP_Client_CLI::$Event->add($Socket, TCP_Client_CLI::$Event::EVENT_WRITE, $Connection);
+            $Connection->Client->Event->add($Socket, $Connection->Client->Event::EVENT_WRITE, $Connection);
          })
          ->on(Events::ClientDisconnect, function ($Connection) use ($TCP_Client_CLI) {
             $TCP_Client_CLI->log(
@@ -76,7 +76,7 @@ return new Project(
          // on Data write / read
          ->on(Events::DataWrite, function ($Socket, $Connection, $Package) {
             // @ Add Package read to Event loop
-            TCP_Client_CLI::$Event->add($Socket, TCP_Client_CLI::$Event::EVENT_READ, $Connection);
+            $Connection->Client->Event->add($Socket, $Connection->Client->Event::EVENT_READ, $Connection);
          });
 
       $TCP_Client_CLI->start();

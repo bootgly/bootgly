@@ -5,7 +5,6 @@ use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI;
-use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
 
 
 return new Test(
@@ -47,7 +46,7 @@ return new Test(
       $Client->open($Socket);
 
       $started = microtime(true);
-      TCP_Client_CLI::$Event->loop();
+      $Client->Event->loop();
       $elapsed = microtime(true) - $started;
 
       yield new Assertion(description: 'the event loop terminated — the dial did not hang forever')
@@ -66,7 +65,7 @@ return new Test(
          ->assert();
 
       yield new Assertion(description: 'the failed dial was counted as a connection error')
-         ->expect(Connections::$errors['connection'] >= 1)
+         ->expect($Client->Connections->errors['connection'] >= 1)
          ->to->be(true)
          ->assert();
    })

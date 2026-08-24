@@ -78,12 +78,12 @@ return new Test(
          $supervisorWasQuiet = $Connection->output === $queued
             && $Session->awaitingPong === false;
 
-         TCP_Client_CLI::$Event->del(
+         $Client->Event->del(
             $Connection->Socket,
-            TCP_Client_CLI::$Event::EVENT_WRITE
+            $Client->Event::EVENT_WRITE
          );
          $started = (int) hrtime(true);
-         TCP_Client_CLI::$Event->loop();
+         $Client->Event->loop();
          $elapsed = ((int) hrtime(true) - $started) / 1_000_000_000;
          $expired = $Session->disconnected
             && $Session->closeAfterWrite === false

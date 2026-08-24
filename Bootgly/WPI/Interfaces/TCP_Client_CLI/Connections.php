@@ -61,19 +61,19 @@ class Connections implements WPI\Connections
    public array $error = [];
    // @ Local
    /** @var array<int,Connection> */
-   public static array $Connections;
+   public array $Connections;
    // @ Stats
-   public static bool $stats;
+   public bool $stats;
    // Connections
    public int $connections;
    // Errors
    /** @var array<string,int> */
-   public static array $errors;
+   public array $errors;
    // Packages
-   public static int $writes;
-   public static int $reads;
-   public static int $written;
-   public static int $read;
+   public int $writes;
+   public int $reads;
+   public int $written;
+   public int $read;
 
    public Packages $Packages;
 
@@ -94,23 +94,23 @@ class Connections implements WPI\Connections
       // @ Error
       $this->error = [];
       // @ Remote
-      self::$Connections = []; // Connections peers
+      $this->Connections = []; // Connections peers
       // @ Stats
-      self::$stats = false;
+      $this->stats = false;
       // Connections
       $this->connections = 0;  // Connections count
       // Errors
-      self::$errors = [
+      $this->errors = [
          'connection' => 0,    // Socket Connection errors
          'write' => 0,         // Socket Writing errors
          'read' => 0           // Socket Reading errors
          // 'except' => 0
       ];
       // Packages
-      self::$writes = 0;       // Socket Write count
-      self::$reads = 0;        // Socket Read count
-      self::$written = 0;      // Socket Writes in bytes
-      self::$read = 0;         // Socket Reads in bytes
+      $this->writes = 0;       // Socket Write count
+      $this->reads = 0;        // Socket Read count
+      $this->written = 0;      // Socket Writes in bytes
+      $this->read = 0;         // Socket Reads in bytes
    }
 
    // Open connection with server / Connect with server
@@ -118,12 +118,12 @@ class Connections implements WPI\Connections
    {
       $Client = $this->Client;
       if ($Client === null) {
-         self::$errors['connection']++;
+         $this->errors['connection']++;
          return false;
       }
       $Socket = &$Client->Socket;
 
-      Client::$Event->del($Socket, Client::$Event::EVENT_CONNECT);
+      $Client->Event->del($Socket, $Client->Event::EVENT_CONNECT);
 
       try {
          // @ Set blocking
@@ -150,7 +150,7 @@ class Connections implements WPI\Connections
 
       if ($Socket === false || is_resource($Socket) === false) {
          $this->Logger->log(error: 'Socket connection is false or invalid!' . PHP_EOL);
-         self::$errors['connection']++;
+         $this->errors['connection']++;
          return false;
       }
 
@@ -177,7 +177,7 @@ class Connections implements WPI\Connections
          || ($monotonicDeadline !== null && $monotonicDeadline <= $nowMonotonic)
       ) {
          fclose($Socket);
-         self::$errors['connection']++;
+         $this->errors['connection']++;
          return false;
       }
 
@@ -214,7 +214,7 @@ class Connections implements WPI\Connections
          || @stream_socket_get_name($Socket, true) === false
       ) {
          fclose($Socket);
-         self::$errors['connection']++;
+         $this->errors['connection']++;
          return false;
       }
 
@@ -228,7 +228,7 @@ class Connections implements WPI\Connections
          $monotonicDeadline
       );
       if ($Connection->status !== Connection::STATUS_ESTABLISHED || ($secure && $Connection->encrypted === false)) {
-         self::$errors['connection']++;
+         $this->errors['connection']++;
          return false;
       }
 
@@ -236,7 +236,7 @@ class Connections implements WPI\Connections
       $this->connections++;
 
       // @ Set Connection
-      self::$Connections[(int) $Socket] = $Connection;
+      $this->Connections[(int) $Socket] = $Connection;
 
       return true;
    }
@@ -262,8 +262,8 @@ class Connections implements WPI\Connections
       $connection = (int) $Connection;
 
       // @ Close specific Connection
-      if ( isSet(self::$Connections[$connection]) ) {
-         $closed = self::$Connections[$connection]->close();
+      if ( isSet($this->Connections[$connection]) ) {
+         $closed = $this->Connections[$connection]->close();
       }
       else {
          $closed = false;

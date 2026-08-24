@@ -75,19 +75,19 @@ return new Test(
                return;
             }
 
-            HTTP_Client_CLI::$Event->loop = false; // @phpstan-ignore-line
+            $Client->Event->loop = false; // @phpstan-ignore-line
          }
       );
 
       $Client->request('POST', '/submit', body: $bodies[$index++]);
       $Socket = $Client->connect();
 
-      HTTP_Client_CLI::$Event->defer(microtime(true) + 8.0, function (): void {
-         HTTP_Client_CLI::$Event->loop = false; // @phpstan-ignore-line
+      $Client->Event->defer(microtime(true) + 8.0, function () use ($Client): void {
+         $Client->Event->loop = false; // @phpstan-ignore-line
       });
 
       if ($Socket !== false) {
-         HTTP_Client_CLI::$Event->loop();
+         $Client->Event->loop();
       }
 
       posix_kill($forked, SIGTERM);

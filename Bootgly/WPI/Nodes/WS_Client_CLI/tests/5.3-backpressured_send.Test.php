@@ -102,13 +102,13 @@ return new Test(
             $discarded += strlen($chunk);
          }
 
-         TCP_Client_CLI::$Event->defer(
+         $Client->Event->defer(
             (int) hrtime(true) + 100_000_000,
-            static function (): void {
-               TCP_Client_CLI::$Event->destroy();
+            static function () use ($Client): void {
+               $Client->Event->destroy();
             }
          );
-         TCP_Client_CLI::$Event->loop();
+         $Client->Event->loop();
          $drained = $Connection->output === ''
             && $Connection->status === Connection::STATUS_CLOSED;
          $closeTimerCancelled = $Session->closeTimer === 0;

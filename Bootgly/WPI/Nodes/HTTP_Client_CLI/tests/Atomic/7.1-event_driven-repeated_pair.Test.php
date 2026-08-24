@@ -70,7 +70,7 @@ return new Test(
                return;
             }
 
-            HTTP_Client_CLI::$Event->loop = false; // @phpstan-ignore-line
+            $Client->Event->loop = false; // @phpstan-ignore-line
          }
       );
 
@@ -78,12 +78,12 @@ return new Test(
       $Socket = $Client->connect();
 
       // ! A hang must fail the assertion, never wedge the suite
-      HTTP_Client_CLI::$Event->defer(microtime(true) + 8.0, function (): void {
-         HTTP_Client_CLI::$Event->loop = false; // @phpstan-ignore-line
+      $Client->Event->defer(microtime(true) + 8.0, function () use ($Client): void {
+         $Client->Event->loop = false; // @phpstan-ignore-line
       });
 
       if ($Socket !== false) {
-         HTTP_Client_CLI::$Event->loop();
+         $Client->Event->loop();
       }
 
       posix_kill($forked, SIGTERM);

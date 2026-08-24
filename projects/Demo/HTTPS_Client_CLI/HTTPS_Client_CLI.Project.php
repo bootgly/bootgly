@@ -96,7 +96,7 @@ return new Project(
 
             $Socket = $Client->connect();
             if ($Socket) {
-               $Client::$Event->loop();
+               $Client->Event->loop();
             }
          })
          // on Connection connect
@@ -136,7 +136,7 @@ return new Project(
             $Output->render('@.;@#green:✓ HTTPS request completed@;@..;');
 
             // @ Stop the event loop after first response (demo is one-shot)
-            $Client::$Event->loop = false;
+            $Client->Event->loop = false;
          });
 
       // @ Start the client

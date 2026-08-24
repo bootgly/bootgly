@@ -12,15 +12,15 @@ use Bootgly\WPI\Interfaces\TCP_Client_CLI\Pool;
 return new Test(
    description: 'It should multiplex acquisitions on one connection up to its stream capacity (h2) and honor cap()',
    test: new Assertions(Case: function (): Generator {
-      // ! Boot the client statics (Client::$Event) that Connection->close() uses
-      new TCP_Client_CLI(TCP_Client_CLI::MODE_TEST);
+      // ! The owning client whose reactor Connection->close() deregisters from
+      $Client = new TCP_Client_CLI(TCP_Client_CLI::MODE_TEST);
 
       // ! A real established loopback pair
       $Server = stream_socket_server('tcp://127.0.0.1:0');
       $address = stream_socket_get_name($Server, false);
       $Socket = stream_socket_client("tcp://{$address}");
       $Peer = stream_socket_accept($Server);
-      $Connection = new Connection($Socket);
+      $Connection = new Connection($Socket, false, $Client);
 
       $Pool = new Pool(['max' => 1]);
 

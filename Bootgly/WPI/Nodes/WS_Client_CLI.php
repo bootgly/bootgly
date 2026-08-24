@@ -98,6 +98,8 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
    // # Concurrency (open()/run() — many clients on one shared loop)
    protected static bool $multi = false;    // concurrent mode active (set by open(), cleared by connect()/run())
    protected static int $open = 0;          // live concurrently-opened connections
+   /** First open()ed client — later ones adopt its reactor so run() pumps ONE loop. */
+   protected static null|self $Leader = null;
 
 
    public function __construct (int $mode = self::MODE_DEFAULT)
@@ -252,8 +254,8 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
       // @@ Re-enable + run the event loop until the connection closes (and, when
       //   reconnect is on, until the attempt budget is exhausted). A prior
       //   connection on this shared loop may have stopped it via destroy().
-      self::$Event->loop = true; // @phpstan-ignore-line (property on the Select impl)
-      self::$Event->loop();
+      $this->Event->loop = true; // @phpstan-ignore-line (property on the Select impl)
+      $this->Event->loop();
 
       // :
       return $Socket;
@@ -275,6 +277,15 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
       // ! Concurrent mode — the shared loop stops only when the LAST connection
       //   closes (see the onClientDisconnect router).
       self::$multi = true;
+
+      // ! Shared loop: the first open()ed client leads; later ones adopt its
+      //   reactor so every concurrent socket lands in the loop run() pumps.
+      if (self::$Leader === null) {
+         self::$Leader = $this;
+      }
+      else if (self::$Leader !== $this) {
+         $this->Event = self::$Leader->Event;
+      }
 
       // ! Arm the handshake template.
       $this->URI = $URI;
@@ -303,14 +314,15 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
    public static function run (): void
    {
       // ? Nothing opened — nothing to run.
-      if (self::$open <= 0) {
+      if (self::$open <= 0 || self::$Leader === null) {
          return;
       }
 
-      self::$Event->loop = true; // @phpstan-ignore-line (property on the Select impl)
-      self::$Event->loop();
+      self::$Leader->Event->loop = true; // @phpstan-ignore-line (property on the Select impl)
+      self::$Leader->Event->loop();
 
       self::$multi = false;
+      self::$Leader = null;
    }
 
    /**
@@ -368,14 +380,14 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
 
       // ? Budget exhausted (attempt cap) — give up and end the loop.
       if ($this->reconnectAttempts > 0 && $this->attempt >= $this->reconnectAttempts) {
-         self::$Event->destroy();
+         $this->Event->destroy();
          return;
       }
 
       // ? Budget exhausted (wall-clock) — give up even under unlimited attempts, so a
       //   permanently dead port (connection refused forever) cannot re-dial endlessly.
       if ($this->reconnectTimeout > 0 && (time() - $this->reconnectStartedAt) >= $this->reconnectTimeout) {
-         self::$Event->destroy();
+         $this->Event->destroy();
          return;
       }
 
@@ -481,7 +493,7 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
       //   connections (each WS_Client_CLI owns exactly one connection + Session).
 
       // @ On TCP connect: create the session and queue the upgrade GET.
-      self::$onClientConnect = function ($Socket, $Connection) {
+      $this->onClientConnect = function ($Socket, $Connection) {
          if ($Connection->Client instanceof self === false) {
             return;
          }
@@ -493,15 +505,18 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
          $Session->offeredCompression = $Client->compression;
          $Client->Session = $Session;
          $Connection->output = $Client->request;
-         self::$Event->add($Socket, self::$Event::EVENT_WRITE, $Connection);
+         $Client->Event->add($Socket, $Client->Event::EVENT_WRITE, $Connection);
       };
 
       // @ After the request flushes, switch the socket to reading the response.
-      self::$onDataWrite = function ($Socket, $Connection) {
-         self::$Event->del($Socket, self::$Event::EVENT_WRITE);
+      $this->onDataWrite = function ($Socket, $Connection) {
+         $Owner = $Connection->Client;
+         if ($Owner !== null) {
+            $Owner->Event->del($Socket, $Owner->Event::EVENT_WRITE);
+         }
 
-         if ($Connection->Client instanceof self) {
-            $Session = $Connection->Client->Session;
+         if ($Owner instanceof self) {
+            $Session = $Owner->Session;
             if ($Session !== null && $Session->closeAfterWrite) {
                $Session->closeAfterWrite = false;
                $Session->disconnect();
@@ -511,11 +526,13 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
             }
          }
 
-         self::$Event->add($Socket, self::$Event::EVENT_READ, $Connection);
+         if ($Owner !== null) {
+            $Owner->Event->add($Socket, $Owner->Event::EVENT_READ, $Connection);
+         }
       };
 
       // @ On read: drive the handshake → framing decode loop.
-      self::$onDataRead = function ($Socket, $Connection) {
+      $this->onDataRead = function ($Socket, $Connection) {
          if ($Connection->Client instanceof self === false) {
             return;
          }
@@ -594,7 +611,7 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
       // @ On TCP disconnect: fire the Disconnected hook, then either schedule a
       //   reconnect (abrupt drop + reconnect enabled) or stop the event loop so
       //   the blocking connect() returns.
-      self::$onClientDisconnect = function ($Connection) {
+      $this->onClientDisconnect = function ($Connection) {
          if ($Connection->Client instanceof self === false) {
             return;
          }
@@ -610,7 +627,7 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
          if (self::$multi) {
             self::$open--;
             if (self::$open <= 0) {
-               self::$Event->loop = false; // @phpstan-ignore-line (property on the Select impl)
+               $Client->Event->loop = false; // @phpstan-ignore-line (property on the Select impl)
             }
             return;
          }
@@ -622,7 +639,7 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
             $Client->retry();
          }
          else {
-            self::$Event->destroy();
+            $Client->Event->destroy();
          }
       };
    }
@@ -637,9 +654,9 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
       $this->Session = null;
       $this->wired = false;
 
-      self::$onClientConnect = null;
-      self::$onClientDisconnect = null;
-      self::$onDataRead = null;
-      self::$onDataWrite = null;
+      $this->onClientConnect = null;
+      $this->onClientDisconnect = null;
+      $this->onDataRead = null;
+      $this->onDataWrite = null;
    }
 }

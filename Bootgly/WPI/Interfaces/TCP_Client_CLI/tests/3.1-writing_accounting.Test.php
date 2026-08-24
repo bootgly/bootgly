@@ -103,7 +103,7 @@ return new Test(
 
       @proc_terminate($process);
       proc_close($process);
-      TCP_Client_CLI::$onDataProgress = null;
+      $Client->onDataProgress = null;
 
       yield new Assertion(
          description: 'Accepted bytes are not resurrected when zero progress reaches the deadline',

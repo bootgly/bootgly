@@ -138,16 +138,16 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
    // * Data
    // # Protocol
-   public static Encoder $Encoder;
+   public Encoder $Encoder;
    // # Hooks
-   protected static null|Closure $onResponse = null;
-   protected static null|Closure $httpOnConnect = null;
-   protected static null|Closure $httpOnRead = null;
-   protected static null|Closure $httpOnWrite = null;
+   protected null|Closure $onResponse = null;
+   protected null|Closure $httpOnConnect = null;
+   protected null|Closure $httpOnRead = null;
+   protected null|Closure $httpOnWrite = null;
 
    // * Metadata
-   protected static bool $eventDriven = false;
-   public static int $bytesReceived = 0;
+   protected bool $eventDriven = false;
+   public int $bytesReceived = 0;
    // # Pool
    /** Per-origin connection pool (sync/batch modes). */
    public protected(set) Pool $Pool;
@@ -185,8 +185,8 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       // ...
 
       // * Metadata
-      self::$eventDriven = false;
-      self::$bytesReceived = 0;
+      $this->eventDriven = false;
+      $this->bytesReceived = 0;
       // # Pool
       $this->Pool = new Pool;
 
@@ -198,7 +198,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $this->Logger = new Logger(channel: 'HTTP.Client.CLI');
 
       // . Request/Encoder
-      self::$Encoder = new Encoder_;
+      $this->Encoder = new Encoder_;
    }
 
    /**
@@ -277,15 +277,15 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $this->Events[$Event->value] = true;
 
       // @ Mark as event-driven mode
-      self::$eventDriven = true;
+      $this->eventDriven = true;
 
       match ($Event) {
-         Events::WorkerStarted => self::$onWorkerStarted = $Callback,
-         Events::ClientConnect => self::$httpOnConnect = $Callback,
-         Events::ClientDisconnect => self::$onClientDisconnect = $Callback,
-         Events::DataRead => self::$httpOnRead = $Callback,
-         Events::DataWrite => self::$httpOnWrite = $Callback,
-         Events::ResponseReceive => self::$onResponse = $Callback,
+         Events::WorkerStarted => $this->onWorkerStarted = $Callback,
+         Events::ClientConnect => $this->httpOnConnect = $Callback,
+         Events::ClientDisconnect => $this->onClientDisconnect = $Callback,
+         Events::DataRead => $this->httpOnRead = $Callback,
+         Events::DataWrite => $this->httpOnWrite = $Callback,
+         Events::ResponseReceive => $this->onResponse = $Callback,
       };
 
       return $this;
@@ -307,16 +307,16 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $HTTP_Client_CLI = $this;
 
       // @ On client connection: encode and queue the request for writing
-      parent::$onClientConnect = function ($Socket, $Connection) use ($HTTP_Client_CLI) {
+      $this->onClientConnect = function ($Socket, $Connection) use ($HTTP_Client_CLI) {
          // @ Call user's connect hook if set
-         if (self::$httpOnConnect !== null) {
-            (self::$httpOnConnect)($Socket, $Connection);
+         if ($HTTP_Client_CLI->httpOnConnect !== null) {
+            ($HTTP_Client_CLI->httpOnConnect)($Socket, $Connection);
          }
 
          $Template = $HTTP_Client_CLI->nextRequest;
 
          // # HTTP/2 negotiation (sync/batch modes)
-         if (self::$eventDriven === false) {
+         if ($HTTP_Client_CLI->eventDriven === false) {
             $h2 = false;
             if ($Connection->encrypted) {
                // @ TLS: honor the ALPN-negotiated protocol
@@ -371,7 +371,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          }
 
          // @ Register the fresh h1 connection in the per-origin pool (sync/batch)
-         if (self::$eventDriven === false) {
+         if ($HTTP_Client_CLI->eventDriven === false) {
             $HTTP_Client_CLI->Pool->attach($Connection, capacity: 1, busy: $Template !== null);
          }
 
@@ -383,7 +383,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          // @ Event-driven: nextRequest is a shared template — keep it for other
          //   connections. Create a per-socket Request for decode state tracking.
          // @ Sync/batch: one-to-one mapping — consume nextRequest.
-         if (self::$eventDriven) {
+         if ($HTTP_Client_CLI->eventDriven) {
             $Request = new Request;
             $Request($Template->method, $Template->URI);
             $Request->connectionState = 'waiting';
@@ -398,13 +398,13 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       };
 
       // @ On read: decode response using per-request state
-      self::$onDataRead = function ($Socket, $Connection) use ($HTTP_Client_CLI) {
+      $this->onDataRead = function ($Socket, $Connection) use ($HTTP_Client_CLI) {
          // # One monotonic arrival timestamp follows this chunk through decoding
          //   to the logical response callback. Parser work must not inflate wire
          //   latency or move an in-window final byte beyond the cutoff.
          $receivedNS = (int) hrtime(true);
-         if (self::$httpOnRead !== null) {
-            (self::$httpOnRead)($Socket, $Connection, $receivedNS);
+         if ($HTTP_Client_CLI->httpOnRead !== null) {
+            ($HTTP_Client_CLI->httpOnRead)($Socket, $Connection, $receivedNS);
          }
 
          $socketId = (int) $Socket;
@@ -426,7 +426,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          $newSize = strlen($newBytes);
 
          if ($newSize > 0) {
-            self::$bytesReceived += $newSize;
+            $HTTP_Client_CLI->bytesReceived += $newSize;
             $Request->bytesReceived += $newSize;
 
             if (
@@ -489,8 +489,8 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             ) {
                $Connection->output = $Request->Body->raw;
                $Request->connectionState = 'waiting';
-               self::$Event->del($Socket, self::$Event::EVENT_READ);
-               self::$Event->add($Socket, self::$Event::EVENT_WRITE, $Connection);
+               $HTTP_Client_CLI->Event->del($Socket, $HTTP_Client_CLI->Event::EVENT_READ);
+               $HTTP_Client_CLI->Event->add($Socket, $HTTP_Client_CLI->Event::EVENT_WRITE, $Connection);
                return;
             }
 
@@ -687,12 +687,12 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          }
 
          // @ Response complete — branch by mode
-         if (self::$eventDriven) {
+         if ($HTTP_Client_CLI->eventDriven) {
             // @ Event-driven: fire hook, reuse connection
             $Request->connectionState = 'idle';
 
-            if (self::$onResponse !== null) {
-               (self::$onResponse)($Request, $Request->Response, $receivedNS);
+            if ($HTTP_Client_CLI->onResponse !== null) {
+               ($HTTP_Client_CLI->onResponse)($Request, $Request->Response, $receivedNS);
             }
 
             // @ Handle connection close
@@ -738,7 +738,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                   if (stripos($headerRaw, 'Expect: 100-continue') !== false
                      && $next->Body->raw !== ''
                   ) {
-                     $Connection->output = self::$Encoder::encode(
+                     $Connection->output = $HTTP_Client_CLI->Encoder::encode(
                         $next->method,
                         $next->URI,
                         $next->protocol,
@@ -750,7 +750,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                      $next->connectionState = 'waiting-100-continue';
                   }
                   else {
-                     $Connection->output = self::$Encoder::encode(
+                     $Connection->output = $HTTP_Client_CLI->Encoder::encode(
                         $next->method,
                         $next->URI,
                         $next->protocol,
@@ -767,8 +767,8 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                   }
                }
 
-               self::$Event->del($Socket, self::$Event::EVENT_READ);
-               self::$Event->add($Socket, self::$Event::EVENT_WRITE, $Connection);
+               $HTTP_Client_CLI->Event->del($Socket, $HTTP_Client_CLI->Event::EVENT_READ);
+               $HTTP_Client_CLI->Event->add($Socket, $HTTP_Client_CLI->Event::EVENT_WRITE, $Connection);
             }
          }
          else {
@@ -789,7 +789,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             else {
                // @ Park the connection idle — it leaves the select sets;
                //   liveness is re-checked at acquire()
-               self::$Event->del($Socket, self::$Event::EVENT_READ);
+               $HTTP_Client_CLI->Event->del($Socket, $HTTP_Client_CLI->Event::EVENT_READ);
                $HTTP_Client_CLI->Pool->release($Connection);
             }
 
@@ -802,16 +802,16 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       };
 
       // @ After write completes, switch to read mode
-      self::$onDataWrite = function ($Socket, $Connection) use ($HTTP_Client_CLI) {
-         self::$Event->del($Socket, self::$Event::EVENT_WRITE);
-         self::$Event->add($Socket, self::$Event::EVENT_READ, $Connection);
+      $this->onDataWrite = function ($Socket, $Connection) use ($HTTP_Client_CLI) {
+         $HTTP_Client_CLI->Event->del($Socket, $HTTP_Client_CLI->Event::EVENT_WRITE);
+         $HTTP_Client_CLI->Event->add($Socket, $HTTP_Client_CLI->Event::EVENT_READ, $Connection);
 
-         if (self::$httpOnWrite !== null) {
+         if ($HTTP_Client_CLI->httpOnWrite !== null) {
             // ? The third argument is the exact logical Request whose final
             //   encoded byte just reached the socket API. Existing callbacks
             //   that declare fewer arguments remain valid in PHP.
             $Request = $HTTP_Client_CLI->pendingRequests[$Connection->id] ?? null;
-            (self::$httpOnWrite)($Socket, $Connection, $Request);
+            ($HTTP_Client_CLI->httpOnWrite)($Socket, $Connection, $Request);
          }
       };
 
@@ -821,10 +821,10 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       //   of dying in the waiting decoder until the deadline. A chunked or
       //   Content-Length body cut short by EOF is TRUNCATED, not legal — it
       //   fails immediately while retaining its incomplete-body metadata.
-      parent::$onClientDisconnect = function ($Connection) use ($HTTP_Client_CLI) {
+      $this->onClientDisconnect = function ($Connection) use ($HTTP_Client_CLI) {
          $completedNS = (int) hrtime(true);
          // @ Pool bookkeeping first — the connection is gone either way
-         if (self::$eventDriven === false) {
+         if ($HTTP_Client_CLI->eventDriven === false) {
             $HTTP_Client_CLI->Pool->drop($Connection);
          }
 
@@ -872,15 +872,15 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                $Request->connectionState = 'idle';
                unset($HTTP_Client_CLI->pendingRequests[$Connection->id]);
 
-               if (self::$eventDriven && self::$onResponse !== null) {
-                  (self::$onResponse)($Request, $Response, $completedNS);
+               if ($HTTP_Client_CLI->eventDriven && $HTTP_Client_CLI->onResponse !== null) {
+                  ($HTTP_Client_CLI->onResponse)($Request, $Response, $completedNS);
                }
                else if ($Request->onComplete !== null) {
                   ($Request->onComplete)($Request);
                }
             }
             else if (
-               self::$eventDriven === false
+               $HTTP_Client_CLI->eventDriven === false
                && $Request->reused
                && $Request->replayed === false
                && $Request->bytesReceived === 0
@@ -951,8 +951,8 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                $Request->connectionState = 'idle';
                unset($HTTP_Client_CLI->pendingRequests[$Connection->id]);
 
-               if (self::$eventDriven && self::$onResponse !== null) {
-                  (self::$onResponse)($Request, $Response, $completedNS);
+               if ($HTTP_Client_CLI->eventDriven && $HTTP_Client_CLI->onResponse !== null) {
+                  ($HTTP_Client_CLI->onResponse)($Request, $Response, $completedNS);
                }
                else if ($Request->onComplete !== null) {
                   ($Request->onComplete)($Request);
@@ -961,7 +961,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          }
 
          // @ Feed queued requests into the freed capacity
-         if (self::$eventDriven === false) {
+         if ($HTTP_Client_CLI->eventDriven === false) {
             $HTTP_Client_CLI->promote();
          }
 
@@ -1042,7 +1042,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       // @ Reuse the memoized encoding: the same Request object, re-dispatched
       //   to the origin its bytes were built for (event-driven hot path)
       if (
-         self::$eventDriven
+         $this->eventDriven
          && $Template->encoded !== null
          && $Template->encodedHost === $this->host
          && $Template->encodedPort === $this->port
@@ -1057,7 +1057,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          if (stripos($headerRaw, 'Expect: 100-continue') !== false
             && $Template->Body->raw !== ''
          ) {
-            $Connection->output = self::$Encoder::encode(
+            $Connection->output = $this->Encoder::encode(
                $Template->method,
                $Template->URI,
                $Template->protocol,
@@ -1069,7 +1069,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             $Request->connectionState = 'waiting-100-continue';
          }
          else {
-            $Connection->output = self::$Encoder::encode(
+            $Connection->output = $this->Encoder::encode(
                $Template->method,
                $Template->URI,
                $Template->protocol,
@@ -1084,7 +1084,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             //   carry this object's headers, body and origin (HCLI-5). The
             //   Expect path is deliberately excluded — replaying its
             //   headers-only encoding would skip the 100-continue state.
-            if (self::$eventDriven) {
+            if ($this->eventDriven) {
                $Template->encoded = $Connection->output;
                $Template->encodedHost = $this->host;
                $Template->encodedPort = $this->port;
@@ -1092,11 +1092,11 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          }
       }
 
-      self::$Event->del($Socket, self::$Event::EVENT_READ);
-      self::$Event->add($Socket, self::$Event::EVENT_WRITE, $Connection);
+      $this->Event->del($Socket, $this->Event::EVENT_READ);
+      $this->Event->add($Socket, $this->Event::EVENT_WRITE, $Connection);
 
       // @ Every dispatch arms its own response deadline (sync/batch)
-      if (self::$eventDriven === false) {
+      if ($this->eventDriven === false) {
          $this->watch($Request);
       }
    }
@@ -1172,7 +1172,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          foreach ($this->pendingRequests as $socketID => $PendingRequest) {
             if ($PendingRequest === $Request) {
                unset($this->pendingRequests[$socketID]);
-               $Connection = Connections::$Connections[$socketID] ?? null;
+               $Connection = $this->Connections->Connections[$socketID] ?? null;
                // ! close() fires the disconnect hook: pool drop + promote
                $Connection?->close();
             }
@@ -1192,7 +1192,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                }
 
                $Session = $this->Sessions[$socketID] ?? null;
-               $Connection = Connections::$Connections[$socketID] ?? null;
+               $Connection = $this->Connections->Connections[$socketID] ?? null;
                if ($Session !== null && $Connection !== null) {
                   $Session->reset($stream, Errors::Cancel);
                   // @ The local reset record is moot — the request timed out
@@ -1213,10 +1213,10 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       // ! Held on the Request so that any later stage can withdraw them
       if ($deadline !== null) {
-         $Request->timers[] = self::$Event->defer($deadline, $Timeout);
+         $Request->timers[] = $this->Event->defer($deadline, $Timeout);
       }
       if ($monotonicDeadline !== null) {
-         $Request->timers[] = self::$Event->defer($monotonicDeadline, $Timeout);
+         $Request->timers[] = $this->Event->defer($monotonicDeadline, $Timeout);
       }
    }
 
@@ -1238,7 +1238,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       // @ cancel() is O(1) per ID and IDs are never reused
       foreach ($Request->timers as $timerID) {
-         self::$Event->cancel($timerID);
+         $this->Event->cancel($timerID);
       }
 
       $Request->timers = [];
@@ -1308,7 +1308,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $Connection->output .= $Session->outbox;
       $Session->outbox = '';
 
-      self::$Event->add($Connection->Socket, self::$Event::EVENT_WRITE, $Connection);
+      $this->Event->add($Connection->Socket, $this->Event::EVENT_WRITE, $Connection);
    }
 
    /**
@@ -1398,7 +1398,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $input = $Connection->input;
       $bytes = strlen($input);
       if ($bytes > 0) {
-         self::$bytesReceived += $bytes;
+         $this->bytesReceived += $bytes;
       }
 
       // @ Feed the engine
@@ -1601,7 +1601,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    private function warm (): void
    {
       // ? Warm-up runs once per configuration, sync/batch modes only
-      if ($this->warmed || self::$eventDriven) {
+      if ($this->warmed || $this->eventDriven) {
          return;
       }
       $this->warmed = true;
@@ -1687,7 +1687,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          return;
       }
 
-      self::$Event->destroy();
+      $this->Event->destroy();
    }
 
    /**
@@ -1932,7 +1932,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       // @ Schedule the re-dispatch on the event loop
       $this->retrying++;
-      self::$Event->defer(microtime(true) + $delay, function () use ($Request): void {
+      $this->Event->defer(microtime(true) + $delay, function () use ($Request): void {
          $this->retrying--;
 
          $Connection = $this->Pool->acquire();
@@ -1989,8 +1989,8 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       }
 
       // @ Re-arm the persistent reactor (a previous drain may have stopped it)
-      self::$Event->loop = true; // @phpstan-ignore-line (property on the Select impl)
-      self::$Event->loop();
+      $this->Event->loop = true; // @phpstan-ignore-line (property on the Select impl)
+      $this->Event->loop();
 
       // @ Reset for next batch of requests
       $this->batching = false;
@@ -2030,7 +2030,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    ): self|Response
    {
       // @ Event-driven mode: reuse cached Request when method+URI match (avoid allocation)
-      if (self::$eventDriven
+      if ($this->eventDriven
          && $this->cachedRequest !== null
          && $this->cachedRequest->method === $method
          && $this->cachedRequest->URI === $URI
@@ -2049,7 +2049,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $this->nextRequest = $Request;
 
       // @ Event-driven mode: cache and return self
-      if (self::$eventDriven) {
+      if ($this->eventDriven) {
          $this->cachedRequest = $Request;
          $this->wire();
          return $this;
