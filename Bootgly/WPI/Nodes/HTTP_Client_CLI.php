@@ -10,9 +10,11 @@
 
 namespace Bootgly\WPI\Nodes;
 
-
 use const BOOTGLY_ROOT_DIR;
 use const SIGTERM;
+use const STREAM_IPPROTO_IP;
+use const STREAM_PF_UNIX;
+use const STREAM_SOCK_STREAM;
 use const STREAM_CRYPTO_METHOD_TLSv1_2_SERVER;
 use const STREAM_CRYPTO_METHOD_TLSv1_3_SERVER;
 use const STREAM_SERVER_BIND;
@@ -27,6 +29,7 @@ use function fread;
 use function fwrite;
 use function hrtime;
 use function in_array;
+use function is_resource;
 use function max;
 use function microtime;
 use function min;
@@ -41,6 +44,8 @@ use function stream_get_meta_data;
 use function stream_socket_accept;
 use function stream_socket_enable_crypto;
 use function stream_socket_server;
+use function stream_set_blocking;
+use function stream_socket_pair;
 use function stripos;
 use function strlen;
 use function strpos;
@@ -54,11 +59,14 @@ use function usleep;
 use BackedEnum;
 use Closure;
 use Exception;
+use Fiber;
 use Generator;
 use InvalidArgumentException;
 use LogicException;
+use RuntimeException;
 
 use Bootgly\ABI\IO\FS\File;
+use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Suite;
@@ -69,8 +77,8 @@ use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Pool;
-use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Modules\HTTP2\Errors;
+use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Events;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Encoder;
@@ -80,7 +88,6 @@ use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response\Decoders\Decoder_;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response\Decoders\Decoder_Chunked;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Session;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Tests\Suite\Test as E2ETest;
-
 
 class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 {
@@ -174,7 +181,11 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    protected null|Request $nextRequest = null;
    /** Cached Request template for event-driven reuse (avoids allocation per cycle) */
    protected null|Request $cachedRequest = null;
-
+   // # Parked drain (adopted reactor)
+   /** @var null|resource Episode notifier read end — the parked Fiber waits on it. */
+   private $Notify = null;
+   /** @var null|resource Episode notifier write end — wake() signals it. */
+   private $Notified = null;
 
    public function __construct (int $mode = self::MODE_DEFAULT)
    {
@@ -189,7 +200,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $this->bytesReceived = 0;
       // # Pool
       $this->Pool = new Pool;
-
 
       // \
       parent::__construct($mode);
@@ -360,10 +370,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                      $HTTP_Client_CLI->unwatch($Template);
                      $Template->connectionState = 'idle';
 
-                     if ($Template->onComplete !== null) {
-                        ($Template->onComplete)($Template);
-                     }
-
                      $HTTP_Client_CLI->Pool->release($Connection);
                   }
                }
@@ -445,10 +451,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                $Request->connectionState = 'idle';
                unset($HTTP_Client_CLI->pendingRequests[$socketId]);
 
-               if ($Request->onComplete !== null) {
-                  ($Request->onComplete)($Request);
-               }
-
                // @ close() fires the disconnect hook: pool drop + promote + halt
                $Connection->close();
                return;
@@ -522,10 +524,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             $Request->connectionState = 'idle';
             unset($HTTP_Client_CLI->pendingRequests[$socketId]);
 
-            if ($Request->onComplete !== null) {
-               ($Request->onComplete)($Request);
-            }
-
             // @ close() fires the disconnect hook: pool drop + promote + halt
             $Connection->close();
             return;
@@ -586,10 +584,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                   $HTTP_Client_CLI->unwatch($Request);
                   $Request->connectionState = 'idle';
                   unset($HTTP_Client_CLI->pendingRequests[$socketId]);
-
-                  if ($Request->onComplete !== null) {
-                     ($Request->onComplete)($Request);
-                  }
 
                   // @ close() fires the disconnect hook: pool drop + promote + halt
                   $Connection->close();
@@ -783,10 +777,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             $Request->connectionState = 'idle';
             unset($HTTP_Client_CLI->pendingRequests[$socketId]);
 
-            if ($Request->onComplete !== null) {
-               ($Request->onComplete)($Request);
-            }
-
             if ($Request->Response->closeConnection) {
                // @ close() fires the disconnect hook: pool drop + promote + halt
                $Connection->close();
@@ -845,9 +835,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                $HTTP_Client_CLI->unwatch($PendingRequest);
                $PendingRequest->connectionState = 'idle';
 
-               if ($PendingRequest->onComplete !== null) {
-                  ($PendingRequest->onComplete)($PendingRequest);
-               }
             }
             unset($HTTP_Client_CLI->pendingStreams[$Connection->id]);
 
@@ -879,9 +866,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
                if ($HTTP_Client_CLI->eventDriven && $HTTP_Client_CLI->onResponse !== null) {
                   ($HTTP_Client_CLI->onResponse)($Request, $Response, $completedNS);
-               }
-               else if ($Request->onComplete !== null) {
-                  ($Request->onComplete)($Request);
                }
             }
             else if (
@@ -931,9 +915,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                   $HTTP_Client_CLI->unwatch($Request);
                   $Request->connectionState = 'idle';
 
-                  if ($Request->onComplete !== null) {
-                     ($Request->onComplete)($Request);
-                  }
                }
             }
             else {
@@ -954,9 +935,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
                if ($HTTP_Client_CLI->eventDriven && $HTTP_Client_CLI->onResponse !== null) {
                   ($HTTP_Client_CLI->onResponse)($Request, $Response, $completedNS);
-               }
-               else if ($Request->onComplete !== null) {
-                  ($Request->onComplete)($Request);
                }
             }
          }
@@ -1204,10 +1182,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             }
          }
 
-         if ($Request->onComplete !== null) {
-            ($Request->onComplete)($Request);
-         }
-
          // ? Stop the loop when no pending work remains
          $this->halt();
       };
@@ -1376,10 +1350,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $this->unwatch($Request);
       $Request->connectionState = 'idle';
 
-      if ($Request->onComplete !== null) {
-         ($Request->onComplete)($Request);
-      }
-
       // : The request was consumed (failed) — nothing left to queue
       return true;
    }
@@ -1508,10 +1478,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          $this->unwatch($Request);
          $Request->connectionState = 'idle';
 
-         if ($Request->onComplete !== null) {
-            ($Request->onComplete)($Request);
-         }
-
          return;
       }
 
@@ -1587,9 +1553,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          $Request->connectionState = 'idle';
       }
 
-      if ($Request->onComplete !== null) {
-         ($Request->onComplete)($Request);
-      }
    }
 
    /**
@@ -1624,6 +1587,13 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     */
    private function promote (): void
    {
+      // ? Reactor-stack code never dials on an adopted reactor — wake the
+      //   owner Fiber: it services the queue between parks (BG-13)
+      if ($this->owned === false && Fiber::getCurrent() === null) {
+         $this->wake();
+         return;
+      }
+
       // @@
       $attempts = 0;
       while ($this->Queue !== []) {
@@ -1653,9 +1623,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                $Request->completed = true;
                $this->unwatch($Request);
 
-               if ($Request->onComplete !== null) {
-                  ($Request->onComplete)($Request);
-               }
             }
 
             continue;
@@ -1684,12 +1651,73 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          return;
       }
 
-      // ? An adopted reactor belongs to its host and must never be destroyed
+      // ? An adopted reactor belongs to its host and must never be destroyed —
+      //   quiescence is signalled to the parked drain episode instead
       if ($this->owned === false) {
+         $this->wake();
          return;
       }
 
       $this->Event->destroy();
+   }
+   /**
+    * Wake the parked drain episode, if one is open.
+    */
+   private function wake (): void
+   {
+      if ($this->Notified !== null) {
+         @fwrite($this->Notified, "\0");
+      }
+   }
+   /**
+    * Fail a request deterministically (code 0) outside any dispatch terminal.
+    *
+    * @param Request $Request The request to fail.
+    */
+   private function fail (Request $Request): void
+   {
+      $this->unwatch($Request);
+
+      if ($Request->Response->code === 0 && $Request->Response->status === '') {
+         $Request->Response->status = 'Connection Failed';
+      }
+      $Request->connectionState = 'idle';
+      $Request->completed = true;
+   }
+   /**
+    * Tear down every in-flight request deterministically (parked-drain abort) —
+    * the same reclamation the per-request timeout performs, for the whole set.
+    */
+   private function scrap (): void
+   {
+      // @ Queued — never dispatched
+      foreach ($this->Queue as $Request) {
+         $this->fail($Request);
+      }
+      $this->Queue = [];
+
+      // @ h1 in flight — close their connections
+      foreach ($this->pendingRequests as $socketID => $Request) {
+         $Connection = $this->Connections->Connections[$socketID] ?? null;
+         $Connection?->close();
+         $this->fail($Request);
+      }
+      $this->pendingRequests = [];
+
+      // @ h2 streams
+      foreach ($this->pendingStreams as $socketID => $Requests) {
+         $Session = $this->Sessions[$socketID] ?? null;
+         foreach ($Requests as $stream => $Request) {
+            if ($Session !== null) {
+               $Session->reset($stream, Errors::Cancel);
+               unset($Session->done[$stream]);
+            }
+            $this->fail($Request);
+         }
+         $Connection = $this->Connections->Connections[$socketID] ?? null;
+         $Connection?->close();
+      }
+      $this->pendingStreams = [];
    }
 
    /**
@@ -1958,9 +1986,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          if ($Request->Response->code === 0 && $Request->Response->status === '') {
             $Request->Response->status = 'Connection Failed';
          }
-         if ($Request->onComplete !== null) {
-            ($Request->onComplete)($Request);
-         }
          $this->halt();
       });
 
@@ -1979,6 +2004,18 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     */
    private function dial (Request $Request): bool
    {
+      // ? Reactor-stack code never dials on an adopted reactor: queue the
+      //   request and wake the owner Fiber — it dials between parks (BG-13)
+      if ($this->owned === false && Fiber::getCurrent() === null) {
+         $this->Queue[] = $Request;
+         if ($Request->timers === []) {
+            $this->watch($Request, queued: true);
+         }
+         $this->wake();
+
+         return true;
+      }
+
       // ! Claim — exactly one dial is ever in flight per client
       $this->nextRequest = $Request;
 
@@ -2015,10 +2052,15 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          return;
       }
 
-      // ? Adopted reactor: never pump the host loop from here — parking
-      //   arrives with the wait bridge (BG-13)
+      // @ Adopted reactor: park the calling Fiber instead of pumping the
+      //   host loop (BG-13)
       if ($this->owned === false) {
-         throw new LogicException('Draining on an adopted reactor requires the wait bridge.');
+         $this->parking();
+
+         // @ Reset for next batch of requests
+         $this->batching = false;
+
+         return;
       }
 
       // @ Re-arm the persistent reactor (a previous drain may have stopped it)
@@ -2027,6 +2069,107 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       // @ Reset for next batch of requests
       $this->batching = false;
+   }
+   /**
+    * Park the calling Fiber until this client is quiescent (adopted reactor).
+    *
+    * Condition-first: every wake re-probes the live predicate — spurious wakes
+    * are normal, and readiness, expiry and sibling wakeups are by design
+    * indistinguishable (`Fiber::suspend()` always returns null).
+    */
+   private function parking (): void
+   {
+      // ? The bridge and a current Fiber are the parking prerequisites
+      if ($this->Wait === null) {
+         throw new LogicException('Parking requires the wait bridge — call schedule() first.');
+      }
+      if (Fiber::getCurrent() === null) {
+         throw new LogicException('Parking requires a Fiber — drain() must run inside a deferred context.');
+      }
+      if ($this->Notify !== null) {
+         throw new LogicException('A drain episode is already parked on this client.');
+      }
+
+      // ! Episode notifier — the Fiber waits on the read end; every reactor-
+      //   side transition signals the write end through wake()
+      $Pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+      if ($Pair === false) {
+         throw new RuntimeException('Unable to open the drain episode notifier.');
+      }
+      [$Notify, $Notified] = $Pair;
+      stream_set_blocking($Notify, false);
+      stream_set_blocking($Notified, false);
+      $this->Notify = $Notify;
+      $this->Notified = $Notified;
+      $Wait = $this->Wait;
+
+      $pending = fn (): bool => $this->pendingRequests !== []
+         || $this->pendingStreams !== []
+         || $this->Queue !== []
+         || $this->retrying > 0
+         || $this->dialing > 0;
+
+      try {
+         // @@ Park until quiescent
+         $stalled = 0;
+         while ($pending()) {
+            // @ Service queued dials on the Fiber before re-parking — reactor-
+            //   stack code enqueues instead of dialing (BG-13)
+            $this->promote();
+            if (
+               $this->pendingRequests === []
+               && $this->pendingStreams === []
+               && $this->Queue === []
+               && $this->retrying === 0
+               && $this->dialing === 0
+            ) {
+               break;
+            }
+
+            // ! Parked waits always carry a finite deadline; the per-request
+            //   windows are enforced by watch() timers on the host reactor
+            $deadline = microtime(true) + max(1.0, (float) $this->connectTimeout);
+            $before = hrtime(true);
+            try {
+               $Wait(Readiness::read($Notify, $deadline));
+            }
+            catch (RuntimeException) {
+               // ? Selector admission rejected the notifier (fd budget) — fail
+               //   every in-flight request deterministically and stop parking
+               $this->scrap();
+               break;
+            }
+            $waited = (int) hrtime(true) - $before;
+
+            // @ Drain the wake bytes
+            $drained = false;
+            while (($bytes = @fread($Notify, 8192)) !== '' && $bytes !== false) {
+               $drained = true;
+            }
+
+            // ? Non-suspending-wait tripwire: a cancelled deferral makes the
+            //   bridge return instantly forever — fail loud, never hot-spin
+            if ($waited < 100_000 && $drained === false) {
+               if (++$stalled >= 8) {
+                  $this->scrap();
+                  break;
+               }
+            }
+            else {
+               $stalled = 0;
+            }
+         }
+      }
+      finally {
+         $this->Notify = null;
+         $this->Notified = null;
+         if (is_resource($Notify)) {
+            fclose($Notify);
+         }
+         if (is_resource($Notified)) {
+            fclose($Notified);
+         }
+      }
    }
    /**
     * Enter batch mode: subsequent request() calls are deferred
@@ -2117,6 +2260,10 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             // @ Retry on connection failure — a scheduled retry continues
             //   through the normal drain/redirect/retry pipeline below
             if ($this->retry($Request) === false) {
+               // ? Contract: code 0 always names why no response was produced
+               if ($Request->Response->code === 0 && $Request->Response->status === '') {
+                  $Request->Response->status = 'Connection Failed';
+               }
                $Request->completed = true;
                $this->unwatch($Request);
 

@@ -140,6 +140,14 @@ class TCP_Client_CLI
    /** Positive socket-write progress; receives accepted and total remaining bytes. */
    public null|Closure $onDataProgress = null;
    public null|Closure $onDataWrite = null;
+   // # Wait bridge
+   /**
+    * Parking bridge injected by a host runtime — the same contract the HTTP
+    * Server's Response Resources use (`Scheduling`): the Closure receives a
+    * `Readiness` (or resource, or null) and parks the calling Fiber on it.
+    * Only honored on an adopted reactor.
+    */
+   public private(set) null|Closure $Wait = null;
 
    // * Metadata
    // # Error
@@ -320,6 +328,20 @@ class TCP_Client_CLI
 
       $this->Event = $Event;
       $this->owned = false;
+
+      // :
+      return $this;
+   }
+   /**
+    * Inject the parking bridge used by blocking waits on an adopted reactor.
+    *
+    * @param Closure $Wait The wait bridge (`fn (mixed $value = null): object`).
+    *
+    * @return self The Client instance, for chaining.
+    */
+   public function schedule (Closure $Wait): self
+   {
+      $this->Wait = $Wait;
 
       // :
       return $this;

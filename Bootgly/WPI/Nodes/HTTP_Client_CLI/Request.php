@@ -13,7 +13,6 @@ namespace Bootgly\WPI\Nodes\HTTP_Client_CLI;
 
 use function is_array;
 use function is_string;
-use Closure;
 
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Raw\Body;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Raw\Header;
@@ -57,7 +56,6 @@ class Request
    public string $connectionState;
    public bool $completed;
    public int $bytesReceived;
-   public null|Closure $onComplete;
    // | Encoder
    /** Encoded wire bytes memoized for re-dispatch, or null when stale. */
    public null|string $encoded;
@@ -113,7 +111,6 @@ class Request
       $this->connectionState = 'idle';
       $this->completed = false;
       $this->bytesReceived = 0;
-      $this->onComplete = null;
       // | Encoder
       $this->encoded = null;
       $this->encodedHost = null;
@@ -205,7 +202,6 @@ class Request
       $this->connectionState = 'idle';
       $this->completed = false;
       $this->bytesReceived = 0;
-      $this->onComplete = null;
       // | Encoder
       $this->encoded = null;
       $this->encodedHost = null;

@@ -4,8 +4,28 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\tests\E2E;
 
 
 use const BOOTGLY_ROOT_DIR;
+use const SIGKILL;
+use const SIGTERM;
+use const WNOHANG;
 use function define;
 use function defined;
+use function fclose;
+use function feof;
+use function fread;
+use function fwrite;
+use function pcntl_fork;
+use function pcntl_waitpid;
+use function posix_getppid;
+use function posix_kill;
+use function posix_setsid;
+use function str_repeat;
+use function stream_set_blocking;
+use function stream_socket_accept;
+use function stream_socket_server;
+use function strpos;
+use function substr;
+use function usleep;
+use RuntimeException;
 
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Tests\Suite;
@@ -25,6 +45,111 @@ return new Suite(
          define('BOOTGLY_PROJECT', $TestProject);
       }
 
+      // @ Scripted upstream fixture (BG-13 probes) — forked BEFORE start() so
+      //   the port constant is inherited by the server workers and the child
+      //   carries no server state.
+      // ? 8098 — first free port above the suite's own 8097.
+      if ( !defined('BOOTGLY_E2E_UPSTREAM_PORT') ) {
+         define('BOOTGLY_E2E_UPSTREAM_PORT', 8098);
+      }
+      $upstream = pcntl_fork();
+      if ($upstream === -1) {
+         throw new RuntimeException('HTTP Server E2E could not fork the upstream fixture.');
+      }
+      if ($upstream === 0) {
+         // ! Own session: the @test choreography signals the process group;
+         //   the fixture must only die by the explicit teardown kill below
+         posix_setsid();
+         $server = @stream_socket_server('tcp://127.0.0.1:' . BOOTGLY_E2E_UPSTREAM_PORT, $errno, $error);
+         // ! Release the inherited stdio pipes: a failing suite exits fail-fast
+         //   WITHOUT running this autoboot's teardown, and any harness wrapper
+         //   draining the runner's stdout would wait forever on a pipe this
+         //   child still holds.
+         fclose(STDIN);
+         fclose(STDOUT);
+         fclose(STDERR);
+         if ($server === false) {
+            exit(1);
+         }
+         $parent = posix_getppid();
+
+         $flaked = false;
+
+         // @@ Serial scripted responses — the E2E specs run serially
+         while (true) {
+            // ? Orphan watchdog — the fail-fast exit above also skips the
+            //   teardown reap; die with the runner instead of squatting the port
+            if (posix_getppid() !== $parent) {
+               exit(0);
+            }
+            $conn = @stream_socket_accept($server, 1);
+            if ($conn === false) {
+               continue;
+            }
+
+            // ! Read the request head
+            $head = '';
+            while (strpos($head, "\r\n\r\n") === false) {
+               $bytes = @fread($conn, 4096);
+               if ($bytes === '' || $bytes === false) {
+                  break;
+               }
+               $head .= $bytes;
+            }
+            $path = '/';
+            $space = strpos($head, ' ');
+            if ($space !== false) {
+               $end = strpos($head, ' ', $space + 1);
+               if ($end !== false) {
+                  $path = substr($head, $space + 1, $end - $space - 1);
+               }
+            }
+
+            // @ Respond per path
+            switch ($path) {
+               case '/delay':
+                  // ? 1 s upstream latency — the BG-13 stall window
+                  usleep(1_000_000);
+                  @fwrite($conn, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\nConnection: close\r\n\r\nhello-bg13-ok");
+                  break;
+               case '/never':
+                  // ? Accept and never answer — hold until the peer gives up (10 s cap)
+                  stream_set_blocking($conn, false);
+                  $held = 0;
+                  while (feof($conn) === false && $held < 100) {
+                     usleep(100_000);
+                     @fread($conn, 4096);
+                     $held++;
+                  }
+                  break;
+               case '/leave':
+                  // ? Cross-origin redirect to a dead origin
+                  @fwrite($conn, "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:1/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                  break;
+               case '/grow':
+                  // ? Oversized body — pairs with a small maxResponseBytes
+                  @fwrite($conn, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 262144\r\nConnection: close\r\n\r\n" . str_repeat('A', 262144));
+                  break;
+               case '/chunk':
+                  // ? Malformed chunked framing
+                  @fwrite($conn, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\nZZ\r\nbogus\r\n0\r\n\r\n");
+                  break;
+               case '/flaky':
+                  // ? Fails once (connection closed without a response), then answers
+                  if ($flaked === false) {
+                     $flaked = true;
+                     break;
+                  }
+                  @fwrite($conn, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 8\r\nConnection: close\r\n\r\nflaky-ok");
+                  break;
+               default:
+                  @fwrite($conn, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            }
+
+            @fclose($conn);
+         }
+      }
+
       HTTP_Server_CLI::pretest($Suite);
 
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: Modes::Test);
@@ -41,6 +166,22 @@ return new Suite(
       $HTTP_Server_CLI->start();
 
       $HTTP_Server_CLI->Commands->command('test');
+
+      // @ Teardown: reap the scripted upstream fixture FIRST, so the server's
+      //   own child reaping below never blocks on an untracked process
+      posix_kill($upstream, SIGTERM);
+      $reaped = 0;
+      for ($attempt = 0; $attempt < 20; $attempt++) {
+         $reaped = pcntl_waitpid($upstream, $status, WNOHANG);
+         if ($reaped === $upstream || $reaped === -1) {
+            break;
+         }
+         usleep(50_000);
+      }
+      if ($reaped !== $upstream && $reaped !== -1) {
+         posix_kill($upstream, SIGKILL);
+         pcntl_waitpid($upstream, $status);
+      }
 
       // @ Teardown: terminate workers and release state lock so the next
       //   suite running in the same master PHP process can bind/lock cleanly.
@@ -422,6 +563,9 @@ return new Suite(
          '1.9-scheduled_deferred_response_isolation',
          '1.10-scheduled_deferred_removed_readiness',
          '1.11-scheduled_deferred_i18n',
+         '1.12-scheduled_deferred_native_client',
+         '1.13-scheduled_embedded_failures',
+         '1.14-scheduled_embedded_isolation',
       ],
       'Queues/' => [
          '1.1-http-enqueue',
