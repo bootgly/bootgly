@@ -50,6 +50,7 @@ use function time;
 use BackedEnum;
 use Closure;
 use InvalidArgumentException;
+use LogicException;
 use Throwable;
 
 use Bootgly\ABI\Debugging\Data\Vars;
@@ -147,6 +148,9 @@ class TCP_Client_CLI
    // # Dialing
    /** In-flight async EVENT_CONNECT dials awaiting their deadline. */
    public protected(set) int $dialing = 0;
+   // # Reactor ownership
+   /** True while this client owns (and may destroy) its reactor; false after react(). */
+   public protected(set) bool $owned = true;
    // # State
    protected int $started = 0;
    // # Status
@@ -296,6 +300,30 @@ class TCP_Client_CLI
 
       return $this;
    }
+   /**
+    * Adopt an external reactor already owned by another runtime (e.g. a
+    * server worker). The client stops owning its loop: `halt()` releases only
+    * its own accounting and `start()` refuses to run. Must be called before
+    * any connection is opened. Event-driven mode cannot run on an adopted
+    * reactor — `start()` throws.
+    *
+    * @param Events&Loops&Scheduler $Event The reactor to adopt.
+    *
+    * @return self The Client instance, for chaining.
+    */
+   public function react (Events & Loops & Scheduler $Event): self
+   {
+      // ? Adoption must precede any socket registration
+      if ($this->Connections->Connections !== []) {
+         throw new LogicException('Reactor adoption must happen before any connection is opened.');
+      }
+
+      $this->Event = $Event;
+      $this->owned = false;
+
+      // :
+      return $this;
+   }
    public function handle (int $signal): void
    {
       switch ($signal) {
@@ -332,6 +360,11 @@ class TCP_Client_CLI
    }
    public function start (): bool
    {
+      // ? Event-driven mode owns the reactor by definition
+      if ($this->owned === false) {
+         throw new LogicException('Event-driven mode owns the reactor; it cannot run on an adopted one.');
+      }
+
       $this->status = self::STATUS_STARTING;
 
       if ($this->workers) {
@@ -595,6 +628,11 @@ class TCP_Client_CLI
    {
       // ? Live connections or in-flight dials keep the loop running
       if ($this->Connections->Connections !== [] || $this->dialing > 0) {
+         return;
+      }
+
+      // ? An adopted reactor belongs to its host and must never be destroyed
+      if ($this->owned === false) {
          return;
       }
 

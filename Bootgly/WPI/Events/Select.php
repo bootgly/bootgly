@@ -27,6 +27,7 @@ use function stream_select;
 use function usleep;
 use Closure;
 use Fiber;
+use LogicException;
 use RuntimeException;
 use Throwable;
 use WeakMap;
@@ -46,6 +47,9 @@ class Select implements Events, Loops, Scheduler, Cancelling
 
    // * Config
    public bool $loop = true;
+   /** Reentrancy tripwire: a nested loop() shares one shutdown key and would
+    * silently kill the outer loop; stays latched if loop() exits by exception. */
+   private bool $entered = false;
 
    // * Data
    // # Sockets
@@ -375,6 +379,12 @@ class Select implements Events, Loops, Scheduler, Cancelling
     */
    public function loop (): void
    {
+      // ? A nested loop() is never legal — fail loud instead of wedging the host
+      if ($this->entered) {
+         throw new LogicException('The event loop is not reentrant.');
+      }
+      $this->entered = true;
+
       $this->started = microtime(true);
 
       $Connections = $this->Connections;
@@ -657,6 +667,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
          // if ($except) {}
       }
 
+      $this->entered = false;
       $this->finished = microtime(true);
    }
 

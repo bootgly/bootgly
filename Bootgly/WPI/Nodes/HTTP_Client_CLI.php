@@ -276,6 +276,11 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       }
       $this->Events[$Event->value] = true;
 
+      // ? The two ownership models are exclusive: event-driven owns its loop
+      if ($this->owned === false) {
+         throw new LogicException('An adopted-reactor client cannot enter event-driven mode.');
+      }
+
       // @ Mark as event-driven mode
       $this->eventDriven = true;
 
@@ -1679,6 +1684,11 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          return;
       }
 
+      // ? An adopted reactor belongs to its host and must never be destroyed
+      if ($this->owned === false) {
+         return;
+      }
+
       $this->Event->destroy();
    }
 
@@ -2003,6 +2013,12 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          && $this->dialing === 0
       ) {
          return;
+      }
+
+      // ? Adopted reactor: never pump the host loop from here — parking
+      //   arrives with the wait bridge (BG-13)
+      if ($this->owned === false) {
+         throw new LogicException('Draining on an adopted reactor requires the wait bridge.');
       }
 
       // @ Re-arm the persistent reactor (a previous drain may have stopped it)

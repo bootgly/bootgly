@@ -18,6 +18,7 @@ return new Suite(
       '1.2-shutdown_hook_fork_isolation',
       '1.3-embedded_mode_isolation',
       '1.4-instance_state_isolation',
+      '1.5-reactor_adoption',
       '2.1-pool_lifecycle',
       '2.2-pool_capacity',
       '2.3-pool_health',

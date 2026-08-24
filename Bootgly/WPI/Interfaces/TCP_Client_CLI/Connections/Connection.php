@@ -26,8 +26,11 @@ use function stream_socket_get_name;
 use function time;
 use Throwable;
 
+use Bootgly\ACI\Events\Loops;
+use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\WPI\Connections\Peer;
+use Bootgly\WPI\Events;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI as Client;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Packages;
 
@@ -46,6 +49,8 @@ class Connection extends Packages
    // * Data
    // # Owner (the TCP/WS client that opened this connection — dispatch back-ref).
    public null|Client $Client = null;
+   /** Reactor this connection registered in — deregistration must target it. */
+   private null|(Events&Loops&Scheduler) $Event = null;
    // # Remote
    public string $address;
    public int $port;
@@ -84,6 +89,9 @@ class Connection extends Packages
    {
       $this->Socket = $Socket;
       $this->Client = $Client;
+      // ! Stamp the reactor at construction: the owner may adopt another one
+      //   later, but THIS socket lives in the reactor it was registered with
+      $this->Event = $Client?->Event;
 
 
       // * Config
@@ -141,9 +149,10 @@ class Connection extends Packages
       $this->status = self::STATUS_CLOSING;
 
       $Client = $this->Client;
-      if ($Client !== null) {
-         $Client->Event->del($this->Socket, $Client->Event::EVENT_WRITE);
-         $Client->Event->del($this->Socket, $Client->Event::EVENT_READ);
+      $Event = $this->Event;
+      if ($Event !== null) {
+         $Event->del($this->Socket, $Event::EVENT_WRITE);
+         $Event->del($this->Socket, $Event::EVENT_READ);
       }
 
       try {
