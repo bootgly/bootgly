@@ -43,7 +43,20 @@ namespace Bootgly\ABI {
    if (\function_exists('\Bootgly\ABI\copy_recursively') === false) {
       function copy_recursively (string $source, string $destination): void
       {
-         if (\is_dir($source) === true) {
+         // ? A symlink is copied AS the link, and tested FIRST: is_dir() and
+         //   is_file() both follow it, so otherwise a link becomes a regular
+         //   file (git: a 120000 -> 100644 typechange) or a duplicated
+         //   directory tree — and one pointing at an ancestor is walked until
+         //   the kernel's link limit stops it. remove_recursively() already
+         //   draws this line.
+         if (\is_link($source) === true) {
+            $target = \readlink($source);
+
+            if ($target !== false) {
+               \symlink($target, $destination);
+            }
+         }
+         else if (\is_dir($source) === true) {
             // ? Layered copies land on a destination an earlier source made
             if (\is_dir($destination) === false) {
                \mkdir($destination);
