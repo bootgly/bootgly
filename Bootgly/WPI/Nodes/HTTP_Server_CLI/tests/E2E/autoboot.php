@@ -32,6 +32,7 @@ use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\HTTP;
 
 
 return new Suite(
@@ -151,6 +152,10 @@ return new Suite(
                   $length = strlen($body);
                   @fwrite($conn, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {$length}\r\nConnection: close\r\n\r\n{$body}");
                   break;
+               case '/fast':
+                  // ? Instant answer — pairs with /delay in interleaved batches
+                  @fwrite($conn, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 7\r\nConnection: close\r\n\r\nfast-ok");
+                  break;
                default:
                   @fwrite($conn, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
             }
@@ -169,7 +174,20 @@ return new Suite(
          //   already claimed by the other E2E suites.
          port: 8097,
          workers: 1,
-         health: '/health'
+         health: '/health',
+         // @ BG-13 zero-boilerplate resources — built lazily in the worker,
+         //   one embedded client per deferral (Resources::fork() rebuilds them)
+         responseResources: [
+            'Upstream' => static fn (object $Context): HTTP => new HTTP(
+               host: '127.0.0.1',
+               port: BOOTGLY_E2E_UPSTREAM_PORT
+            ),
+            'Mirror' => static fn (object $Context): HTTP => new HTTP(
+               host: '127.0.0.1',
+               port: BOOTGLY_E2E_UPSTREAM_PORT,
+               pool: ['min' => 0, 'max' => 2]
+            ),
+         ]
       );
 
       $HTTP_Server_CLI->start();
@@ -575,6 +593,8 @@ return new Suite(
          '1.12-scheduled_deferred_native_client',
          '1.13-scheduled_embedded_failures',
          '1.14-scheduled_embedded_isolation',
+         '1.15-scheduled_resource_native_client',
+         '1.16-scheduled_resource_interleaved',
       ],
       'Queues/' => [
          '1.1-http-enqueue',

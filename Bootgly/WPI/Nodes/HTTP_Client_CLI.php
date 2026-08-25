@@ -2121,6 +2121,34 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $this->batching = false;
    }
    /**
+    * Abandon every queued, in-flight and retrying request and close every
+    * connection — pooled keep-alive ones included.
+    *
+    * The client stays usable: the next `request()` dials afresh. Abandoned
+    * requests terminalize with code 0 (`'Connection Failed'`, or
+    * `'Truncated Response'` once bytes arrived) and a parked drain episode,
+    * if one is open, is woken to observe the quiescence.
+    *
+    * @return void
+    */
+   public function abort (): void
+   {
+      $this->scrap();
+
+      // @ Idle keep-alive connections hold reactor registrations too — sweep
+      //   the whole registry, not only the pool (a dial that never reached
+      //   the pool is a live socket all the same)
+      // ! Local handle: close() unsets from the registry through the same
+      //   protected(set) property — iterate a copy, never the live map
+      $Connections = $this->Connections->Connections;
+      foreach ($Connections as $Connection) {
+         $Connection->close();
+      }
+
+      $this->batching = false;
+      $this->wake();
+   }
+   /**
     * Park the calling Fiber until this client is quiescent (adopted reactor).
     *
     * Condition-first: every wake re-probes the live predicate — spurious wakes
