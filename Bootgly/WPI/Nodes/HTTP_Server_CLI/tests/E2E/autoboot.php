@@ -135,6 +135,11 @@ return new Suite(
                   // ? Malformed chunked framing
                   @fwrite($conn, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\nZZ\r\nbogus\r\n0\r\n\r\n");
                   break;
+               case '/flaky/reset':
+                  // ? Decouples specs from the process-global counter
+                  $flakes = 0;
+                  @fwrite($conn, "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                  break;
                case '/flaky':
                   // ? Fails once (connection closed without a response), then
                   //   answers with the hit count so specs can pin the retry

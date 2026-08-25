@@ -58,7 +58,11 @@ return new Suite(
       '7.3-event_driven-two_origins',
       '7.4-follow-redirect_failed_veto',
       '7.5-event_driven-reconfigure_origin',
-      '8.1-embedded-reactor_gates',
       '7.6-construct-unconfigured_origin',
+      '8.1-embedded-reactor_gates',
+      '8.2-embedded-scrap_reuse',
+      '8.3-embedded-retry_scrap',
+      '8.4-embedded-starvation',
+      '8.5-embedded-starvation_race',
    ]
 );

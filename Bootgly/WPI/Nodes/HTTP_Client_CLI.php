@@ -166,6 +166,8 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    // # Retry
    /** Retry re-dispatches scheduled on the event loop. */
    protected int $retrying = 0;
+   /** @var array<int,array{Request:Request,timer:int}> Armed backoff campaigns, keyed by Request object id. */
+   protected array $Retries = [];
    // # HTTP/2 multiplexing
    /** @var array<int,Session> h2 Sessions keyed by socket ID */
    public protected(set) array $Sessions = [];
@@ -183,8 +185,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    /** Cached Request template for event-driven reuse (avoids allocation per cycle) */
    protected null|Request $cachedRequest = null;
    // # Parked drain (adopted reactor)
-   /** @var array<int,Request> Requests awaiting a scheduled retry backoff, keyed by object id. */
-   protected array $Retries = [];
    /** @var null|resource Episode notifier read end — the parked Fiber waits on it. */
    private $Notify = null;
    /** @var null|resource Episode notifier write end — wake() signals it. */
@@ -1679,9 +1679,21 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    {
       $this->unwatch($Request);
 
-      if ($Request->Response->code === 0 && $Request->Response->status === '') {
-         $Request->Response->status = 'Connection Failed';
+      // ! Abort terminal: a scrapped request must never surface a partial
+      //   success — force code 0 with a named status, preserving only an
+      //   already-named code-0 terminal. `Body->waiting` is deliberately kept:
+      //   partial bytes are never blessed as complete (same contract as the
+      //   wire-truncation terminals).
+      $Response = $Request->Response;
+      if ($Response->code !== 0 || $Response->status === '') {
+         $Response->code = 0;
+         $Response->status = $Request->bytesReceived > 0
+            ? 'Truncated Response'
+            : 'Connection Failed';
       }
+      // ! The abort is terminal: no further retry campaign may re-enter a
+      //   drain this client just declared unusable
+      $Request->retryCount = $this->maxRetries;
       $Request->connectionState = 'idle';
       $Request->completed = true;
    }
@@ -1702,16 +1714,20 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $this->pendingStreams = [];
       $Retrying = $this->Retries;
       $this->Retries = [];
-      $this->retrying = 0;
 
       // @ Queued — never dispatched
       foreach ($Queued as $Request) {
          $this->fail($Request);
       }
 
-      // @ Retry campaigns — fail() cancels the armed backoff deferral
-      foreach ($Retrying as $Request) {
-         $this->fail($Request);
+      // @ Retry campaigns — cancel each armed backoff and settle its request
+      foreach ($Retrying as $campaign) {
+         $this->Event->cancel($campaign['timer']);
+         $this->retrying--;
+         $this->fail($campaign['Request']);
+      }
+      if ($this->retrying < 0) {
+         $this->retrying = 0;
       }
 
       // @ h1 in flight — fail, then close (the hook finds nothing to replay)
@@ -1721,7 +1737,9 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          $Connection?->close();
       }
 
-      // @ h2 streams — closing the connection cancels every stream
+      // @ h2 streams — closing the connection cancels every stream.
+      //   ? h2 keeps no per-Request byte count, so fail() cannot distinguish
+      //   a truncated stream: 'Connection Failed' is the deliberate name here
       foreach ($Streams as $socketID => $Requests) {
          foreach ($Requests as $Request) {
             $this->fail($Request);
@@ -1970,13 +1988,20 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       // @ Schedule the re-dispatch on the event loop
       $this->retrying++;
-      $this->Retries[spl_object_id($Request)] = $Request;
-      $Request->timers[] = $this->Event->defer(microtime(true) + $delay, function () use ($Request): void {
-         unset($this->Retries[spl_object_id($Request)]);
+      $timerID = $this->Event->defer(microtime(true) + $delay, function () use ($Request): void {
+         // ? A torn-down campaign (scrap cancelled it, or the reactor fired
+         //   this timer past an ineffective same-tick cancel) must never
+         //   re-dispatch: its Response was already handed back
+         $id = spl_object_id($Request);
+         if (isSet($this->Retries[$id]) === false) {
+            $this->halt();
+            return;
+         }
+         unset($this->Retries[$id]);
          $this->retrying--;
 
-         // ? A request scrapped or timed out while its backoff was armed must
-         //   never be re-dispatched: its Response was already handed back
+         // ? Defense in depth: a request completed by any other path while
+         //   its backoff was armed must never be re-dispatched
          //   (the flag mutates between scheduling and firing)
          /** @phpstan-ignore if.alwaysFalse */
          if ($Request->completed) {
@@ -2012,6 +2037,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          }
          $this->halt();
       });
+      $this->Retries[spl_object_id($Request)] = ['Request' => $Request, 'timer' => $timerID];
 
       return true;
    }
@@ -2138,6 +2164,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       try {
          // @@ Park until quiescent
          $stalled = 0;
+         $starving = false;
          while ($pending()) {
             // @ Service queued dials on the Fiber before re-parking — reactor-
             //   stack code enqueues instead of dialing (BG-13)
@@ -2151,6 +2178,25 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             ) {
                break;
             }
+
+            // ? Capacity starvation: a whole silent deadline elapsed and even
+            //   a fresh promote() pass could not pair the queue with capacity
+            //   while nothing is in flight or armed — fail the queue loud
+            if (
+               $starving
+               && $this->Queue !== []
+               && $this->pendingRequests === []
+               && $this->pendingStreams === []
+               && $this->retrying === 0
+               && $this->dialing === 0
+            ) {
+               $this->Logger->log(
+                  warning: 'Parked drain aborted: queued requests starved for capacity.@\\;'
+               );
+               $this->scrap();
+               break;
+            }
+            $starving = false;
 
             // ! Parked waits always carry a finite deadline; the per-request
             //   windows are enforced by watch() timers on the host reactor
@@ -2196,23 +2242,10 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                $stalled = 0;
             }
 
-            // ? Capacity starvation: nothing is in flight, nothing is armed
-            //   and the full deadline elapsed — no event can ever pair the
-            //   queued requests with capacity, so fail them loud
-            if (
-               microtime(true) >= $deadline
-               && $this->Queue !== []
-               && $this->pendingRequests === []
-               && $this->pendingStreams === []
-               && $this->retrying === 0
-               && $this->dialing === 0
-            ) {
-               $this->Logger->log(
-                  warning: 'Parked drain aborted: queued requests starved for capacity.@\\;'
-               );
-               $this->scrap();
-               break;
-            }
+            // ! Starvation candidate: the full deadline elapsed with no wake —
+            //   judged only at the TOP of the next iteration, after promote()
+            //   had a fresh chance to pair the queue with released capacity
+            $starving = ($drained === false && microtime(true) >= $deadline);
          }
       }
       finally {

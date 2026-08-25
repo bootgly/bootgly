@@ -15,6 +15,17 @@ return new Test(
       $Host = new TCP_Client_CLI(TCP_Client_CLI::MODE_TEST);
       $make = function () {
          return new class(HTTP_Client_CLI::MODE_EMBEDDED) extends HTTP_Client_CLI {
+            public int $dials = 0;
+
+            protected function dial (Request $Request): bool
+            {
+               // ! Spin guard: a gate-less promote() would ping-pong forever
+               if (++$this->dials > 8) {
+                  throw new RuntimeException('Reactor-stack dial storm - the D4 gates are gone.');
+               }
+
+               return parent::dial($Request);
+            }
             public function attempt (Request $Request): bool
             {
                return $this->dial($Request);
@@ -23,9 +34,9 @@ return new Test(
             {
                $this->promote();
             }
-            public function plant (Request $Request): void
+            public function plant (Request $Request, int $id = 999999): void
             {
-               $this->pendingRequests[999999] = $Request;
+               $this->pendingRequests[$id] = $Request;
             }
             /** @return array{queue:int,created:int,connections:int,retrying:int} */
             public function inspect (): array
@@ -70,14 +81,15 @@ return new Test(
          ->assert();
 
       // @ D4 — reactor-stack promote() must not pop the queue either
+      $dials = $A->dials;
       $A->service();
 
       yield new Assertion(
          description: 'A reactor-stack promote() leaves the queue to the Fiber',
          fallback: 'The D4 promote() gate dialed or dropped a queued request!'
       )
-         ->expect($A->inspect()['queue'])
-         ->to->be(1)
+         ->expect($A->inspect()['queue'] === 1 && $A->dials === $dials)
+         ->to->be(true)
          ->assert();
 
       // @ Guards — parking without the bridge, and outside a Fiber
@@ -116,6 +128,14 @@ return new Test(
       $B->schedule(static fn (mixed $value = null): mixed => null);
       $Planted = $forge();
       $B->plant($Planted);
+      // ! A second request scrapped MID-BODY: its decoded 200 must never
+      //   surface as a success
+      $Midbody = $forge();
+      $Midbody->bytesReceived = 10;
+      $Midbody->Response->code = 200;
+      $Midbody->Response->status = 'OK';
+      $Midbody->Response->Body->waiting = true;
+      $B->plant($Midbody, 999998);
       $Fiber = new Fiber(static function () use ($B): void {
          $B->drain();
       });
@@ -129,6 +149,17 @@ return new Test(
             && $Planted->completed === true
             && $Planted->Response->code === 0
             && $Planted->Response->status === 'Connection Failed')
+         ->to->be(true)
+         ->assert();
+
+      yield new Assertion(
+         description: 'A request scrapped mid-body is terminalized, never a 200',
+         fallback: 'The abort surfaced a truncated body as a SUCCESS!'
+      )
+         ->expect($Midbody->completed === true
+            && $Midbody->Response->code === 0
+            && $Midbody->Response->status === 'Truncated Response'
+            && $Midbody->Response->Body->waiting === true)
          ->to->be(true)
          ->assert();
 
@@ -163,7 +194,8 @@ return new Test(
       $D->schedule(static function (mixed $value = null): mixed {
          throw new RuntimeException('boom');
       });
-      $D->plant($forge());
+      $Kept = $forge();
+      $D->plant($Kept);
       $leaked = null;
       $Fiber = new Fiber(static function () use ($D): void {
          $D->drain();
@@ -179,8 +211,10 @@ return new Test(
          description: 'A foreign RuntimeException propagates instead of scrapping',
          fallback: 'An unrelated exception was silently converted into a mass abort!'
       )
-         ->expect($leaked)
-         ->to->be('boom')
+         ->expect($leaked === 'boom'
+            && $Kept->completed === false
+            && $Kept->Response->status === '')
+         ->to->be(true)
          ->assert();
    })
 );

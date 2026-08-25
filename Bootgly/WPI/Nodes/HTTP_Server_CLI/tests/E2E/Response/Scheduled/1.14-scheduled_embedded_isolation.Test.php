@@ -57,8 +57,16 @@ return new Test(
       //   backoff closure runs on the host reactor stack and must not dial)
       yield $Router->route('/embedded/flaky', function (Request $Request, Response $Response) use ($embed) {
          return $Response->defer(function (Response $Response) use ($embed) {
+            // ! Re-arm the fixture flake and pin a short, jitter-free backoff
+            //   so the window below proves the backoff was really paid
+            $embed($Response)->request(method: 'GET', URI: '/flaky/reset');
+
             $started = microtime(true);
-            $Upstream = $embed($Response, ['maxRetries' => 2])->request(method: 'GET', URI: '/flaky');
+            $Upstream = $embed($Response, [
+               'maxRetries' => 2,
+               'retryDelay' => 0.3,
+               'retryJitter' => 0.0
+            ])->request(method: 'GET', URI: '/flaky');
 
             $Response->JSON->send([
                'code' => $Upstream->code,
@@ -114,7 +122,7 @@ return new Test(
          fallback: 'The flaky leg resolved without paying the retry backoff!'
       )
          ->expect($flaky['elapsed'] ?? 0.0)
-         ->to->delimit(0.9, 1.9)
+         ->to->delimit(0.25, 0.9)
          ->assert();
 
       yield new Assertion(
