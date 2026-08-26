@@ -23,7 +23,12 @@ use function stream_select;
 use function stream_set_blocking;
 use function stream_set_read_buffer;
 use function stream_socket_get_name;
+use function strpos;
+use Closure;
+use Fiber;
+use RuntimeException;
 
+use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI;
 use Bootgly\WPI\Connections\Packages;
@@ -121,7 +126,9 @@ class Connections implements WPI\Connections
          $this->errors['connection']++;
          return false;
       }
-      $Socket = &$Client->Socket;
+      // ! By value: the client's slot is overwritten by the next dial, and a
+      //   reference here would follow it (use-after-overwrite)
+      $Socket = $Client->Socket;
 
       $Client->Event->del($Socket, $Client->Event::EVENT_CONNECT);
 
@@ -181,34 +188,42 @@ class Connections implements WPI\Connections
          return false;
       }
 
-      do {
-         $read = [];
-         $write = [$Socket];
-         $except = null;
-         if ($deadline === null && $monotonicDeadline === null) {
-            $selected = @stream_select($read, $write, $except, null);
-         }
-         else {
-            $remaining = $deadline === null
-               ? INF
-               : max(0.0, $deadline - microtime(true));
-            if ($monotonicDeadline !== null) {
-               $remaining = min(
-                  $remaining,
-                  max(0.0, ($monotonicDeadline - (int) hrtime(true)) / 1_000_000_000)
-               );
+      // @ Adopted reactor, owner Fiber: park on writability instead of blocking
+      //   the worker (BG-13 S6). Reactor-stack code never dials (D4), so the
+      //   blocking branch below is the self-driving client's own
+      if ($Client->Wait !== null && $Client->owned === false && Fiber::getCurrent() !== null) {
+         $selected = $this->parking($Socket, $Client->Wait, $deadline, $monotonicDeadline) ? 1 : 0;
+      }
+      else {
+         do {
+            $read = [];
+            $write = [$Socket];
+            $except = null;
+            if ($deadline === null && $monotonicDeadline === null) {
+               $selected = @stream_select($read, $write, $except, null);
             }
-            $seconds = (int) $remaining;
-            $microseconds = (int) (($remaining - $seconds) * 1_000_000);
-            $selected = @stream_select($read, $write, $except, $seconds, $microseconds);
-         }
-         // SIGALRM parent watchdogs legitimately interrupt select. Retry only
-         // while a finite caller deadline still bounds a persistent failure.
-      } while (
-         $selected === false
-         && ($deadline === null || microtime(true) < $deadline)
-         && ($monotonicDeadline === null || (int) hrtime(true) < $monotonicDeadline)
-      );
+            else {
+               $remaining = $deadline === null
+                  ? INF
+                  : max(0.0, $deadline - microtime(true));
+               if ($monotonicDeadline !== null) {
+                  $remaining = min(
+                     $remaining,
+                     max(0.0, ($monotonicDeadline - (int) hrtime(true)) / 1_000_000_000)
+                  );
+               }
+               $seconds = (int) $remaining;
+               $microseconds = (int) (($remaining - $seconds) * 1_000_000);
+               $selected = @stream_select($read, $write, $except, $seconds, $microseconds);
+            }
+            // SIGALRM parent watchdogs legitimately interrupt select. Retry only
+            // while a finite caller deadline still bounds a persistent failure.
+         } while (
+            $selected === false
+            && ($deadline === null || microtime(true) < $deadline)
+            && ($monotonicDeadline === null || (int) hrtime(true) < $monotonicDeadline)
+         );
+      }
       if (
          $selected !== 1
          || @stream_socket_get_name($Socket, true) === false
@@ -239,6 +254,112 @@ class Connections implements WPI\Connections
       $this->Connections[(int) $Socket] = $Connection;
 
       return true;
+   }
+
+   /**
+    * Park the owner Fiber until a dialing socket is writable (adopted reactor).
+    *
+    * Probe first, then park in finite slices: every wake re-probes the socket
+    * before re-parking, and the dial deadline is re-proven at the top of
+    * every slice. The socket is registered nowhere yet, so an unwind mid-dial
+    * (the deferred context was cancelled and its Fiber collected) closes it
+    * here.
+    *
+    * @param resource $Socket
+    * @param Closure(Readiness):mixed $Wait
+    *
+    * @return bool Whether the socket became writable before the deadline.
+    */
+   private function parking ($Socket, Closure $Wait, null|float $deadline, null|int $monotonicDeadline): bool
+   {
+      $Readiness = Readiness::write($Socket, microtime(true));
+      $writable = false;
+      $settled = false;
+      // ! Non-suspending-wait tripwire (same bound as the drain episode)
+      $stalled = 0;
+
+      try {
+         // ? Already writable: the dial resolved before it could park — do not
+         //   spend a reactor round-trip proving it
+         $read = [];
+         $write = [$Socket];
+         $except = null;
+         $writable = @stream_select($read, $write, $except, 0, 0) === 1;
+
+         // @@ Park until writable or expired
+         while ($writable === false) {
+            $now = microtime(true);
+            if (
+               ($deadline !== null && $now >= $deadline)
+               || ($monotonicDeadline !== null && (int) hrtime(true) >= $monotonicDeadline)
+            ) {
+               break;
+            }
+
+            // ! Parked waits always carry a finite deadline; both dial clocks
+            //   are re-proven at the top of every slice
+            $slice = $deadline === null ? $now + 1.0 : min($deadline, $now + 1.0);
+            if ($monotonicDeadline !== null) {
+               $slice = min($slice, $now + max(0.0, ($monotonicDeadline - (int) hrtime(true)) / 1_000_000_000));
+            }
+            $before = hrtime(true);
+            try {
+               $Wait($Readiness->renew($slice));
+            }
+            catch (RuntimeException $Rejection) {
+               // ? Anything but the selector admission rejection is not ours
+               if (strpos($Rejection->getMessage(), 'selector admission') === false) {
+                  throw $Rejection;
+               }
+
+               // ? The reactor refused the socket (fd budget): the dial fails
+               //   deterministically
+               $this->Logger->log(
+                  warning: 'Parked dial aborted: selector admission rejected the socket.@\;'
+               );
+               break;
+            }
+
+            // @ Re-probe: writable means connected or refused — the caller
+            //   tells them apart by the peer name
+            $read = [];
+            $write = [$Socket];
+            $except = null;
+            $writable = @stream_select($read, $write, $except, 0, 0) === 1;
+
+            // ? Non-suspending-wait tripwire: a fast wake with nothing to
+            //   show is usually a revoked bridge, but an ordinary reactor
+            //   release (a del() on this socket) looks the same — the
+            //   consecutive count is the margin that separates them
+            // ! 8 consecutive: no reachable client path releases a parked
+            //   socket more than once (connect() dels before parking;
+            //   close()/expire() del then fclose) — fail the dial, never
+            //   hot-spin
+            if ($writable === false && (int) hrtime(true) - $before < 100_000) {
+               if (++$stalled >= 8) {
+                  $this->Logger->log(
+                     warning: 'Parked dial aborted: the wait bridge stopped suspending.@\;'
+                  );
+                  break;
+               }
+            }
+            else {
+               $stalled = 0;
+            }
+         }
+
+         $settled = true;
+      }
+      finally {
+         // ? Left without settling — an unwind or a foreign exception: the
+         //   caller never sees this socket again
+         if ($settled === false && is_resource($Socket)) {
+            @fclose($Socket);
+         }
+      }
+
+      // :
+      return $writable;
    }
 
    /**

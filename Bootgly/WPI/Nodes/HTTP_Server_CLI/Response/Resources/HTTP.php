@@ -31,10 +31,12 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource\Scheduling;
  * wait parks the deferred Fiber instead of pumping a private event loop, so
  * the worker keeps serving its other connections while the upstream answers.
  *
- * The wait is parked; the dial is not. Opening the connection (and the TLS
- * handshake) still runs a blocking select on the worker reactor, and every
- * deferral dials afresh — `connectTimeout` is therefore a hard stall budget
- * for the whole worker, and `0` freezes it until the peer answers.
+ * The dial parks too: opening the connection and the TLS handshake suspend
+ * the deferred Fiber between readiness slices, so an unreachable upstream
+ * costs the worker nothing but the dialing socket. Both legs are bounded by
+ * `connectTimeout` alone — `timeout` arms only the response window, after
+ * the connection is up. Every deferral dials afresh — no upstream connection
+ * is reused across requests.
  *
  * Register it once and call it from `defer()`:
  *
@@ -83,7 +85,7 @@ class HTTP extends Resource implements Scheduling
     * @param array<string,mixed>|null $secure TLS stream context options (`[]` enables TLS with the defaults).
     * @param array<string,int>|null $pool Connection pool bounds inside one deferral: `['min' => N, 'max' => N]`.
     * @param int|float $timeout Response timeout in seconds (0 = no timeout).
-    * @param int|float $connectTimeout Connection timeout in seconds. The dial is synchronous on the worker reactor, so this bounds how long the worker can stall on one unreachable upstream (0 = no timeout = an unbounded stall).
+    * @param int|float $connectTimeout Connection timeout in seconds, per dial attempt — it alone bounds the dial AND the TLS handshake (0 = no timeout: a peer that accepts TCP but never negotiates keeps the deferred Fiber and its socket parked until the deferral's own generation is cancelled).
     * @param int $maxRedirects Maximum redirects to follow (0 = disabled).
     * @param int $maxRetries Maximum retries on connection/timeout failure (0 = disabled).
     * @param null|bool $enableHTTP2 HTTP/2 negotiation (null = ALPN when secure; true = also h2c; false = never).
@@ -274,7 +276,7 @@ class HTTP extends Resource implements Scheduling
       $this->Fiber = null;
 
       // ! Every generation dials afresh: abort() closes the pooled keep-alive
-      //   connections too, so the next deferral pays one synchronous dial
+      //   connections too, so the next deferral pays one (parked) dial
       $this->Client->abort();
 
       // @ The generation has settled and its Fiber is never resumed — retire

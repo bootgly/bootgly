@@ -34,8 +34,9 @@ return new Suite(
          //   IPv4-mapped '::ffff:a.b.c.d' peers (MW-6 regression surface)
          host: '[::]',
          // ? 8101 — 8081-8097 belong to the other E2E suites, 8098 to
-         //   ACME_Challenge, 8099 to ACME_Swap and 8100 is referenced by
-         //   Fuzz fixtures.
+         //   ACME_Challenge (and the E2E upstream fixture), 8099 to ACME_Swap,
+         //   8100 is referenced by Fuzz fixtures and 8102 is the E2E TLS
+         //   upstream fixture.
          port: 8101,
          workers: 1,
          health: '/health'

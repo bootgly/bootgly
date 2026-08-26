@@ -68,7 +68,7 @@ return new Project(
             $Connection->Client->Event->add($Socket, $Connection->Client->Event::EVENT_WRITE, $Connection);
          })
          ->on(Events::ClientDisconnect, function ($Connection) use ($TCP_Client_CLI) {
-            $TCP_Client_CLI->log(
+            $TCP_Client_CLI->Logger->log(
                'Connection #' . $Connection->id . ' (' . $Connection->address . ':' . $Connection->port . ')'
                . ' from Worker with PID @_:' . $TCP_Client_CLI->Process->id . '_@ was closed! @\;'
             );

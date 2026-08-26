@@ -28,5 +28,6 @@ return new Suite(
       '1.10-resource_registry_lifecycle',
       '1.11-database_resource_transact_routing',
       '1.12-http_resource',
+      '1.13-http_resource_dial',
    ]
 );

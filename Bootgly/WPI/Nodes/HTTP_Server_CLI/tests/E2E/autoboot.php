@@ -6,6 +6,13 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\tests\E2E;
 use const BOOTGLY_ROOT_DIR;
 use const SIGKILL;
 use const SIGTERM;
+use const STDERR;
+use const STDIN;
+use const STDOUT;
+use const STREAM_CRYPTO_METHOD_TLSv1_2_SERVER;
+use const STREAM_CRYPTO_METHOD_TLSv1_3_SERVER;
+use const STREAM_SERVER_BIND;
+use const STREAM_SERVER_LISTEN;
 use const WNOHANG;
 use function define;
 use function defined;
@@ -19,8 +26,10 @@ use function posix_getppid;
 use function posix_kill;
 use function posix_setsid;
 use function str_repeat;
+use function stream_context_create;
 use function stream_set_blocking;
 use function stream_socket_accept;
+use function stream_socket_enable_crypto;
 use function stream_socket_server;
 use function strlen;
 use function strpos;
@@ -47,22 +56,33 @@ return new Suite(
          define('BOOTGLY_PROJECT', $TestProject);
       }
 
-      // @ Scripted upstream fixture (BG-13 probes) — forked BEFORE start() so
-      //   the port constant is inherited by the server workers and the child
-      //   carries no server state.
-      // ? 8098 — first free port above the suite's own 8097.
+      // @ Scripted upstream fixtures (BG-13 probes) — forked BEFORE start() so
+      //   the port constants are inherited by the server workers and the
+      //   children carry no server state. One serial accept loop per
+      //   listener: cleartext (8098) and TLS (8102), each in its own child.
+      // ? 8098 predates this map and is shared with ACME_Challenge (the suites
+      //   run serially); 8102 — 8081-8097 belong to the other E2E suites,
+      //   8099 to ACME_Swap, 8100 to ACME_E2E and 8101 to E2E_DualStack.
       if ( !defined('BOOTGLY_E2E_UPSTREAM_PORT') ) {
          define('BOOTGLY_E2E_UPSTREAM_PORT', 8098);
       }
-      $upstream = pcntl_fork();
-      if ($upstream === -1) {
-         throw new RuntimeException('HTTP Server E2E could not fork the upstream fixture.');
+      if ( !defined('BOOTGLY_E2E_UPSTREAM_TLS_PORT') ) {
+         define('BOOTGLY_E2E_UPSTREAM_TLS_PORT', 8102);
       }
-      if ($upstream === 0) {
+      $serve = static function (int $port, null|array $TLS): void {
          // ! Own session: the @test choreography signals the process group;
          //   the fixture must only die by the explicit teardown kill below
          posix_setsid();
-         $server = @stream_socket_server('tcp://127.0.0.1:' . BOOTGLY_E2E_UPSTREAM_PORT, $errno, $error);
+         $context = $TLS === null
+            ? stream_context_create()
+            : stream_context_create(['ssl' => $TLS]);
+         $server = @stream_socket_server(
+            "tcp://127.0.0.1:{$port}",
+            $errno,
+            $error,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+            $context
+         );
          // ! Release the inherited stdio pipes: a failing suite exits fail-fast
          //   WITHOUT running this autoboot's teardown, and any harness wrapper
          //   draining the runner's stdout would wait forever on a pipe this
@@ -87,6 +107,18 @@ return new Suite(
             $conn = @stream_socket_accept($server, 1);
             if ($conn === false) {
                continue;
+            }
+            // @ TLS listener: handshake before reading the head
+            if ($TLS !== null) {
+               $crypto = @stream_socket_enable_crypto(
+                  $conn,
+                  true,
+                  STREAM_CRYPTO_METHOD_TLSv1_2_SERVER | STREAM_CRYPTO_METHOD_TLSv1_3_SERVER
+               );
+               if ($crypto !== true) {
+                  @fclose($conn);
+                  continue;
+               }
             }
 
             // ! Read the request head
@@ -128,6 +160,10 @@ return new Suite(
                   // ? Cross-origin redirect to a dead origin
                   @fwrite($conn, "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:1/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
                   break;
+               case '/downgrade':
+                  // ? https → http step-down: refused by default (R3 remainder)
+                  @fwrite($conn, "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:" . BOOTGLY_E2E_UPSTREAM_PORT . "/fast\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                  break;
                case '/grow':
                   // ? Oversized body — pairs with a small maxResponseBytes
                   @fwrite($conn, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 262144\r\nConnection: close\r\n\r\n" . str_repeat('A', 262144));
@@ -135,6 +171,22 @@ return new Suite(
                case '/chunk':
                   // ? Malformed chunked framing
                   @fwrite($conn, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\nZZ\r\nbogus\r\n0\r\n\r\n");
+                  break;
+               case '/burst':
+                  // ? Keep-alive + three back-to-back writes (three TLS records):
+                  //   no EOF rescues a reader that went back to select with
+                  //   bytes still buffered in the TLS layer. Held open until
+                  //   the client lets go (its deferral end), 3 s cap.
+                  @fwrite($conn, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 32\r\nConnection: keep-alive\r\n\r\n");
+                  @fwrite($conn, 'burst-record-one');
+                  @fwrite($conn, 'burst-record-two');
+                  stream_set_blocking($conn, false);
+                  $held = 0;
+                  while (feof($conn) === false && $held < 30) {
+                     usleep(100_000);
+                     @fread($conn, 4096);
+                     $held++;
+                  }
                   break;
                case '/flaky/reset':
                   // ? Decouples specs from the process-global counter
@@ -162,6 +214,26 @@ return new Suite(
 
             @fclose($conn);
          }
+      };
+      $certificates = BOOTGLY_ROOT_DIR . 'Bootgly/WPI/Nodes/HTTP_Client_CLI/tests/E2E_SSL/';
+      $upstream = pcntl_fork();
+      if ($upstream === -1) {
+         throw new RuntimeException('HTTP Server E2E could not fork the upstream fixture.');
+      }
+      if ($upstream === 0) {
+         $serve(BOOTGLY_E2E_UPSTREAM_PORT, null);
+         exit(0);
+      }
+      $secured = pcntl_fork();
+      if ($secured === -1) {
+         throw new RuntimeException('HTTP Server E2E could not fork the TLS upstream fixture.');
+      }
+      if ($secured === 0) {
+         $serve(BOOTGLY_E2E_UPSTREAM_TLS_PORT, [
+            'local_cert' => "{$certificates}localhost.cert.pem",
+            'local_pk' => "{$certificates}localhost.key.pem"
+         ]);
+         exit(0);
       }
 
       HTTP_Server_CLI::pretest($Suite);
@@ -187,6 +259,13 @@ return new Suite(
                port: BOOTGLY_E2E_UPSTREAM_PORT,
                pool: ['min' => 0, 'max' => 2]
             ),
+            // ? Real verification: the E2E_SSL certificate carries
+            //   `IP:127.0.0.1` in its SAN, so the auto peer_name matches
+            'Secure' => static fn (object $Context): HTTP => new HTTP(
+               host: '127.0.0.1',
+               port: BOOTGLY_E2E_UPSTREAM_TLS_PORT,
+               secure: ['cafile' => "{$certificates}localhost.cert.pem"]
+            ),
          ]
       );
 
@@ -194,21 +273,25 @@ return new Suite(
 
       $HTTP_Server_CLI->Commands->command('test');
 
-      // @ Teardown: reap the scripted upstream fixture FIRST, so the server's
+      // @ Teardown: reap the scripted upstream fixtures FIRST, so the server's
       //   own child reaping below never blocks on an untracked process
-      posix_kill($upstream, SIGTERM);
-      $reaped = 0;
-      for ($attempt = 0; $attempt < 20; $attempt++) {
-         $reaped = pcntl_waitpid($upstream, $status, WNOHANG);
-         if ($reaped === $upstream || $reaped === -1) {
-            break;
+      $reap = static function (int $child): void {
+         posix_kill($child, SIGTERM);
+         $reaped = 0;
+         for ($attempt = 0; $attempt < 20; $attempt++) {
+            $reaped = pcntl_waitpid($child, $status, WNOHANG);
+            if ($reaped === $child || $reaped === -1) {
+               break;
+            }
+            usleep(50_000);
          }
-         usleep(50_000);
-      }
-      if ($reaped !== $upstream && $reaped !== -1) {
-         posix_kill($upstream, SIGKILL);
-         pcntl_waitpid($upstream, $status);
-      }
+         if ($reaped !== $child && $reaped !== -1) {
+            posix_kill($child, SIGKILL);
+            pcntl_waitpid($child, $status);
+         }
+      };
+      $reap($upstream);
+      $reap($secured);
 
       // @ Teardown: terminate workers and release state lock so the next
       //   suite running in the same master PHP process can bind/lock cleanly.
@@ -595,6 +678,8 @@ return new Suite(
          '1.14-scheduled_embedded_isolation',
          '1.15-scheduled_resource_native_client',
          '1.16-scheduled_resource_interleaved',
+         '1.17-scheduled_resource_tls',
+         '1.18-scheduled_resource_tls_failures',
       ],
       'Queues/' => [
          '1.1-http-enqueue',

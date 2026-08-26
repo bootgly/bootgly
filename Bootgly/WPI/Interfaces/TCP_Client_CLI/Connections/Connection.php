@@ -16,6 +16,7 @@ use const STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT;
 use const STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT;
 use function fclose;
 use function hrtime;
+use function is_resource;
 use function max;
 use function microtime;
 use function min;
@@ -23,10 +24,14 @@ use function stream_select;
 use function stream_set_blocking;
 use function stream_socket_enable_crypto;
 use function stream_socket_get_name;
+use function strpos;
 use function time;
+use Fiber;
+use RuntimeException;
 use Throwable;
 
 use Bootgly\ACI\Events\Loops;
+use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\WPI\Connections\Peer;
@@ -185,6 +190,19 @@ class Connection extends Packages
       null|int $monotonicDeadline = null
    ): bool|int
    {
+      // ! Adopted reactor, owner Fiber: the handshake parks instead of
+      //   blocking the worker (BG-13 S6)
+      $Client = $this->Client;
+      $Wait = $Client?->Wait;
+      $parked = $Client?->owned === false && Fiber::getCurrent() !== null;
+      $Readiness = null;
+      // ! A foreign bridge exception is never laundered into a TLS failure
+      $Foreign = null;
+      // ! Non-suspending-wait tripwire (same bound as the drain episode)
+      $stalled = 0;
+      $negotiation = false;
+      $settled = false;
+
       try {
          stream_set_blocking($this->Socket, false);
          do {
@@ -203,6 +221,67 @@ class Connection extends Packages
             );
             if ($negotiation === true || $negotiation === false) {
                break;
+            }
+
+            // @ Park until readable, then negotiate again (both deadlines
+            //   are re-proven at the top of the loop)
+            if ($Wait !== null && $parked) {
+               $now = microtime(true);
+               $slice = $deadline === null ? $now + 1.0 : min($deadline, $now + 1.0);
+               if ($monotonicDeadline !== null) {
+                  $slice = min($slice, $now + max(0.0, ($monotonicDeadline - (int) hrtime(true)) / 1_000_000_000));
+               }
+               $Readiness ??= Readiness::read($this->Socket, $slice);
+               $before = hrtime(true);
+               try {
+                  $Wait($Readiness->renew($slice));
+               }
+               catch (Throwable $Rejection) {
+                  // ? Anything but the selector admission rejection is not ours
+                  if (
+                     $Rejection instanceof RuntimeException
+                     && strpos($Rejection->getMessage(), 'selector admission') !== false
+                  ) {
+                     $this->Logger->log(
+                        warning: 'Parked handshake aborted: selector admission rejected the socket.@\;'
+                     );
+                  }
+                  else {
+                     $Foreign = $Rejection;
+                  }
+
+                  $negotiation = false;
+                  break;
+               }
+
+               // ? Non-suspending-wait tripwire: a fast wake with nothing to
+               //   read is usually a revoked bridge, but an ordinary reactor
+               //   release (a del() on this socket) looks the same — the
+               //   consecutive count is the margin that separates them
+               // ! 8 consecutive: no reachable client path releases a parked
+               //   socket more than once (connect() dels before parking;
+               //   close()/expire() del then fclose) — fail the handshake,
+               //   never hot-spin
+               $read = [$this->Socket];
+               $write = [];
+               $except = null;
+               if (
+                  (int) hrtime(true) - $before < 100_000
+                  && @stream_select($read, $write, $except, 0, 0) !== 1
+               ) {
+                  if (++$stalled >= 8) {
+                     $this->Logger->log(
+                        warning: 'Parked handshake aborted: the wait bridge stopped suspending.@\;'
+                     );
+                     $negotiation = false;
+                     break;
+                  }
+               }
+               else {
+                  $stalled = 0;
+               }
+
+               continue;
             }
 
             do {
@@ -236,9 +315,30 @@ class Connection extends Packages
                break;
             }
          } while (true);
+
+         $settled = true;
       }
       catch (Throwable) {
          $negotiation = false;
+         $settled = true;
+      }
+      finally {
+         // ? Left mid-negotiation — an unwind (the deferred context was
+         //   cancelled and its Fiber collected): the socket is registered
+         //   nowhere yet. The unwind is not an exception the catch above
+         //   sees, which is what static analysis cannot know here
+         /** @phpstan-ignore booleanAnd.alwaysFalse, identical.alwaysFalse */
+         if ($settled === false && is_resource($this->Socket)) {
+            @fclose($this->Socket);
+            $this->status = self::STATUS_CLOSED;
+         }
+      }
+
+      // ? Not ours — the caller sees it, not a fabricated TLS failure
+      if ($Foreign !== null) {
+         $this->close();
+
+         throw $Foreign;
       }
 
       // @ Check negotiation
