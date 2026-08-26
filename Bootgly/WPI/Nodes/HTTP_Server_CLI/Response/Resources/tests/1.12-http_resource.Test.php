@@ -3,6 +3,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Tests\HTTP;
 
 
+use const BOOTGLY_ROOT_DIR;
 use const PHP_BINARY;
 use function assert;
 use function count;
@@ -26,17 +27,21 @@ use Fiber;
 use LogicException;
 use RuntimeException;
 
-use const BOOTGLY_ROOT_DIR;
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\WPI\Events\Cancellation;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\HTTP;
 
 
 return new Test(
    description: 'Resources: the HTTP resource embeds one client per instance, owned by one deferred context and released with it',
    test: function () {
+      // ! The exact refusal — a substring would also match the client's own
+      //   parking refusal, which fires only AFTER the request was queued
+      $outside = 'HTTP response resource must be used inside a live deferred context — call it from defer(), before handing off to SSE or a nested defer().';
+
       // # Without a server reactor the resource refuses to build
       //   The static reactor cannot be unset in-process (the rig below sets it),
       //   so the guard is probed in a fresh interpreter through the same autoboot.
@@ -55,9 +60,11 @@ return new Test(
       );
 
       // ! Host reactor standing in for the worker's — the resource reads it
-      //   from TCP_Server_CLI::$Event, exactly as a worker would
+      //   from TCP_Server_CLI::$Event, exactly as a worker would; restored on
+      //   teardown so no later suite inherits a Select nobody loops
       $Host = new TCP_Client_CLI(TCP_Client_CLI::MODE_TEST);
       $Event = $Host->Event;
+      $OldEvent = isSet(TCP_Server_CLI::$Event) ? TCP_Server_CLI::$Event : null;
       TCP_Server_CLI::$Event = $Event;
 
       // ! Keep-alive loopback upstream served BY the host reactor: `/hold`
@@ -72,8 +79,9 @@ return new Test(
 
       $Peers = [];
       $serving = true;
+      $timer = 0;
       $serve = null;
-      $serve = function () use (&$serve, &$serving, &$Peers, $Server, $Event): void {
+      $serve = function () use (&$serve, &$serving, &$Peers, &$timer, $Server, $Event): void {
          if ($serving === false) {
             return;
          }
@@ -88,9 +96,9 @@ return new Test(
                @fwrite($Open, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
             }
          }
-         $Event->defer(microtime(true) + 0.005, $serve);
+         $timer = $Event->defer(microtime(true) + 0.005, $serve);
       };
-      $Event->defer(microtime(true) + 0.005, $serve);
+      $timer = $Event->defer(microtime(true) + 0.005, $serve);
 
       // ! Pump bridge: runs the host reactor inline for one short slice (the
       //   8.2 rig) — honest progress without a real suspension
@@ -135,7 +143,7 @@ return new Test(
       }
 
       yield assert(
-         assertion: $refusal !== null && str_contains($refusal, 'deferred context') && $census() === ['connections' => 0, 'idle' => 0, 'busy' => 0],
+         assertion: $refusal === $outside && $census() === ['connections' => 0, 'idle' => 0, 'busy' => 0],
          description: 'Outside a Fiber the resource refuses and dials nothing, found: ' . json_encode([$refusal, $census()])
       );
 
@@ -153,7 +161,7 @@ return new Test(
       $Foreign->start();
 
       yield assert(
-         assertion: str_contains($results['foreign'] ?? '', 'deferred context'),
+         assertion: ($results['foreign'] ?? null) === $outside,
          description: 'A Fiber that is not a deferred context is refused, found: ' . json_encode($results['foreign'] ?? null)
       );
 
@@ -216,10 +224,35 @@ return new Test(
          description: 'A released resource is claimable again and released again, found: ' . json_encode([$results['C'] ?? null, $census()])
       );
 
+      // # A settled generation refuses further use (the handoff shape)
+      //   SSE->open() and a nested defer() finish the token while the Fiber
+      //   keeps running: settle() unpublishes the alias, the wait capability
+      //   is gone, and the resource refuses instead of parking on a bridge
+      //   that never suspends
+      $FiberS = new Fiber(function () use ($Resource, &$results): void {
+         $Token = Cancellation::fetch(Fiber::getCurrent());
+         $Token?->finish();
+         try {
+            $Resource->request('GET', '/one');
+            $results['S'] = 'served';
+         }
+         catch (LogicException $Refused) {
+            $results['S'] = $Refused->getMessage();
+         }
+      });
+      Cancellation::open($FiberS);
+      $FiberS->start();
+
+      yield assert(
+         assertion: ($results['S'] ?? null) === $outside,
+         description: 'A generation that already settled is refused like a context that never was, found: ' . json_encode($results['S'] ?? null)
+      );
+
       // # Cancelling the generation mid-park terminalizes the in-flight
       //   request and closes its connection — the peer-left shape
-      //   The parked Fiber is evicted by the scheduler and never resumed, so
-      //   the bridge here really suspends and the test never resumes it.
+      //   The Fiber is bound and scheduled on the reactor exactly as defer()
+      //   does, so the cancel path runs through Select::evict(): the Fiber is
+      //   never resumed, and the test never resumes it either.
       $Resource->schedule(static fn (mixed $value = null): mixed => Fiber::suspend($value));
       $FiberD = new Fiber(function () use ($Resource, &$results): void {
          $Resource->batch();
@@ -228,11 +261,14 @@ return new Test(
          $results['D-resumed'] = true;
       });
       $TokenD = Cancellation::open($FiberD);
-      $FiberD->start();
+      $suspended = $FiberD->start();
+      $Event->bind($FiberD, static function (): void {}, static function (): void {});
+      $Event->schedule($FiberD, $suspended);
       // ! Let the request reach the wire and be accepted
       $slice(3);
-      // ! Still unanswered: code 0 with no named terminal yet
-      $parked = $FiberD->isSuspended() && $census() === ['connections' => 1, 'idle' => 0, 'busy' => 1]
+      // ! Still unanswered: code 0 with no named terminal yet, episode parked
+      $parked = $FiberD->isSuspended() && $Client->parked === true
+         && $census() === ['connections' => 1, 'idle' => 0, 'busy' => 1]
          && ($results['D']->code ?? -1) === 0 && ($results['D']->status ?? 'x') === '';
 
       $TokenD->cancel();
@@ -248,14 +284,25 @@ return new Test(
             . json_encode(['parked' => $parked, 'code' => $Answer?->code, 'status' => $Answer?->status, 'census' => $census()])
       );
 
+      // ! The evicted Fiber is never resumed, so its parking() finally never
+      //   runs: the settled path must retire the episode notifier itself
+      yield assert(
+         assertion: $Client->parked === false,
+         description: 'A cancelled generation retires the drain episode with its connections, found: ' . json_encode($Client->parked)
+      );
+
       // ! Eviction: the suspended Fiber is dropped, never resumed — its parked
-      //   drain must unwind cleanly (notifier pair closed by the finally)
+      //   drain must unwind cleanly on collection
       $FiberD = null;
 
+      // # The next context parks and is answered — it must not inherit the
+      //   cancelled generation's batch mode (a stale flag would hand it an
+      //   unfilled Response without ever parking)
+      $Resource->schedule($pump);
       $FiberE = new Fiber(function () use ($Resource, &$results): void {
          try {
-            $Resource->batch();
-            $results['E'] = 'claimed';
+            $Answer = $Resource->request('GET', '/three');
+            $results['E'] = ['code' => $Answer->code, 'body' => $Answer->body];
          }
          catch (LogicException $Refused) {
             $results['E'] = $Refused->getMessage();
@@ -266,15 +313,81 @@ return new Test(
       $TokenE->finish();
 
       yield assert(
-         assertion: ($results['E'] ?? null) === 'claimed' && isset($results['D-resumed']) === false,
-         description: 'After the cancelled context is dropped the resource is claimable again, found: ' . json_encode($results['E'] ?? null)
+         assertion: ($results['E']['code'] ?? 0) === 200
+            && ($results['E']['body'] ?? '') === 'ok'
+            && isset($results['D-resumed']) === false,
+         description: 'After the cancelled context is dropped the resource is claimable again and no longer batching, found: ' . json_encode($results['E'] ?? null)
+      );
+
+      // # A carried instance keeps its owner's bridge across a foreign attach
+      //   defer() starts by cloning the Response it works on, and __clone
+      //   forks the resources — a mount without a definition is carried and
+      //   RE-ATTACHED to the clone, which would swap the bridge under the
+      //   context parked on it (a wait that never suspends: tripwire, scrap,
+      //   a fabricated code 0). The rig's bridge is installed AFTER the mount.
+      $Carrier = new Response;
+      $Carried = $Carrier->mount(new HTTP(host: '127.0.0.1', port: (int) $port, connectTimeout: 1, timeout: 2), 'Carried');
+      $Carried->schedule($pump);
+      $FiberF = new Fiber(function () use ($Carried, $Carrier, &$results): void {
+         $Carried->batch();
+         $Answer = $Carried->request('GET', '/four');
+         // ! The framework hop, from inside the owner
+         $Clone = clone $Carrier;
+         $Carried->drain();
+         $results['F'] = ['code' => $Answer->code, 'body' => $Answer->body];
+      });
+      $TokenF = Cancellation::open($FiberF);
+      $FiberF->start();
+      $TokenF->finish();
+
+      yield assert(
+         assertion: ($results['F']['code'] ?? 0) === 200 && ($results['F']['body'] ?? '') === 'ok',
+         description: 'A foreign attach while owned does not swap the owner bridge, found: ' . json_encode($results['F'] ?? null)
+      );
+
+      // # ...and the context whose attach was refused is told, not tripwired
+      $FiberG = new Fiber(function () use ($Carried, &$results): void {
+         try {
+            $Carried->batch();
+            $results['G'] = 'claimed';
+         }
+         catch (LogicException $Refused) {
+            $results['G'] = $Refused->getMessage();
+         }
+      });
+      Cancellation::open($FiberG);
+      $FiberG->start();
+
+      // ! A fresh attach (the next clone's fork, here the rig) re-arms it
+      $Carried->schedule($pump);
+      $FiberH = new Fiber(function () use ($Carried, &$results): void {
+         try {
+            $Carried->batch();
+            $results['H'] = 'claimed';
+         }
+         catch (LogicException $Refused) {
+            $results['H'] = $Refused->getMessage();
+         }
+      });
+      $TokenH = Cancellation::open($FiberH);
+      $FiberH->start();
+      $TokenH->finish();
+
+      yield assert(
+         assertion: str_contains($results['G'] ?? '', 'attached to another response while owned')
+            && ($results['H'] ?? null) === 'claimed',
+         description: 'A refused attach is reported at the claim and a fresh attach re-arms the resource, found: ' . json_encode([$results['G'] ?? null, $results['H'] ?? null])
       );
 
       // # Teardown
       $serving = false;
+      $Event->cancel($timer);
       foreach ($Peers as $Open) {
          @fclose($Open);
       }
       fclose($Server);
+      if ($OldEvent !== null) {
+         TCP_Server_CLI::$Event = $OldEvent;
+      }
    }
 );

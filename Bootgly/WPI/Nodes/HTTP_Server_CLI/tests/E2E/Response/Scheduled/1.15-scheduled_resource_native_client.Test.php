@@ -11,12 +11,21 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
 
 
+// ! The resource lifecycle (release on finish/cancel, abort(), keep-alive
+//   reaping) is pinned by Response/Resources/tests/1.12-http_resource: the
+//   fixture here answers `Connection: close`, so nothing is ever left to reap.
+
 return new Test(
    Separator: new Separator(line: ''),
 
-   request: function () {
-      return "GET /deferred/resource HTTP/1.1\r\nHost: localhost\r\n\r\n";
-   },
+   requests: [
+      function () {
+         return "GET /deferred/resource HTTP/1.1\r\nHost: localhost\r\n\r\n";
+      },
+      function () {
+         return "GET /deferred/resource HTTP/1.1\r\nHost: localhost\r\n\r\n";
+      }
+   ],
    response: function (Request $Request, Response $Response, Router $Router)
    {
       // @ BG-13 S5: the zero-boilerplate form — the `Upstream` resource is
@@ -49,18 +58,18 @@ return new Test(
                + $usage['ru_stime.tv_sec'] + $usage['ru_stime.tv_usec'] / 1e6
                - $baseline;
 
-            // ! Same resource, same deferral: the second read is the SAME
-            //   instance (no rebuild inside one generation)
-            $same = $Response->Upstream === $Response->Upstream
-               && $Response->Upstream->Client->owned === false;
-
             $Response->JSON->send([
                'code' => $Upstream->code,
                'body' => $Upstream->body,
                'elapsed' => $elapsed,
                'gap' => $ticked > 0.0 ? $ticked - $started : 0.0,
                'cpu' => $spent,
-               'same' => $same
+               // ! Identity across deferrals: Resources::fork() drops the
+               //   definition-backed mount, so each deferral embeds its own
+               //   adopted client — the second request must see new ids
+               'resource' => spl_object_id($Response->Upstream),
+               'client' => spl_object_id($Response->Upstream->Client),
+               'adopted' => $Response->Upstream->Client->owned === false
             ]);
          });
       }, GET);
@@ -70,15 +79,19 @@ return new Test(
       });
    },
 
-   test: new Assertions(Case: function (string $response): Generator
+   test: new Assertions(Case: function (array $responses): Generator
    {
-      $body = (array) json_decode(substr($response, strpos($response, "\r\n\r\n") + 4), true);
+      $decode = function (string $raw): array {
+         return (array) json_decode(substr($raw, strpos($raw, "\r\n\r\n") + 4), true);
+      };
+      $first = $decode($responses[0] ?? '');
+      $second = $decode($responses[1] ?? '');
 
       yield new Assertion(
          description: 'The resource call completes with the upstream body',
          fallback: 'The Upstream resource did not relay the 200!'
       )
-         ->expect(($body['code'] ?? 0) === 200 && ($body['body'] ?? '') === 'hello-bg13-ok')
+         ->expect(($first['code'] ?? 0) === 200 && ($first['body'] ?? '') === 'hello-bg13-ok')
          ->to->be(true)
          ->assert();
 
@@ -86,7 +99,7 @@ return new Test(
          description: 'The upstream really delayed',
          fallback: 'Upstream answered too fast - the fixture did not delay!'
       )
-         ->expect($body['elapsed'] ?? 0.0)
+         ->expect($first['elapsed'] ?? 0.0)
          ->to->delimit(1.0, 1.6)
          ->assert();
 
@@ -94,7 +107,7 @@ return new Test(
          description: 'The worker reactor ticked during the resource wait',
          fallback: 'The worker reactor never ticked while the resource call was in flight!'
       )
-         ->expect($body['gap'] ?? 0.0)
+         ->expect($first['gap'] ?? 0.0)
          ->to->delimit(0.040, 0.300)
          ->assert();
 
@@ -102,15 +115,25 @@ return new Test(
          description: 'The resource wait burns no CPU',
          fallback: 'The resource wait burned CPU - parking degenerated into a spin!'
       )
-         ->expect($body['cpu'] ?? 9.9)
+         ->expect($first['cpu'] ?? 9.9)
          ->to->delimit(0.0, 0.100)
          ->assert();
 
       yield new Assertion(
-         description: 'One adopted client per deferral, stable within it',
-         fallback: 'The resource was rebuilt mid-deferral or its client is not adopted!'
+         description: 'The embedded client is adopted by the worker reactor',
+         fallback: 'The resource client owns its own loop instead of the worker reactor!'
       )
-         ->expect($body['same'] ?? false)
+         ->expect(($first['adopted'] ?? false) === true && ($second['adopted'] ?? false) === true)
+         ->to->be(true)
+         ->assert();
+
+      yield new Assertion(
+         description: 'One adopted client per deferral (identity differs across requests)',
+         fallback: 'The second deferral reused the first one\'s resource or client!'
+      )
+         ->expect(($second['code'] ?? 0) === 200
+            && ($first['resource'] ?? 0) !== ($second['resource'] ?? 0)
+            && ($first['client'] ?? 0) !== ($second['client'] ?? 0))
          ->to->be(true)
          ->assert();
    })

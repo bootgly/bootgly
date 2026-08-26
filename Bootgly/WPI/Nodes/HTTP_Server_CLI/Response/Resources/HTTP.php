@@ -31,11 +31,16 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource\Scheduling;
  * wait parks the deferred Fiber instead of pumping a private event loop, so
  * the worker keeps serving its other connections while the upstream answers.
  *
+ * The wait is parked; the dial is not. Opening the connection (and the TLS
+ * handshake) still runs a blocking select on the worker reactor, and every
+ * deferral dials afresh — `connectTimeout` is therefore a hard stall budget
+ * for the whole worker, and `0` freezes it until the peer answers.
+ *
  * Register it once and call it from `defer()`:
  *
  * ```php
  * $HTTP_Server_CLI->configure(responseResources: [
- *    'Upstream' => static fn (object $Context): HTTP => new HTTP(host: 'api.example.com', port: 443, secure: [])
+ *    'Upstream' => static fn (object $Context): HTTP => new HTTP(host: 'api.example.com', secure: [])
  * ]);
  *
  * $Response->defer(function (Response $Response) {
@@ -51,8 +56,12 @@ class HTTP extends Resource implements Scheduling
 
    // * Data
    /**
-    * The embedded client. Every knob not covered by the constructor
-    * (`retryOn`, `retryDelay`, `maxResponseBytes`, ...) is set here.
+    * The embedded client — knob surface only.
+    *
+    * Every knob not covered by the constructor (`retryOn`, `retryDelay`,
+    * `maxResponseBytes`, ...) is set here. Never send through it: only
+    * `request()`, `batch()` and `drain()` claim the deferred context, and
+    * only that claim releases the client when the deferral settles.
     */
    public private(set) HTTP_Client_CLI $Client;
 
@@ -63,22 +72,27 @@ class HTTP extends Resource implements Scheduling
    //   contexts — and a parked drain answers only the Fiber that parked it.
    /** @var null|Fiber<mixed,mixed,mixed,mixed> */
    private null|Fiber $Fiber = null;
+   // ! Whether a bridge was refused while a context owned this resource: the
+   //   refused context would park on a wait that is not its own
+   private bool $stale = false;
 
 
    /**
     * @param string $host Upstream host.
-    * @param int $port Upstream port.
+    * @param null|int $port Upstream port (null = 80, or 443 when `secure` is set).
     * @param array<string,mixed>|null $secure TLS stream context options (`[]` enables TLS with the defaults).
-    * @param array<string,int>|null $pool Connection pool bounds: `['min' => N, 'max' => N]`.
+    * @param array<string,int>|null $pool Connection pool bounds inside one deferral: `['min' => N, 'max' => N]`.
     * @param int|float $timeout Response timeout in seconds (0 = no timeout).
-    * @param int|float $connectTimeout Connection timeout in seconds (0 = no timeout).
+    * @param int|float $connectTimeout Connection timeout in seconds. The dial is synchronous on the worker reactor, so this bounds how long the worker can stall on one unreachable upstream (0 = no timeout = an unbounded stall).
     * @param int $maxRedirects Maximum redirects to follow (0 = disabled).
     * @param int $maxRetries Maximum retries on connection/timeout failure (0 = disabled).
     * @param null|bool $enableHTTP2 HTTP/2 negotiation (null = ALPN when secure; true = also h2c; false = never).
+    *
+    * @throws RuntimeException When constructed outside the HTTP server reactor.
     */
    public function __construct (
       string $host,
-      int $port = 80,
+      null|int $port = null,
       null|array $secure = null,
       null|array $pool = null,
       int|float $timeout = 30,
@@ -104,7 +118,7 @@ class HTTP extends Resource implements Scheduling
       $Client->react(TCP_Server_CLI::$Event);
       $Client->configure(
          host: $host,
-         port: $port,
+         port: $port ?? ($secure === null ? 80 : 443),
          secure: $secure,
          pool: $pool,
          enableHTTP2: $enableHTTP2
@@ -119,9 +133,24 @@ class HTTP extends Resource implements Scheduling
 
    /**
     * Bind the response wait bridge.
+    *
+    * A carried instance is re-attached by every Response clone (`defer()`
+    * forks the resources of the clone it works on), so a bridge is only
+    * accepted while no deferred context owns this resource.
     */
    public function schedule (Closure $Wait): static
    {
+      // ? The owner parks on the bridge it claimed under: swapping it from a
+      //   clone's attach would hand its next episode a wait that never
+      //   suspends (tripwire, scrap, a fabricated code 0). The refused context
+      //   is told so at its first claim instead
+      if ($this->Fiber !== null) {
+         $this->stale = true;
+
+         return $this;
+      }
+
+      $this->stale = false;
       $this->Client->schedule($Wait);
 
       return $this;
@@ -137,6 +166,9 @@ class HTTP extends Resource implements Scheduling
     * @param string $URI Request URI.
     * @param array<string,string> $headers Additional headers.
     * @param mixed $body Request body.
+    *
+    * @return Response The upstream response (the client's `Request\Response`).
+    * @throws LogicException When called outside a live deferred context, or while another one owns this resource.
     */
    public function request (
       string $method = 'GET',
@@ -161,6 +193,8 @@ class HTTP extends Resource implements Scheduling
    /**
     * Enter batch mode: subsequent `request()` calls are dispatched
     * concurrently and settled together by `drain()`.
+    *
+    * @throws LogicException When called outside a live deferred context, or while another one owns this resource.
     */
    public function batch (): static
    {
@@ -172,6 +206,8 @@ class HTTP extends Resource implements Scheduling
 
    /**
     * Park the deferred Fiber until every batched request completes.
+    *
+    * @throws LogicException When called outside a live deferred context, or while another one owns this resource.
     */
    public function drain (): static
    {
@@ -190,7 +226,7 @@ class HTTP extends Resource implements Scheduling
 
       // ? A parked wait needs a deferred Fiber to park
       if ($Fiber === null) {
-         throw new LogicException('HTTP response resource must be used inside a deferred context — call it from defer().');
+         throw new LogicException('HTTP response resource must be used inside a live deferred context — call it from defer(), before handing off to SSE or a nested defer().');
       }
 
       // ?: Already claimed by this context
@@ -204,14 +240,24 @@ class HTTP extends Resource implements Scheduling
          throw new LogicException('HTTP response resource is owned by another deferred context.');
       }
 
+      // ? A context whose attach was refused while another owned this
+      //   resource has no bridge of its own installed
+      if ($this->stale) {
+         throw new LogicException('HTTP response resource was attached to another response while owned — a carried instance cannot serve interleaved deferred contexts; register it as a responseResources factory instead.');
+      }
+
       // ! The generation token proves the Fiber is a live deferred context —
       //   and it is the one lifecycle hook that fires whether the work
       //   finishes or the peer leaves mid-wait (an evicted Fiber is never
       //   resumed): either way the client is released, so no keep-alive
       //   connection outlives the deferral on the worker reactor
+      // ? A handoff (SSE head, nested defer) settles the generation while its
+      //   Fiber keeps running: settle() unpublishes the alias, so a settled
+      //   context reads exactly like one that never was — the wait capability
+      //   is gone either way
       $Token = Cancellation::fetch($Fiber);
       if ($Token === null || $Token->check()) {
-         throw new LogicException('HTTP response resource must be used inside a deferred context — call it from defer().');
+         throw new LogicException('HTTP response resource must be used inside a live deferred context — call it from defer(), before handing off to SSE or a nested defer().');
       }
 
       $this->Fiber = $Fiber;
@@ -226,6 +272,14 @@ class HTTP extends Resource implements Scheduling
    private function release (): void
    {
       $this->Fiber = null;
+
+      // ! Every generation dials afresh: abort() closes the pooled keep-alive
+      //   connections too, so the next deferral pays one synchronous dial
       $this->Client->abort();
+
+      // @ The generation has settled and its Fiber is never resumed — retire
+      //   the episode notifier it may still be parked on instead of leaving
+      //   two descriptors to the cycle collector
+      $this->Client->unpark();
    }
 }

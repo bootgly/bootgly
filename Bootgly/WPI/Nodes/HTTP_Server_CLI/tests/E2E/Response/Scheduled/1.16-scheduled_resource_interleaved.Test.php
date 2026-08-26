@@ -43,17 +43,21 @@ return new Test(
             $Mirror->batch();
             $C = $Mirror->request(method: 'GET', URI: '/fast');
             $D = $Mirror->request(method: 'GET', URI: '/fast');
+            // ! Dispatch evidence — in batch mode request() queues and
+            //   returns; a client that left batch mode parks each leg to
+            //   completion here (the serial fixture makes wire overlap
+            //   unobservable, so the spec pins dispatch concurrency)
+            $issued = microtime(true) - $started;
 
             // ! Mirror drains FIRST while Upstream's legs are still in flight
             $Mirror->drain();
-            $mirrored = microtime(true) - $started;
             $Upstream->drain();
 
             $Response->JSON->send([
                'codes' => [$A->code, $B->code, $C->code, $D->code],
                'bodies' => [$A->body, $B->body, $C->body, $D->body],
                'distinct' => $Upstream->Client !== $Mirror->Client,
-               'mirrored' => $mirrored,
+               'issued' => $issued,
                'elapsed' => microtime(true) - $started,
                'loop' => TCP_Server_CLI::$Event->loop
             ]);
@@ -107,18 +111,18 @@ return new Test(
          ->to->be(true)
          ->assert();
 
-      // ! The serial fixture answers /delay (1 s) before any /fast leg, so a
-      //   Mirror drain that really overlapped Upstream's in-flight leg ends
-      //   right after that second; the whole exchange stays under the
-      //   harness window only if the batches did not serialize
+      // ! ~5 ms when the four legs queue; ~1 s when a batch parks its /delay
+      //   leg to completion (measured 190x apart)
       yield new Assertion(
-         description: 'The Mirror drain overlapped the Upstream leg in flight',
-         fallback: 'The interleaved drains serialized instead of overlapping!'
+         description: 'Both batches were dispatched without parking a leg',
+         fallback: 'A batched request parked instead of queueing - the legs serialized!'
       )
-         ->expect($interleaved['mirrored'] ?? 9.9)
-         ->to->delimit(0.9, 1.6)
+         ->expect($interleaved['issued'] ?? 9.9)
+         ->to->delimit(0.0, 0.5)
          ->assert();
 
+      // ! The serial fixture answers /delay (1 s) before the three /fast legs:
+      //   an extra upstream round trip would push this past the band
       yield new Assertion(
          description: 'Both drains settled within one upstream latency',
          fallback: 'The interleaved batches took longer than the single delayed leg!'
@@ -139,8 +143,8 @@ return new Test(
          description: 'Outside defer() the resource refuses before dialing (F4)',
          fallback: 'A resource used outside a deferred context was not refused!'
       )
-         ->expect(str_contains($body($responses[1] ?? ''), 'deferred context'))
-         ->to->be(true)
+         ->expect($body($responses[1] ?? ''))
+         ->to->be('HTTP response resource must be used inside a live deferred context — call it from defer(), before handing off to SSE or a nested defer().')
          ->assert();
 
       yield new Assertion(

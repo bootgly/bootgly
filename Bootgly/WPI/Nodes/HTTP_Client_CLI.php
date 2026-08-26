@@ -189,6 +189,10 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    private $Notify = null;
    /** @var null|resource Episode notifier write end — wake() signals it. */
    private $Notified = null;
+   /** Whether a drain episode is parked on this client. */
+   public bool $parked {
+      get => $this->Notify !== null;
+   }
 
    public function __construct (int $mode = self::MODE_DEFAULT)
    {
@@ -2124,10 +2128,14 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     * Abandon every queued, in-flight and retrying request and close every
     * connection — pooled keep-alive ones included.
     *
-    * The client stays usable: the next `request()` dials afresh. Abandoned
-    * requests terminalize with code 0 (`'Connection Failed'`, or
-    * `'Truncated Response'` once bytes arrived) and a parked drain episode,
-    * if one is open, is woken to observe the quiescence.
+    * The client stays usable: the next `request()` dials afresh. The pool
+    * floor (`pool['min']`) is not re-warmed — warm-up is per configuration,
+    * and the pool re-fills on demand up to `pool['max']`. Abandoned requests
+    * terminalize with code 0 (`'Connection Failed'`, or `'Truncated
+    * Response'` once bytes arrived) and a parked drain episode, if one is
+    * open, is woken to observe the quiescence — its notifier is closed by
+    * the parked Fiber itself when it resumes; `unpark()` is for one that
+    * never will.
     *
     * @return void
     */
@@ -2147,6 +2155,33 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       $this->batching = false;
       $this->wake();
+   }
+   /**
+    * Retire the parked drain episode of a context that will never resume.
+    *
+    * The episode notifier is this client's own pair of descriptors, closed
+    * by `parking()` when the parked Fiber resumes. An evicted Fiber (its
+    * generation settled) never does, so the settled path retires the pair
+    * itself. Never call it while the parked Fiber can still resume — the
+    * reactor still holds the read end.
+    *
+    * @return void
+    */
+   public function unpark (): void
+   {
+      // ! Local handles: the evicted Fiber's own finally re-enters here on
+      //   collection, and its is_resource() guards then see closed streams
+      $Notify = $this->Notify;
+      $Notified = $this->Notified;
+      $this->Notify = null;
+      $this->Notified = null;
+
+      if (is_resource($Notify)) {
+         fclose($Notify);
+      }
+      if (is_resource($Notified)) {
+         fclose($Notified);
+      }
    }
    /**
     * Park the calling Fiber until this client is quiescent (adopted reactor).
@@ -2277,8 +2312,13 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          }
       }
       finally {
-         $this->Notify = null;
-         $this->Notified = null;
+         // ? Only this episode's handles: an evicted Fiber unwinds here on
+         //   collection, possibly after unpark() retired the pair and a later
+         //   context parked a new one on this client
+         if ($this->Notify === $Notify) {
+            $this->Notify = null;
+            $this->Notified = null;
+         }
          if (is_resource($Notify)) {
             fclose($Notify);
          }
