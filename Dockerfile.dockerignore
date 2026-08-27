@@ -16,12 +16,39 @@
 !bootgly
 !bootgly_benchmarks
 
+# @ Security boundary — Git ignore rules do not apply to Docker contexts.
+#   Never admit repository/agent metadata, environment secrets or the private
+#   scripts that the source checkout deliberately keeps outside version control.
+**/.git
+**/.codex
+**/.agent
+**/.claude
+**/.env
+**/.env.*
+bootgly/scripts/_*.php
+
+# @ Public, versioned fixtures required by the full test/benchmark image.
+#   Keep these exceptions exact: a wildcard fixture allowlist would let an
+#   ignored secret placed beside one of them cross the boundary again.
+!bootgly/Bootgly/API/Environment/Configs/tests/fixtures/configs/database/.env
+!bootgly/Bootgly/API/Environment/Configs/tests/fixtures/configs/database/.env.development
+!bootgly/Bootgly/API/Environment/Configs/tests/fixtures/configs/policy_bad_name/.env
+!bootgly/Bootgly/API/Environment/Configs/tests/fixtures/configs/policy_environment/.env
+!bootgly/Bootgly/API/Environment/Configs/tests/fixtures/configs/policy_environment/.env.development
+!bootgly/Bootgly/API/Environment/Configs/tests/fixtures/configs/policy_environment/.env.production
+!bootgly/Bootgly/API/Environment/Configs/tests/fixtures/configs/policy_extra/.env
+!bootgly/Bootgly/API/Environment/Configs/tests/fixtures/configs/policy_good/.env
+!bootgly/Bootgly/API/Environment/Configs/tests/fixtures/configs/policy_locked/.env
+!bootgly/Bootgly/API/Environment/Configs/tests/fixtures/configs/server/.env
+!bootgly/Bootgly/API/Environment/Configs/tests/fixtures/project/configs/database/.env
+!bootgly/Bootgly/WPI/Nodes/HTTP_Server_CLI/Response/Resources/tests/fixtures/secure/kv/.env
+!bootgly_benchmarks/HTTP_Server_CLI/bootables/laravel/.env
+!bootgly_benchmarks/HTTP_Server_CLI/bootables/laravel/.env.example
+
 # @ Trim bootgly/ — storage is ~5.4G, storage/temp ~421M, tmp ~789M, vendor is
 #   rebuilt in-image. storage/ is runtime working data (temp/cache/sessions/pids/
 #   bench marks) — the framework re-creates whatever subdirs it needs on demand.
-bootgly/.git
 bootgly/.github
-bootgly/.claude
 bootgly/storage
 bootgly/storage
 bootgly/tmp

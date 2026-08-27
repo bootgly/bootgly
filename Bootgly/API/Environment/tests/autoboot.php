@@ -16,5 +16,7 @@ return new Suite(
    tests: [
       '1.1-build-detect',
       '1.2-build-inspect',
+      // # Docker build-context secret boundary (security audit H5)
+      '1.3-docker-context-secrets',
    ]
 );
