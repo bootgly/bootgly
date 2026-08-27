@@ -66,5 +66,7 @@ return new Suite(
       '1.41-configure_deferred_timeout',
       // # BG-20: prompt release of evicted generations (finally, never catch)
       '1.42-select_graveyard_reap',
+      // # BG-15: the request a Response answers is readable, never writable, never shadowed
+      '1.43-response_request_exposure',
    ]
 );

@@ -213,6 +213,9 @@ return new Suites(
       // # HTTP_Server_CLI idle reaper vs parked deferred responses (port 8103)
       //   (appended last to keep every suite index above stable)
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/E2E_Idle/',
+      // # HTTP_Server_CLI deferred work: request snapshot + Session persistence (port 8104)
+      //   (appended last to keep every suite index above stable)
+      'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/E2E_Deferred/',
       // # HTTP_Server_CLI Security — explicit isolated-audit opt-in only. Some
       //   cases exercise signals, process death and private SysV IPC and are not
       //   portable to ordinary CI or a host IPC namespace.

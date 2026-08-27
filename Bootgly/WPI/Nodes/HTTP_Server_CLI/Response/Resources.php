@@ -12,9 +12,11 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 
 use function is_string;
+use function property_exists;
 use function spl_object_id;
 use Closure;
 use InvalidArgumentException;
+use ReflectionProperty;
 use RuntimeException;
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response as ServerResponse;
@@ -77,14 +79,14 @@ class Resources
 
       if ($Context instanceof ServerResponse) {
          // * Data
-         $this->define('JSON', static fn (object $Context): JSON => new JSON(self::guard($Context)));
-         $this->define('JSONP', static fn (object $Context): JSONP => new JSONP(self::guard($Context)));
-         $this->define('Negotiation', static fn (object $Context): Negotiation => new Negotiation(self::guard($Context)));
-         $this->define('Plaintext', static fn (object $Context): Plaintext => new Plaintext(self::guard($Context)));
-         $this->define('Pre', static fn (object $Context): Pre => new Pre(self::guard($Context)));
-         $this->define('SSE', static fn (object $Context): SSE => new SSE(self::guard($Context)));
-         $this->define('View', static fn (object $Context): View => new View(self::guard($Context)));
-         $this->define('XML', static fn (object $Context): XML => new XML(self::guard($Context)));
+         $this->register('JSON', static fn (object $Context): JSON => new JSON(self::guard($Context)));
+         $this->register('JSONP', static fn (object $Context): JSONP => new JSONP(self::guard($Context)));
+         $this->register('Negotiation', static fn (object $Context): Negotiation => new Negotiation(self::guard($Context)));
+         $this->register('Plaintext', static fn (object $Context): Plaintext => new Plaintext(self::guard($Context)));
+         $this->register('Pre', static fn (object $Context): Pre => new Pre(self::guard($Context)));
+         $this->register('SSE', static fn (object $Context): SSE => new SSE(self::guard($Context)));
+         $this->register('View', static fn (object $Context): View => new View(self::guard($Context)));
+         $this->register('XML', static fn (object $Context): XML => new XML(self::guard($Context)));
       }
    }
 
@@ -131,11 +133,24 @@ class Resources
       if ($this->Context === null) {
          throw new RuntimeException('Response resource definitions require a context.');
       }
+      self::reserve($this->Context, $name);
 
-      $this->definitions[$name] = $Factory;
-      $this->remove($name);
+      $this->register($name, $Factory);
 
       return $this;
+   }
+
+   /**
+    * Write one factory into the registry.
+    *
+    * The framework's own built-ins take this path around the reserved-name
+    * guard: a subclass that declares a public property named after a built-in
+    * chooses to shadow that resource and must still construct.
+    */
+   private function register (string $name, Closure $Factory): void
+   {
+      $this->definitions[$name] = $Factory;
+      $this->remove($name);
    }
 
    /**
@@ -170,7 +185,34 @@ class Resources
     */
    public function set (string $name, Resource $Resource): Resource
    {
+      if ($this->Context !== null) {
+         self::reserve($this->Context, $name);
+      }
+
       return $this->replace($name, $Resource, true);
+   }
+
+   /**
+    * Refuse a resource name a publicly readable instance property of the
+    * context already owns: the property wins every read, so the resource
+    * could never be reached. A private/protected property and a static one
+    * never shadow `__get`, so their names stay free. Registration/mount time
+    * only — `fetch()` is untouched.
+    */
+   private static function reserve (object $Context, string $name): void
+   {
+      // ? Only a declared property can win a read
+      if (property_exists($Context, $name) === false) {
+         return;
+      }
+      // ! A static property never answers instance access — `__get` still
+      //   reaches the resource — so only a public instance property reserves
+      $Property = new ReflectionProperty($Context, $name);
+      if ($Property->isPublic() && $Property->isStatic() === false) {
+         throw new InvalidArgumentException(
+            "Response resource name `{$name}` is reserved by a declared response property."
+         );
+      }
    }
 
    /**

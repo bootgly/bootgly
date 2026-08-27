@@ -31,6 +31,7 @@ use function gzcompress;
 use function gzdeflate;
 use function gzencode;
 use function hrtime;
+use function is_a;
 use function is_array;
 use function is_resource;
 use function is_string;
@@ -45,6 +46,7 @@ use function strlen;
 use function strncasecmp;
 use function strncmp;
 use function strpos;
+use function strtok;
 use function strtolower;
 use function substr;
 use function trim;
@@ -54,6 +56,9 @@ use Fiber;
 use InvalidArgumentException;
 use LogicException;
 use ReflectionFunction;
+use ReflectionNamedType;
+use ReflectionType;
+use ReflectionUnionType;
 use SplObjectStorage;
 use stdClass;
 use Throwable;
@@ -62,6 +67,7 @@ use WeakReference;
 use const Bootgly\WPI;
 use Bootgly\ABI\Code\__String\Path;
 use Bootgly\ABI\Data\Language;
+use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Events\Cancelling;
 use Bootgly\ACI\Events\Contextualizing;
@@ -117,7 +123,17 @@ class Response extends Server\Response
 
 
    private null|Packages $Package;
-   private null|Request $Request;
+   /**
+    * The Request this Response answers.
+    *
+    * On the synchronous cycle it is the live per-connection Request — the
+    * encoder scrubs its payload and reuses it once the cycle ends. Inside
+    * deferred work it is the private snapshot `Request::capture()` took for
+    * that generation: fields, files, authentication, identity, claims,
+    * attributes and the shared Session survive every `wait()`, unlike a
+    * `use ($Request)` of the live object.
+    */
+   public private(set) null|Request $Request;
    private null|Router $Router;
    private null|Route $Route;
    private null|Exchange $Exchange;
@@ -1237,14 +1253,6 @@ class Response extends Server\Response
 
       return $this;
    }
-   // # Deferred
-   /**
-    * Defer the response to be completed asynchronously via Fiber.
-    *
-    * @param Closure(self):void $work The async work to execute inside a Fiber.
-    * 
-    * @return Response The Response instance, for chaining
-    */
    /**
     * Store this response's built wire bytes in the route response cache.
     *
@@ -1487,6 +1495,25 @@ class Response extends Server\Response
    }
 
    /**
+    * Persist the snapshot's Session before this generation's wire is built.
+    *
+    * The synchronous cycle saved the session in `Encoder_::encode()` before
+    * the deferred work ran, so a write made after the first `wait()` has no
+    * other save point. Throws like the synchronous save does: the caller
+    * decides what the failure means for the wire.
+    */
+   private static function persist (self $Response): void
+   {
+      $Request = $Response->Request;
+      // ? No Session was ever built for this request
+      if ($Request === null || $Request->sessioned === false) {
+         return;
+      }
+
+      $Request->Session?->save();
+   }
+
+   /**
     * Persistent deferred-job loop run by pooled Fibers.
     *
     * Executes one job, clears every request reference, parks itself back
@@ -1499,14 +1526,15 @@ class Response extends Server\Response
     *    2:Packages,
     *    3:string,
     *    4:Cancellation,
-    *    5:null|Exchange
+    *    5:null|Exchange,
+    *    6:bool
     * } $job
     */
    private static function loop (array $job): void
    {
       // @@
       while (true) {
-         [$work, $Response, $Package, $locale, $Cancellation, $Exchange] = $job;
+         [$work, $Response, $Package, $locale, $Cancellation, $Exchange, $wants] = $job;
 
          // ! Bind the scheduling request's locale to this Fiber — deferred
          //   work must not translate (or stash) under a locale negotiated by
@@ -1520,13 +1548,28 @@ class Response extends Server\Response
          $selected = false;
 
          try {
-            // @ Execute user work (may call Fiber::suspend())
-            $work($Response);
+            // @ Execute user work (may call Fiber::suspend()) — a second
+            //   parameter that accepts a Request receives this generation's
+            //   captured snapshot, the same object as `$Response->Request`,
+            //   never the live one the encoder scrubs once the cycle ends;
+            //   any other second parameter keeps its own default
+            if ($wants) {
+               $work($Response, $Response->Request);
+            }
+            else {
+               $work($Response);
+            }
 
             // ? Nested defer/SSE/transport cancellation already selected or
             //   abandoned this generation. The outer job must not serialize a
             //   second response after that terminal handoff.
             if ($Cancellation->check() === false) {
+               // @ Persist before serializing: a Session written after the
+               //   first wait() has no other save point — the synchronous
+               //   cycle saved before this work ran. A failure flows into the
+               //   catch below, as the synchronous pre-selection save does.
+               self::persist($Response);
+
                // ? Guard: socket may have closed while the Fiber was suspended.
                if (is_resource($Package->Connection->Socket)) {
                   $buffer = $Response->encode($Package, $length);
@@ -1586,6 +1629,23 @@ class Response extends Server\Response
                $Errored->Exchange = $Exchange;
                $Errored->Cancellation = $Cancellation;
 
+               // @ The work may have written the Session before it threw:
+               //   persist as the synchronous cycle would, without letting a
+               //   backend failure replace the error response already chosen
+               try {
+                  self::persist($Response);
+               }
+               catch (Throwable $Unsaved) {
+                  $Snapshot = $Response->Request;
+                  Throwables::notify($Unsaved, [
+                     'interface' => 'WPI',
+                     'phase' => 'Session',
+                     'method' => $Snapshot->method ?? '',
+                     'URI' => strtok($Snapshot->URI ?? '', '?'),
+                     'peer' => $Snapshot->peer ?? '',
+                  ]);
+               }
+
                $encoded = is_resource($Package->Connection->Socket) === false;
                if ($encoded === false) {
                   try {
@@ -1625,6 +1685,28 @@ class Response extends Server\Response
             }
          }
          finally {
+            // @ A terminal handoff (SSE, a nested child) settled this
+            //   generation from INSIDE the work, so the pre-encode save above
+            //   never ran. Persist here — the synchronous cycle does exactly
+            //   this for an inline SSE (Encoder_ saves before it suppresses
+            //   the stale representation). An abandonment (cancelled: the
+            //   client left) still persists nothing.
+            if ($selected === false && $Cancellation->check() && $Cancellation->cancelled === false) {
+               try {
+                  self::persist($Response);
+               }
+               catch (Throwable $Unsaved) {
+                  $Snapshot = $Response->Request;
+                  Throwables::notify($Unsaved, [
+                     'interface' => 'WPI',
+                     'phase' => 'Session',
+                     'method' => $Snapshot->method ?? '',
+                     'URI' => strtok($Snapshot->URI ?? '', '?'),
+                     'peer' => $Snapshot->peer ?? '',
+                  ]);
+               }
+            }
+
             // ! A path that neither selected nor handed off is abandonment.
             //   cancel() is idempotent and its committed bridge closes the
             //   Exchange without inventing a response status.
@@ -1677,7 +1759,8 @@ class Response extends Server\Response
           *    2:Packages,
           *    3:string,
           *    4:Cancellation,
-          *    5:null|Exchange
+          *    5:null|Exchange,
+          *    6:bool
           * } $job
           */
          $job = Fiber::suspend(Scheduler::DETACH);
@@ -1736,9 +1819,30 @@ class Response extends Server\Response
    }
 
    /**
+    * Whether a parameter type admits the Request snapshot.
+    */
+   private static function accept (null|ReflectionType $Type): bool
+   {
+      if ($Type instanceof ReflectionNamedType) {
+         return is_a(Request::class, $Type->getName(), true);
+      }
+      if ($Type instanceof ReflectionUnionType) {
+         foreach ($Type->getTypes() as $Member) {
+            if (self::accept($Member)) {
+               return true;
+            }
+         }
+      }
+
+      return false;
+   }
+
+   /**
     * Run response work on a pooled Fiber that may park on the worker reactor.
     *
-    * @param Closure $work The deferred work, receiving this Response.
+    * @param Closure $work The deferred work, receiving this Response and —
+    *    when it declares a second parameter that accepts a Request — the
+    *    snapshot it answers, the same object as `$Response->Request`.
     * @param int|float $timeout Seconds the work may stay parked before a
     *    `Response\Timeout` is delivered at its suspension point; `0` uses
     *    `self::$deferredTimeout`, where `0` means unbounded.
@@ -1856,6 +1960,18 @@ class Response extends Server\Response
                : clone $BoundRoute;
             $work = $work->bindTo($WorkRoute, $WorkRoute) ?? $work;
          }
+         // ! Hand the snapshot only to a second parameter that can take it:
+         //   a required one (a one-argument call could never have satisfied
+         //   it) or an optional one typed to accept a Request. An untyped,
+         //   `mixed` or variadic optional parameter keeps the default its
+         //   author wrote for the one-argument call.
+         $Parameter = $Reflection->getParameters()[1] ?? null;
+         $wants = $Parameter !== null
+            && $Parameter->isVariadic() === false
+            && (
+               $Parameter->isOptional() === false
+               || self::accept($Parameter->getType())
+            );
 
          $Fiber = array_pop(self::$Pool);
          if ($Fiber === null) {
@@ -1948,6 +2064,7 @@ class Response extends Server\Response
             Language::resolve(),
             $Cancellation,
             $Exchange,
+            $wants,
          ];
          $Response->bind();
          try {

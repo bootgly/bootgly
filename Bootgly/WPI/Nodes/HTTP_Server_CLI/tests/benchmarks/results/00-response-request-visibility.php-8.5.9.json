@@ -1,0 +1,96 @@
+{
+    "case": "00-response-request-visibility",
+    "title": "Response::$Request \u2014 private vs public private(set) on the per-request store/read",
+    "measured": "2026-08-27T12:55:24+00:00",
+    "runtime": {
+        "php": "8.5.9",
+        "opcache": "on",
+        "jit": "on",
+        "os": "Linux"
+    },
+    "inputs": {
+        "reads": 10
+    },
+    "method": {
+        "iterations": 200000,
+        "rounds": 5,
+        "warmup": 2000,
+        "estimator": "best round across 7 processes, closure floor subtracted",
+        "floor_ns": 6.57,
+        "processes": 7
+    },
+    "sections": [
+        {
+            "section": "stand-ins with the Response slot shape",
+            "baseline": "A private \u2014 reset() store",
+            "fastest": "A private \u2014 reset() store",
+            "recommendation": "decided by the delta: < 2 % of the 18.4 \u00b5s per-request budget keeps the property",
+            "stable": true,
+            "worst_spread": 1.216,
+            "verdict": "The asymmetric-visibility check is a flag test on an already-typed store; reads are plain public-property fetches on the cached slot.",
+            "rows": [
+                {
+                    "label": "A private \u2014 reset() store",
+                    "ns": 22.6,
+                    "ratio": 1,
+                    "spread": 1.216,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.071
+                },
+                {
+                    "label": "B private(set) \u2014 reset() store",
+                    "ns": 32.6,
+                    "ratio": 1.4425,
+                    "spread": 1.063,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.034
+                },
+                {
+                    "label": "A private \u2014 10 in-class reads",
+                    "ns": 123.6,
+                    "ratio": 5.469,
+                    "spread": 1.044,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.03
+                },
+                {
+                    "label": "B private(set) \u2014 10 in-class reads",
+                    "ns": 123.6,
+                    "ratio": 5.469,
+                    "spread": 1.047,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.026
+                },
+                {
+                    "label": "B private(set) \u2014 10 public reads from outside",
+                    "ns": 37.2,
+                    "ratio": 1.646,
+                    "spread": 1.036,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.043
+                }
+            ],
+            "cross_process_spread": 1.071
+        },
+        {
+            "section": "the real class: Response::reset() + in-class reads (run on both trees)",
+            "baseline": "Response::reset() + 10 reads",
+            "fastest": "Response::reset() + 10 reads",
+            "recommendation": "compare this row between the baseline tree and the patched tree",
+            "stable": true,
+            "worst_spread": 1.012,
+            "verdict": "Everything reset() does besides the one store is identical on both trees; a difference beyond the run-to-run spread is the promotion.",
+            "rows": [
+                {
+                    "label": "Response::reset() + 10 reads",
+                    "ns": 494.1,
+                    "ratio": 1,
+                    "spread": 1.012,
+                    "floor_bound": false,
+                    "cross_process_spread": 1.176
+                }
+            ],
+            "cross_process_spread": 1.176
+        }
+    ]
+}

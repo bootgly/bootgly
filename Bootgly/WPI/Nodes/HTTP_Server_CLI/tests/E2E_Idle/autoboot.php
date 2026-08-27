@@ -40,7 +40,7 @@ return new Suite(
             // ? 8103 — 8081-8097 belong to the other E2E suites, 8098 to
             //   ACME_Challenge (and the E2E upstream fixture), 8099 to ACME_Swap,
             //   8100 to ACME_E2E, 8101 to E2E_DualStack and 8102 is the E2E TLS
-            //   upstream fixture.
+            //   upstream fixture and 8104 is E2E_Deferred.
             port: 8103,
             workers: 1,
             health: '/health',

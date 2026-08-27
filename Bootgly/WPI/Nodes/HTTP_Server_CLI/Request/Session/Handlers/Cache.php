@@ -62,7 +62,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Committing;
 /**
  * Cache-backed session handler.
  *
- * Stores sessions in any `ABI\Resources\Cache` backend: `shared` (default)
+ * Stores sessions in any `ABI\Resources\Cache` backend: `file` (default),
  * for single-host multi-worker servers, `redis` for multi-host fleets, or
  * `apcu`/`file` where their scopes fit. Expiry is native — every write sets
  * the entry TTL to `Session::$lifetime`, so reads never return stale data

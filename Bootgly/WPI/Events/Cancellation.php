@@ -38,6 +38,13 @@ final class Cancellation implements Disconnecting
    /** @var null|WeakMap<object,true> */
    private null|WeakMap $Aliases = null;
    private int $state = self::ACTIVE;
+   /**
+    * Whether this generation ended by cancellation — as opposed to a normal
+    * completion or a handoff, which settle it the same way for `check()`.
+    */
+   public bool $cancelled {
+      get => $this->state === self::CANCELLED;
+   }
    /** @var array<int,Closure(self,bool):void> */
    private array $Observers = [];
 

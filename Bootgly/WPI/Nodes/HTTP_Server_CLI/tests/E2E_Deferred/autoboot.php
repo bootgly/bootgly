@@ -1,6 +1,6 @@
 <?php
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\tests\E2E_DualStack;
+namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\tests\E2E_Deferred;
 
 
 use const BOOTGLY_ROOT_DIR;
@@ -25,19 +25,16 @@ return new Suite(
          define('BOOTGLY_PROJECT', $TestProject);
       }
 
-      HTTP_Server_CLI::pretest($Suite, 'E2E_DualStack');
+      HTTP_Server_CLI::pretest($Suite, 'E2E_Deferred');
 
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: Modes::Test);
       $HTTP_Server_CLI->configure(
-         // ! Dual-stack listener — Bootgly always builds TCP listeners with
-         //   'ipv6_v6only' => false, so IPv4 hops land on this socket as
-         //   IPv4-mapped '::ffff:a.b.c.d' peers (MW-6 regression surface)
-         host: '[::]',
-         // ? 8101 — 8081-8097 belong to the other E2E suites, 8098 to
+         host: '0.0.0.0',
+         // ? 8104 — 8081-8097 belong to the other E2E suites, 8098 to
          //   ACME_Challenge (and the E2E upstream fixture), 8099 to ACME_Swap,
-         //   8100 is referenced by Fuzz fixtures, 8102 is the E2E TLS
-         //   upstream fixture, 8103 is E2E_Idle and 8104 is E2E_Deferred.
-         port: 8101,
+         //   8100 to ACME_E2E, 8101 to E2E_DualStack, 8102 is the E2E TLS
+         //   upstream fixture and 8103 is E2E_Idle.
+         port: 8104,
          workers: 1,
          health: '/health'
       );
@@ -57,6 +54,15 @@ return new Suite(
    suiteName: __NAMESPACE__,
    // * Data
    tests: [
-      '1.1-ipv4_mapped_peer_trust'
+      '1.1-fields_and_params_survive_await',
+      '1.2-outer_use_request_is_scrubbed',
+      '1.3-session_write_after_await_persists',
+      '1.4-session_first_touch_after_await_sets_cookie',
+      '1.5-session_write_then_throw_persists_and_500',
+      '1.6-credentials_and_files_survive_await',
+      '1.7-live_request_reused_while_parked',
+      '1.8-session_write_then_sse_handoff_persists',
+      '1.9-session_write_then_client_leaves_not_persisted',
+      '1.10-session_write_around_nested_defer_persists'
    ]
 );

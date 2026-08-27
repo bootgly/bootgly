@@ -63,7 +63,7 @@ return new Suite(
       // ? 8098 predates this map and is shared with ACME_Challenge (the suites
       //   run serially); 8102 — 8081-8097 belong to the other E2E suites,
       //   8099 to ACME_Swap, 8100 to ACME_E2E, 8101 to E2E_DualStack and
-      //   8103 to E2E_Idle.
+      //   8103 to E2E_Idle and 8104 to E2E_Deferred.
       if ( !defined('BOOTGLY_E2E_UPSTREAM_PORT') ) {
          define('BOOTGLY_E2E_UPSTREAM_PORT', 8098);
       }
