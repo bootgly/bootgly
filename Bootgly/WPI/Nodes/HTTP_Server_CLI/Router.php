@@ -33,6 +33,7 @@ use function trim;
 use Closure;
 use Generator;
 use InvalidArgumentException;
+use Throwable;
 
 use const Bootgly\WPI;
 use Bootgly\ABI\IO\FS\File;
@@ -223,8 +224,8 @@ class Router
          $Result = $handler($Request, $Response);
          return $Result instanceof Response ? $Result : $Response;
       };
-      // @ Fold right over Middlewares
-      for ($i = count($Middlewares) - 1; $i >= 0; $i--) {
+      // @ Fold right over Middlewares — every frame but the outermost
+      for ($i = count($Middlewares) - 1; $i > 0; $i--) {
          $Middleware = $Middlewares[$i];
          $next = $invokable;
          $invokable = function (object $Request, object $Response) use ($Middleware, $next): object {
@@ -232,7 +233,37 @@ class Router
          };
       }
 
-      return $invokable;
+      // @ Outermost frame: the call the fold would emit for index 0, plus the
+      //   route's chain published on the Route for the duration of the
+      //   dispatch. It must exist BEFORE the first process() runs — a
+      //   middleware may defer() ahead of $next, and the deferred clone
+      //   copies the Route right then — and be gone once the onion returned
+      //   or threw, so neither a later middleware-free route nor a global
+      //   middleware deferring ahead of routing inherits a stale chain.
+      // ! No finally: FAST_CALL/FAST_RET defeats the tracing JIT (see
+      //   Encoder_::encode). A catch region costs nothing until a throw.
+      //   Indicative measurement (2026-08-27, 3e6 calls, best-of-5,
+      //   interleaved A/B on a machine under concurrent test load — not
+      //   idle): middleware-free dispatch unchanged; one-middleware dispatch
+      //   +~22 ns tracing / +~34 ns JIT-off, all of it in the two property
+      //   writes.
+      $Middleware = $Middlewares[0];
+      $next = $invokable;
+
+      return function (object $Request, object $Response) use ($Middleware, $next, $Middlewares): object {
+         $Route = $this->Route;
+         $Route->Middlewares = $Middlewares;
+         try {
+            $Result = $Middleware->process($Request, $Response, $next);
+         }
+         catch (Throwable $Throwable) {
+            $Route->Middlewares = [];
+            throw $Throwable;
+         }
+         $Route->Middlewares = [];
+
+         return $Result;
+      };
    }
 
    // # Cache

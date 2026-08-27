@@ -80,6 +80,10 @@ final class Client
    /**
     * Write one request and read one complete response.
     *
+    * `body` is the Content-Length-delimited body when the head carries one;
+    * otherwise (chunked / event-stream) it is the RAW bytes that arrived with
+    * the head, chunk framing included — the caller keeps reading the wire.
+    *
     * @param resource $Socket
     *
     * @return array{code:int, head:string, body:string, elapsed:float, eof:bool}
@@ -118,9 +122,12 @@ final class Client
          $head = substr($wire, 0, $separator);
          $body = substr($wire, $separator + 4);
          $matches = [];
-         $length = preg_match('/\r\nContent-Length:[ \t]*(\d+)/i', $head, $matches) === 1
-            ? (int) $matches[1]
-            : 0;
+         // ? No Content-Length (chunked / event-stream): stop at the head but
+         //   keep every byte that arrived with it — the caller drains the rest
+         if (preg_match('/\r\nContent-Length:[ \t]*(\d+)/i', $head, $matches) !== 1) {
+            break;
+         }
+         $length = (int) $matches[1];
          if (strlen($body) >= $length) {
             $body = substr($body, 0, $length);
             break;

@@ -74,6 +74,7 @@ use Bootgly\ACI\Events\Contextualizing;
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Logs\Logger;
+use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\WPI\Endpoints\Servers\Ownership;
 use Bootgly\WPI\Events\Cancellation;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
@@ -102,6 +103,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\SSE as SSEResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\View as ViewResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\XML as XMLResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Timeout;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Recovering;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Route;
 
 
@@ -1468,6 +1470,102 @@ class Response extends Server\Response
    }
 
    /**
+    * Offer a deferred failure to the error boundaries the route onion could
+    * no longer reach: the route's middleware snapshot innermost first, then
+    * the global pipeline. The first Response wins; a boundary that throws
+    * replaces the offered Throwable for the next one outward, the way a
+    * rethrow inside process() reaches the enclosing middleware.
+    *
+    * Only `SAPI::$Middlewares->stack` is read: a pipeline subtype that
+    * overrides process() with another composition is not visible here.
+    */
+   private static function rescue (self $Response, Throwable &$Throwable): null|self
+   {
+      // ? A boundary answers a request; a Response without one has none
+      $Request = $Response->Request;
+      if ($Request === null) {
+         return null;
+      }
+
+      // ! Route chain (outermost first, as folded), then the global stack
+      $RouteMiddlewares = $Response->Route->Middlewares ?? [];
+      $GlobalMiddlewares = isset(SAPI::$Middlewares) ? SAPI::$Middlewares->stack : [];
+
+      // @@ Innermost → outermost
+      foreach ([$RouteMiddlewares, $GlobalMiddlewares] as $Middlewares) {
+         for ($i = count($Middlewares) - 1; $i >= 0; $i--) {
+            $Middleware = $Middlewares[$i];
+            if ($Middleware instanceof Recovering === false) {
+               continue;
+            }
+
+            try {
+               $Recovered = $Middleware->recover($Request, $Response, $Throwable);
+            }
+            catch (Throwable $Rethrown) {
+               // ! A throwing boundary is the next outer boundary's problem
+               $Throwable = $Rethrown;
+               continue;
+            }
+
+            // ?: The first answer wins
+            if ($Recovered !== null) {
+               return $Recovered;
+            }
+         }
+      }
+
+      // : Nobody answered — the Catcher owns it
+      return null;
+   }
+   /**
+    * Bound the boundary walk once the deferral's own budget was spent: a
+    * deadline of the same budget that re-arms itself for as long as the walk
+    * stays parked, interrupting the running Fiber with a fresh `Timeout` at
+    * each expiry. Returns the closure that disarms it, or null when nothing
+    * can bound the walk (no reactor scheduler, no Fiber).
+    */
+   private static function bound (int|float $budget): null|Closure
+   {
+      $Event = TCP_Server_CLI::$Event;
+      $Current = Fiber::getCurrent();
+      if ($Event instanceof Contextualizing === false || $Current === null) {
+         return null;
+      }
+
+      $Reference = WeakReference::create($Current);
+      $Timer = new class {
+         public int $ID = 0;
+      };
+      $arm = static function () use (&$arm, $Event, $Reference, $Timer, $budget): void {
+         // ! Same integer-domain clamp as defer(), on every arm: a budget
+         //   beyond the clock's remaining headroom would wrap to a deadline
+         //   in the past — or overflow to a float, which the scheduler files
+         //   as a wall-clock deadline that never fires
+         $now = (int) hrtime(true);
+         $deadline = $budget >= (PHP_INT_MAX - $now) / 1_000_000_000
+            ? PHP_INT_MAX
+            : $now + (int) ($budget * 1_000_000_000);
+         $Timer->ID = $Event->defer($deadline, static function () use (&$arm, $Event, $Reference, $budget): void {
+            $Parked = $Reference->get();
+            if ($Parked === null) {
+               return;
+            }
+            // ! Re-arm BEFORE delivering: interrupt() resumes the Fiber
+            //   synchronously, and the walk may park again
+            $arm();
+            $Event->interrupt($Parked, new Timeout($budget));
+         });
+      };
+      $arm();
+
+      // :
+      return static function () use ($Event, $Timer): void {
+         $Event->cancel($Timer->ID);
+      };
+   }
+
+   /**
     * Log a deferral terminated by its budget.
     */
    private static function warn (self $Response, Timeout $Timeout): void
@@ -1489,7 +1587,7 @@ class Response extends Server\Response
 
       self::$Logger ??= new Logger(channel: self::class);
       self::$Logger->log(
-         warning: "Deferred response timed out after {$Timeout->timeout}s — answered 503.@.;",
+         warning: "Deferred response timed out after {$Timeout->timeout}s.@.;",
          context: $context
       );
    }
@@ -1527,14 +1625,15 @@ class Response extends Server\Response
     *    3:string,
     *    4:Cancellation,
     *    5:null|Exchange,
-    *    6:bool
+    *    6:bool,
+    *    7:int|float
     * } $job
     */
    private static function loop (array $job): void
    {
       // @@
       while (true) {
-         [$work, $Response, $Package, $locale, $Cancellation, $Exchange, $wants] = $job;
+         [$work, $Response, $Package, $locale, $Cancellation, $Exchange, $wants, $budget] = $job;
 
          // ! Bind the scheduling request's locale to this Fiber — deferred
          //   work must not translate (or stash) under a locale negotiated by
@@ -1600,87 +1699,125 @@ class Response extends Server\Response
          }
          catch (Throwable $Throwable) {
             // ! An out-of-band child/SSE may have completed and user code may
-            //   then throw. Its terminal token wins; Catcher must not append a
-            //   second 500 to the same persistent connection.
+            //   then throw. Its terminal token wins; neither a boundary nor
+            //   Catcher may append a second response to the same connection.
             if ($selected === false && $Cancellation->check() === false) {
-               // ? A deferral past its budget is answered as unavailable, not
-               //   as an application error: no report intake, no debug page
-               $timedOut = $Throwable instanceof Timeout;
-               if ($timedOut) {
+               // ? A deferral past its budget is a server policy: log it
+               //   before any boundary decides what the client sees
+               if ($Throwable instanceof Timeout) {
                   self::warn($Response, $Throwable);
                }
-               try {
-                  $Errored = $timedOut
-                     ? Catcher::respond($Response->Request, $Response, code: 503)
-                     : Catcher::respond($Response->Request, $Response, $Throwable);
-               }
-               catch (Throwable) {
-                  $Errored = new Response(code: $timedOut ? 503 : 500, body: '');
+
+               // ! The generation's one-shot budget is spent by the time any
+               //   Throwable reaches this catch — the Timeout itself, or
+               //   whatever the work turned it into. A boundary that parks
+               //   now would have no deadline left, so the walk gets one of
+               //   the same budget: a fresh Timeout lands at the boundary's
+               //   wait point and travels outward as any throwing recover()
+               //   would. Disarmed as soon as the walk returns; a generation
+               //   without a budget stays bounded by transport teardown only.
+               $Disarm = $budget > 0 ? self::bound($budget) : null;
+
+               // @ Error boundaries — the route onion has already unwound, so
+               //   the route's middleware snapshot is walked here, innermost
+               //   first, then the global pipeline. A boundary that throws
+               //   hands its Throwable to the next one outward.
+               $Errored = self::rescue($Response, $Throwable);
+               if ($Disarm !== null) {
+                  $Disarm();
                }
 
-               // ! Catcher returns a fresh Response. Bind the suspended job's
-               //   exact transport/request generation before serialization;
-               //   the ambient Server::$Request may already belong to an
-               //   interleaved HTTP/2 stream. Passing this Cancellation into
-               //   Encoder_HTTP2 also distinguishes normal stream completion
-               //   from teardown before the 500 lifecycle is committed.
-               $Errored->Package = $Package;
-               $Errored->Request = $Response->Request;
-               $Errored->Exchange = $Exchange;
-               $Errored->Cancellation = $Cancellation;
-
-               // @ The work may have written the Session before it threw:
-               //   persist as the synchronous cycle would, without letting a
-               //   backend failure replace the error response already chosen
-               try {
-                  self::persist($Response);
+               // ? A boundary may have handed this generation off (nested
+               //   defer()/SSE) or parked while the transport left. A settled
+               //   token already owns the wire — serialize nothing.
+               if ($Cancellation->check()) { // @phpstan-ignore if.alwaysFalse
+                  $Errored = null;
                }
-               catch (Throwable $Unsaved) {
-                  $Snapshot = $Response->Request;
-                  Throwables::notify($Unsaved, [
-                     'interface' => 'WPI',
-                     'phase' => 'Session',
-                     'method' => $Snapshot->method ?? '',
-                     'URI' => strtok($Snapshot->URI ?? '', '?'),
-                     'peer' => $Snapshot->peer ?? '',
-                  ]);
-               }
-
-               $encoded = is_resource($Package->Connection->Socket) === false;
-               if ($encoded === false) {
+               else if ($Errored === null) {
+                  // ? Unhandled — a deferral past its budget is answered as
+                  //   unavailable, not as an application error: no report
+                  //   intake, no debug page. Recomputed: a boundary may have
+                  //   replaced the Throwable on its way out.
+                  $timedOut = $Throwable instanceof Timeout;
                   try {
-                     $buffer = $Errored->encode($Package, $length);
-                     $encoded = true;
+                     $Errored = $timedOut
+                        ? Catcher::respond($Response->Request, $Response, code: 503)
+                        : Catcher::respond($Response->Request, $Response, $Throwable);
                   }
                   catch (Throwable) {
-                     // A second serialization failure has no trustworthy wire
-                     // status. Abandon this exchange and let transport cleanup
-                     // continue without escaping the reactor or writing twice.
+                     $Errored = new Response(code: $timedOut ? 503 : 500, body: '');
                   }
                }
 
-               if ($encoded) {
-                  $selected = true;
-                  $Cancellation->finish();
-                  $Exchange?->finish($Errored);
+               if ($Errored !== null) { // @phpstan-ignore notIdentical.alwaysTrue
+                  // ! A fresh Response (Catcher's, or one a boundary built)
+                  //   must carry the suspended job's exact transport/request
+                  //   generation before serialization; the ambient
+                  //   Server::$Request may already belong to an interleaved
+                  //   HTTP/2 stream, and Encoder_HTTP2 reads this Cancellation
+                  //   to tell normal stream completion from teardown. The
+                  //   private clone answered in place already carries all four.
+                  if ($Errored !== $Response) {
+                     $Errored->Package = $Package;
+                     $Errored->Request = $Response->Request;
+                     $Errored->Exchange = $Exchange;
+                     $Errored->Cancellation = $Cancellation;
+                  }
 
-                  if (is_resource($Package->Connection->Socket)) {
+                  // @ The work — or the boundary — may have written the
+                  //   Session before this point: persist as the synchronous
+                  //   cycle would, without letting a backend failure replace
+                  //   the response already chosen
+                  try {
+                     self::persist($Response);
+                  }
+                  catch (Throwable $Unsaved) {
+                     $Snapshot = $Response->Request;
+                     Throwables::notify($Unsaved, [
+                        'interface' => 'WPI',
+                        'phase' => 'Session',
+                        'method' => $Snapshot->method ?? '',
+                        'URI' => strtok($Snapshot->URI ?? '', '?'),
+                        'peer' => $Snapshot->peer ?? '',
+                     ]);
+                  }
+
+                  $encoded = is_resource($Package->Connection->Socket) === false;
+                  if ($encoded === false) {
                      try {
-                        $Package->writing(
-                           $Package->Connection->Socket,
-                           length: $length,
-                           buffer: $buffer,
-                        );
+                        $buffer = $Errored->encode($Package, $length);
+                        $encoded = true;
                      }
                      catch (Throwable) {
-                        // Terminal response was already selected. A retry or
-                        // second error head could desynchronize keep-alive.
+                        // A second serialization failure has no trustworthy wire
+                        // status. Abandon this exchange and let transport cleanup
+                        // continue without escaping the reactor or writing twice.
                      }
                   }
-               }
-               else {
-                  $Cancellation->cancel();
-                  $Exchange?->finish(null);
+
+                  if ($encoded) {
+                     $selected = true;
+                     $Cancellation->finish();
+                     $Exchange?->finish($Errored);
+
+                     if (is_resource($Package->Connection->Socket)) {
+                        try {
+                           $Package->writing(
+                              $Package->Connection->Socket,
+                              length: $length,
+                              buffer: $buffer,
+                           );
+                        }
+                        catch (Throwable) {
+                           // Terminal response was already selected. A retry or
+                           // second error head could desynchronize keep-alive.
+                        }
+                     }
+                  }
+                  else {
+                     $Cancellation->cancel();
+                     $Exchange?->finish(null);
+                  }
                }
             }
          }
@@ -1737,6 +1874,7 @@ class Response extends Server\Response
          //   not keep the previous Response/Package/buffer alive
          $work = $Response = $Package = $buffer = $length = null;
          $Cancellation = $Exchange = null;
+         $Errored = $Throwable = null;
 
          $Self = Fiber::getCurrent();
 
@@ -1760,7 +1898,8 @@ class Response extends Server\Response
           *    3:string,
           *    4:Cancellation,
           *    5:null|Exchange,
-          *    6:bool
+          *    6:bool,
+          *    7:int|float
           * } $job
           */
          $job = Fiber::suspend(Scheduler::DETACH);
@@ -2057,6 +2196,10 @@ class Response extends Server\Response
             $uploads = true;
          }
 
+         // ! The generation's budget rides with the job: the deferred loop
+         //   bounds the boundary walk with it once the work's own deadline
+         //   was spent, whatever Throwable the work ended on.
+         $budget = $timeout > 0 ? $timeout : self::$deferredTimeout;
          $job = [
             $work,
             $Response,
@@ -2065,6 +2208,7 @@ class Response extends Server\Response
             $Cancellation,
             $Exchange,
             $wants,
+            $budget,
          ];
          $Response->bind();
          try {
@@ -2120,7 +2264,6 @@ class Response extends Server\Response
             //   or the server default. The Fiber is held weakly: a pooled
             //   Fiber must not be retained by a stale deadline, and the
             //   reactor re-checks identity before delivering.
-            $budget = $timeout > 0 ? $timeout : self::$deferredTimeout;
             if ($budget > 0) {
                $Reference = WeakReference::create($Fiber);
                // ! A budget beyond the monotonic clock's remaining nanosecond

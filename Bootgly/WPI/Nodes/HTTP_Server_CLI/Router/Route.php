@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 
 
 use const Bootgly\WPI;
+use Bootgly\API\Workables\Server\Middleware;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Route\Params;
 
 
@@ -25,6 +26,20 @@ class Route
    public Params $Params;
 
    // * Data
+   /**
+    * The middleware list the Router folded around the matched route — group
+    * `intercept()` entries first, then the route's own `middlewares:` —
+    * outermost first.
+    *
+    * Present only while a middleware-bearing dispatch runs; `Response::defer()`
+    * clones the Route at that moment, so a deferred generation keeps the chain
+    * its route was dispatched with, and the deferred loop walks it as the
+    * error boundaries a Throwable from deferred work could no longer reach
+    * through `$next`. Empty for middleware-free routes and outside a dispatch.
+    *
+    * @var array<Middleware>
+    */
+   public array $Middlewares = [];
    public string $base {
       get {
          $WPI = WPI;

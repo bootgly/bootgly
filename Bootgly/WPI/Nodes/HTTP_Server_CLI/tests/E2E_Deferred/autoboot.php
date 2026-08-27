@@ -63,6 +63,20 @@ return new Suite(
       '1.7-live_request_reused_while_parked',
       '1.8-session_write_then_sse_handoff_persists',
       '1.9-session_write_then_client_leaves_not_persisted',
-      '1.10-session_write_around_nested_defer_persists'
+      '1.10-session_write_around_nested_defer_persists',
+      // BG-14: Throwables from deferred work reach the Recovering boundaries
+      '2.1-boundary_answers_deferred_throw',
+      '2.2-boundary_fresh_response_and_session',
+      '2.3-nested_boundaries_innermost_first',
+      '2.4-throwing_recover_replaces_throwable',
+      '2.5-global_boundary_answers',
+      '2.6-admission_not_rerun',
+      '2.7-timeout_recovered_as_503',
+      '2.8-route_snapshot_cleared_per_request',
+      '2.9-boundary_handoff_single_wire',
+      '2.10-chain_published_before_process',
+      '2.11-timeout_bounds_parked_boundary',
+      '2.12-timeout_bounds_two_parked_boundaries',
+      '2.13-budget_bounds_parked_boundary_after_any_throwable'
    ]
 );

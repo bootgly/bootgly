@@ -257,7 +257,8 @@ final class Routes
             'sse' => $Session->get('sse'),
             'left' => $Session->get('left'),
             'nested' => $Session->get('nested'),
-            'after' => $Session->get('after')
+            'after' => $Session->get('after'),
+            'recovered' => $Session->get('recovered')
          ]);
 
          return $Response;
@@ -271,7 +272,7 @@ final class Routes
    /**
     * Park the deferral on a socket pair that never turns readable.
     */
-   private static function park (Response $Response, float $seconds): void
+   public static function park (Response $Response, float $seconds): void
    {
       $Pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
       if ($Pair === false) {
