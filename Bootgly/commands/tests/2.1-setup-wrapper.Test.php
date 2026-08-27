@@ -1,18 +1,32 @@
 <?php
+/*
+ * --------------------------------------------------------------------------
+ * Bootgly PHP Framework
+ * Developed by Rodrigo Vieira (@rodrigoslayertech)
+ * Copyright (c) 2023-present Bootgly and contributors
+ * Licensed under MIT
+ * --------------------------------------------------------------------------
+ */
 
 namespace Bootgly\commands;
 
 
+use const BOOTGLY_WORKING_DIR;
+use function assert;
 use function chmod;
 use function count;
-use function exec;
 use function escapeshellarg;
+use function exec;
+use function file_get_contents;
 use function file_put_contents;
+use function function_exists;
 use function getmypid;
 use function implode;
 use function is_dir;
 use function is_file;
+use function is_string;
 use function mkdir;
+use function posix_geteuid;
 use function rmdir;
 use function str_contains;
 use function str_ends_with;
@@ -24,14 +38,12 @@ use Bootgly\ACI\Tests\Suite\Test;
 
 
 return new Test(
-   description: 'The global wrapper runs the workspace you stand in, not the checkout setup ran from',
+   description: 'The global wrapper resolves the nearest trusted workspace in ordinary mode',
+   skip: function_exists('posix_geteuid') && posix_geteuid() === 0,
    test: function () {
-      // ! compose() writes the /usr/local/bin wrapper. The recorded script is
-      //   only a FALLBACK: it points at the framework of the checkout `setup`
-      //   ran from, whose launcher boots the AUTHOR context — from a kit, the
-      //   global command would list the framework's own projects instead of
-      //   the user's. The wrapper must walk up from $PWD to the nearest
-      //   Bootgly launcher and run THAT.
+      // ! The recorded script is only a fallback. install() records the active
+      //   working launcher so a Kit does not silently fall back to its internal
+      //   framework checkout. Ordinary runs still walk up from $PWD first.
       $Compose = new ReflectionMethod(SetupCommand::class, 'compose');
       $Command = new SetupCommand;
 
@@ -43,6 +55,7 @@ return new Test(
       $paths = [
          "{$root}/kit/projects/App",
          "{$root}/plain",
+         "{$root}/install",
       ];
       foreach ($paths as $path) {
          if (is_dir($path) === false) {
@@ -55,6 +68,7 @@ return new Test(
             "{$root}/kit/projects/App/bootgly", "{$root}/kit/projects/App", "{$root}/kit/projects",
             "{$root}/kit/bootgly", "{$root}/kit",
             "{$root}/plain", "{$root}/php", "{$root}/fallback", "{$root}/wrapper", "{$root}/hostile",
+            "{$root}/install/bootgly", "{$root}/install",
             $root,
          ] as $target) {
             if (is_dir($target) === true) {
@@ -94,10 +108,12 @@ return new Test(
 
          // @@ Inside the kit (deep): the nearest launcher wins
          $argv = $run("{$root}/kit/projects/App");
+         $expected = "{$root}/kit/bootgly";
 
          yield assert(
-            assertion: ($argv[count($argv) - 1] ?? '') === "{$root}/kit/bootgly",
-            description: 'from inside a kit, the wrapper execs the KIT launcher — got: ' . implode(' | ', $argv)
+            assertion: ($argv[count($argv) - 1] ?? '') === $expected,
+            description: 'ordinary mode resolves the kit launcher — got: '
+               . implode(' | ', $argv)
          );
 
          // @@ No launcher above: the recorded fallback runs
@@ -113,8 +129,9 @@ return new Test(
 
          yield assert(
             assertion: str_contains(implode(' ', $argv), 'opcache.jit=disable')
-               && ($argv[count($argv) - 1] ?? '') === "{$root}/kit/bootgly",
-            description: 'BOOTGLY_JIT=0 disables the JIT and still resolves the kit launcher — got: ' . implode(' | ', $argv)
+               && ($argv[count($argv) - 1] ?? '') === $expected,
+            description: 'BOOTGLY_JIT=0 preserves ordinary launcher resolution — got: '
+               . implode(' | ', $argv)
          );
 
          // @@ A launcher anyone else could have written is NOT trusted: the
@@ -126,8 +143,9 @@ return new Test(
          chmod("{$root}/kit/projects/App/bootgly", 0666);
          $argv = $run("{$root}/kit/projects/App");
          yield assert(
-            assertion: ($argv[count($argv) - 1] ?? '') === "{$root}/kit/bootgly",
-            description: 'a group/other-writable launcher above the cwd is skipped — got: ' . implode(' | ', $argv)
+            assertion: ($argv[count($argv) - 1] ?? '') === $expected,
+            description: 'a group/other-writable launcher is skipped — got: '
+               . implode(' | ', $argv)
          );
          // @@ The recorded paths are data, never shell: a `$(…)` or a quote in
          //    the checkout path must survive `bash -n` and stay literal
@@ -140,11 +158,33 @@ return new Test(
                && str_contains($hostile, "SCRIPT='{$root}/a\$(touch pwned)\"b/bootgly'"),
             description: 'shell metacharacters in the recorded paths are quoted, not interpreted — got: ' . implode(' | ', $syntax)
          );
-         // @@ The wrapper never hardcodes the resolved script
+         // @@ The wrapper resolves and canonicalizes the script at runtime
          yield assert(
-            assertion: str_contains($wrapper, 'SCRIPT="$DIR/bootgly"')
+            assertion: str_contains($wrapper, 'SOURCE="$DIR/bootgly"')
+               && str_contains($wrapper, 'CANDIDATE="$(canonical "$SOURCE")"')
+               && str_contains($wrapper, 'SCRIPT="$CANDIDATE"')
+               && str_contains($wrapper, 'BINARY="$(canonical "$BINARY")"')
                && str_ends_with($wrapper, "\n"),
-            description: 'the wrapper resolves the launcher at RUN time, from $PWD'
+            description: 'the wrapper canonicalizes its binary and resolves the launcher at RUN time from $PWD'
+         );
+
+         // @@ install() records the active workspace launcher as its fallback,
+         //    not the framework root nested inside a Kit.
+         $Install = new ReflectionMethod(SetupCommand::class, 'install');
+         $installed = $Install->invoke(
+            $Command,
+            'bootgly',
+            "{$root}/install",
+            "{$root}/install/bootgly"
+         );
+         $installedWrapper = file_get_contents("{$root}/install/bootgly");
+         $workingLauncher = escapeshellarg(BOOTGLY_WORKING_DIR . 'bootgly');
+
+         yield assert(
+            assertion: $installed === true
+               && is_string($installedWrapper)
+               && str_contains($installedWrapper, "SCRIPT={$workingLauncher}"),
+            description: 'install records the active working launcher as the fallback'
          );
       }
       finally {

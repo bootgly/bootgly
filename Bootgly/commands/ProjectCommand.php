@@ -3666,9 +3666,8 @@ class ProjectCommand extends Command
    }
 
    /**
-    * Surface the sudo path when project state files exist but could not be
-    * verified — a root-started daemon holds root-owned state the runtime
-    * user can neither authenticate nor signal.
+    * Explain the privilege boundary when root-owned project state cannot be
+    * verified by the current runtime user.
     */
    private function hint (string $projectName, string $action): void
    {
@@ -3687,9 +3686,8 @@ class ProjectCommand extends Command
          return;
       }
 
-      $prefix = shell_exec('command -v bootgly 2>/dev/null') ? '' : 'php ';
       CLI->Terminal->Output->render(
-         "@#Green:Tip:@; state files exist but could not be verified — if the project was started as @#cyan:root@;, retry with @#Blue:sudo {$prefix}bootgly project {$projectName} {$action}@;.@..;"
+         "@#Green:Tip:@; state files exist but could not be verified — manage the process from its original service account. If this is an intentional root-controlled deployment, invoke that deployment's absolute PHP binary and launcher directly for @#Blue:project {$projectName} {$action}@; (never @#red:sudo bootgly@;).@..;"
       );
    }
 

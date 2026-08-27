@@ -27,5 +27,7 @@ return new Suite(
       '1.10-project-stock',
       '1.11-project-wizard-mode',
       '2.1-setup-wrapper',
+      '2.2-setup-wrapper-root-boundary',
+      '2.3-setup-privilege-delegation',
    ]
 );

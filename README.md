@@ -167,10 +167,11 @@ php bootgly project import
 <details>
    <summary><kbd>Setup Bootgly CLI globally</kbd></summary><br>
 
-   1) Run the Bootgly CLI setup command in terminal (with sudo):
+   1) Run the Bootgly CLI setup command as your ordinary user. It delegates
+   only the fixed system installation operation through sudo when required:
 
    ```bash
-   sudo php bootgly setup
+   php bootgly setup
    ```
 </details>
 
