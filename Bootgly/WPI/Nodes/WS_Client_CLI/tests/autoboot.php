@@ -23,6 +23,8 @@ return new Suite(
       '5.2-reconnect_budget',
       '5.3-backpressured_send',
       '5.4-monotonic_timer',
-      '5.5-close_drain_timeout'
+      '5.5-close_drain_timeout',
+      // # Security H4 — compressed output must be bounded during inflation
+      '6.1-decompression_limit'
    ]
 );

@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Nodes\WS_Client_CLI\Decoders;
 
 
+use function is_int;
 use function preg_match;
 use function strlen;
 use function substr;
@@ -143,8 +144,22 @@ class Decoder_Framing extends Decoders
             if ($payload === false) {
                return $this->fail($Session, 1007);
             }
-            // ? Post-inflate size cap — decompression-bomb guard.
+            // ? Incremental inflater refused the expansion before retention.
+            if (is_int($payload)) {
+               $Session->reassembly = '';
+               $Session->reassemblyOpcode = 0;
+               $Session->reassemblyCompressed = false;
+               $Session->utf8Pending = '';
+
+               return $this->fail($Session, $payload);
+            }
+            // ? Defense in depth around the bounded inflater contract.
             if (strlen($payload) > $Session->Client->maxMessageSize) {
+               $Session->reassembly = '';
+               $Session->reassemblyOpcode = 0;
+               $Session->reassemblyCompressed = false;
+               $Session->utf8Pending = '';
+
                return $this->fail($Session, 1009);
             }
             // ? Compressed text is validated here, on the inflated plaintext.

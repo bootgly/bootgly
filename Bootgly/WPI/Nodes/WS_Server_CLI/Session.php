@@ -16,7 +16,6 @@ use const ZLIB_SYNC_FLUSH;
 use function deflate_add;
 use function deflate_init;
 use function feof;
-use function inflate_add;
 use function inflate_init;
 use function is_int;
 use function pack;
@@ -33,6 +32,7 @@ use Bootgly\WPI\Endpoints\Servers\Disconnecting;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Modules\WS;
+use Bootgly\WPI\Modules\WS\Inflater;
 use Bootgly\WPI\Nodes\WS_Server_CLI\Channels;
 use Bootgly\WPI\Nodes\WS_Server_CLI\Channels\Channel;
 use Bootgly\WPI\Nodes\WS_Server_CLI\Message\Frame;
@@ -357,18 +357,28 @@ class Session implements Disconnecting
    }
 
    /**
-    * Inflate a compressed inbound message payload (RSV1). Returns `false` when
-    * the compressed data is invalid (the caller closes with 1007).
+    * Inflate a compressed inbound message payload (RSV1).
+    *
+    * @return string|int|false Plaintext, 1009 when it exceeds the configured
+    *   allowance, or false for invalid compressed data (close 1007).
     */
-   public function inflate (string $payload): string|false
+   public function inflate (string $payload): string|int|false
    {
       // ?
       if ($this->Inflator === null) {
          return $payload;
       }
 
-      // @ Append the RFC 7692 §7.2.2 tail before inflating.
-      $out = inflate_add($this->Inflator, "{$payload}\x00\x00\xff\xff");
+      // @ Incremental inflation checks every bounded output part before it is
+      //   retained, so the configured limit governs allocation as well as wire.
+      $out = Inflater::inflate($this->Inflator, $payload, self::$maxMessageSize);
+      // ? Overflow advanced this context; the decoder closes the Session and
+      //   no later message may continue from the partial dictionary.
+      if (is_int($out)) {
+         $this->Inflator = null;
+
+         return $out;
+      }
       // : `false` signals invalid compressed data — the decoder closes 1007.
       if ($out === false) {
          return false;

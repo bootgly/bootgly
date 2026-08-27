@@ -20,6 +20,8 @@ return new Suite(
       // # Cross-worker relay mailbox (WS-1)
       '3.1-relay',
       // # Relay fork topology (bus inheritance + both constructor roles)
-      '3.2-relay_fork'
+      '3.2-relay_fork',
+      // # Security H4 — compressed output must be bounded during inflation
+      '4.1-decompression_limit'
    ]
 );
