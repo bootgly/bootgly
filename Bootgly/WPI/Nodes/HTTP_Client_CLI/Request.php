@@ -13,6 +13,11 @@ namespace Bootgly\WPI\Nodes\HTTP_Client_CLI;
 
 use function is_array;
 use function is_string;
+use function strcspn;
+use function strlen;
+use function strspn;
+
+use InvalidArgumentException;
 
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Raw\Body;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Raw\Header;
@@ -50,6 +55,17 @@ class Request
    public Decoder $Decoder;
 
    // * Metadata
+   /** RFC 9110 §5.6.2 token alphabet accepted for extension methods too. */
+   private const string METHOD =
+      "!#$%&'*+-.^_`|~"
+      . '0123456789'
+      . 'abcdefghijklmnopqrstuvwxyz'
+      . 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+   /** C0, SP, DEL, backslash and fragment marker never enter a request-target. */
+   private const string TARGET_INVALID =
+      "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F"
+      . "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F"
+      . "\x20\x7F\\#";
    // | Transport
    public string $pendingBuffer;
    /** Connection state: 'idle' | 'waiting' | 'waiting-100-continue' | 'redirect' */
@@ -132,14 +148,56 @@ class Request
    }
 
    /**
+    * Check whether values can form a safe outbound HTTP request-line or the
+    * equivalent HTTP/2 `:method` / `:path` pseudo-headers.
+    *
+    * The client contract is origin-form (`/path?query`) plus the RFC asterisk
+    * form for `OPTIONS *`. Absolute/authority forms are intentionally absent:
+    * this client connects to the origin configured on the node, not a proxy.
+    *
+    * @return bool True when all supplied request-line values are valid.
+    */
+   public static function check (
+      string $method,
+      string $URI,
+      null|string $protocol = null
+   ): bool
+   {
+      if (
+         $method === ''
+         || strspn($method, self::METHOD) !== strlen($method)
+      ) {
+         return false;
+      }
+
+      if ($URI === '*') {
+         if ($method !== 'OPTIONS') {
+            return false;
+         }
+      }
+      else if (
+         $URI === ''
+         || $URI[0] !== '/'
+         || strcspn($URI, self::TARGET_INVALID) !== strlen($URI)
+      ) {
+         return false;
+      }
+
+      return $protocol === null
+         || $protocol === 'HTTP/1.1'
+         || $protocol === 'HTTP/1.0';
+   }
+
+   /**
     * Prepare the Request with method, URI, and optional headers/body.
     *
-    * @param string $method HTTP method (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS).
-    * @param string $URI Request URI (path + optional query string).
+    * @param string $method HTTP token method (standard or extension).
+    * @param string $URI Origin-form path/query, or `*` with OPTIONS.
     * @param array<string,string> $headers Additional headers to set.
     * @param mixed $body Request body (string, array for JSON, or null).
     *
     * @return self
+    * @throws InvalidArgumentException When method, URI or protocol is unsafe.
     */
    public function __invoke (
       string $method = 'GET',
@@ -148,6 +206,12 @@ class Request
       mixed $body = null
    ): self
    {
+      // ? Reject atomically: invalid request-line values must not change the
+      //   Request, invalidate a valid memo or reach either transport encoder.
+      if (self::check($method, $URI, $this->protocol) === false) {
+         throw new InvalidArgumentException('Invalid HTTP client request-line.');
+      }
+
       // ! Any of method, URI, headers or body may change here, so whatever was
       //   encoded from this Request before no longer describes it
       $this->encoded = null;

@@ -13,6 +13,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources;
 
 use Closure;
 use Fiber;
+use InvalidArgumentException;
 use LogicException;
 use RuntimeException;
 
@@ -171,6 +172,7 @@ class HTTP extends Resource implements Scheduling
     *
     * @return Response The upstream response (the client's `Request\Response`).
     * @throws LogicException When called outside a live deferred context, or while another one owns this resource.
+    * @throws InvalidArgumentException When method or URI cannot form a safe request-line.
     */
    public function request (
       string $method = 'GET',

@@ -64,5 +64,8 @@ return new Suite(
       '8.3-embedded-retry_scrap',
       '8.4-embedded-starvation',
       '8.5-embedded-starvation_race',
+      // # Security audit H3 — request-line injection must stop before wire.
+      '9.1-request_line_injection',
+      '9.2-event_driven_memo_integrity',
    ]
 );

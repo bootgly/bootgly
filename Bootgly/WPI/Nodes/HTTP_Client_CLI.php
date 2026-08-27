@@ -65,6 +65,7 @@ use Generator;
 use InvalidArgumentException;
 use LogicException;
 use RuntimeException;
+use WeakMap;
 
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Events\Readiness;
@@ -184,6 +185,22 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    protected null|Request $nextRequest = null;
    /** Cached Request template for event-driven reuse (avoids allocation per cycle) */
    protected null|Request $cachedRequest = null;
+   /**
+    * Canonical event-driven wire memo, isolated from the Request's public
+    * diagnostic mirrors so application callbacks cannot replace trusted bytes.
+    *
+    * @var WeakMap<Request,array{
+    *    wire:string,
+    *    host:null|string,
+    *    port:null|int,
+    *    method:string,
+    *    URI:string,
+    *    protocol:string,
+    *    headers:array<string,string|array<int,string>>,
+    *    body:string
+    * }>
+    */
+   private WeakMap $Encodings;
    // # Parked drain (adopted reactor)
    /** @var null|resource Episode notifier read end — the parked Fiber waits on it. */
    private $Notify = null;
@@ -207,6 +224,8 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $this->bytesReceived = 0;
       // # Pool
       $this->Pool = new Pool;
+      // # Request encoding
+      $this->Encodings = new WeakMap;
 
       // \
       parent::__construct($mode);
@@ -632,7 +651,19 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                || $redirectCode === 307 || $redirectCode === 308)
          ) {
             $location = $Response->Header->get('Location');
-            if ($location !== null && $location !== '') {
+            $redirectMethod = in_array($redirectCode, [301, 302, 303], true)
+               && $Request->method !== 'HEAD'
+               ? 'GET'
+               : $Request->method;
+            $resolved = $location !== null && $location !== ''
+               ? $HTTP_Client_CLI->resolve(
+                  $location,
+                  $Request->URI,
+                  $redirectMethod,
+                  $Request->protocol
+               )
+               : null;
+            if ($resolved !== null) {
                $Request->redirectCount++;
 
                // @ Save original method/body on first redirect
@@ -650,9 +681,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                   }
                   $Request->clear();
                }
-
-               // @ Resolve redirect URL
-               $resolved = $HTTP_Client_CLI->resolve($location, $Request->URI);
 
                // ! The URI changes in place here, bypassing __invoke()/clear(),
                //   so the memoized encoding must be dropped by hand (HCLI-5)
@@ -711,6 +739,13 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             // @ Auto-send next request if callback queued one via request()
             if ($HTTP_Client_CLI->nextRequest !== null) {
                $next = $HTTP_Client_CLI->nextRequest;
+
+               // ? The response callback receives this same mutable Request.
+               //   Revalidate after it returns and before consuming the queued
+               //   request or changing transport.
+               if (Request::check($next->method, $next->URI, $next->protocol) === false) {
+                  throw new InvalidArgumentException('Invalid HTTP client request-line.');
+               }
                $HTTP_Client_CLI->nextRequest = null;
 
                // @ Reuse existing Request object when method+URI match (avoid allocation)
@@ -729,12 +764,9 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
                // @ Reuse the memoized encoding — valid only for this very
                //   Request at the origin its bytes were built for (HCLI-4/5)
-               if (
-                  $next->encoded !== null
-                  && $next->encodedHost === $HTTP_Client_CLI->host
-                  && $next->encodedPort === $HTTP_Client_CLI->port
-               ) {
-                  $Connection->output = $next->encoded;
+               $memo = $HTTP_Client_CLI->recall($next);
+               if ($memo !== null) {
+                  $Connection->output = $memo;
                }
                else {
                   $headerRaw = $next->Header->build();
@@ -767,9 +799,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                         $length
                      );
 
-                     $next->encoded = $Connection->output;
-                     $next->encodedHost = $HTTP_Client_CLI->host;
-                     $next->encodedPort = $HTTP_Client_CLI->port;
+                     $HTTP_Client_CLI->remember($next, $Connection->output);
                   }
                }
 
@@ -959,19 +989,37 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     *
     * @param string $location The Location header value.
     * @param string $currentURI The current request URI (for relative resolution).
+    * @param string $method Effective method of the redirected request.
+    * @param string $protocol Textual protocol bound to the Request state.
     *
-    * @return array{host: string, port: int, path: string, secure: bool}
+    * @return null|array{host: string, port: int, path: string, secure: bool}
     */
-   private function resolve (string $location, string $currentURI): array
+   private function resolve (
+      string $location,
+      string $currentURI,
+      string $method,
+      string $protocol
+   ): null|array
    {
       $host = $this->host ?? '127.0.0.1';
       $port = $this->port ?? 80;
       $secure = $this->secure !== null;
 
+      // # Fragments never travel in an HTTP request-target.
+      $fragment = strpos($location, '#');
+      if ($fragment !== false) {
+         $location = substr($location, 0, $fragment);
+      }
+      if ($location === '') {
+         return Request::check($method, $currentURI, $protocol)
+            ? ['host' => $host, 'port' => $port, 'path' => $currentURI, 'secure' => $secure]
+            : null;
+      }
+
       $parsed = parse_url($location);
 
       if ($parsed === false) {
-         return ['host' => $host, 'port' => $port, 'path' => $location, 'secure' => $secure];
+         return null;
       }
 
       // @ Absolute URL (has scheme + host)
@@ -981,14 +1029,18 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          $port = $parsed['port'] ?? ($secure ? 443 : 80);
          $path = ($parsed['path'] ?? '/') . (isset($parsed['query']) ? '?' . $parsed['query'] : '');
 
-         return ['host' => $host, 'port' => $port, 'path' => $path, 'secure' => $secure];
+         return Request::check($method, $path, $protocol)
+            ? ['host' => $host, 'port' => $port, 'path' => $path, 'secure' => $secure]
+            : null;
       }
 
       // @ Absolute path
       if (isset($parsed['path']) && ($parsed['path'][0] ?? '') === '/') {
          $path = $parsed['path'] . (isset($parsed['query']) ? '?' . $parsed['query'] : '');
 
-         return ['host' => $host, 'port' => $port, 'path' => $path, 'secure' => $secure];
+         return Request::check($method, $path, $protocol)
+            ? ['host' => $host, 'port' => $port, 'path' => $path, 'secure' => $secure]
+            : null;
       }
 
       // @ Relative path: resolve against current URI's directory
@@ -999,7 +1051,56 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       }
       $path = $currentDir . $location;
 
-      return ['host' => $host, 'port' => $port, 'path' => $path, 'secure' => $secure];
+      return Request::check($method, $path, $protocol)
+         ? ['host' => $host, 'port' => $port, 'path' => $path, 'secure' => $secure]
+         : null;
+   }
+
+   /**
+    * Remember one canonical encoding and every input that defines it.
+    */
+   private function remember (Request $Request, string $wire): void
+   {
+      $Request->encoded = $wire;
+      $Request->encodedHost = $this->host;
+      $Request->encodedPort = $this->port;
+
+      $this->Encodings[$Request] = [
+         'wire' => $wire,
+         'host' => $this->host,
+         'port' => $this->port,
+         'method' => $Request->method,
+         'URI' => $Request->URI,
+         'protocol' => $Request->protocol,
+         'headers' => $Request->Header->fields,
+         'body' => $Request->Body->raw,
+      ];
+   }
+
+   /**
+    * Recall a canonical encoding only while every bound input is unchanged.
+    */
+   private function recall (Request $Request): null|string
+   {
+      $memo = $this->Encodings[$Request] ?? null;
+      if (
+         $memo === null
+         || Request::check($Request->method, $Request->URI, $Request->protocol) === false
+         || $Request->encoded !== $memo['wire']
+         || $Request->encodedHost !== $memo['host']
+         || $Request->encodedPort !== $memo['port']
+         || $this->host !== $memo['host']
+         || $this->port !== $memo['port']
+         || $Request->method !== $memo['method']
+         || $Request->URI !== $memo['URI']
+         || $Request->protocol !== $memo['protocol']
+         || $Request->Header->fields !== $memo['headers']
+         || $Request->Body->raw !== $memo['body']
+      ) {
+         return null;
+      }
+
+      return $memo['wire'];
    }
 
    /**
@@ -1018,6 +1119,11 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $Template ??= $Request;
       $Socket = $Connection->Socket;
 
+      // ? Validate before registering ownership or changing request timing.
+      if (Request::check($Template->method, $Template->URI, $Template->protocol) === false) {
+         throw new InvalidArgumentException('Invalid HTTP client request-line.');
+      }
+
       $this->pendingRequests[$Connection->id] = $Request;
 
       // @ Track when request was sent for timeout detection
@@ -1025,13 +1131,9 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       // @ Reuse the memoized encoding: the same Request object, re-dispatched
       //   to the origin its bytes were built for (event-driven hot path)
-      if (
-         $this->eventDriven
-         && $Template->encoded !== null
-         && $Template->encodedHost === $this->host
-         && $Template->encodedPort === $this->port
-      ) {
-         $Connection->output = $Template->encoded;
+      $memo = $this->eventDriven ? $this->recall($Template) : null;
+      if ($memo !== null) {
+         $Connection->output = $memo;
       }
       else {
          $headerRaw = $Template->Header->build();
@@ -1069,9 +1171,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             //   Expect path is deliberately excluded — replaying its
             //   headers-only encoding would skip the 100-continue state.
             if ($this->eventDriven) {
-               $Template->encoded = $Connection->output;
-               $Template->encodedHost = $this->host;
-               $Template->encodedPort = $this->port;
+               $this->remember($Template, $Connection->output);
             }
          }
       }
@@ -1507,7 +1607,19 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             || $code === 307 || $code === 308)
       ) {
          $location = $Response->Header->get('Location');
-         if ($location !== null && $location !== '') {
+         $redirectMethod = in_array($code, [301, 302, 303], true)
+            && $Request->method !== 'HEAD'
+            ? 'GET'
+            : $Request->method;
+         $resolved = $location !== null && $location !== ''
+            ? $this->resolve(
+               $location,
+               $Request->URI,
+               $redirectMethod,
+               $Request->protocol
+            )
+            : null;
+         if ($resolved !== null) {
             $Request->redirectCount++;
 
             if ($Request->originalMethod === '') {
@@ -1522,7 +1634,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                $Request->clear();
             }
 
-            $resolved = $this->resolve($location, $Request->URI);
             // ! In-place URI change — drop the memoized encoding (HCLI-5)
             $Request->URI = $resolved['path'];
             $Request->encoded = null;
@@ -2353,6 +2464,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     * @param mixed $body Request body.
     *
     * @return self|Response Self in event-driven mode, Response in sync mode.
+    * @throws InvalidArgumentException When method or URI cannot form a safe request-line.
     */
    public function request (
       string $method = 'GET',
@@ -2369,6 +2481,12 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          && $headers === []
          && $body === null
       ) {
+         // ? This branch bypasses Request::__invoke(), so validate before the
+         //   cached template can select any private memo or transport.
+         if (Request::check($method, $URI, $this->cachedRequest->protocol) === false) {
+            throw new InvalidArgumentException('Invalid HTTP client request-line.');
+         }
+
          $this->nextRequest = $this->cachedRequest;
          return $this;
       }

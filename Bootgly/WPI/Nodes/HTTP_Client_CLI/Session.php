@@ -24,6 +24,8 @@ use function strtolower;
 use function substr;
 use function unpack;
 
+use InvalidArgumentException;
+
 use Bootgly\WPI\Modules\HTTP2;
 use Bootgly\WPI\Modules\HTTP2\Errors;
 use Bootgly\WPI\Modules\HTTP2\Frame;
@@ -148,9 +150,15 @@ final class Session
     * @param array<string, string|array<int, string>> $fields Regular fields, any case (connection-specific ones are stripped).
     *
     * @return int The stream id, or `0` when no stream can be opened.
+    * @throws InvalidArgumentException When method or path is unsafe.
     */
    public function open (string $method, string $scheme, string $authority, string $path, array $fields, string $body = ''): int
    {
+      // ? Reject before allocating a stream id or appending HPACK/frame bytes.
+      if (Request::check($method, $path) === false) {
+         throw new InvalidArgumentException('Invalid HTTP client request-line.');
+      }
+
       // ? No spare capacity, closing handshake or dead connection
       if ($this->capacity <= 0) {
          return 0;

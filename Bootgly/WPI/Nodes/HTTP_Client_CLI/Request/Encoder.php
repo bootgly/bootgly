@@ -19,6 +19,7 @@ abstract class Encoder implements EncoderInterface
    /**
     * @param int<0, max>|null $length
     * @param-out int<0, max>|null $length
+    * @throws \InvalidArgumentException When request-line values are unsafe.
     */
    abstract public static function encode (
       string $method,
