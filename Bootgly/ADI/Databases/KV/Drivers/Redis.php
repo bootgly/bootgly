@@ -19,12 +19,14 @@ use function extension_loaded;
 use function feof;
 use function fread;
 use function fwrite;
+use function is_array;
 use function is_int;
 use function is_resource;
 use function is_scalar;
 use function is_string;
 use function socket_import_stream;
 use function socket_set_option;
+use function stream_get_meta_data;
 use function strtolower;
 use function substr;
 use RuntimeException;
@@ -57,7 +59,10 @@ use Bootgly\ADI\Databases\KV\Operation;
  * Commands are pipelined per connection: co-located operations write their
  * frames back-to-back on the same socket and replies resolve them FIFO (Redis
  * answers in order), so N in-flight commands share round-trips. AUTH/SELECT
- * are sent once as a preamble when a connection is first opened.
+ * are sent once as a preamble when a connection is first opened. Strict TLS
+ * modes complete the non-blocking handshake before that preamble exists.
+ * `prefer` attempts the same handshake first and reconnects in plaintext only
+ * after it fails, so credentials never share the failed TLS generation.
  */
 class Redis extends Driver
 {
@@ -98,6 +103,12 @@ class Redis extends Driver
    private null|Readiness $WriteReadiness = null;
    /** @var resource|null */
    private mixed $cachedSocket = null;
+   /** @var resource|null Socket generation on which this driver completed TLS. */
+   private mixed $SecureSocket = null;
+   /** @var resource|null Socket generation that owns the current Redis wire state. */
+   private mixed $WireSocket = null;
+   /** Whether the next connection is the plaintext retry of `prefer`. */
+   private bool $downgrade = false;
 
 
    public function __construct (Config $Config, Connection $Connection)
@@ -105,6 +116,18 @@ class Redis extends Driver
       $this->abandoned = new WeakMap();
 
       parent::__construct($Config, $Connection);
+
+      // ! An explicitly attached connection may already be TLS-protected. The
+      //   normal pool path starts disconnected and sets this only after its own
+      //   handshake; inspecting once keeps reused commands syscall-free.
+      $Socket = $Connection->socket;
+      if (is_resource($Socket)) {
+         $this->WireSocket = $Socket;
+         $metadata = stream_get_meta_data($Socket);
+         $this->SecureSocket = is_array($metadata['crypto'] ?? null)
+            ? $Socket
+            : null;
+      }
 
       // * Config
       $this->Encoder = new Encoder;
@@ -196,64 +219,56 @@ class Redis extends Driver
             return $this->abort($Operation, 'Redis socket is not available.');
          }
 
-         // @ TCP is established; mark ready and prepend the AUTH/SELECT preamble once.
-         $this->Connection->transition(ConnectionStates::Ready);
+         // @ Socket tuning belongs to the raw TCP generation. After TLS,
+         //   socket_import_stream() cannot represent tcp_socket/ssl.
+         $this->tune();
 
-         // ! Fresh wire state — a new socket must not inherit a stale partial frame
-         $this->Decoder->reset();
+         $this->SecureSocket = null;
+         $mode = $this->Config->secure['mode'];
+         if ($mode !== Config::SECURE_DISABLE && $this->downgrade === false) {
+            // ! Redis TLS is implicit: unlike PostgreSQL there is no protocol
+            //   SSLRequest. The first transport byte must be a ClientHello.
+            $Operation->state = OperationStates::SSLHandshake;
+         }
+         else {
+            $this->downgrade = false;
+            $this->boot($Operation);
+         }
+      }
 
-         // ! A fresh socket orphans any commands in flight on the previous one
-         foreach ($this->pipeline as $Stale) {
-            if ($Stale === $Operation) {
-               continue;
+      if ($Operation->state === OperationStates::SSLHandshake) {
+         try {
+            $encrypted = $this->Connection->encrypt();
+         }
+         catch (Throwable $Throwable) {
+            if ($this->Config->secure['mode'] === Config::SECURE_PREFER) {
+               return $this->fallback($Operation, $Throwable->getMessage());
             }
 
-            if ($Stale->finished === false) {
-               $Stale->fail('Redis connection was lost before the reply arrived.');
+            return $this->abort(
+               $Operation,
+               "Redis TLS handshake failed: {$Throwable->getMessage()}",
+            );
+         }
+
+         if ($encrypted === true) {
+            $this->SecureSocket = $this->Connection->socket;
+            $this->downgrade = false;
+            $this->boot($Operation);
+         }
+         else if ($encrypted === null) {
+            // @ ClientHello is already queued; further progress needs the
+            //   peer's ServerHello. WRITE stays perpetually ready here and
+            //   would spin Pool::wait() against a silent endpoint.
+            return $this->await($Operation, Scheduler::SCHEDULE_READ);
+         }
+         else {
+            if ($this->Config->secure['mode'] === Config::SECURE_PREFER) {
+               return $this->fallback($Operation, 'native TLS negotiation failed');
             }
 
-            $this->completed[] = $Stale;
+            return $this->abort($Operation, 'Redis TLS handshake failed.');
          }
-         $this->pipeline = [];
-
-         // ! The command that held the write stream owns bytes of the socket
-         //   that just died. Its buffer must not be flushed onto this one.
-         $Stale = $this->Writing;
-         $this->Writing = null;
-
-         if ($Stale !== null && $Stale !== $Operation) {
-            $Stale->write = '';
-
-            if ($Stale->finished === false) {
-               $Stale->fail('Redis connection was lost before the command was sent.');
-               $this->completed[] = $Stale;
-            }
-         }
-
-         // @ Disable Nagle: commands and replies are small — latency dominates
-         $socket = $this->Connection->socket;
-         if (is_resource($socket) === true && extension_loaded('sockets') === true) {
-            $Raw = socket_import_stream($socket);
-            if ($Raw !== false) {
-               @socket_set_option($Raw, SOL_TCP, TCP_NODELAY, 1);
-            }
-         }
-
-         $preamble = '';
-         $this->skip = 0;
-         if ($this->Config->password !== '') {
-            $preamble .= $this->Encoder->encode(['AUTH', $this->Config->password]);
-            $this->skip++;
-         }
-         // ? Database\Config->database is a name string; SELECT only a numeric, non-zero index
-         $database = $this->Config->database;
-         if ($database !== '' && $database !== '0' && ctype_digit($database) === true) {
-            $preamble .= $this->Encoder->encode(['SELECT', $database]);
-            $this->skip++;
-         }
-
-         $Operation->write = $preamble . $Operation->write;
-         $Operation->state = OperationStates::Querying;
       }
 
       if ($Operation->state === OperationStates::Querying) {
@@ -290,6 +305,110 @@ class Redis extends Driver
       }
 
       return $Operation;
+   }
+
+   /**
+    * Initialize one fresh Redis wire generation after its transport is safe.
+    */
+   private function boot (Operation $Operation): void
+   {
+      $this->Connection->transition(ConnectionStates::Ready);
+      $this->WireSocket = $this->Connection->socket;
+
+      // ! Fresh wire state — a new socket must not inherit a stale partial frame
+      $this->Decoder->reset();
+
+      // ! A fresh socket orphans any commands in flight on the previous one
+      foreach ($this->pipeline as $Stale) {
+         if ($Stale === $Operation) {
+            continue;
+         }
+
+         if ($Stale->finished === false) {
+            $Stale->fail('Redis connection was lost before the reply arrived.');
+         }
+
+         $this->completed[] = $Stale;
+      }
+      $this->pipeline = [];
+
+      // ! The command that held the write stream owns bytes of the socket
+      //   that just died. Its buffer must not be flushed onto this one.
+      $Stale = $this->Writing;
+      $this->Writing = null;
+
+      if ($Stale !== null && $Stale !== $Operation) {
+         $Stale->write = '';
+
+         if ($Stale->finished === false) {
+            $Stale->fail('Redis connection was lost before the command was sent.');
+            $this->completed[] = $Stale;
+         }
+      }
+
+      // ! One preamble per fresh connection, after the transport is safe.
+      $preamble = '';
+      $this->skip = 0;
+      if ($this->Config->password !== '') {
+         $preamble .= $this->Encoder->encode(['AUTH', $this->Config->password]);
+         $this->skip++;
+      }
+      // ? Database\Config->database is a name string; SELECT only a numeric, non-zero index
+      $database = $this->Config->database;
+      if ($database !== '' && $database !== '0' && ctype_digit($database) === true) {
+         $preamble .= $this->Encoder->encode(['SELECT', $database]);
+         $this->skip++;
+      }
+
+      $Operation->write = $preamble . $Operation->write;
+      $Operation->state = OperationStates::Querying;
+   }
+
+   /** Disable Nagle on the raw TCP stream before any optional TLS handshake. */
+   private function tune (): void
+   {
+      $socket = $this->Connection->socket;
+      if (is_resource($socket) === false || extension_loaded('sockets') === false) {
+         return;
+      }
+
+      try {
+         $Raw = socket_import_stream($socket);
+      }
+      catch (Throwable) {
+         return;
+      }
+
+      if ($Raw !== false) {
+         @socket_set_option($Raw, SOL_TCP, TCP_NODELAY, 1);
+      }
+   }
+
+   /** Reconnect once in plaintext after an explicitly preferred TLS failure. */
+   private function fallback (Operation $Operation, string $cause): Operation
+   {
+      $this->Connection->disconnect();
+      $this->SecureSocket = null;
+      $this->WireSocket = null;
+      $this->downgrade = true;
+      $Operation->state = OperationStates::Connecting;
+
+      try {
+         $Readiness = $this->Connection->connect($Operation->deadline);
+         $this->Connection->bind($this);
+
+         $Operation->await($Readiness);
+
+         return $Operation;
+      }
+      catch (Throwable $Throwable) {
+         $this->downgrade = false;
+
+         return $this->abort(
+            $Operation,
+            "Redis plaintext fallback failed after TLS error `{$cause}`: {$Throwable->getMessage()}",
+         );
+      }
    }
 
    /**
@@ -415,20 +534,60 @@ class Redis extends Driver
    }
 
    /**
+    * Fail closed when Redis wire state no longer belongs to this socket.
+    */
+   private function protect (Operation $Operation): bool
+   {
+      $Socket = $this->Connection->socket;
+      if (is_resource($Socket) === false) {
+         $this->abort($Operation, 'Redis socket is not available.');
+
+         return false;
+      }
+
+      $mode = $this->Config->secure['mode'];
+      $strict = $mode === Config::SECURE_REQUIRE
+         || $mode === Config::SECURE_VERIFY_CA
+         || $mode === Config::SECURE_VERIFY_FULL;
+
+      if ($Socket !== $this->WireSocket) {
+         $error = $strict
+            ? 'Redis strict TLS mode rejected a changed connection generation.'
+            : 'Redis connection generation changed during command I/O.';
+         $this->abort($Operation, $error);
+
+         return false;
+      }
+
+      if ($strict === false) {
+         return true;
+      }
+
+      $metadata = stream_get_meta_data($Socket);
+      if ($Socket !== $this->SecureSocket || is_array($metadata['crypto'] ?? null) === false) {
+         $this->abort($Operation, 'Redis strict TLS mode requires an encrypted connection.');
+
+         return false;
+      }
+
+      return true;
+   }
+
+   /**
     * Flush the operation write buffer to the socket.
     */
    private function flush (Operation $Operation): bool
    {
+      if ($this->protect($Operation) === false) {
+         return false;
+      }
+
       if ($Operation->write === '') {
          return true;
       }
 
       $socket = $this->Connection->socket;
-      if (is_resource($socket) === false) {
-         $this->abort($Operation, 'Redis socket is not available.');
-
-         return false;
-      }
+      /** @var resource $socket */
 
       $written = @fwrite($socket, $Operation->write);
 
@@ -466,12 +625,12 @@ class Redis extends Driver
     */
    private function read (Operation $Operation): void
    {
-      $socket = $this->Connection->socket;
-      if (is_resource($socket) === false) {
-         $this->abort($Operation, 'Redis socket is not available.');
-
+      if ($this->protect($Operation) === false) {
          return;
       }
+
+      $socket = $this->Connection->socket;
+      /** @var resource $socket */
 
       $bytes = @fread($socket, 16384);
 
@@ -650,6 +809,9 @@ class Redis extends Driver
       //   socket, and the next connection must not inherit either.
       $this->Decoder->reset();
       $this->skip = 0;
+      $this->SecureSocket = null;
+      $this->WireSocket = null;
+      $this->downgrade = false;
       $this->abandoned = new WeakMap();
 
       // ! So does the half-written command. A command joins the FIFO only once

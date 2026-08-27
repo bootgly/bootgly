@@ -1,4 +1,12 @@
 <?php
+/*
+ * --------------------------------------------------------------------------
+ * Bootgly PHP Framework
+ * Developed by Rodrigo Vieira (@rodrigoslayertech)
+ * Copyright (c) 2023-present Bootgly and contributors
+ * Licensed under MIT
+ * --------------------------------------------------------------------------
+ */
 
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Tests\KVResourceProvide;
 
@@ -50,6 +58,34 @@ return new Test(
       yield assert(
          assertion: $disabled !== null && str_contains($disabled->getMessage(), 'KV_ENABLED'),
          description: 'Factory throws when the kv scope is disabled'
+      );
+
+      // @ Every Redis security field survives the Configs allowlist and the
+      //   KVConfig adapter before a connection is ever opened.
+      $SecureFactory = KV::provide(__DIR__ . '/fixtures/secure/');
+      $Resource = $SecureFactory(new Response);
+      $Config = $Resource->KV->Pool->Config;
+
+      yield assert(
+         assertion: $Config->host === 'redis.internal'
+            && $Config->port === 6380
+            && $Config->database === '2'
+            && $Config->password === 'H2-resource-canary'
+            && $Config->timeout === 1.5
+            && $Config->pool === ['min' => 0, 'max' => 1],
+         description: 'Factory allowlist preserves Redis connection and credential fields'
+      );
+
+      yield assert(
+         assertion: $Config->secure === [
+            'mode' => 'verify-full',
+            'verify' => true,
+            'name' => true,
+            'peer' => 'redis.internal',
+            'cafile' => '/run/secrets/redis-ca.pem',
+            'key' => '',
+         ],
+         description: 'Factory allowlist preserves strict Redis TLS fields'
       );
    }
 );

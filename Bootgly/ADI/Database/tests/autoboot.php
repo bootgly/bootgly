@@ -132,5 +132,12 @@ return new Suite(
       '8.10-kv_redis_push_frames',
       '7.37-postgresql_tls_pending_write',
       '7.38-postgresql_tls_pending_write_live',
+      // ! H2 security regression appended last so every prior case index stays stable.
+      '8.11-kv_redis_tls_transport',
+      '8.12-kv_redis_tls_prefer',
+      '8.13-kv_redis_tls_generation',
+      '8.14-kv_redis_tls_readiness',
+      '8.15-kv_redis_tls_partial_generation',
+      '8.16-kv_redis_tls_read_generation',
    ]
 );

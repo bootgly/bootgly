@@ -63,6 +63,8 @@ class KVConfig
       foreach ([
          'host' => 'Host',
          'port' => 'Port',
+         'database' => 'Database',
+         'password' => 'Password',
          'timeout' => 'Timeout',
       ] as $key => $name) {
          $value = $this->resolve($this->Config, $name);
@@ -70,6 +72,27 @@ class KVConfig
          if ($value !== null) {
             $config[$key] = $value;
          }
+      }
+
+      // @ Transport security
+      $Secure = $this->Config->Secure;
+      $secure = [];
+
+      foreach ([
+         'mode' => 'Mode',
+         'verify' => 'Verify',
+         'peer' => 'Peer',
+         'cafile' => 'CAFile',
+      ] as $key => $name) {
+         $value = $this->resolve($Secure, $name);
+
+         if ($value !== null) {
+            $secure[$key] = $value;
+         }
+      }
+
+      if ($secure !== []) {
+         $config['secure'] = $secure;
       }
 
       // @ Pool

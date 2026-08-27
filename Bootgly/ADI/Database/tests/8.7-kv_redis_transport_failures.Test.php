@@ -1,4 +1,12 @@
 <?php
+/*
+ * --------------------------------------------------------------------------
+ * Bootgly PHP Framework
+ * Developed by Rodrigo Vieira (@rodrigoslayertech)
+ * Copyright (c) 2023-present Bootgly and contributors
+ * Licensed under MIT
+ * --------------------------------------------------------------------------
+ */
 
 
 use Bootgly\ACI\Tests\Suite\Test;
@@ -24,6 +32,7 @@ return new Test(
          $KV = new KV([
             'driver'  => 'redis',
             'timeout' => 2.0,
+            'secure'  => ['mode' => 'disable'],
             'pool'    => ['min' => 0, 'max' => 1],
          ]);
          $KV->Connection->attach($client);
@@ -190,6 +199,7 @@ return new Test(
             'host'     => $listenHost,
             'port'     => (int) $listenPort,
             'timeout'  => 2.0,
+            'secure'   => ['mode' => 'disable'],
             // ! Any numeric, non-zero index composes a SELECT preamble
             'database' => '20',
             'pool'     => ['min' => 0, 'max' => 1],
@@ -262,6 +272,7 @@ return new Test(
             'host'    => $listenHost,
             'port'    => (int) $listenPort,
             'timeout' => 2.0,
+            'secure'  => ['mode' => 'disable'],
             'pool'    => ['min' => 0, 'max' => 1],
          ]);
 

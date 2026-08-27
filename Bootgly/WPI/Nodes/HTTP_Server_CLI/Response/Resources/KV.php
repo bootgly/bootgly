@@ -78,11 +78,17 @@ class KV extends Resource implements Scheduling
             $Configs = new Configs($configs);
             $Configs->allow('kv', [
                'KV_DRIVER',
+               'KV_DATABASE',
                'KV_ENABLED',
                'KV_HOST',
+               'KV_PASS',
                'KV_POOL_MAX',
                'KV_POOL_MIN',
                'KV_PORT',
+               'KV_SSLCAFILE',
+               'KV_SSLMODE',
+               'KV_SSLPEER',
+               'KV_SSLVERIFY',
                'KV_TIMEOUT',
             ]);
             $Scope = $Configs->get('kv');
