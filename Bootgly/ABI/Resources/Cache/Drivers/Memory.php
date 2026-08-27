@@ -15,6 +15,7 @@ use function in_array;
 use function is_int;
 use function time;
 
+use Bootgly\ABI\Resources\Cache\Atomic;
 use Bootgly\ABI\Resources\Cache\Driver;
 
 
@@ -31,7 +32,7 @@ use Bootgly\ABI\Resources\Cache\Driver;
  * TTL is evaluated lazily against the configured clock; tag membership is
  * tracked in a companion map so invalidate() drops every key under a tag.
  */
-class Memory extends Driver
+class Memory extends Driver implements Atomic
 {
    // * Metadata
    /**

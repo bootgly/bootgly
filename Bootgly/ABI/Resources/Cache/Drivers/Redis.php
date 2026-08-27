@@ -43,6 +43,7 @@ use Throwable;
 
 use Bootgly\ABI\Data\RESP\Decoder;
 use Bootgly\ABI\Data\RESP\Encoder;
+use Bootgly\ABI\Resources\Cache\Atomic;
 use Bootgly\ABI\Resources\Cache\Driver;
 
 
@@ -59,7 +60,7 @@ use Bootgly\ABI\Resources\Cache\Driver;
  * the event-loop Redis driver under ADI/Databases/KV, to avoid stalling the
  * loop.
  */
-class Redis extends Driver
+class Redis extends Driver implements Atomic
 {
    private const string SWAP_SCRIPT = <<<'LUA'
 if redis.call('GET', KEYS[1]) ~= ARGV[1] then

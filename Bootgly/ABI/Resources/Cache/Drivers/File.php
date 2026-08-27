@@ -48,6 +48,7 @@ use RecursiveIteratorIterator;
 use RuntimeException;
 use SplFileInfo;
 
+use Bootgly\ABI\Resources\Cache\Atomic;
 use Bootgly\ABI\Resources\Cache\Driver;
 use Bootgly\ABI\Resources\Cache\Item;
 
@@ -60,7 +61,7 @@ use Bootgly\ABI\Resources\Cache\Item;
  * an exclusive file lock. Raw filesystem calls are used throughout (the
  * Efficiency principle) including a direct SPL recursive walk for clear/purge.
  */
-class File extends Driver
+class File extends Driver implements Atomic
 {
    private const string LOCK = '.cache.lock';
    /**

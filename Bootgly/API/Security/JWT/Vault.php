@@ -49,19 +49,23 @@ use JsonException;
 use RuntimeException;
 
 use Bootgly\ABI\Resources\Cache as Storage;
+use Bootgly\ABI\Resources\Cache\Atomic;
 
 
 /**
  * JWT cache backed by the Bootgly Cache facade.
  *
- * Records keep Vault's HMAC-SHA256 envelope (`mac . {"expires","value"}`), so
+ * Records keep Vault's HMAC-SHA256 envelope
+ * (`mac . {"expires","value","nonce"}`), so
  * the store never holds plain trusted state: a record altered in the storage
  * backend fails MAC verification and reads as a miss. The default backend is
  * the `file` driver rooted at the Vault path (same-host worker sharing, as
  * before); passing a Redis-backed Cache enables fleet-wide token revocation —
  * inject a shared `$secret` in that case, since the default secret is derived
- * per host. Mutual exclusion (lock/claim/take) uses a local lock file, so
- * compare-and-set sequences are serialized per host.
+ * per host. `claim()` and `take()` elect their winners through the backend's
+ * atomic create/compare-and-evict primitives. `lock()` remains deliberately
+ * host-local: it serializes compound sections within one host, but is not a
+ * distributed multi-key transaction.
  */
 class Vault implements Cache
 {
@@ -81,13 +85,15 @@ class Vault implements Cache
 
    // * Metadata
    private const int MAC_LENGTH = 64;
+   private const int CLAIM_ATTEMPTS = 3;
 
 
    /**
     * Create a JWT cache on a storage backend.
     *
     * @param null|string|Storage $storage Directory for the default file
-    * backend, or a prepared Cache facade (any driver).
+    * backend, or a prepared Cache facade whose driver implements the atomic
+    * create/swap/evict contract.
     * @param string $prefix Storage key prefix.
     * @param null|string $secret Shared HMAC secret (>= 32 bytes); null derives
     * a per-host secret file.
@@ -122,6 +128,11 @@ class Vault implements Cache
             'driver' => 'file',
             'path' => $this->path
          ]);
+      if ($this->Storage->Driver instanceof Atomic === false) {
+         throw new InvalidArgumentException(
+            'JWT cache storage driver must provide atomic create, swap and evict operations.'
+         );
+      }
 
       // * Data
       $this->secret = $secret ?? '';
@@ -186,11 +197,37 @@ class Vault implements Cache
 
       $Lock = $this->share(LOCK_EX);
       try {
-         if ($this->load($key) !== null) {
+         $record = $this->seal($value, $ttl);
+         if ($record === null) {
             return false;
          }
+         $resolved = $this->resolve($key);
 
-         return $this->put($key, $value, $ttl);
+         // @ The backend, not the host-local lock, elects the fleet winner.
+         for ($attempt = 0; $attempt < self::CLAIM_ATTEMPTS; $attempt++) {
+            if ($this->Storage->create($resolved, $record, $ttl)) {
+               return true;
+            }
+
+            // ? A live authentic record owns the claim. Invalid/tampered
+            //   records fail closed instead of being overwritten blindly.
+            $stored = $this->Storage->fetch($resolved);
+            if ($stored === null) {
+               continue;
+            }
+            $expired = false;
+            if ($this->decode($stored, $expired) !== null || $expired === false) {
+               return false;
+            }
+
+            // @ The protected expiry can precede a backend TTL under clock
+            //   skew. Replace only the exact authentic expired envelope.
+            if ($this->Storage->swap($resolved, $stored, $record, $ttl)) {
+               return true;
+            }
+         }
+
+         return false;
       }
       finally {
          $this->release($Lock);
@@ -204,8 +241,13 @@ class Vault implements Cache
    {
       $Lock = $this->share(LOCK_EX);
       try {
-         $value = $this->load($key);
-         if ($this->Storage->delete($this->resolve($key)) === false) {
+         $stored = null;
+         $value = $this->load($key, $stored);
+         if (
+            $value === null
+            || $stored === null
+            || $this->Storage->evict($this->resolve($key), $stored) === false
+         ) {
             return null;
          }
 
@@ -259,9 +301,19 @@ class Vault implements Cache
    /**
     * Read and validate a stored record.
     */
-   private function load (string $key): null|string
+   private function load (string $key, mixed &$stored = null): null|string
    {
-      $data = $this->Storage->fetch($this->resolve($key));
+      $stored = $this->Storage->fetch($this->resolve($key));
+
+      return $this->decode($stored);
+   }
+
+   /**
+    * Verify and decode one raw Vault envelope.
+    */
+   private function decode (mixed $data, bool &$expired = false): null|string
+   {
+      $expired = false;
       if (is_string($data) === false || strlen($data) < self::MAC_LENGTH) {
          return null;
       }
@@ -289,6 +341,8 @@ class Vault implements Cache
       }
 
       if ($Record['expires'] <= time()) {
+         $expired = true;
+
          return null;
       }
 
@@ -304,19 +358,33 @@ class Vault implements Cache
     */
    private function put (string $key, string $value, int $ttl): bool
    {
+      $record = $this->seal($value, $ttl);
+
+      return $record !== null
+         && $this->Storage->store($this->resolve($key), $record, $ttl);
+   }
+
+   /**
+    * Seal one value in a unique authenticated Vault envelope.
+    */
+   private function seal (string $value, int $ttl): null|string
+   {
       try {
          $payload = json_encode([
             'expires' => time() + $ttl,
             'value' => $value,
+            // ! Unique per write so an old compare-and-evict cannot remove a
+            //   later record recreated with the same value in the same second.
+            'nonce' => bin2hex(random_bytes(16)),
          ], JSON_THROW_ON_ERROR);
       }
       catch (JsonException) {
-         return false;
+         return null;
       }
 
       $mac = hash_hmac('sha256', $payload, $this->derive());
 
-      return $this->Storage->store($this->resolve($key), $mac . $payload, $ttl);
+      return $mac . $payload;
    }
 
    /**

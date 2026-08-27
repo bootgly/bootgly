@@ -50,6 +50,7 @@ use SysvSemaphore;
 use SysvSharedMemory;
 use Throwable;
 
+use Bootgly\ABI\Resources\Cache\Atomic;
 use Bootgly\ABI\Resources\Cache\Driver;
 
 
@@ -78,7 +79,7 @@ use Bootgly\ABI\Resources\Cache\Driver;
  * the segment can still fire a planted `__wakeup`/`__destruct`. The boundary is
  * the segment's `permissions` (default `0600`) — keep it there.
  */
-class Shared extends Driver
+class Shared extends Driver implements Atomic
 {
    private const int BUCKET_VERSION = 1;
    /**

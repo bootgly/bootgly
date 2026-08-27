@@ -53,5 +53,6 @@ return new Suite(
       '1.37-tokens_atomic_supersede_live',
       '1.38-tokens_upsert_mysql_live',
       '1.39-tokens_expired_supersede_race',
+      '1.40-jwt_vault_fleet_atomicity_live',
    ]
 );
