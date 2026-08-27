@@ -35,12 +35,12 @@ ARG BOOTGLY_BENCHMARKS_UNTRACKED_MANIFEST_SHA256=unknown
 # ============================================================================
 FROM ${PHP_IMAGE} AS base
 
-# ! Build + enable native extensions, then drop build-only libs.
+# ! Install Git, build + enable native extensions, then drop build-only libs.
 #   Bundled & enabled already in the official image: openssl, posix, readline.
 #   libonig-dev is needed to build mbstring; its runtime lib (libonig5) is kept.
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends libonig-dev; \
+    apt-get install -y --no-install-recommends git libonig-dev; \
     docker-php-ext-install -j"$(nproc)" pcntl sockets shmop sysvshm sysvsem opcache mbstring; \
     apt-get purge -y libonig-dev; \
     rm -rf /var/lib/apt/lists/*
@@ -58,10 +58,10 @@ FROM base AS vendor
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# ! Composer needs git + unzip to fetch/extract packages (not in the base image)
+# ! Git is inherited from base; Composer also needs unzip to extract packages
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends git unzip; \
+    apt-get install -y --no-install-recommends unzip; \
     rm -rf /var/lib/apt/lists/*
 
 # ? Only the manifests are needed to resolve+install dependencies
