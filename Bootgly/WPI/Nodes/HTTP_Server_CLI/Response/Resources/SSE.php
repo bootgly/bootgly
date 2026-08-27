@@ -429,6 +429,13 @@ class SSE extends Resource implements Disconnecting
       if ($this->heartbeat > 0 && $this->heartbeat < $cadence) {
          $cadence = $this->heartbeat;
       }
+      // ? The lease renewal must outpace the transport idle reaper: a
+      //   supervisor slower than the connection's own expiration would let
+      //   a live stream be reaped as idle
+      $expiration = $Connection->expiration;
+      if ($expiration > 0 && $cadence >= $expiration) {
+         $cadence = max(1, $expiration - 1);
+      }
       $timer = Timer::add(interval: $cadence, handler: [$this, 'supervise']);
       if ($timer !== false) {
          $this->timer = $timer;

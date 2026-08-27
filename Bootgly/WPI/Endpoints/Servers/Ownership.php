@@ -21,6 +21,9 @@ use WeakMap;
  *
  * The weak scope registry avoids adding collision-prone public methods to
  * Connection/Stream while keeping late and re-entrant attachment terminal.
+ * `attach()`/`detach()` bind and release owners, `close()` notifies them
+ * exactly once, and `check()` tells a supervisor whether a scope still
+ * carries pending work.
  */
 final class Ownership
 {
@@ -114,6 +117,34 @@ final class Ownership
 
       $State['Owners']?->offsetUnset($Owner);
       self::$Scopes[$Scope] = $State;
+   }
+
+   /**
+    * Check whether a live scope still carries at least one attached owner.
+    *
+    * The transport idle reaper asks this before closing a silent connection:
+    * a parked deferred exchange writes nothing while it waits, but its
+    * generation is attached here until it settles — pending work, not
+    * idleness. A closed scope (its notified tombstones) and a storage left
+    * allocated by `detach()` both report false.
+    */
+   public static function check (object $Scope): bool
+   {
+      // ?
+      $Scopes = self::$Scopes;
+      if ($Scopes === null) {
+         return false;
+      }
+
+      $State = $Scopes[$Scope] ?? null;
+      if ($State === null || $State['closed']) {
+         return false;
+      }
+
+      $Owners = $State['Owners'];
+
+      // :
+      return $Owners !== null && $Owners->count() > 0;
    }
 
    /**

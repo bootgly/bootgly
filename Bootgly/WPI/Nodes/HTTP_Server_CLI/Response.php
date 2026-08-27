@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
 use const BOOTGLY_PROJECT;
+use const PHP_INT_MAX;
 use const STR_PAD_LEFT;
 use const ZLIB_ENCODING_DEFLATE;
 use const ZLIB_ENCODING_GZIP;
@@ -29,6 +30,7 @@ use function gmdate;
 use function gzcompress;
 use function gzdeflate;
 use function gzencode;
+use function hrtime;
 use function is_array;
 use function is_resource;
 use function is_string;
@@ -55,6 +57,7 @@ use ReflectionFunction;
 use SplObjectStorage;
 use stdClass;
 use Throwable;
+use WeakReference;
 
 use const Bootgly\WPI;
 use Bootgly\ABI\Code\__String\Path;
@@ -64,6 +67,7 @@ use Bootgly\ACI\Events\Cancelling;
 use Bootgly\ACI\Events\Contextualizing;
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Events\Scheduler;
+use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI\Endpoints\Servers\Ownership;
 use Bootgly\WPI\Events\Cancellation;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
@@ -91,6 +95,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Pre as PreResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\SSE as SSEResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\View as ViewResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\XML as XMLResource;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Timeout;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Route;
 
 
@@ -128,7 +133,12 @@ class Response extends Server\Response
    private array $Contexts;
 
    // * Config
-   // ...
+   /**
+    * Default budget, in seconds, a deferred response may stay parked on the
+    * reactor before a `Timeout` is delivered at its suspension point.
+    * `0` = unbounded. A per-call `defer()` timeout takes precedence.
+    */
+   public static int|float $deferredTimeout = 0;
 
    // * Data
    // # Content
@@ -199,6 +209,8 @@ class Response extends Server\Response
     * Pool ceiling — beyond it a finishing Fiber terminates instead of parking.
     */
    private const int POOL_LIMIT = 256;
+   /** Lazy: only a deferral that outlived its budget ever logs. */
+   private static null|Logger $Logger = null;
 
    // / HTTP
    public Header $Header;
@@ -1448,6 +1460,33 @@ class Response extends Server\Response
    }
 
    /**
+    * Log a deferral terminated by its budget.
+    */
+   private static function warn (self $Response, Timeout $Timeout): void
+   {
+      // ! The request target is attacker-controlled. It never rides in the
+      //   message (its `@` bytes would be read as Output directives) and
+      //   never carries its query (credentials ride there — see Catcher).
+      $Request = $Response->Request;
+      $context = [];
+      if ($Request !== null) {
+         $URI = $Request->URI;
+         $query = strpos($URI, '?');
+
+         $context['method'] = $Request->method;
+         $context['URI'] = $query === false
+            ? $URI
+            : substr($URI, 0, $query);
+      }
+
+      self::$Logger ??= new Logger(channel: self::class);
+      self::$Logger->log(
+         warning: "Deferred response timed out after {$Timeout->timeout}s — answered 503.@.;",
+         context: $context
+      );
+   }
+
+   /**
     * Persistent deferred-job loop run by pooled Fibers.
     *
     * Executes one job, clears every request reference, parks itself back
@@ -1521,11 +1560,19 @@ class Response extends Server\Response
             //   then throw. Its terminal token wins; Catcher must not append a
             //   second 500 to the same persistent connection.
             if ($selected === false && $Cancellation->check() === false) {
+               // ? A deferral past its budget is answered as unavailable, not
+               //   as an application error: no report intake, no debug page
+               $timedOut = $Throwable instanceof Timeout;
+               if ($timedOut) {
+                  self::warn($Response, $Throwable);
+               }
                try {
-                  $Errored = Catcher::respond($Response->Request, $Response, $Throwable);
+                  $Errored = $timedOut
+                     ? Catcher::respond($Response->Request, $Response, code: 503)
+                     : Catcher::respond($Response->Request, $Response, $Throwable);
                }
                catch (Throwable) {
-                  $Errored = new Response(code: 500, body: '');
+                  $Errored = new Response(code: $timedOut ? 503 : 500, body: '');
                }
 
                // ! Catcher returns a fresh Response. Bind the suspended job's
@@ -1618,6 +1665,11 @@ class Response extends Server\Response
 
          // @ Park and wait for the next job (the scheduler drops DETACH)
          self::$Pool[] = $Self;
+         // ! Release the self-reference before parking — see wait(). This
+         //   frame stays alive across every later job's suspension; holding
+         //   the Fiber here would rebuild the self-cycle for every reused
+         //   pooled Fiber.
+         $Self = null;
 
          /** @var array{
           *    0:Closure,
@@ -1683,7 +1735,15 @@ class Response extends Server\Response
       $WPI->Request = $Context['Request'];
    }
 
-   public function defer (Closure $work): self
+   /**
+    * Run response work on a pooled Fiber that may park on the worker reactor.
+    *
+    * @param Closure $work The deferred work, receiving this Response.
+    * @param int|float $timeout Seconds the work may stay parked before a
+    *    `Response\Timeout` is delivered at its suspension point; `0` uses
+    *    `self::$deferredTimeout`, where `0` means unbounded.
+    */
+   public function defer (Closure $work, int|float $timeout = 0): self
    {
       $Package = $this->Package;
 
@@ -1814,10 +1874,17 @@ class Response extends Server\Response
          }
          $Response->Fibers->offsetSet($Fiber, true);
 
+         // ! Handled weakly for symmetry with Select::bind(): the guard seat
+         //   on $Response->Fibers (above) is what owns the pooled Fiber for
+         //   this generation, and this very observer drops it at settle. A
+         //   null get() means the Fiber is already gone — and with it any
+         //   storage seat, since SplObjectStorage holds strong keys — so
+         //   there is nothing left to unregister.
+         $Reference = WeakReference::create($Fiber);
          $Cancellation->observe(static function (
             Cancellation $Observed,
             bool $cancelled,
-         ) use ($Fiber, $Response, $State): void {
+         ) use ($Reference, $Response, $State): void {
             $State->terminal = true;
             $State->cancelled = $cancelled;
 
@@ -1825,7 +1892,8 @@ class Response extends Server\Response
             //   capability. In a nested handoff the parent finishes normally
             //   while still RUNNING; allowing it to suspend again afterward
             //   would abandon or cancel the selected child exchange.
-            if ($Response->Fibers->offsetExists($Fiber)) {
+            $Fiber = $Reference->get();
+            if ($Fiber !== null && $Response->Fibers->offsetExists($Fiber)) {
                $Response->Fibers->offsetUnset($Fiber);
             }
             if ($cancelled === false) {
@@ -1834,7 +1902,7 @@ class Response extends Server\Response
             // ! Running work may still read its captured request. Its loop
             //   finally cleans after return; suspended/not-started work can be
             //   reclaimed immediately.
-            if ($Fiber->isRunning() === false) {
+            if ($Fiber === null || $Fiber->isRunning() === false) {
                $Response->Request?->clean();
             }
          });
@@ -1929,6 +1997,46 @@ class Response extends Server\Response
                      'HTTP deferred execution was rejected by the scheduler.'
                   );
                }
+            }
+
+            // @ Deadline — a parked deferral is bounded by the per-call budget
+            //   or the server default. The Fiber is held weakly: a pooled
+            //   Fiber must not be retained by a stale deadline, and the
+            //   reactor re-checks identity before delivering.
+            $budget = $timeout > 0 ? $timeout : self::$deferredTimeout;
+            if ($budget > 0) {
+               $Reference = WeakReference::create($Fiber);
+               // ! A budget beyond the monotonic clock's remaining nanosecond
+               //   headroom would wrap to a deadline in the past. Clamp in the
+               //   integer domain: a float round-trip would overflow the sum
+               //   and demote the deadline to the wall-clock timer bucket.
+               $now = (int) hrtime(true);
+               $headroom = PHP_INT_MAX - $now;
+               $nanoseconds = $budget >= $headroom / 1_000_000_000
+                  ? $headroom
+                  : (int) ($budget * 1_000_000_000);
+               $deadline = $now + $nanoseconds;
+               $timer = $Event->defer($deadline, static function () use (
+                  $Event,
+                  $Reference,
+                  $Cancellation,
+                  $budget,
+               ): void {
+                  // ? Settled meanwhile — completion, handoff or teardown
+                  if ($Cancellation->check()) { // @phpstan-ignore if.alwaysFalse
+                     return;
+                  }
+                  $Parked = $Reference->get();
+                  if ($Parked !== null) {
+                     $Event->interrupt($Parked, new Timeout($budget));
+                  }
+               });
+               // ! Every terminal transition disarms the deadline. The token
+               //   settles only after the Fiber left its suspension point, so
+               //   a firing deadline always finds the generation still active.
+               $Cancellation->observe(static function () use ($Event, $timer): void {
+                  $Event->cancel($timer);
+               });
             }
          }
 
@@ -2047,10 +2155,16 @@ class Response extends Server\Response
       }
 
       // ? Guard: only suspend from a Fiber created by defer()
-      $current = Fiber::getCurrent();
-      if ($current === null || !$this->Fibers->offsetExists($current)) {
+      $Current = Fiber::getCurrent();
+      if ($Current === null || $this->Fibers->offsetExists($Current) === false) {
          return $this;
       }
+      // ! A compiled variable lives until its frame exits. Kept across the
+      //   suspension it would make the parked stack reference its own Fiber
+      //   — a self-cycle only the cycle collector can break — so an evicted
+      //   generation could never be destroyed, and its finally never run, at
+      //   the reactor's safe point. Release it before parking.
+      unset($Current);
 
       // @ Suspend current Fiber until resumed by deferred work
       Fiber::suspend($value);

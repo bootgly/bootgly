@@ -99,6 +99,11 @@ $Build = static function (): WPIEvents&Loops&Scheduler&Contextualizing {
          return true;
       }
 
+      public function interrupt (Fiber $Fiber, Throwable $Throwable): bool
+      {
+         return false;
+      }
+
       public function bind (
          Fiber $Fiber,
          Closure $Enter,

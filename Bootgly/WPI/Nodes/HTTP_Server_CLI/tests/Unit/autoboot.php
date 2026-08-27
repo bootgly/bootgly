@@ -57,5 +57,14 @@ return new Suite(
       '1.36-select_parked_watermark',
       // # Terminal stream teardown (L4 review finding 7)
       '1.37-http2_stream_close_terminality',
+      // # BG-20: the idle reaper vs retained deferred work
+      '1.38-ownership_check',
+      '1.39-connection_expire_ownership',
+      // # BG-20: a Throwable delivered at a parked Fiber's wait point
+      '1.40-select_interrupt',
+      // # BG-20: the documented server-wide deferral budget knob
+      '1.41-configure_deferred_timeout',
+      // # BG-20: prompt release of evicted generations (finally, never catch)
+      '1.42-select_graveyard_reap',
    ]
 );

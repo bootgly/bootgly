@@ -298,6 +298,9 @@ return new Test(
       $dialing = $fds();
       $Token->cancel();
       $Fiber = null;
+      // ! The reactor releases an evicted generation at its safe point — the
+      //   next turn — never inline from the cancel
+      $slice(1);
       $after = $fds();
 
       yield assert(
@@ -408,6 +411,8 @@ return new Test(
       $negotiating = $fds();
       $Token->cancel();
       $Fiber = null;
+      // ! Released at the reactor's safe point, not inline (see case C)
+      $slice(1);
       foreach ($Muted as $Open) {
          @fclose($Open);
       }

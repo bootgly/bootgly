@@ -113,6 +113,11 @@ $Build = static function (object $Inner): WPIEvents&Loops&Scheduler&Cancelling {
          return $this->Inner->cancel($ID);
       }
 
+      public function interrupt (Fiber $Fiber, Throwable $Throwable): bool
+      {
+         return $this->Inner->interrupt($Fiber, $Throwable);
+      }
+
       public function bind (
          Fiber $Fiber,
          Closure $Enter,

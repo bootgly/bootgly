@@ -13,6 +13,7 @@ namespace Bootgly\ACI\Events;
 
 use Closure;
 use Fiber;
+use Throwable;
 
 
 interface Scheduler
@@ -57,4 +58,21 @@ interface Scheduler
 
    /** Cancel a one-shot callback before it fires. */
    public function cancel (int $ID): bool;
+
+   /**
+    * Deliver a Throwable at the suspension point of one scheduled Fiber.
+    *
+    * The Fiber leaves every wait seat it occupies, is resumed with
+    * `Fiber::throw()` inside its execution-segment binding, and its next
+    * suspend value is queued again. Its generation is left untouched, so the
+    * Fiber's own catch/finally may still select an outcome. A terminal
+    * generation is never resumed — it is evicted instead.
+    *
+    * @param Fiber<mixed,mixed,mixed,mixed> $Fiber
+    *
+    * @return bool True when the Throwable was delivered; false when the Fiber
+    *    is not parked under this scheduler (running, terminated, detached, or
+    *    bound to an already terminal generation).
+    */
+   public function interrupt (Fiber $Fiber, Throwable $Throwable): bool;
 }

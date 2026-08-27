@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Events;
 
 
 use function array_key_last;
+use function array_shift;
 use function count;
 use function get_debug_type;
 use function hrtime;
@@ -89,6 +90,13 @@ class Select implements Events, Loops, Scheduler, Cancelling
    private null|WeakMap $Waits = null;
    /** @var null|WeakMap<Fiber<mixed,mixed,mixed,mixed>,array<int,true>> */
    private null|WeakMap $Ticks = null;
+   // # Evicted generations awaiting release outside every queue walk. A
+   //   parked Fiber whose last reference drops is destroyed on the spot and
+   //   PHP unwinds it through its finally blocks right there — user code in
+   //   the middle of reactor bookkeeping. evict() seats the Fiber here
+   //   instead and reap() releases it at the safe point.
+   /** @var array<int,Fiber<mixed,mixed,mixed,mixed>> */
+   private array $Graveyard = [];
    // I/O-bound (resumed when stream_select signals readiness)
    /** @var array<int,array<int,Fiber<mixed,mixed,mixed,mixed>>> */
    private array $awaitingReads = [];
@@ -467,7 +475,23 @@ class Select implements Events, Loops, Scheduler, Cancelling
                   $this->evict($Fiber, $Token);
                }
             }
+            // ! Batch temporaries outlive the walk until overwritten by the
+            //   next batch — a generation evicted by a sibling in this batch
+            //   would stay referenced here past reap().
+            unset($Generations, $Generation, $Fiber, $Token);
 
+            $wait = $this->tick();
+         }
+
+         // @ Safe point: no queue is being walked, and the selector sets are
+         //   built AFTER it, so a finally that adds or removes a descriptor
+         //   is honored by this very wakeup.
+         while ($this->Graveyard !== []) {
+            $this->reap();
+
+            // ! An unwinding finally may arm or shorten a one-shot: the wait
+            //   computed before it is stale for this very select(). A timer
+            //   fired here may bury another generation — drain again.
             $wait = $this->tick();
          }
 
@@ -597,6 +621,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
                         $Generation['Token'],
                      );
                   }
+                  unset($Fibers, $Generation);
 
                   // ? The same descriptor may also belong to a persistent
                   //   listener/package. Resume waiters and dispatch that base
@@ -648,6 +673,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
                         $Generation['Token'],
                      );
                   }
+                  unset($Fibers, $Generation);
 
                   if (isSet($this->writing[$id]) === false) {
                      continue;
@@ -666,6 +692,10 @@ class Select implements Events, Loops, Scheduler, Cancelling
          // TODO add timer ticks?
          // if ($except) {}
       }
+
+      // @ Whatever the last dispatch evicted is released before the caller
+      //   regains control
+      $this->reap();
 
       $this->entered = false;
       $this->finished = microtime(true);
@@ -783,6 +813,44 @@ class Select implements Events, Loops, Scheduler, Cancelling
    }
 
    /**
+    * Deliver a Throwable at the suspension point of one scheduled Fiber.
+    *
+    * The Fiber leaves every wait seat it occupies and is resumed with
+    * `Fiber::throw()` inside its execution-segment binding; whatever it
+    * suspends with next is queued again. Its generation stays untouched, so
+    * its own catch/finally may still select an outcome. A terminal generation
+    * is never resumed: it is evicted instead.
+    *
+    * @param Fiber<mixed,mixed,mixed,mixed> $Fiber
+    *
+    * @return bool True when the Throwable was delivered; false when the Fiber
+    *    is not parked under this scheduler (running, terminated, detached, or
+    *    bound to an already terminal generation).
+    */
+   public function interrupt (Fiber $Fiber, Throwable $Throwable): bool
+   {
+      $Binding = $this->Bindings[spl_object_id($Fiber)] ?? null;
+      $Token = $Binding['Token'] ?? null;
+
+      // ? A terminal generation is never resumed — evict instead of delivering
+      if ($Token?->check() === true) {
+         $this->evict($Fiber, $Token);
+
+         return false;
+      }
+      // ? Only a Fiber this reactor seated has a suspension point of ours:
+      //   running, terminated and pooled (detached) Fibers hold no seat
+      if ($Fiber->isSuspended() === false || $this->withdraw($Fiber) === false) {
+         return false;
+      }
+
+      $this->deliver($Fiber, $Throwable);
+
+      // :
+      return true;
+   }
+
+   /**
     * Queue one Fiber for tick-based resumption, remembering where it landed.
     *
     * @param Fiber<mixed,mixed,mixed,mixed> $Fiber
@@ -851,17 +919,81 @@ class Select implements Events, Loops, Scheduler, Cancelling
             return false;
          }
       }
-      else {
-         if ($Binding['Token'] !== $Token) {
-            return false;
-         }
+      else if ($Binding['Token'] !== $Token) {
+         return false;
+      }
+
+      // ! The grave outlives this call: `$Fiber` is a parameter, so nothing
+      //   here can destroy the Fiber, but the binding's Leave closure and the
+      //   queue seats dropped below may be its last external holders —
+      //   released at evict()'s return, the unwind would run in whatever
+      //   frame called it. reap() moves it to the reactor safe point instead.
+      //   A pooled Fiber (suspended on DETACH) is seated too — twice on that
+      //   path (advance()'s Leave settles and evicts, then the caller's
+      //   post-check evicts the same generation): reap() then only
+      //   decrements, the pool still owns it, and the duplicate costs less
+      //   than any guard against it.
+      if ($Fiber->isSuspended()) {
+         $this->Graveyard[] = $Fiber;
+      }
+
+      if ($Binding !== null) {
          unset($this->Bindings[$FiberID]);
       }
 
-      // @ Only the locations this Fiber actually entered, never a sweep of
-      //   every parked waiter. A location consumed by readiness dispatch,
-      //   expiry or release is stale — one lookup that matches nothing — and
-      //   the identity check keeps another generation's entry untouched.
+      $this->withdraw($Fiber);
+
+      return true;
+   }
+
+   /**
+    * Release every evicted generation outside any queue walk.
+    *
+    * A Fiber whose last reference is its graveyard seat is destroyed here:
+    * PHP resumes it once with an uncatchable graceful exit, so only its
+    * finally blocks run — a catch never sees the eviction and nothing after
+    * the wait point executes. An exception escaping one unwind is contained
+    * so the next grave is still reaped. A finally may bury another
+    * generation; the outer loop drains until the graveyard stays empty.
+    */
+   private function reap (): void
+   {
+      // @@
+      while ($this->Graveyard !== []) {
+         // ! No foreach: its snapshot would keep every Fiber alive to the end
+         $Graveyard = $this->Graveyard;
+         $this->Graveyard = [];
+
+         while ($Graveyard !== []) {
+            $Fiber = array_shift($Graveyard);
+            try {
+               // ! The local is the last reactor-side reference: this
+               //   assignment is the destroy-unwind point.
+               $Fiber = null;
+            }
+            catch (Throwable) { // @phpstan-ignore catch.neverThrown
+               // One unwinding finally cannot stop the next grave.
+            }
+         }
+      }
+   }
+
+   /**
+    * Withdraw one Fiber from every queue seat it recorded.
+    *
+    * Only the locations this Fiber actually entered, never a sweep of every
+    * parked waiter. A location consumed by readiness dispatch, expiry or
+    * release is stale — one lookup that matches nothing — and the identity
+    * check keeps another generation's entry untouched.
+    *
+    * @param Fiber<mixed,mixed,mixed,mixed> $Fiber
+    *
+    * @return bool True when at least one live seat was removed.
+    */
+   private function withdraw (Fiber $Fiber): bool
+   {
+      $removed = false;
+
       $Ticks = $this->Ticks;
       $indexes = $Ticks === null ? null : ($Ticks[$Fiber] ?? null);
       if ($indexes !== null) {
@@ -869,6 +1001,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
          foreach ($indexes as $index => $_) {
             if (($this->Fibers[$index] ?? null) === $Fiber) {
                unset($this->Fibers[$index]);
+               $removed = true;
             }
          }
       }
@@ -876,7 +1009,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
       $Waits = $this->Waits;
       $locations = $Waits === null ? null : ($Waits[$Fiber] ?? null);
       if ($locations === null) {
-         return true;
+         return $removed;
       }
       unset($Waits[$Fiber]);
 
@@ -885,6 +1018,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
             foreach ($this->awaitingReads[$id] as $index => $Queued) {
                if ($Queued === $Fiber) {
                   unset($this->awaitingReads[$id][$index]);
+                  $removed = true;
                }
             }
             if ($this->awaitingReads[$id] === []) {
@@ -903,6 +1037,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
             foreach ($this->awaitingWrites[$id] as $index => $Queued) {
                if ($Queued === $Fiber) {
                   unset($this->awaitingWrites[$id][$index]);
+                  $removed = true;
                }
             }
             if ($this->awaitingWrites[$id] === []) {
@@ -915,7 +1050,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
          }
       }
 
-      return true;
+      return $removed;
    }
 
    /**
@@ -1347,12 +1482,29 @@ class Select implements Events, Loops, Scheduler, Cancelling
          return false;
       }
 
-      $Error = new RuntimeException(
+      // :
+      return $this->deliver($Fiber, new RuntimeException(
          'Fiber I/O resource failed selector admission.'
-      );
+      ));
+   }
+
+   /**
+    * Deliver a Throwable at the suspension point of one Fiber and queue its
+    * next suspend value again — the tail shared by reject() and interrupt().
+    *
+    * @param Fiber<mixed,mixed,mixed,mixed> $Fiber
+    *
+    * @return bool True when the Fiber was rescheduled after handling the
+    *    Throwable; false when it terminated, detached or was dropped.
+    */
+   private function deliver (Fiber $Fiber, Throwable $Throwable): bool
+   {
+      $FiberID = spl_object_id($Fiber);
+      $Binding = $this->Bindings[$FiberID] ?? null;
+      $Token = $Binding['Token'] ?? null;
 
       try {
-         $value = $this->advance($Fiber, $Error);
+         $value = $this->advance($Fiber, $Throwable);
       }
       catch (Throwable) {
          $Token?->cancel();
@@ -1468,6 +1620,23 @@ class Select implements Events, Loops, Scheduler, Cancelling
     */
    public function destroy (): void
    {
+      // ! Seat every parked waiter before the queues drop: the reactor never
+      //   releases a suspended Fiber inline, not even on shutdown.
+      foreach ($this->Fibers as $Fiber) {
+         $this->Graveyard[] = $Fiber;
+      }
+      foreach ([$this->awaitingReads, $this->awaitingWrites] as $Buckets) {
+         foreach ($Buckets as $Queued) {
+            foreach ($Queued as $Fiber) {
+               $this->Graveyard[] = $Fiber;
+            }
+         }
+      }
+      // ! Loop variables outlive their loops: held here, the last reference
+      //   of a grave would drop at this method's return — outside reap()'s
+      //   containment — instead of inside it.
+      unset($Fiber, $Queued, $Buckets);
+
       $this->reads = [];
       $this->writes = [];
       $this->excepts = [];
@@ -1505,10 +1674,20 @@ class Select implements Events, Loops, Scheduler, Cancelling
             // Scheduler destruction must continue through every generation.
          }
       }
+      // ! Drop the snapshot — and the loop variables that still point into
+      //   it — before reaping: a binding's Leave closure is the last owner of
+      //   its evicted generation. Held past reap(), the unwind would move to
+      //   this method's return — outside the containment.
+      unset($Binding, $Token);
+      $Bindings = [];
       $this->Timers = [];
       $this->MonotonicTimers = [];
 
       // # Loop
       $this->loop = false;
+
+      // @ The queues are empty: a finally that re-enters the reactor finds
+      //   nothing to corrupt, and a deferred timer lands in a clean reactor
+      $this->reap();
    }
 }

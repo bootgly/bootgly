@@ -341,6 +341,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
     * Configure the HTTP Server.
     *
     * @param null|array<string,Closure(object):Response\Resource> $responseResources Lazy response resource factories.
+    * @param null|int $connectionIdleTimeout Seconds of transport silence before an established connection is closed (`0` disables; a parked deferred response counts as activity).
+    * @param null|int|float $deferredTimeout Seconds a deferred response may stay parked before `Response\Timeout` is delivered at its wait point (`0` = unbounded; a per-call `defer()` timeout wins).
     *
     * @return self The HTTP Server instance, for chaining 
     */
@@ -358,7 +360,9 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       null|int $maxConnections = null,
       null|int $maxConnectionsPerIP = null,
       null|array $responseResources = null,
-      null|string $health = null
+      null|string $health = null,
+      null|int $connectionIdleTimeout = null,
+      null|int|float $deferredTimeout = null
    ): self
    {
       // ? configure() is a PRE-START contract. Only the initial Booting and
@@ -587,6 +591,14 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
       if ($maxConnectionsPerIP !== null) {
          self::$maxConnectionsPerIP = $maxConnectionsPerIP;
+      }
+      // @ Idle connections — retained deferred work counts as activity
+      if ($connectionIdleTimeout !== null) {
+         self::$connectionIdleTimeout = $connectionIdleTimeout;
+      }
+      // @ Deferred responses — budget before a parked defer() is answered 503
+      if ($deferredTimeout !== null) {
+         Response::$deferredTimeout = $deferredTimeout;
       }
       if ($responseResources !== null) {
          self::$Response->Resources->load($responseResources);

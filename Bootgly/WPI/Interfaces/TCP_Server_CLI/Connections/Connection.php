@@ -70,7 +70,9 @@ class Connection extends Packages
 
       // * Config
       $this->timers = [];
-      $this->expiration = 15;
+      // ! Seeded from the server knob; a subclass may still overwrite it
+      //   before guard() arms the timer on the TLS path
+      $this->expiration = Server::$connectionIdleTimeout;
 
       // * Metadata
       $this->id = (int) $Socket;
@@ -231,7 +233,12 @@ class Connection extends Packages
       // ! Per-instance snapshot (was a per-method `static` shared by every
       //   Connection in the worker — one busy connection masked the
       //   idleness of all others).
-      if ($this->expiredWrites !== $this->writes) {
+      // @ Activity since the previous tick: a completed write, or pending
+      //   work still owned by this transport — a deferred exchange parked on
+      //   the reactor writes nothing until it settles. Either renews the
+      //   lease; neither is permanent: once the owner detaches and the reply
+      //   is flushed, the following silent ticks reap it like any idle peer.
+      if ($this->expiredWrites !== $this->writes || Ownership::check($this)) {
          $this->expiredWrites = $this->writes;
          $this->used = time();
       }

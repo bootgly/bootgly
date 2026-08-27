@@ -308,6 +308,13 @@ class TCP_Server_CLI implements Servers
    //   client onto one source IP; enable it only when the peer IP is the real
    //   client. When > 0, accepts past it are shed.
    public static int $maxConnectionsPerIP = 0;
+   // # Idle connections
+   //   Seconds an established connection may stay silent — no completed write
+   //   since the previous supervisor tick and no pending work retained on it
+   //   (see Ownership) — before the worker closes it. Whole seconds: the
+   //   supervisor runs on the one-second SIGALRM timer wheel, so a reap lands
+   //   between N and N+1 seconds after the last activity tick. 0 disables it.
+   public static int $connectionIdleTimeout = 15;
    // # TLS admission
    //   Absolute wall-time budget for a nonblocking TLS handshake. The
    //   Connection converts it to a monotonic deadline when the peer is
