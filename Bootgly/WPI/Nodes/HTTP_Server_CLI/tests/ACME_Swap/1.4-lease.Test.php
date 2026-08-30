@@ -12,6 +12,7 @@ return new Test(
          $storage = "{$base}{$name}/";
          $result = "{$base}{$name}.json";
          putenv('BOOTGLY_LEASE_ROOT=' . BOOTGLY_ROOT_BASE);
+         putenv('BOOTGLY_LEASE_WORKING=' . BOOTGLY_WORKING_BASE);
          putenv("BOOTGLY_LEASE_STORAGE={$storage}");
          putenv("BOOTGLY_LEASE_CHALLENGES={$challenges}");
          putenv("BOOTGLY_LEASE_RESULT={$result}");
@@ -33,6 +34,7 @@ return new Test(
          $decoded = is_string($JSON) ? json_decode($JSON, true) : null;
 
          putenv('BOOTGLY_LEASE_ROOT');
+         putenv('BOOTGLY_LEASE_WORKING');
          putenv('BOOTGLY_LEASE_STORAGE');
          putenv('BOOTGLY_LEASE_CHALLENGES');
          putenv('BOOTGLY_LEASE_RESULT');
