@@ -11,17 +11,24 @@
 namespace Bootgly\WPI\Modules\WS;
 
 
+use const E_WARNING;
 use const ZLIB_NO_FLUSH;
 use const ZLIB_STREAM_END;
 use const ZLIB_SYNC_FLUSH;
+use function function_exists;
 use function inflate_add;
 use function inflate_get_status;
 use function intdiv;
 use function max;
 use function min;
+use function pcntl_async_signals;
+use function pcntl_signal_dispatch;
+use function restore_error_handler;
+use function set_error_handler;
 use function strlen;
 use function substr;
 use InflateContext;
+use LogicException;
 
 
 /**
@@ -65,6 +72,8 @@ final class Inflater
     * is always the WebSocket 1009 close code.
     *
     * @return string|int|false
+    * @throws LogicException when async PCNTL is enabled but its dispatch
+    *    primitive was selectively disabled
     */
    public static function inflate (
       InflateContext $Inflator,
@@ -91,6 +100,14 @@ final class Inflater
       $output = '';
       $outputSize = 0;
       $offset = 0;
+      $Handler = static function (
+         int $level,
+         string $message,
+         string $file,
+         int $line
+      ): bool {
+         return $level === E_WARNING;
+      };
 
       // @@ A do/while is intentional: an empty compressed payload still needs
       //    the RFC 7692 tail to complete the current message.
@@ -108,11 +125,44 @@ final class Inflater
             $chunk .= "\x00\x00\xff\xff";
          }
 
-         $part = inflate_add(
-            $Inflator,
-            $chunk,
-            $last ? ZLIB_SYNC_FLUSH : ZLIB_NO_FLUSH
-         );
+         // ? Malformed peer bytes warn before zlib returns false. A local
+         //   handler keeps that expected warning inside the protocol even when
+         //   the application handler ignores suppression or throws.
+         $asyncAvailable = function_exists('pcntl_async_signals');
+         $dispatchAvailable = function_exists('pcntl_signal_dispatch');
+
+         $asyncEnabled = $asyncAvailable && pcntl_async_signals();
+         // ? Without dispatch, changing the process-global error handler while
+         //   async callbacks are live cannot be made safe. Fail before mutation.
+         if ($asyncEnabled && $dispatchAvailable === false) {
+            throw new LogicException(
+               'Async PCNTL requires pcntl_signal_dispatch'
+            );
+         }
+         $asyncSignals = $asyncAvailable
+            ? pcntl_async_signals(false)
+            : false;
+         try {
+            set_error_handler($Handler, E_WARNING);
+            try {
+               $part = inflate_add(
+                  $Inflator,
+                  $chunk,
+                  $last ? ZLIB_SYNC_FLUSH : ZLIB_NO_FLUSH
+               );
+            }
+            finally {
+               restore_error_handler();
+            }
+         }
+         finally {
+            // @ Deliver deferred application signals only after its own
+            //   error handler is back on top of the process-global stack.
+            if ($asyncSignals) {
+               pcntl_async_signals(true);
+               pcntl_signal_dispatch();
+            }
+         }
          if ($part === false) {
             return false;
          }

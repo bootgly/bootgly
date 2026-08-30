@@ -25,6 +25,10 @@ return new Suite(
       '5.4-monotonic_timer',
       '5.5-close_drain_timeout',
       // # Security H4 — compressed output must be bounded during inflation
-      '6.1-decompression_limit'
+      '6.1-decompression_limit',
+      // # Security H8 — malformed DEFLATE warnings stay inside the protocol
+      '6.2-decompression_warning',
+      // # Security H8 — async signals must not cross warning isolation
+      '6.3-inflater_signal_guard'
    ]
 );
