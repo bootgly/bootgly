@@ -139,5 +139,8 @@ return new Suite(
       '8.14-kv_redis_tls_readiness',
       '8.15-kv_redis_tls_partial_generation',
       '8.16-kv_redis_tls_read_generation',
+      // ! Row layout cache appended last so every prior case index stays stable.
+      '7.39-postgresql_layout_cache',
+      '7.40-postgresql_layout_eviction',
    ]
 );

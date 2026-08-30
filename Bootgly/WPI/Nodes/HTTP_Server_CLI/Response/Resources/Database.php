@@ -25,6 +25,7 @@ use InvalidArgumentException;
 use RuntimeException;
 use Stringable;
 use Throwable;
+use WeakReference;
 
 use const Bootgly\WPI;
 use Bootgly\ADI\Database\Operation\Result;
@@ -41,6 +42,8 @@ use Bootgly\ADI\Databases\SQL\Transaction;
 use Bootgly\API\Environment\Configs;
 use Bootgly\API\Environment\Configs\Config;
 use Bootgly\API\Environment\Configs\DatabaseConfig;
+use Bootgly\WPI\Events\Cancellation;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
@@ -381,7 +384,25 @@ class Database extends Resource implements Awaiting, Scheduling
          $Wait ??= $this->Wait
             ?? throw new RuntimeException('Database response resource is not bound.');
 
-         $Wait($Operation->Readiness);
+         // ! A readiness park waits on "socket readable" as a proxy for
+         //   "operation finished". A co-located sibling context resumed for
+         //   the same socket can consume that readability AND finish this
+         //   operation — arm the completion edge so whoever finishes it
+         //   reschedules this Fiber (see wake()).
+         $Readiness = $Operation->Readiness;
+         $Waker = $Readiness === null ? null : $this->wake();
+
+         if ($Waker !== null) {
+            $Operation->Waker = $Waker;
+         }
+
+         $Wait($Readiness);
+
+         // ! Disarmed before advancing: awake, this context observes its own
+         //   completions — a self-wake would only queue a spurious resume.
+         if ($Waker !== null) {
+            $Operation->Waker = null;
+         }
       }
 
       return $Operation;
@@ -428,7 +449,33 @@ class Database extends Resource implements Awaiting, Scheduling
          $Wait ??= $this->Wait
             ?? throw new RuntimeException('Database response resource is not bound.');
 
+         // ! A readiness park waits on "socket readable" as a proxy for
+         //   "operations finished". A co-located sibling context resumed for
+         //   the same socket can consume that readability AND finish the
+         //   operations parked here — the socket then never signals again.
+         //   Arm the completion edge so whoever finishes one of these
+         //   operations reschedules this Fiber (see wake()).
+         $Waker = $waiting === null ? null : $this->wake();
+
+         if ($Waker !== null) {
+            foreach ($Operations as $Operation) {
+               if ($Operation->finished === false) {
+                  $Operation->Waker = $Waker;
+               }
+            }
+         }
+
          $Wait($waiting);
+
+         // ! Disarmed before advancing: awake, this context observes its own
+         //   completions — a self-wake would only queue a spurious resume.
+         if ($Waker !== null) {
+            foreach ($Operations as $Operation) {
+               if ($Operation->Waker !== null) {
+                  $Operation->Waker = null;
+               }
+            }
+         }
       }
 
       return $Operations;
@@ -554,6 +601,60 @@ class Database extends Resource implements Awaiting, Scheduling
 
          throw $Throwable;
       }
+   }
+
+   /**
+    * Build a completion hook that reschedules this context's parked Fiber.
+    *
+    * A readiness park waits on "socket readable" as a proxy for "operations
+    * finished". Under co-located pipelining a sibling context resumed for the
+    * same socket can consume that readability and finish this context's
+    * operations — the socket then never signals again and the Fiber strands
+    * until a deadline. The hook restores the missing completion edge: whoever
+    * finishes an armed operation moves this Fiber to the reactor tick queue,
+    * where its own re-scan observes the completion.
+    */
+   private function wake (): null|Closure
+   {
+      $Fiber = Fiber::getCurrent();
+
+      // ? Not parked under the worker reactor (synchronous usage) — the wait
+      //   bridge returns without suspending, so no completion edge is needed.
+      if ($Fiber === null || isSet(TCP_Server_CLI::$Event) === false) {
+         return null;
+      }
+
+      $Event = TCP_Server_CLI::$Event;
+
+      // ! Weak: an armed operation may outlive an evicted generation, and its
+      //   late completion must not retain — or wake — a Fiber the reactor
+      //   already destroyed or rebound. The captured lease pins the exact
+      //   generation this park belongs to.
+      $Reference = WeakReference::create($Fiber);
+      $Lease = Cancellation::fetch($Fiber);
+      $fired = false;
+
+      // : One wake per park: every armed sibling shares this closure, and the
+      //   first completion is the whole edge — the resumed re-scan sees the rest.
+      return static function () use ($Reference, $Lease, $Event, &$fired): void {
+         if ($fired) {
+            return;
+         }
+
+         $Fiber = $Reference->get();
+
+         // ? Gone, running, or rebound to another generation — not ours to wake
+         if (
+            $Fiber === null
+            || $Fiber->isSuspended() === false
+            || Cancellation::fetch($Fiber) !== $Lease
+         ) {
+            return;
+         }
+
+         $fired = true;
+         $Event->schedule($Fiber, null);
+      };
    }
 
    /**

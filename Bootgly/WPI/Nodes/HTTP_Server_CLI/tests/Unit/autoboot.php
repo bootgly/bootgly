@@ -70,5 +70,7 @@ return new Suite(
       '1.43-response_request_exposure',
       // # BG-14: the middleware chain a deferred Route carries, only while its dispatch runs
       '1.44-route_middlewares_snapshot',
+      // # Warmup hang root cause: readiness parks woken by sibling-context completions
+      '1.45-database_completion_wake',
    ]
 );

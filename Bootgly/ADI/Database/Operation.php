@@ -12,6 +12,7 @@ namespace Bootgly\ADI\Database;
 
 
 use function microtime;
+use Closure;
 
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ADI\Database\Connection;
@@ -57,6 +58,16 @@ class Operation
    public bool $fallback = false;
    /** Failure should count against the owning pool health. */
    public bool $quarantine = false;
+   /**
+    * Completion hook armed by a parked awaiter, invoked once when this
+    * operation finishes — whichever execution context finishes it.
+    *
+    * An awaiter parked on socket readiness uses "readable" as a proxy for
+    * "finished"; a co-located sibling advancing the shared connection can
+    * consume that readability and finish this operation, so the completion
+    * itself must be able to reschedule the awaiter.
+    */
+   public null|Closure $Waker = null;
 
    // * Metadata
    public private(set) float $deadline;
@@ -99,6 +110,15 @@ class Operation
       $this->finished = true;
       $this->state = OperationStates::Finished;
 
+      // @ Completion edge: wake a parked awaiter whose readiness proxy this
+      //   completion may have consumed (see $Waker).
+      $Waker = $this->Waker;
+
+      if ($Waker !== null) {
+         $this->Waker = null;
+         $Waker($this);
+      }
+
       return $this;
    }
 
@@ -111,6 +131,14 @@ class Operation
       $this->Readiness = null;
       $this->finished = true;
       $this->state = OperationStates::Failed;
+
+      // @ Completion edge: failure finishes the operation too (see $Waker).
+      $Waker = $this->Waker;
+
+      if ($Waker !== null) {
+         $this->Waker = null;
+         $Waker($this);
+      }
 
       return $this;
    }

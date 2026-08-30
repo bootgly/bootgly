@@ -107,6 +107,13 @@ class PostgreSQL extends Driver
    private array $carrying = [];
    /** @var array<string,string> */
    private array $names = [];
+   // @ Result layout per statement name, learned from the RowDescription its
+   //   Parse-time Describe returned. A warm batch applies it and omits its own
+   //   portal Describe, so the backend stops repeating the layout on every
+   //   execute. Evicted with the statement it describes: a name the backend no
+   //   longer has must not leave a layout behind for a later re-Parse.
+   /** @var array<string,array{columns:array<int,string>,types:array<int,int>}> */
+   private array $layouts = [];
    // @ Statement names with a Parse in flight. The value is a weak reference to
    //   the operation that composed it while its batch is still unsent, and
    //   `true` once those bytes have reached the socket — a sibling may Bind the
@@ -237,14 +244,30 @@ class PostgreSQL extends Driver
          $sync = Encoder::SYNC_BYTES;
 
          if ($Operation->prepared) {
+            $layout = null;
+
             if ($cached !== false) {
                // ! LRU touch — reinsert inline: evict() queues a wire Close,
                //   which a touch must never do.
                unset($this->statements[$Operation->statement]);
                $this->statements[$Operation->statement] = $cached;
+
+               // ? Only a settled cache entry may carry a layout. An operation
+               //   binding against a Parse still in flight ($marker) has none,
+               //   so it keeps asking the backend for the RowDescription.
+               $layout = $this->layouts[$Operation->statement] ?? null;
             }
 
-            $Operation->write = "{$bind}{$describe}{$execute}{$sync}";
+            // ?: Layout known — drop the portal Describe from the batch and the
+            //    RowDescription from the answer, one backend message per query.
+            if ($layout !== null) {
+               $Operation->columns = $layout['columns'];
+               $Operation->types = $layout['types'];
+               $Operation->write = "{$bind}{$execute}{$sync}";
+            }
+            else {
+               $Operation->write = "{$bind}{$describe}{$execute}{$sync}";
+            }
 
             // ! This batch Binds a statement it does not Parse — hold the name
             //   against any queued Close until these bytes reach the socket.
@@ -825,6 +848,7 @@ class PostgreSQL extends Driver
    {
       // ! Session state — packets and named statements die with the socket
       $this->statements = [];
+      $this->layouts = [];
       $this->preparing = [];
       $this->closing = [];
       $this->Holders = [];
@@ -998,7 +1022,7 @@ class PostgreSQL extends Driver
       }
 
       $this->release($statement);
-      unset($this->statements[$statement]);
+      unset($this->statements[$statement], $this->layouts[$statement]);
 
       // ! Pair every client-side removal with a wire Close on the next batch.
       //   A Close for a name the backend never registered is harmless.
@@ -1480,11 +1504,42 @@ class PostgreSQL extends Driver
             }
          }
 
+         // ! Record the layout under the statement that produced it: every later
+         //   Bind of the same name answers with this same RowDescription, so the
+         //   warm batch can stop asking for it (see prepare()).
+         //
+         //   ! The cache entry is the gate, not the name. A RowDescription still
+         //   in flight when its statement is evicted would otherwise re-create a
+         //   layout the driver no longer holds; the next cold re-Parse of that
+         //   content-derived name restores the cache entry at ParseComplete, and
+         //   a sibling composed before the new RowDescription would apply the
+         //   PREVIOUS registration's columns and type OIDs. The backend cannot
+         //   catch that — its plan is new, so `cached plan must not change result
+         //   type` never fires — and the rows come back silently mislabelled and
+         //   mis-cast.
+         if ($Operation->statement !== '' && isset($this->statements[$Operation->statement])) {
+            $this->layouts[$Operation->statement] = [
+               'columns' => $Operation->columns,
+               'types' => $Operation->types,
+            ];
+         }
+
          return $Operation;
       }
 
-      // @ Extended query no-ops — Bind / NoData / PortalSuspended / CloseComplete.
-      if ($type === '2' || $type === 'n' || $type === 's' || $type === '3') {
+      // @ NoData — the statement produces no result columns. That is a layout
+      //   too: caching it lets the warm batch skip its portal Describe. Same
+      //   gate as the RowDescription branch above.
+      if ($type === 'n') {
+         if ($Operation->statement !== '' && isset($this->statements[$Operation->statement])) {
+            $this->layouts[$Operation->statement] = ['columns' => [], 'types' => []];
+         }
+
+         return $Operation;
+      }
+
+      // @ Extended query no-ops — Bind / PortalSuspended / CloseComplete.
+      if ($type === '2' || $type === 's' || $type === '3') {
          return $Operation;
       }
 
@@ -1496,7 +1551,10 @@ class PostgreSQL extends Driver
             //   queued while the Parse was unanswered described an older
             //   registration and is stale now that this one exists.
             $this->release($Operation->statement, answered: true);
-            unset($this->closing[$Operation->statement]);
+            // ! A ParseComplete announces a NEW registration of this name. Any
+            //   layout still held describes the old one and must not survive
+            //   into the window this cache() opens.
+            unset($this->closing[$Operation->statement], $this->layouts[$Operation->statement]);
             $this->cache($Operation->statement);
             $Operation->prepared = true;
          }
