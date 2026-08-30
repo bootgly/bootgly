@@ -37,5 +37,12 @@ return new Suite(
       '8.3-handler-pipe',
       // # Live viewer
       '8.4-viewer',
+      // # Provenance (project field)
+      '9.1-record-provenance',
+      '9.2-file-project-placeholder',
+      // # Backlog (persisted-log reading + file-follow)
+      '10.1-backlog-scan',
+      '10.2-backlog-merge',
+      '10.3-backlog-follow',
    ]
 );

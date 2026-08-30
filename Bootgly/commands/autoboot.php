@@ -12,4 +12,5 @@ return [
    new ProjectCommand,
    new ScheduleCommand,
    new QueueCommand,
+   new LogsCommand,
 ];

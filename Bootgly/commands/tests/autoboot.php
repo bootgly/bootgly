@@ -29,5 +29,13 @@ return new Suite(
       '2.1-setup-wrapper',
       '2.2-setup-wrapper-root-boundary',
       '2.3-setup-privilege-delegation',
+      // # logs command (backlog + file follow)
+      '3.1-logs-backlog',
+      '3.2-logs-follow-files',
+      // # console-project registry identity (start registers, TUI adopts)
+      '4.1-project-start-cli-state',
+      // # logs live lane (project scope delegation + instance tiebreaker)
+      '4.2-project-logs-scope',
+      '4.3-logs-instances',
    ]
 );

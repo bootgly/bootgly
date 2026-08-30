@@ -63,6 +63,7 @@ use function max;
 use function microtime;
 use function min;
 use function posix_get_last_error;
+use function posix_getpid;
 use function posix_getuid;
 use function posix_kill;
 use function posix_strerror;
@@ -71,6 +72,7 @@ use function proc_close;
 use function proc_open;
 use function putenv;
 use function realpath;
+use function register_shutdown_function;
 use function rmdir;
 use function rtrim;
 use function scandir;
@@ -97,6 +99,7 @@ use const Bootgly\ABI\BOOTSTRAP_FILENAME;
 use const Bootgly\CLI;
 use Bootgly\ABI\Code\__String;
 use Bootgly\ACI\Process\State;
+use Bootgly\ACI\Process\States;
 use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Databases\SQL\Schema\Migrations;
 use Bootgly\ADI\Databases\SQL\Schema\Runner as MigrationRunner;
@@ -171,7 +174,7 @@ class ProjectCommand extends Command
          'description' => 'Stop a running project (all instances, or one by port)',
          'arguments'   => [
             '<name>' => 'Project name to stop',
-            '[port]' => 'Stop only one instance — bound port (servers) or master PID (TUI)'
+            '[port]' => 'Stop only one instance — bound port (servers) or master PID (console/TUI)'
          ]
       ],
       'show' => [
@@ -216,6 +219,12 @@ class ProjectCommand extends Command
             '[value]'  => 'Seeder name for create or run'
          ]
       ],
+      'logs' => [
+         'description' => 'View and follow a project\'s logs (backlog + live tap)',
+         'arguments'   => [
+            '<name>' => 'Project name (never a port — use --instance to pick one)'
+         ]
+      ],
    ];
    /** @var array<string,array<string>> */
    public array $options = [
@@ -230,6 +239,8 @@ class ProjectCommand extends Command
       'Skip confirmations (create/import)' => ['--yes'],
       'Do not create a git repository for the new project (create)' => ['--no-git'],
       'Replace an existing project, git history included (create --from)' => ['--refresh'],
+      'Keep following new records — logs (unrelated to `start -f`)' => ['-f', '--follow'],
+      'Log filters and output shape (logs)' => ['--instance=<id>', '--channel=<channel>', '--level=<level>', '--since=<time>', '--json'],
    ];
 
 
@@ -291,6 +302,10 @@ class ProjectCommand extends Command
             $options
          ),
          'seed'    => $this->seed(
+            array_slice($arguments, 1),
+            $options
+         ),
+         'logs'    => $this->logs(
             array_slice($arguments, 1),
             $options
          ),
@@ -956,6 +971,35 @@ class ProjectCommand extends Command
          $Alert->render();
 
          return false;
+      }
+
+      // @ Console-interface projects get a registry identity (instance = master PID)
+      //   so show/stop/logs can address them. WPI projects register their own
+      //   port-qualified State inside the server; TUI apps adopt this entry (Input).
+      $interfaces = Projects::read()[$projectName]['interfaces'] ?? [];
+      if ($interfaces === ['CLI']) {
+         try {
+            $ownerPID = posix_getpid();
+            $State = new State(Projects::encode($projectName), (string) $ownerPID);
+            if ($State->lock(LOCK_EX | LOCK_NB) === true) {
+               $State->save([
+                  'master'  => $ownerPID,
+                  'workers' => [$ownerPID],
+                  'type'    => 'CLI',
+                  'started' => time(),
+                  'project' => $projectName
+               ]);
+               register_shutdown_function(static function () use ($State, $ownerPID): void {
+                  // ? Only the registering process cleans — forks inherit this hook
+                  if (posix_getpid() === $ownerPID) {
+                     $State->clean();
+                  }
+               });
+            }
+         }
+         catch (Throwable) {
+            // ? Registry identity is best-effort — an unsafe storage dir never blocks a boot
+         }
       }
 
       $Project->boot($bootArguments, $options);
@@ -1735,6 +1779,40 @@ class ProjectCommand extends Command
       $Alert->render();
 
       return false;
+   }
+
+   /**
+    * View and follow one project's logs — the project-scoped face of `bootgly logs`.
+    *
+    * Addressed by NAME, never by port: a console project has no port, and a server's
+    * port is only the `--instance` tiebreaker when several instances are live.
+    *
+    * @param array<string> $arguments
+    * @param array<string, bool|int|string> $options
+    *
+    * @return bool
+    */
+   public function logs (array $arguments, array $options): bool
+   {
+      // ? Refuse flags this subcommand does not implement
+      if ($this->admit(['follow', 'f', 'instance', 'channel', 'level', 'since', 'json'], $options) === false) {
+         return false;
+      }
+
+      // ? Require project name
+      $projectName = $arguments[0] ?? null;
+      if ($projectName === null || $projectName === '') {
+         return $this->help(['logs']);
+      }
+
+      // ? Only registered, resolvable projects
+      if ($this->resolve($projectName) === null) {
+         return false;
+      }
+
+      // : One implementation — the kit `logs` command, project-scoped
+      $options['project'] = $projectName;
+      return CLI->Commands->find('logs')?->run([], $options) ?? false;
    }
 
    // @ Helpers
@@ -3495,78 +3573,8 @@ class ProjectCommand extends Command
     */
    private function locate (string $projectName, null|string $instance = null): null|array
    {
-      try {
-         $State = new State(Projects::encode($projectName), $instance);
-      }
-      catch (Throwable) {
-         return null;
-      }
-
-      $data = $State->read();
-      if (
-         is_array($data) === false
-         || is_int($data['master'] ?? null) === false
-         || $data['master'] <= 0
-         || is_array($data['workers'] ?? null) === false
-         || count($data['workers']) > 4096
-         || is_int($data['started'] ?? null) === false
-         || is_string($data['type'] ?? null) === false
-         || $data['type'] === ''
-         || (
-            $data['type'] === 'WPI'
-            && (
-               is_string($data['host'] ?? null) === false
-               || is_int($data['port'] ?? null) === false
-            )
-         )
-         || $State->authenticate($data['master']) === false
-      ) {
-         return null;
-      }
-
-      $Workers = [];
-      $seen = [];
-      foreach ($data['workers'] as $workerPID) {
-         if (
-            is_int($workerPID) === false
-            || $workerPID <= 0
-            || isSet($seen[$workerPID])
-         ) {
-            return null;
-         }
-         $seen[$workerPID] = true;
-         if ($State->authenticate($workerPID, parent: $data['master'])) {
-            $Workers[] = $workerPID;
-         }
-      }
-      $data['workers'] = $Workers;
-
-      // ? The Auto-TLS helper PID rides in the SAME runtime-writable discovery
-      //   state as everything else here, but unlike master/workers it used to
-      //   pass through unauthenticated — the stop path then signalled it after
-      //   only a `/proc/<pid>/cmdline` substring match, so a compromised
-      //   runtime UID could point it at another project's similarly titled
-      //   helper and let a privileged operator deliver the signal (audit M6).
-      //
-      // ! Bind it to the already-authenticated master HERE, while that master
-      //   is still alive. The signal site runs after the master is SIGKILLed,
-      //   at which point the helper may already be reparented and PPid can no
-      //   longer prove anything.
-      $lease = $data['AutoTLS'] ?? null;
-      if (is_array($lease)) {
-         $helper = $lease['helper'] ?? null;
-         if (
-            is_int($helper) === false
-            || $helper < 2
-            || $State->authenticate($helper, parent: $data['master']) === false
-         ) {
-            unset($lease['helper']);
-            $data['AutoTLS'] = $lease;
-         }
-      }
-
-      /** @var array{master:int,workers:array<int>,started:int,status?:string,type:string,host?:string,port?:int,AutoTLS?:array<string,mixed>} $data */
-      return $data;
+      // : Shared discovery lives in ACI (States); commands only translate the name
+      return States::locate(Projects::encode($projectName), $instance);
    }
 
    /** Best-effort cleanup without tombstoning a replacement instance. */
@@ -3613,31 +3621,8 @@ class ProjectCommand extends Command
     */
    private function scan (string $projectName): array
    {
-      $pidsDir = BOOTGLY_STORAGE_DIR . 'pids/';
-      $instances = [];
-
-      // @ Primary instance
-      $primary = $this->locate($projectName);
-      if ($primary !== null) {
-         $instances[''] = $primary;
-      }
-
-      // @ Qualified instances (e.g. Demo~HTTP_Server_CLI.8082.json)
-      $encoded = Projects::encode($projectName);
-      $pattern = $pidsDir . $encoded . '.*.json';
-      $files = glob($pattern);
-      if ($files !== false) {
-         foreach ($files as $file) {
-            $basename = basename($file, '.json'); // Demo~HTTP_Server_CLI.8082
-            $instance = substr($basename, strlen($encoded) + 1); // 8082
-            $data = $this->locate($projectName, $instance);
-            if ($data !== null) {
-               $instances[$instance] = $data;
-            }
-         }
-      }
-
-      return $instances;
+      // : Shared discovery lives in ACI (States); commands only translate the name
+      return States::scan(Projects::encode($projectName));
    }
 
    /**
@@ -3652,17 +3637,8 @@ class ProjectCommand extends Command
       null|int $parent = null
    ): bool
    {
-      try {
-         $State = new State(
-            Projects::encode($projectName),
-            $instance !== '' ? $instance : null,
-         );
-      }
-      catch (Throwable) {
-         return false;
-      }
-
-      return $State->authenticate($PID, $parent);
+      // : Shared discovery lives in ACI (States); commands only translate the name
+      return States::authenticate(Projects::encode($projectName), $instance, $PID, $parent);
    }
 
    /**
@@ -3875,6 +3851,7 @@ class ProjectCommand extends Command
          $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI show@;' . PHP_EOL;
          $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI restart@;' . PHP_EOL;
          $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI info@;' . PHP_EOL;
+         $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI logs -f@; @#Black:(follow live — unrelated to `start -f`)@;' . PHP_EOL;
          $exampleLines .= PHP_EOL;
          $exampleLines .= '@#Blue:bootgly project start Demo/HTTP_Server_CLI@;' . PHP_EOL;
          $exampleLines .= '@#Blue:bootgly project stop Demo/HTTP_Server_CLI@;' . PHP_EOL;

@@ -25,5 +25,7 @@ return new Suite(
       '1.9-state-clean-ownership',
       '1.10-process-ownership',
       '1.11-state-lock-table',
+      '1.12-states-discovery',
+      '1.13-state-tapfile-sweep',
    ]
 );

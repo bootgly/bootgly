@@ -44,5 +44,6 @@ return new Suite(
       '6.8-toasts-overlay',
       '7.1-filepicker-scan',
       '7.2-filepicker-pick',
+      '8.1-tail-run',
    ]
 );

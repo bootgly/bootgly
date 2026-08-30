@@ -481,8 +481,14 @@ class Input
       $stateID = defined('BOOTGLY_PROJECT') ? Projects::encode(BOOTGLY_PROJECT->folder) : self::class;
       $masterPID = posix_getpid();
       $State = new State(id: $stateID, instance: (string) $masterPID);
-      if ($State->lock(LOCK_EX | LOCK_NB) === false) {
-         throw new RuntimeException('Can not acquire the terminal process state lock.');
+      $registered = $State->lock(LOCK_EX | LOCK_NB);
+      if ($registered === false) {
+         // ? The launcher (`project start`) may already hold this very instance's lock
+         //   (console projects register on start): adopt its entry and let it keep
+         //   lifecycle ownership. A foreign holder still fails closed.
+         if ($State->authenticate($masterPID) === false) {
+            throw new RuntimeException('Can not acquire the terminal process state lock.');
+         }
       }
 
       // @ Fork only after the master owns the qualified lock. The child
@@ -527,20 +533,24 @@ class Input
          cli_set_process_title("BootglyCLI: Server");
 
          // @ Handle SIGTERM: kill child before exiting
-         pcntl_signal(SIGTERM, function () use ($PID, $State) {
+         pcntl_signal(SIGTERM, function () use ($PID, $State, $registered) {
             posix_kill($PID, SIGTERM);
             pcntl_waitpid($PID, $status);
-            $State->clean();
+            if ($registered === true) {
+               $State->clean();
+            }
             exit(0);
          });
 
-         // @ Save PID state
-         $State->save([
-            'master'  => posix_getpid(),
-            'workers' => [$PID],
-            'type'    => 'CLI-IPC',
-            'started' => time()
-         ]);
+         // @ Save PID state (adopted entries stay the launcher's — see the lock above)
+         if ($registered === true) {
+            $State->save([
+               'master'  => posix_getpid(),
+               'workers' => [$PID],
+               'type'    => 'CLI-IPC',
+               'started' => time()
+            ]);
+         }
 
          try {
             // @ Call Terminal Server API passing the Pipe reading method
@@ -556,8 +566,10 @@ class Input
          // Wait for child process to exit
          pcntl_waitpid($PID, $status);
 
-         // @ Clean PID state
-         $State->clean();
+         // @ Clean PID state (only when this call registered it)
+         if ($registered === true) {
+            $State->clean();
+         }
       }
       else if ($PID === -1) {
          die('Could not fork process!');
