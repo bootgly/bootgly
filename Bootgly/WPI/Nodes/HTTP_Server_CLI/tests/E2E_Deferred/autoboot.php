@@ -79,6 +79,11 @@ return new Suite(
       '2.12-timeout_bounds_two_parked_boundaries',
       '2.13-budget_bounds_parked_boundary_after_any_throwable',
       // BG-23: the worker reserves on THIS server's counter, not the first server's
-      '3.1-upload_counter_follows_the_booted_server'
+      '3.1-upload_counter_follows_the_booted_server',
+      // BG-22: the Sealing pass decorates deferred responses at settlement
+      '4.1-sealing_decorates_deferred_success',
+      '4.2-sealing_decorates_error_answers',
+      '4.3-shipped_etag_compression_seal_deferred',
+      '4.4-throwing_seal_reaches_boundaries'
    ]
 );

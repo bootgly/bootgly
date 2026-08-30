@@ -105,6 +105,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\XML as XMLResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Timeout;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Recovering;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Route;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Sealing;
 
 
 /**
@@ -1518,6 +1519,44 @@ class Response extends Server\Response
       // : Nobody answered — the Catcher owns it
       return null;
    }
+
+   /**
+    * Walk the sealing pass over the Response a deferred generation is about
+    * to serialize: the route's middleware snapshot innermost first, then the
+    * global pipeline — the order the synchronous unwind runs post-`$next()`
+    * code. The chain and the Request snapshot come from the generation's
+    * clone; `$Sealed` is the Response actually chosen for the wire (the
+    * clone itself, or the answer a boundary/Catcher built).
+    *
+    * Throws are the caller's contract: the success path lets them reach the
+    * error boundaries — skipping the remaining seals, as the synchronous
+    * unwind would — and the errored path contains them.
+    */
+   private static function seal (self $Response, self $Sealed): void
+   {
+      // ? A sealing pass decorates an answer to a request; without one,
+      //   there is no chain and nothing to decorate for
+      $Request = $Response->Request;
+      if ($Request === null) {
+         return;
+      }
+
+      // ! Route chain (outermost first, as folded), then the global stack
+      $RouteMiddlewares = $Response->Route->Middlewares ?? [];
+      $GlobalMiddlewares = isset(SAPI::$Middlewares) ? SAPI::$Middlewares->stack : [];
+
+      // @@ Innermost → outermost
+      foreach ([$RouteMiddlewares, $GlobalMiddlewares] as $Middlewares) {
+         for ($i = count($Middlewares) - 1; $i >= 0; $i--) {
+            $Middleware = $Middlewares[$i];
+            if ($Middleware instanceof Sealing === false) {
+               continue;
+            }
+
+            $Middleware->seal($Request, $Sealed);
+         }
+      }
+   }
    /**
     * Bound the boundary walk once the deferral's own budget was spent: a
     * deadline of the same budget that re-arms itself for as long as the walk
@@ -1663,6 +1702,13 @@ class Response extends Server\Response
             //   abandoned this generation. The outer job must not serialize a
             //   second response after that terminal handoff.
             if ($Cancellation->check() === false) {
+               // @ Sealing pass before the wire: the post-`$next()` half of
+               //   the onion never ran against this clone (BG-22). A throw
+               //   here flows into the catch below — boundaries first, as the
+               //   synchronous unwind would — and a parked seal is bounded by
+               //   the budget deadline, still armed until finish().
+               self::seal($Response, $Response);
+
                // @ Persist before serializing: a Session written after the
                //   first wait() has no other save point — the synchronous
                //   cycle saved before this work ran. A failure flows into the
@@ -1762,6 +1808,23 @@ class Response extends Server\Response
                      $Errored->Request = $Response->Request;
                      $Errored->Exchange = $Exchange;
                      $Errored->Cancellation = $Cancellation;
+                  }
+
+                  // @ Sealing pass over the chosen answer — the synchronous
+                  //   unwind decorates a boundary's response on its way out.
+                  //   Contained: a throwing seal never forfeits the answer.
+                  try {
+                     self::seal($Response, $Errored);
+                  }
+                  catch (Throwable $Unsealed) {
+                     $Snapshot = $Response->Request;
+                     Throwables::notify($Unsealed, [
+                        'interface' => 'WPI',
+                        'phase' => 'Sealing',
+                        'method' => $Snapshot->method ?? '',
+                        'URI' => strtok($Snapshot->URI ?? '', '?'),
+                        'peer' => $Snapshot->peer ?? '',
+                     ]);
                   }
 
                   // @ The work — or the boundary — may have written the

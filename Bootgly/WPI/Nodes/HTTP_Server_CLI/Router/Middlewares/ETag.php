@@ -20,9 +20,12 @@ use function trim;
 use Closure;
 
 use Bootgly\API\Workables\Server\Middleware;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Sealing;
 
 
-class ETag implements Middleware
+class ETag implements Middleware, Sealing
 {
    // * Config
    public private(set) bool $weak;
@@ -50,38 +53,58 @@ class ETag implements Middleware
       // @ Pass through to handler first
       $Response = $next($Request, $Response);
 
+      // @ One pass serves both cycles — a deferred generation runs it at
+      //   settlement (`seal()`), against the Response chosen for the wire
+      $this->tag($Request, $Response);
+
+      // :
+      return $Response;
+   }
+
+   public function seal (Request $Request, Response $Response): void
+   {
+      $this->tag($Request, $Response);
+   }
+
+   /**
+    * Validate and stamp one representation — the shared half of both cycles,
+    * typed loosely because the synchronous unit tests hand doubles.
+    *
+    * @param Request $Request
+    * @param Response $Response
+    */
+   private function tag (object $Request, object $Response): void
+   {
       // ? Only validate cacheable responses (audit F-11): 2xx success / 3xx
       //   redirect. Error and auth-challenge bodies (4xx/5xx) must never be
       //   ETagged or 304-revalidated — caching them risks serving a stale
       //   error or challenge as if it were the resource.
       $code = $Response->code;
       if ($code < 200 || $code >= 400) {
-         return $Response;
+         return;
       }
 
       // ? Only compute ETag for non-empty bodies
-      $body = $Response->Body->raw; // @phpstan-ignore-line
+      $body = $Response->Body->raw;
       if (strlen($body) === 0) {
-         return $Response;
+         return;
       }
 
       // @ Generate the ETag over the body as it will be delivered. Order this
       //   middleware OUTSIDE `Compression` so `$Response->Body->raw` is already
       //   the encoded (compressed) representation when this runs — otherwise
       //   the validator would not identify the bytes actually on the wire
-      //   (audit F-11).
+      //   (audit F-11). The sealing walk preserves the order: innermost seals
+      //   first, exactly as the synchronous unwind runs the post-`$next()`.
       $hash = hash('xxh3', $body);
       $etag = $this->weak ? 'W/"' . $hash . '"' : '"' . $hash . '"';
-      $Response->Header->set('ETag', $etag); // @phpstan-ignore-line
+      $Response->Header->set('ETag', $etag);
 
       // ? Conditional request — RFC 7232 §3.2 `If-None-Match`.
-      $ifNoneMatch = $Request->Header->get('If-None-Match'); // @phpstan-ignore-line
+      $ifNoneMatch = $Request->Header->get('If-None-Match');
       if ($ifNoneMatch !== null && $this->compare($ifNoneMatch, $etag)) {
-         return $Response(code: 304, body: ''); // @phpstan-ignore-line
+         $Response(code: 304, body: ''); // ! `__invoke` mutates in place
       }
-
-      // :
-      return $Response;
    }
 
    /**

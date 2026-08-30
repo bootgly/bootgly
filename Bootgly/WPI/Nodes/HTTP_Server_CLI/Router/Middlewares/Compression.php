@@ -19,9 +19,12 @@ use function strlen;
 use Closure;
 
 use Bootgly\API\Workables\Server\Middleware;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Sealing;
 
 
-class Compression implements Middleware
+class Compression implements Middleware, Sealing
 {
    // * Config
    public private(set) int $level;
@@ -53,47 +56,73 @@ class Compression implements Middleware
       // @ Pass through to handler first
       $Response = $next($Request, $Response);
 
+      // @ One pass serves both cycles — a deferred generation runs it at
+      //   settlement (`seal()`), against the Response chosen for the wire
+      $this->compress($Request, $Response);
+
+      // :
+      return $Response;
+   }
+
+   public function seal (Request $Request, Response $Response): void
+   {
+      $this->compress($Request, $Response);
+   }
+
+   /**
+    * Encode one representation — the shared half of both cycles, typed
+    * loosely because the synchronous unit tests hand doubles.
+    *
+    * @param Request $Request
+    * @param Response $Response
+    */
+   private function compress (object $Request, object $Response): void
+   {
       // ? Only compress cacheable responses (audit F-11): 2xx success / 3xx
       //   redirect. Skip 4xx/5xx error and auth-challenge bodies — they should
       //   not be re-encoded (keeps error representations out of the
       //   compression/validator surface).
       $code = $Response->code;
       if ($code < 200 || $code >= 400) {
-         return $Response;
+         return;
+      }
+
+      // ? A representation already encoded must not be encoded again — a
+      //   sealing pass may run after a synchronous pass already compressed
+      //   (the wire-reporting `get()` reads an absent field as `''`)
+      if (($Response->Header->get('Content-Encoding') ?? '') !== '') {
+         return;
       }
 
       // ? Check body size meets minimum
-      $body = $Response->Body->raw; // @phpstan-ignore-line
+      $body = $Response->Body->raw;
       if (strlen($body) < $this->minSize) {
-         return $Response;
+         return;
       }
 
       // ! Every eligible identity/compressed representation depends on the
       //   request's Accept-Encoding value. Emit Vary before negotiation so an
       //   identity response cannot prime either Bootgly's route cache or an
       //   upstream shared cache for a later compression-capable client.
-      $Response->Header->vary('Accept-Encoding'); // @phpstan-ignore-line
+      $Response->Header->vary('Accept-Encoding');
 
       // ? Check Accept-Encoding
-      $acceptEncoding = $Request->Header->get('Accept-Encoding') ?? ''; // @phpstan-ignore-line
+      $acceptEncoding = $Request->Header->get('Accept-Encoding') ?? '';
 
       // @ Compress with preferred encoding
       if (str_contains($acceptEncoding, 'gzip') && function_exists('gzencode')) {
          $compressed = gzencode($body, $this->level);
          if ($compressed !== false) {
-            $Response->Body->raw = $compressed; // @phpstan-ignore-line
-            $Response->Header->set('Content-Encoding', 'gzip'); // @phpstan-ignore-line
+            $Response->Body->raw = $compressed;
+            $Response->Header->set('Content-Encoding', 'gzip');
          }
       }
       else if (str_contains($acceptEncoding, 'deflate') && function_exists('gzdeflate')) {
          $compressed = gzdeflate($body, $this->level);
          if ($compressed !== false) {
-            $Response->Body->raw = $compressed; // @phpstan-ignore-line
-            $Response->Header->set('Content-Encoding', 'deflate'); // @phpstan-ignore-line
+            $Response->Body->raw = $compressed;
+            $Response->Header->set('Content-Encoding', 'deflate');
          }
       }
-
-      // :
-      return $Response;
    }
 }
