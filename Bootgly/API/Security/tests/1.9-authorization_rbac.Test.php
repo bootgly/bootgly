@@ -3,12 +3,13 @@
 namespace Bootgly\API\Security\Tests\AuthorizationRBAC;
 
 
-use const BOOTGLY_WORKING_DIR;
 use function assert;
 use function count;
 use function is_array;
+use function is_dir;
 use function str_contains;
 
+use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\ADI\Database\Operation\Result;
 use Bootgly\ADI\Databases\SQL;
@@ -18,6 +19,7 @@ use Bootgly\ADI\Databases\SQL\Normalized;
 use Bootgly\ADI\Databases\SQL\Operation as SQLOperation;
 use Bootgly\ADI\Databases\SQL\Schema;
 use Bootgly\ADI\Databases\SQL\Seed;
+use Bootgly\API\Projects;
 use Bootgly\API\Security\Authorization\RBAC;
 use Bootgly\API\Security\Identity;
 
@@ -130,7 +132,15 @@ return new Test(
          description: 'RBAC resolver fails closed on database errors'
       );
 
-      $migrations = BOOTGLY_WORKING_DIR . 'projects/Demo/HTTP_Server_CLI/database/migrations';
+      // ! The fixture ships on the framework's own shelf — the consumer's
+      //   projects/ may legitimately lack it (an example the user deleted
+      //   stays deleted, and an updated kit never restocks it).
+      $migrations = Projects::AUTHOR_DIR . 'Demo/HTTP_Server_CLI/database/migrations';
+      if (is_dir($migrations) === false) {
+         yield (new Assertion(description: 'demo RBAC fixture is on the author shelf'))->skip();
+         return;
+      }
+
       $Schema = new Schema;
       $files = [
          'roles' => '20260520000000_create_roles.php',
@@ -155,7 +165,7 @@ return new Test(
          );
       }
 
-      $Seeder = require BOOTGLY_WORKING_DIR . 'projects/Demo/HTTP_Server_CLI/database/seeders/authorization_rbac.php';
+      $Seeder = require Projects::AUTHOR_DIR . 'Demo/HTTP_Server_CLI/database/seeders/authorization_rbac.php';
       $Queries = $Seeder->run(new RecordingSQL, new Seed);
       $sql = [];
 
