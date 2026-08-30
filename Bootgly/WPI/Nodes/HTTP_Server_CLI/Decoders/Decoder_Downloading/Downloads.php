@@ -102,9 +102,21 @@ final class Downloads
 
 
    /**
-    * Idempotent. The master creates a stable controller inode inside the
-    *   protected process-state directory and hands that inode to the runtime
-    *   identity before workers fork. Each process reopens it on first use.
+    * Idempotent for the bound path. The master creates a stable controller
+    *   inode inside the protected process-state directory and hands that inode
+    *   to the runtime identity before workers fork. Each process reopens it on
+    *   first use.
+    *
+    * A different `$path` rebinds: the controller follows the server that
+    *   boots. One process may boot successive servers (the test runner boots
+    *   one Test-mode server per suite), and the previous server's binding must
+    *   not be inherited — `State::sweep()` reclaims that inode once the
+    *   instance is gone, after which every worker bound by path would fail
+    *   closed on its first reservation.
+    *
+    * A rebind that cannot create the new controller returns false and leaves
+    *   this process unbound: the caller boots in the degraded fail-closed mode
+    *   rather than reserving on the previous server's counter.
     */
    public static function init (
       null|string $path = null,
@@ -112,6 +124,20 @@ final class Downloads
       null|string $group = null,
    ): bool
    {
+      // ? A different controller path is a different service identity:
+      //   release the previous binding (descriptor, device/inode, PID,
+      //   tracking map) so the creation path below validates the new inode,
+      //   never the old one. The pathname IS the identity: it is built once
+      //   per start from the protected state directory and the bound port.
+      if (
+         self::$counterfile !== ''
+         && $path !== null
+         && $path !== ''
+         && $path !== self::$counterfile
+      ) {
+         self::destroy();
+      }
+
       // ?:
       if (self::$counterfile !== '') {
          if (self::bind() === false) {
@@ -798,7 +824,9 @@ final class Downloads
     *   unlinking the shared inode. The HTTP master calls this before the base
     *   server drains its workers, so mutating the record here would lower the
     *   aggregate while uploads may still be completing. The next pre-fork
-    *   `init()` owns the authoritative reset.
+    *   `init()` owns the authoritative reset. `init()` also calls this when
+    *   the controller path changes, releasing the previous server's binding
+    *   before it creates the new inode.
     */
    public static function destroy (): void
    {

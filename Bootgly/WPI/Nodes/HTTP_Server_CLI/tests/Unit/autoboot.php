@@ -72,5 +72,7 @@ return new Suite(
       '1.44-route_middlewares_snapshot',
       // # Warmup hang root cause: readiness parks woken by sibling-context completions
       '1.45-database_completion_wake',
+      // # BG-23: the upload counter follows the server that boots (init() rebinds per path)
+      '1.46-downloads_controller_rebinds_per_path',
    ]
 );

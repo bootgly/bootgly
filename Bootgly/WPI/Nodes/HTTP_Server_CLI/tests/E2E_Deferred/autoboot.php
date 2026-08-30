@@ -77,6 +77,8 @@ return new Suite(
       '2.10-chain_published_before_process',
       '2.11-timeout_bounds_parked_boundary',
       '2.12-timeout_bounds_two_parked_boundaries',
-      '2.13-budget_bounds_parked_boundary_after_any_throwable'
+      '2.13-budget_bounds_parked_boundary_after_any_throwable',
+      // BG-23: the worker reserves on THIS server's counter, not the first server's
+      '3.1-upload_counter_follows_the_booted_server'
    ]
 );
