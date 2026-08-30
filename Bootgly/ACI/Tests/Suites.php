@@ -42,6 +42,13 @@ class Suites
     * @var array<string>
     */
    public array $directories;
+   /**
+    * Iterate every directory (default) or stop at the end of the first suite
+    * that failed — the runner's `--fail-fast` contract. The case-level stop
+    * (`Tester::fail()`) never fires in a suite that manages its own cases, so
+    * the iteration is where such a failure ends a fail-fast run.
+    */
+   public bool $sweeping = true;
 
    // * Metadata
    // # Status
@@ -93,6 +100,7 @@ class Suites
             continue;
          }
 
+         $failed = false;
          try {
             /** @var null|true|Suite $Suite */
             $Suite = $iterator($dir, $case, $index + 1);
@@ -102,15 +110,25 @@ class Suites
             //   exit-on-failure fired) would report it as passed
             if ($Suite instanceof Suite && $Suite->failed > 0) {
                $this->failed++;
-
-               continue;
+               $failed = true;
             }
-
-            $this->passed++;
+            else {
+               $this->passed++;
+            }
          }
          catch (Throwable $T) {
             Exceptions::collect($T);
             $this->failed++;
+            $failed = true;
+         }
+
+         // ? A fail-fast run stops at the end of the first failed suite; the
+         //   suites it never reached count as skipped, so the summary and the
+         //   results document keep adding up to the registered total
+         if ($failed && $this->sweeping === false) {
+            $this->skipped += count($this->directories) - ($index + 1);
+
+            break;
          }
       }
    }

@@ -3,7 +3,7 @@ namespace Bootgly\CLI;
 
 
 use const BOOTGLY_ROOT_DIR;
-use const FILE_APPEND;
+use const PHP_BINARY;
 use function assert;
 use function fclose;
 use function file_exists;
@@ -18,7 +18,6 @@ use function proc_close;
 use function proc_open;
 use function rmdir;
 use function str_contains;
-use function str_replace;
 use function str_starts_with;
 use function stream_get_contents;
 use function trim;
@@ -29,7 +28,7 @@ use Bootgly\ACI\Tests\Temporaries;
 
 
 return new Test(
-   description: 'TestCommand verdict contract: rendering follows stdout, the sweep and the status do not',
+   description: 'TestCommand verdict contract: rendering follows stdout and the agent mode, the sweep and the status follow --fail-fast alone',
    test: function () {
       // ? proc_open unavailable — nothing to spawn
       if (function_exists('proc_open') === false) {
@@ -152,6 +151,25 @@ return new Test(
          description: 'A child with no JSON document reports why on STDERR'
       );
 
+      // @ --fail-fast is a bare switch — a value is a typo that must not be
+      //   read as "on" (nor as "off")
+      [$status, $output] = $self(['5', '--fail-fast=0'], $human);
+      yield assert(
+         assertion: $status === 1 && str_contains($output, 'Invalid --fail-fast'),
+         description: '--fail-fast is a bare switch: a value fails with an alert'
+      );
+
+      // @ The heatmap is a whole-run dashboard: it cannot paint a run that
+      //   stops at its first red case. An EXPLICIT heatmap with --fail-fast is
+      //   a contradiction that fails loud instead of being silently discarded.
+      [$status, $output] = $self(['5', '--fail-fast', '--view=heatmap'], $human);
+      yield assert(
+         assertion: $status === 1 && str_contains($output, '--fail-fast')
+            && str_contains($output, 'heatmap')
+            && str_contains($output, ' PASS ') === false,
+         description: 'An explicit --view=heatmap cannot be combined with --fail-fast'
+      );
+
       // ! Full-run shape — a consumer tree with its own BOOTGLY_WORKING_DIR
       //   (exactly how a kit boots) holding two one-case suites. A real full
       //   run is the shape the default view, the sweep and the verdict guard
@@ -183,8 +201,12 @@ return new Test(
             . "   autoInstance: true,\n"
             . "   autoReport: true,\n"
             . "   autoSummarize: true,\n"
+            // ! Like every real suite autoboot — the sweep legs prove the
+            //   runner's contract overrides it, the --fail-fast legs that it
+            //   is honoured
+            . "   exitOnFailure: true,\n"
             . "   suiteName: 'Probe',\n"
-            . "   tests: ['1.1-probe']\n"
+            . "   tests: ['1.1-probe', '1.2-witness']\n"
             . ");\n",
          "{$app}/Second/tests/autoboot.php" => "<?php\n\n"
             . "use Bootgly\\ACI\\Tests\\Suite;\n\n"
@@ -194,6 +216,7 @@ return new Test(
             . "   autoReport: true,\n"
             . "   autoSummarize: true,\n"
             . "   suiteName: 'Second',\n"
+            . "   exitOnFailure: true,\n"
             . "   tests: ['1.1-second']\n"
             . ");\n",
          "{$app}/Second/tests/1.1-second.Test.php" => "<?php\n\n"
@@ -202,6 +225,25 @@ return new Test(
             . "   description: 'The sweep witness',\n"
             . "   test: function () {\n"
             . "      yield assert(assertion: true, description: 'Second ran');\n"
+            . "   }\n"
+            . ");\n",
+         // ! The witness of a TARGETED run: a suite executes every case it
+         //   holds unless --fail-fast asked to stop at the first red one
+         "{$app}/Probe/tests/1.2-witness.Test.php" => "<?php\n\n"
+            . "use Bootgly\\ACI\\Tests\\Suite\\Test;\n\n"
+            . "return new Test(\n"
+            . "   description: 'The case witness',\n"
+            . "   test: function () {\n"
+            . "      yield assert(assertion: true, description: 'the witness runs');\n"
+            . "   }\n"
+            . ");\n",
+         // ! Registered only by the self-managed variant below
+         "{$app}/Second/tests/1.2-second-witness.Test.php" => "<?php\n\n"
+            . "use Bootgly\\ACI\\Tests\\Suite\\Test;\n\n"
+            . "return new Test(\n"
+            . "   description: 'The second witness',\n"
+            . "   test: function () {\n"
+            . "      yield assert(assertion: true, description: 'the second witness runs');\n"
             . "   }\n"
             . ");\n",
       ];
@@ -279,25 +321,97 @@ return new Test(
             description: 'A swept run with a failing suite reads FAILED'
          );
 
-         // @ ...while an EXPLICIT --view=list keeps the fail-fast contract, so
-         //   the witness never runs
+         // @ ...and an EXPLICIT --view=list is rendering only: the contract
+         //   (sweep vs stop) is `--fail-fast`'s alone, so the witness still runs
          [$status, $output, $error] = $run($entry, ['--view=list'], $human, $app);
          yield assert(
             assertion: $status === 1 && str_contains($error, '[test] FAILED')
-               && str_contains($output, 'Second') === false,
-            description: 'An explicit --view=list keeps the fail-fast contract'
+               && str_contains($output, 'Second'),
+            description: 'An explicit --view=list is rendering only: the run still sweeps'
          );
 
-         // @ Agents keep the fail-fast contract, so the document has to say
-         //   what the run did NOT do: the suites after the failing one never
-         //   report an outcome. Feeding the total incrementally shrank it to
-         //   the suites that ran, and `skipped: 0` then read as "everything
-         //   was covered" over a run that stopped at the first red suite.
-         [$status, $output] = $run($entry, ['--view=list'], $agent, $app);
+         // @ --fail-fast is the explicit opt-in to stop at the first failing
+         //   case, so the witness never runs
+         [$status, $output, $error] = $run($entry, ['--fail-fast'], $human, $app);
+         yield assert(
+            assertion: $status === 1 && str_contains($error, '[test] FAILED')
+               && str_contains($output, 'Second') === false,
+            description: 'An explicit --fail-fast stops at the first failing case'
+         );
+
+         // @ A fail-fast agent run: the document has to say what the run did
+         //   NOT do — the suites after the failing one never report an outcome.
+         //   Feeding the total incrementally shrank it to the suites that ran,
+         //   and `skipped: 0` then read as "everything was covered" over a run
+         //   that stopped at the first red suite.
+         [$status, $output] = $run($entry, ['--fail-fast'], $agent, $app);
          yield assert(
             assertion: $status === 1
                && str_contains($output, '"suites":{"total":2,"failed":1,"skipped":1,"passed":0}'),
             description: 'A fail-fast agent run reports the suites it never reached as skipped'
+         );
+
+         // @@ The agent mode decides the RENDER (the JSON document), never the
+         //    contract: an agent full run sweeps like a human one and the
+         //    document lists every failure. Tying the contract to the agent
+         //    mode left a JSON consumer with no way to ask for a sweep.
+         [$status, $output] = $run($entry, [], $agent, $app);
+         yield assert(
+            assertion: $status === 1 && str_starts_with(ltrim($output), '{')
+               && str_contains($output, '"suites":{"total":2,"failed":1,"skipped":0,"passed":1}'),
+            description: 'An agent full run sweeps every suite and reports every failure'
+         );
+
+         // @ ...and an explicit --view=heatmap under an agent is neither
+         //   discarded nor painted: the run sweeps, the document is the output
+         [$status, $output] = $run($entry, ['--view=heatmap'], $agent, $app);
+         yield assert(
+            assertion: $status === 1 && str_starts_with(ltrim($output), '{')
+               && str_contains($output, '"suites":{"total":2,"failed":1,"skipped":0,"passed":1}')
+               && str_contains($output, '■') === false
+               && str_contains($output, '╭') === false,
+            description: 'An agent run with an explicit --view=heatmap sweeps and still emits the JSON document'
+         );
+
+         // @ A TARGETED run executes every case of the suite it was asked to
+         //   run — the index means "this suite", not "stop at its first red"
+         [$status, $output, $error] = $run($entry, ['1'], $human, $app);
+         yield assert(
+            assertion: $status === 1 && str_contains($error, '[test] FAILED')
+               && str_contains($output, '1.2-witness'),
+            description: 'A targeted run executes every case of the suite'
+         );
+
+         // @ ...unless --fail-fast asked to stop at the first failing case
+         [$status, $output, $error] = $run($entry, ['1', '--fail-fast'], $human, $app);
+         yield assert(
+            assertion: $status === 1 && str_contains($error, '[test] FAILED')
+               && str_contains($output, '1.2-witness') === false,
+            description: 'A targeted run with --fail-fast stops at the first failing case'
+         );
+
+         // @ The IMPLICIT heatmap default is downgraded to the list under
+         //   --fail-fast: a quiet run never exits from Tester::fail(), so
+         //   keeping the dashboard would silently drop the stop
+         [$status, $output, $error] = $run($entry, ['--fail-fast'], ['BOOTGLY_TTY' => '1'] + $human, $app);
+         yield assert(
+            assertion: $status === 1 && str_contains($error, '[test] FAILED')
+               && str_contains($output, 'Second') === false
+               && str_contains($output, '╭') === false,
+            description: 'A --fail-fast run on a terminal renders the list and still stops'
+         );
+
+         // @ The agent view arm protects the UNWRAPPED agent path (the stdout
+         //   wrapper's own child, a nested `bootgly test`): no card may paint
+         //   over the document even when the wrapper is not there to drain it
+         [$status, $output] = $run(
+            $entry, ['--view=heatmap'], ['BOOTGLY_AGENT_STDOUT_REDIRECTED' => '1'] + $agent, $app
+         );
+         yield assert(
+            assertion: $status === 1 && str_starts_with(ltrim($output), '{')
+               && str_contains($output, '■') === false
+               && str_contains($output, '╭') === false,
+            description: 'An unwrapped agent run never paints the heatmap over the document'
          );
 
          // @ A cleanup callback armed DURING the sweep still runs on a red
@@ -310,7 +424,7 @@ return new Test(
             . "      yield assert(assertion: false, description: 'the case fails');\n"
          ));
 
-         [$status] = $run($entry, ['--view=list'], $human, $app);
+         [$status] = $run($entry, ['--fail-fast'], $human, $app);
          yield assert(
             assertion: $status === 1 && file_exists($marker)
                && str_contains((string) file_get_contents($marker), 'cleanup ran'),
@@ -353,6 +467,72 @@ return new Test(
          yield assert(
             assertion: $status === 1 && str_contains($error, '[test] INCOMPLETE'),
             description: 'A sweep ended from inside a case exits 1 and says INCOMPLETE'
+         );
+
+         // @@ --fail-fast must survive a suite that manages its own cases.
+         //    Suite::$exitOnFailure is a static: an autoboot that passes
+         //    `exitOnFailure: false` (every E2E harness does) used to switch
+         //    the stop off for every suite AFTER it, and its own failure never
+         //    stopped the run. Probe becomes self-managed; Second inherits the
+         //    static and gains a witness case.
+         file_put_contents("{$app}/Probe/tests/autoboot.php", "<?php\n\n"
+            . "use Bootgly\\ACI\\Tests\\Suite;\n\n"
+            . "return new Suite(\n"
+            . "   autoBoot: __DIR__,\n"
+            . "   autoInstance: true,\n"
+            . "   autoReport: true,\n"
+            . "   autoSummarize: true,\n"
+            . "   exitOnFailure: false,\n"
+            . "   suiteName: 'Probe',\n"
+            . "   tests: ['1.1-probe', '1.2-witness']\n"
+            . ");\n");
+         file_put_contents("{$app}/Second/tests/autoboot.php", "<?php\n\n"
+            . "use Bootgly\\ACI\\Tests\\Suite;\n\n"
+            . "return new Suite(\n"
+            . "   autoBoot: __DIR__,\n"
+            . "   autoInstance: true,\n"
+            . "   autoReport: true,\n"
+            . "   autoSummarize: true,\n"
+            . "   suiteName: 'Second',\n"
+            . "   tests: ['1.1-second', '1.2-second-witness']\n"
+            . ");\n");
+         file_put_contents("{$app}/Second/tests/1.1-second.Test.php", "<?php\n\n"
+            . "use Bootgly\\ACI\\Tests\\Suite\\Test;\n\n"
+            . "return new Test(\n"
+            . "   description: 'The sweep witness',\n"
+            . "   test: function () {\n"
+            . "      yield assert(assertion: false, description: 'Second fails');\n"
+            . "   }\n"
+            . ");\n");
+
+         // @ The static does not leak: a green self-managed suite ahead of a
+         //   red one leaves the case-level stop armed for the red one
+         file_put_contents($probe, $green);
+         [$status, $output, $error] = $run($entry, ['--fail-fast'], $human, $app);
+         yield assert(
+            assertion: $status === 1 && str_contains($error, '[test] FAILED')
+               && str_contains($output, '1.1-second')
+               && str_contains($output, '1.2-second-witness') === false,
+            description: 'A self-managed suite ahead of a red one does not disarm --fail-fast'
+         );
+
+         // @ ...and a self-managed suite that FAILS ends the run at its own
+         //   end: it runs its remaining cases (its own contract), the suites
+         //   after it never start, and they count as skipped
+         file_put_contents($probe, $red);
+         [$status, $output, $error] = $run($entry, ['--fail-fast'], $human, $app);
+         yield assert(
+            assertion: $status === 1
+               && str_contains($error, '[test] FAILED — 2 suites: 1 failed, 1 skipped, 0 passed')
+               && str_contains($output, '1.2-witness')
+               && str_contains($output, 'Second') === false,
+            description: 'A failed self-managed suite ends a --fail-fast run at its own end'
+         );
+         [$status, $output] = $run($entry, ['--fail-fast'], $agent, $app);
+         yield assert(
+            assertion: $status === 1
+               && str_contains($output, '"suites":{"total":2,"failed":1,"skipped":1,"passed":0}'),
+            description: 'The document of that run counts the suites it never reached as skipped'
          );
       }
       finally {

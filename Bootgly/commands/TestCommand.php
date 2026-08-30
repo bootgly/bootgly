@@ -14,6 +14,7 @@ namespace Bootgly\commands;
 use const BOOTGLY_ROOT_DIR;
 use const BOOTGLY_TTY;
 use const BOOTGLY_VERSION;
+use const BOOTGLY_WORKING_BASE;
 use const BOOTGLY_WORKING_DIR;
 use const DIRECTORY_SEPARATOR;
 use const JSON_THROW_ON_ERROR;
@@ -35,6 +36,7 @@ use function array_unique;
 use function array_values;
 use function basename;
 use function bin2hex;
+use function chr;
 use function constant;
 use function count;
 use function defined;
@@ -183,7 +185,8 @@ class TestCommand extends Command
       'Native driver mode: @#Cyan:strict | parity@; @#Black:(default: strict)@;' => ['--coverage-native-mode=MODE'],
       'Coverage report: @#Cyan:text | html | clover@; @#Black:(default: text)@;' => ['--coverage-report=FORMAT[:PATH]'],
       'Restrict the coverage report to changed lines' => ['--coverage-diff'],
-      'Output view: @#Cyan:list | heatmap@; @#Black:(default: heatmap on full runs in a terminal)@;' => ['--view=MODE'],
+      'Output view, rendering only: @#Cyan:list | heatmap@; @#Black:(default: heatmap on a terminal)@;' => ['--view=MODE'],
+      'Stop at the first failing case @#Black:(default: report every failure)@;' => ['--fail-fast'],
       'Show help information' => ['--help', '-h'],
    ];
 
@@ -191,11 +194,15 @@ class TestCommand extends Command
    /** Output view resolved from --view — RENDERING only (list | heatmap) */
    private string $view = 'list';
    /**
-    * Run every suite instead of stopping at the first failing case.
+    * Run everything the run was asked to run instead of stopping at the first
+    * failing case.
     *
-    * The run's contract, decided by its shape and an explicit `--view`. Kept
-    * apart from `$view` so that rendering a log instead of a dashboard — which
-    * depends on where stdout points — can never change what the run measures.
+    * The run's contract, decided by `--fail-fast` alone: never by the view,
+    * never by the run's shape, never by the agent mode. Kept apart from
+    * `$view` so that how the output is rendered — a log, a dashboard, the JSON
+    * document — can never change what the run measures. A suite autoboot's own
+    * `exitOnFailure: true` only matters for Suites driven outside the runner
+    * (the self-test probes): here it is overridden by the contract.
     */
    private bool $sweeping = false;
    /** Failed test cases accumulated across heatmap-mode suites */
@@ -379,31 +386,55 @@ class TestCommand extends Command
          register_shutdown_function(static fn () => exit(1));
       });
 
-      // ! View
-      // The view decides TWO things that must not be confused: how results are
-      // RENDERED, and whether the run sweeps every suite or stops at the first
-      // failing case. Only the first may depend on where stdout points.
-      //
-      // ? Contract — the run shape and an explicit `--view` decide it alone.
-      //   A full run sweeps (heatmap semantics); a targeted run (suite/case
-      //   index) stops at the failure it was asked to debug.
-      $targeted = ((int) ($arguments[0] ?? 0)) > 0;
-      $contract = strtolower((string) ($options['view'] ?? ($targeted ? 'list' : 'heatmap')));
-      if (in_array($contract, ['list', 'heatmap'], true) === false) {
+      // ! Contract
+      // The run executes everything it was asked to run — every suite of a
+      // full run, every case of a targeted one — and reports every failure.
+      // `--fail-fast` is the explicit opt-in to stop at the first failing case:
+      // a human debugging one failure, an agent that wants the first one fast.
+      // Never derived from the view, never from the run's shape, never from the
+      // agent mode: how the output is rendered must not change what the run
+      // measures.
+      $failFast = $options['fail-fast'] ?? false;
+      if ($failFast !== false && $failFast !== true) {
          $Output = CLI->Terminal->Output;
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = "Invalid --view '{$contract}'. Use: list | heatmap.@.;";
+         $Alert->message = "Invalid --fail-fast value '{$failFast}': it is a switch, pass it bare.@.;";
          $Alert->render();
 
          return false;
       }
-      // ? Agents consume the JSON results document — views only shape human output
-      if (Results::$enabled) {
-         $contract = 'list';
+      $this->sweeping = $failFast === false;
+
+      // ! View — RENDERING only
+      // ? A targeted run (suite/case index) defaults to the list: the index
+      //   means "debug this one", and assertion-level output is the point.
+      $targeted = ((int) ($arguments[0] ?? 0)) > 0;
+      $view = strtolower((string) ($options['view'] ?? ($targeted ? 'list' : 'heatmap')));
+      if (in_array($view, ['list', 'heatmap'], true) === false) {
+         $Output = CLI->Terminal->Output;
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Invalid --view '{$view}'. Use: list | heatmap.@.;";
+         $Alert->render();
+
+         return false;
       }
-      // ? Sweep every suite unless something asked for the fail-fast contract
-      $this->sweeping = $contract === 'heatmap';
+      // ? The heatmap is a whole-run dashboard: it cannot paint a run that
+      //   stops at its first red case (Tester::fail() never exits a quiet
+      //   run). An EXPLICIT heatmap with --fail-fast is a contradiction that
+      //   fails loud instead of being silently discarded; the implicit default
+      //   just renders the list.
+      if ($this->sweeping === false && $view === 'heatmap' && isSet($options['view'])) {
+         $Output = CLI->Terminal->Output;
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         // ? Short on purpose, tokens first: the Alert crops to the terminal width
+         $Alert->message = 'Drop --view or --fail-fast: the heatmap needs the whole run.@.;';
+         $Alert->render();
+
+         return false;
+      }
 
       // ? Rendering — the heatmap is a LIVE dashboard, so it only earns the
       //   IMPLICIT default when stdout is a terminal that can paint it. A
@@ -418,11 +449,14 @@ class TestCommand extends Command
          '0' => false,
          default => defined('STDOUT') && function_exists('stream_isatty') && stream_isatty(STDOUT),
       };
-      $this->view = $contract === 'heatmap'
-         && $interactive === false
-         && isSet($options['view']) === false
-            ? 'list'
-            : $contract;
+      $this->view = match (true) {
+         // ? Agents consume the JSON results document — no view paints over it
+         Results::$enabled => 'list',
+         // ? An implicit heatmap cannot survive a run that stops at its first red
+         $this->sweeping === false => 'list',
+         $view === 'heatmap' && $interactive === false && isSet($options['view']) === false => 'list',
+         default => $view,
+      };
 
       // ! Reap temporaries orphaned by interrupted past runs (age- and
       //   ownership-guarded; production surfaces are never matched). Silent:
@@ -674,11 +708,14 @@ class TestCommand extends Command
          $Suites = $Tests->Suites;
       }
       $this->Suites = $Suites;
+      // ? A fail-fast run also stops at the END of a failed suite: the
+      //   case-level stop never fires in a suite that manages its own cases
+      $Suites->sweeping = $this->sweeping;
       Tests::$scope = $scope;
 
       // ! How many suites this run is ACCOUNTABLE for — a fact of the run, not
-      //   of how far it got. A fail-fast end (an agent run, an explicit
-      //   `--view=list`) exits from inside the failing suite, so the tally
+      //   of how far it got. A fail-fast end (an explicit `--fail-fast`)
+      //   exits from inside the failing suite, so the tally
       //   Suite::summarize() feeds incrementally would report only the suites
       //   that ran: the ones the run never reached would vanish from the
       //   document instead of showing up as skipped.
@@ -1081,6 +1118,7 @@ class TestCommand extends Command
       $Fieldset->content = 'bootgly test @#Black: [suite] [case] @;@.;';
       $Fieldset->content .= 'bootgly test @#Black: [suite] --coverage @;@.;';
       $Fieldset->content .= 'bootgly test @#Black: [suite] --view=heatmap @;@.;';
+      $Fieldset->content .= 'bootgly test @#Black: [suite] --fail-fast @;@.;';
       $Fieldset->content .= 'bootgly test @#Black: benchmark CASE --opponents=LIST --loads=SET:SELECTOR @;';
       $Fieldset->render();
 
@@ -1089,8 +1127,9 @@ class TestCommand extends Command
       $examples .= '@#Black:bootgly test 23@;' . PHP_EOL;
       $examples .= '@#Black:bootgly test 23 1@;' . PHP_EOL;
       $examples .= '@#Black:bootgly test --view=heatmap@;' . PHP_EOL;
+      $examples .= '@#Black:bootgly test 23 --fail-fast@;  (stop at the first failing case)' . PHP_EOL;
       $examples .= '@#Black:php -d opcache.enable_cli=0 bootgly test 8 --coverage-driver=native@;' . PHP_EOL;
-      $examples .= '@#Black:AI_AGENT=1 bootgly test@;  (JSON results for AI agents)';
+      $examples .= '@#Black:AI_AGENT=1 bootgly test@;  (JSON results for AI agents — every failure; add --fail-fast to stop at the first)';
       $Fieldset = new Fieldset($Output);
       $Fieldset->title = '@#green: Test examples @;';
       $Fieldset->content = $examples;
@@ -1144,6 +1183,11 @@ class TestCommand extends Command
       if (Environment::get('BOOTGLY_TEST_TRACE')) {
          fwrite(STDERR, "[test-trace] suite {$suite}: {$suite_dir}" . PHP_EOL);
       }
+
+      // ? The contract owns exit-on-failure for every suite: a suite autoboot
+      //   may flip the static for ITSELF (the E2E harnesses manage their own
+      //   cases), never for the suites after it
+      Suite::$exitOnFailure = $this->sweeping === false;
 
       $Suite = include $bootstrap;
       // ?
@@ -1240,7 +1284,7 @@ class TestCommand extends Command
             //   server workers, but run their client cases in this process).
             //   Chart the suite when it produced records here; returning the
             //   Suite lets the aggregate iterator count its case failures in
-            //   every view — no exit-on-failure fires under the heatmap view.
+            //   every view — no exit-on-failure fires under a sweeping run.
             if ($Meter !== null && $Heatmap !== null) { // @phpstan-ignore notIdentical.alwaysTrue (assigned together)
                if ($Suite->records !== []) {
                   $this->plot($Suite, $Meter, $Heatmap, $title);

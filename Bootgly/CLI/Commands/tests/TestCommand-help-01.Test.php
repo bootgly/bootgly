@@ -102,6 +102,13 @@ return new Test(
          assertion: str_contains($output, '--coverage-report'),
          description: '--help lists the coverage options'
       );
+      // @ The run's contract is stated where an agent reading the help finds
+      //   it: every failure by default, --fail-fast to stop at the first
+      yield assert(
+         assertion: str_contains($output, '--fail-fast')
+            && str_contains($output, 'report every failure'),
+         description: '--help lists --fail-fast and states the run contract'
+      );
       yield assert(
          assertion: str_contains($output, 'Ran all test suites') === false,
          description: '--help does not run the test suites'
