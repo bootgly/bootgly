@@ -3,6 +3,7 @@
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test;
+use Bootgly\API\Environment\Agent;
 
 
 return new Test(
@@ -20,13 +21,11 @@ return new Test(
       //   already exported BOOTGLY_AGENT_STDOUT_REDIRECTED into the harness;
       //   scrub the markers so the probe states its own requirement.
       $environment = getenv();
-      foreach ([
-         'AI_AGENT', 'AMP_CURRENT_THREAD_ID', 'ANTIGRAVITY_AGENT',
-         'AUGMENT_AGENT', 'CLAUDECODE', 'CLAUDE_CODE', 'CODEX_SANDBOX',
-         'CODEX_THREAD_ID', 'COPILOT_CLI', 'CURSOR_AGENT', 'GEMINI_CLI',
-         'OPENCODE', 'OPENCODE_CLIENT', 'REPL_ID',
-      ] as $variable) {
-         unset($environment[$variable]);
+      unset($environment['AI_AGENT'], $environment['BOOTGLY_AGENT_STDOUT_REDIRECTED']);
+      foreach (Agent::MARKERS as $variables) {
+         foreach ($variables as $variable) {
+            unset($environment[$variable]);
+         }
       }
 
       $descriptors = [
@@ -39,6 +38,8 @@ return new Test(
             PHP_BINARY,
             '-d',
             'opcache.enable_cli=0',
+            '-d',
+            'zend.assertions=1',
             BOOTGLY_ROOT_DIR . 'bootgly',
             'test',
             '5',

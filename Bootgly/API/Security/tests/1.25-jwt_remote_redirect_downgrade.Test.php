@@ -46,6 +46,7 @@ use RuntimeException;
 use Throwable;
 
 use Bootgly\ACI\Tests\Suite\Test;
+use Bootgly\API\Environment\Agent;
 
 
 $supported = function_exists('pcntl_fork')
@@ -289,11 +290,12 @@ catch (Throwable $Exception) {
 }
 PHP;
       $environment = getenv();
-      unset(
-         $environment['AI_AGENT'],
-         $environment['BOOTGLY_AGENT_STDOUT_REDIRECTED'],
-         $environment['CODEX_THREAD_ID']
-      );
+      unset($environment['AI_AGENT'], $environment['BOOTGLY_AGENT_STDOUT_REDIRECTED']);
+      foreach (Agent::MARKERS as $variables) {
+         foreach ($variables as $variable) {
+            unset($environment[$variable]);
+         }
+      }
       $environment['BOOTGLY_JWT13_ROOT'] = BOOTGLY_ROOT_DIR;
       $environment['BOOTGLY_JWT13_KEYS'] = __DIR__ . '/fixtures/jwt_rs256.php';
       $environment['BOOTGLY_JWT13_DIRECT'] = "https://127.0.0.1:{$TLSPort}/direct";

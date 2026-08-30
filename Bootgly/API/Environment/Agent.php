@@ -20,6 +20,27 @@ use function trim;
 class Agent
 {
    // * Data
+   /**
+    * Environment variables that mark a process as started by a known AI agent,
+    * keyed by agent name. The single source for the detection below and for
+    * every test probe that spawns a human-mode child and must scrub these —
+    * plus `AI_AGENT` — from the environment it hands down.
+    *
+    * @var array<string,array<int,string>>
+    */
+   public const array MARKERS = [
+      'amp'          => ['AMP_CURRENT_THREAD_ID'],
+      'antigravity'  => ['ANTIGRAVITY_AGENT'],
+      'augment'      => ['AUGMENT_AGENT'],
+      'claude'       => ['CLAUDECODE', 'CLAUDE_CODE'],
+      'codex'        => ['CODEX_SANDBOX', 'CODEX_THREAD_ID'],
+      'copilot'      => ['COPILOT_CLI'],
+      'cursor'       => ['CURSOR_AGENT'],
+      'gemini'       => ['GEMINI_CLI'],
+      'opencode'     => ['OPENCODE_CLIENT', 'OPENCODE'],
+      'replit'       => ['REPL_ID'],
+   ];
+
    public readonly bool $detected;
    public readonly ?string $name;
    public readonly ?Agents $known;
@@ -47,21 +68,7 @@ class Agent
       }
 
       // @ Known agents via specific env vars
-      /** @var array<string,array<string>> */
-      $agents = [
-         'amp'          => ['AMP_CURRENT_THREAD_ID'],
-         'antigravity'  => ['ANTIGRAVITY_AGENT'],
-         'augment'      => ['AUGMENT_AGENT'],
-         'claude'       => ['CLAUDECODE', 'CLAUDE_CODE'],
-         'codex'        => ['CODEX_SANDBOX', 'CODEX_THREAD_ID'],
-         'copilot'      => ['COPILOT_CLI'],
-         'cursor'       => ['CURSOR_AGENT'],
-         'gemini'       => ['GEMINI_CLI'],
-         'opencode'     => ['OPENCODE_CLIENT', 'OPENCODE'],
-         'replit'       => ['REPL_ID'],
-      ];
-
-      foreach ($agents as $agent => $variables) {
+      foreach (self::MARKERS as $agent => $variables) {
          foreach ($variables as $variable) {
             if (getenv($variable) !== false) {
                return new self(true, $agent);

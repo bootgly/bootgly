@@ -48,6 +48,7 @@ use function file_get_contents;
 use function file_put_contents;
 use function function_exists;
 use function fwrite;
+use function get_cfg_var;
 use function get_resources;
 use function getcwd;
 use function getenv;
@@ -243,25 +244,27 @@ class TestCommand extends Command
       //   default) every native assert() is compiled out at parse time and can
       //   NEVER be re-enabled at runtime: thousands of `yield assert(...)`
       //   cases would pass vacuously and the sweep would lie green. Re-exec
-      //   this exact command once with assertions forced on; the env marker
-      //   stops a loop if the flag cannot take effect.
-      if (ini_get('zend.assertions') !== '1' && getenv('BOOTGLY_ASSERTIONS') === false) {
+      //   this exact command once with assertions forced on; the cfg var marker
+      //   stops a loop if the flag cannot take effect. The marker rides the
+      //   re-exec'd command line only — an environment marker would be
+      //   inherited by every process the suites spawn, silencing this guard in
+      //   children that never re-executed and letting them run hollow.
+      if (ini_get('zend.assertions') !== '1' && get_cfg_var('bootgly.assertions') === false) {
          /** @var array<int,string> $argv */
          $argv = (array) ($_SERVER['argv'] ?? []);
          $command = $argv === [] ? [BOOTGLY_ROOT_DIR . 'bootgly', 'test'] : $argv;
 
-         putenv('BOOTGLY_ASSERTIONS=1');
-
          // @ Replace this process when the platform allows it...
          if (function_exists('pcntl_exec')) {
-            $environment = getenv();
-            $environment['BOOTGLY_ASSERTIONS'] = '1';
-
-            pcntl_exec(PHP_BINARY, ['-d', 'zend.assertions=1', ...$command], $environment);
+            pcntl_exec(
+               PHP_BINARY,
+               ['-d', 'zend.assertions=1', '-d', 'bootgly.assertions=1', ...$command],
+               getenv()
+            );
          }
 
          // @ ...or degrade to a child run with the same exit code.
-         $line = escapeshellarg(PHP_BINARY) . ' -d zend.assertions=1';
+         $line = escapeshellarg(PHP_BINARY) . ' -d zend.assertions=1 -d bootgly.assertions=1';
          foreach ($command as $part) {
             $part = escapeshellarg($part);
             $line .= " {$part}";

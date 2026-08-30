@@ -3,6 +3,7 @@
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test;
+use Bootgly\API\Environment\Agent;
 
 
 return new Test(
@@ -16,17 +17,15 @@ return new Test(
 
       // ! The probe parses the HUMAN text coverage report, so its child must
       //   not run as an agent — an agent-driven child emits the JSON results
-      //   document instead. Today this only holds because the outer wrapper
-      //   already exported BOOTGLY_AGENT_STDOUT_REDIRECTED into the harness;
-      //   scrub the markers so the probe states its own requirement.
+      //   document instead. Scrub the agent markers and the stdout-redirect
+      //   flag an agent wrapper exports, so the probe states its own
+      //   requirement instead of borrowing the harness environment.
       $environment = getenv();
-      foreach ([
-         'AI_AGENT', 'AMP_CURRENT_THREAD_ID', 'ANTIGRAVITY_AGENT',
-         'AUGMENT_AGENT', 'CLAUDECODE', 'CLAUDE_CODE', 'CODEX_SANDBOX',
-         'CODEX_THREAD_ID', 'COPILOT_CLI', 'CURSOR_AGENT', 'GEMINI_CLI',
-         'OPENCODE', 'OPENCODE_CLIENT', 'REPL_ID',
-      ] as $variable) {
-         unset($environment[$variable]);
+      unset($environment['AI_AGENT'], $environment['BOOTGLY_AGENT_STDOUT_REDIRECTED']);
+      foreach (Agent::MARKERS as $variables) {
+         foreach ($variables as $variable) {
+            unset($environment[$variable]);
+         }
       }
 
       foreach ([15, 16, 17, 18, 19, 20, 21, 22] as $suite) {
@@ -39,6 +38,12 @@ return new Test(
             PHP_BINARY,
             '-d',
             'opcache.enable_cli=0',
+            // ! The child measures executable code: its assertions must be
+            //   compiled in even under a production INI. The runner would
+            //   re-exec itself to the same effect; the explicit flag states
+            //   the contract and saves a re-exec per suite.
+            '-d',
+            'zend.assertions=1',
             BOOTGLY_ROOT_DIR . 'bootgly',
             'test',
             (string) $suite,
