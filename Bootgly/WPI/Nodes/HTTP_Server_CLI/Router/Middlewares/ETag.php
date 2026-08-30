@@ -55,6 +55,8 @@ class ETag implements Middleware, Sealing
 
       // @ One pass serves both cycles — a deferred generation runs it at
       //   settlement (`seal()`), against the Response chosen for the wire
+      /** @var Request $Request */
+      /** @var Response $Response */
       $this->tag($Request, $Response);
 
       // :

@@ -58,6 +58,8 @@ class Compression implements Middleware, Sealing
 
       // @ One pass serves both cycles — a deferred generation runs it at
       //   settlement (`seal()`), against the Response chosen for the wire
+      /** @var Request $Request */
+      /** @var Response $Response */
       $this->compress($Request, $Response);
 
       // :
@@ -90,7 +92,7 @@ class Compression implements Middleware, Sealing
       // ? A representation already encoded must not be encoded again — a
       //   sealing pass may run after a synchronous pass already compressed
       //   (the wire-reporting `get()` reads an absent field as `''`)
-      if (($Response->Header->get('Content-Encoding') ?? '') !== '') {
+      if ((string) $Response->Header->get('Content-Encoding') !== '') {
          return;
       }
 
