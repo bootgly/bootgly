@@ -46,6 +46,7 @@ class JSON implements Formatter
       $json = json_encode([
          'timestamp' => $Record->timestamp,
          'level'     => $Record->Level->render(),
+         'project'   => $Record->project,
          'channel'   => $Record->channel,
          'message'   => $message,
          'context'   => $Record->context,

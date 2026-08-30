@@ -594,6 +594,7 @@ class Logs
       $lines = [];
       $lines[] = self::wrap($color) . $Record->Level->render() . self::_RESET_FORMAT
          . '  ' . self::wrap(self::_BLUE_BRIGHT_FOREGROUND) . $Record->channel . self::_RESET_FORMAT
+         . '  ' . self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . $Record->project . self::_RESET_FORMAT
          . '  ' . self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . date('Y-m-d H:i:s', (int) $Record->timestamp) . self::_RESET_FORMAT;
       $lines[] = '';
 

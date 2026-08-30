@@ -20,6 +20,7 @@ use function mkdir;
 use function preg_replace;
 use function str_contains;
 use function str_replace;
+use function trim;
 
 use Bootgly\ACI\Logs\Data\Levels;
 use Bootgly\ACI\Logs\Data\Record;
@@ -40,7 +41,9 @@ class File extends Handler
     * Write records to a file, rotating it per the rotation policy.
     *
     * @param string $path Destination log file path. A `{channel}` placeholder is replaced per record
-    *                     with the record's channel, writing one file per module (e.g. `logs/{channel}.log`).
+    *                     with the record's channel, writing one file per module (e.g. `logs/{channel}.log`);
+    *                     a `{project}` placeholder is replaced with the record's provenance, separating
+    *                     framework and project records (e.g. `logs/{project}/{channel}.log`).
     * @param null|Formatter $Formatter Output formatter (defaults to JSON — structured, ANSI-free lines).
     * @param Levels $Level Minimum severity this handler accepts.
     * @param null|Rotation $Rotation Rotation policy (defaults to daily + 10MB, keep 7).
@@ -64,7 +67,7 @@ class File extends Handler
     * Ensure the directory, rotate if due, then append the formatted record.
     *
     * @param string $formatted The formatted record.
-    * @param Record $Record The source record (supplies the channel for the `{channel}` placeholder).
+    * @param Record $Record The source record (supplies the `{channel}` and `{project}` placeholders).
     * @return bool True on success.
     */
    protected function write (string $formatted, Record $Record): bool
@@ -74,6 +77,15 @@ class File extends Handler
       if (str_contains($path, '{channel}') === true) {
          $channel = preg_replace('/[^A-Za-z0-9._-]/', '_', $Record->channel) ?? '';
          $path = str_replace('{channel}', $channel !== '' ? $channel : 'default', $path);
+      }
+      // ? Resolve the {project} placeholder per record (sanitized — no path traversal;
+      //   the dot-only names the character class would keep are refused explicitly)
+      if (str_contains($path, '{project}') === true) {
+         $project = preg_replace('/[^A-Za-z0-9._-]/', '_', $Record->project) ?? '';
+         if ($project === '' || trim($project, '.') === '') {
+            $project = 'default';
+         }
+         $path = str_replace('{project}', $project, $path);
       }
 
       // ? Ensure destination directory

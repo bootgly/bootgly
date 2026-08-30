@@ -18,6 +18,7 @@ use function define;
 use function defined;
 use function dirname;
 use function is_dir;
+use function is_file;
 use function rtrim;
 use function str_starts_with;
 use function strlen;
@@ -28,6 +29,7 @@ use Error;
 
 use Bootgly\ABI\Data\Language;
 use Bootgly\ABI\Events\Emitter;
+use Bootgly\ACI\Logs\Data\Record;
 use Bootgly\API\Projects;
 use Bootgly\API\Projects\Configs;
 use Bootgly\API\Projects\Project\Events;
@@ -139,6 +141,12 @@ class Project
 
       define('BOOTGLY_PROJECT', $this);
       Projects::add($this);
+
+      // @ Stamp log provenance for this process — every Record built from here on
+      //   carries this project's canonical id: the projects-root-relative folder,
+      //   the same identity `project start/stop/logs --project` address
+      //   (ACI must never read BOOTGLY_PROJECT itself)
+      Record::$provenance = $this->folder !== '' ? $this->folder : $this->name;
 
       // @ Configs
       $configsDir = "{$this->path}configs/";

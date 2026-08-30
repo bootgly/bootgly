@@ -20,10 +20,19 @@ use function microtime;
 
 class Record
 {
+   // * Config
+   /**
+    * Process-scoped provenance stamped on every new record: the booted project's name, set
+    * ONCE per process by the boot context (Project::boot()); 'framework' when no project is
+    * booted. Never derived per record — no path heuristics, no BOOTGLY_PROJECT reads here.
+    */
+   public static string $provenance = 'framework';
+
    // * Data
    public Levels $Level;
    public string $channel;
    public string $message;
+   public string $project;
    /** @var array<string,mixed> */
    public array $context;
    /** @var array<string,mixed> */
@@ -50,6 +59,7 @@ class Record
       $this->Level = $Level;
       $this->channel = $channel;
       $this->message = $message;
+      $this->project = self::$provenance;
       $this->context = $context;
       $this->extra = [];
       $this->timestamp = microtime(true);
@@ -61,7 +71,7 @@ class Record
     * Used by the master process to reconstruct records streamed from workers over a pipe, so they
     * can be re-filtered and re-formatted for the live viewer.
     *
-    * @param array<string,mixed> $data Decoded fields: level, channel, message, context, extra, timestamp.
+    * @param array<string,mixed> $data Decoded fields: level, project, channel, message, context, extra, timestamp.
     * @return self
     */
    public static function import (array $data): self
@@ -80,6 +90,11 @@ class Record
          is_string($message) ? $message : '',
          $context
       );
+
+      // @ Restore provenance ('framework' for lines written before the field existed) —
+      //   unconditional, so a booted process never leaks its own provenance onto imported lines
+      $project = $data['project'] ?? null;
+      $Record->project = is_string($project) && $project !== '' ? $project : 'framework';
 
       // @ Restore processor-enriched extra + original timestamp
       $Record->extra = isSet($data['extra']) && is_array($data['extra']) ? $data['extra'] : [];
