@@ -10,6 +10,10 @@
 
 
 use const Bootgly\CLI;
+// use const BOOTGLY_STORAGE_DIR;
+// use Bootgly\ACI\Logs\Handlers;
+// use Bootgly\ACI\Logs\Handlers\File;
+// use Bootgly\ACI\Logs\Logger;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
@@ -28,6 +32,11 @@ return new Project(
    // # Project Boot Function
    boot: function (array $arguments = [], array $options = []): void
    {
+      // ? Persistent logs — global (server) channels write JSON lines here in every mode.
+      //   Without this, Daemon mode auto-persists to storage/logs/{channel}.log.
+      // Logger::$Sinks ??= new Handlers;
+      // Logger::$Sinks->push(new File(BOOTGLY_STORAGE_DIR . 'logs/{project}/{channel}.log'));
+
       $Server = new HTTP_Server_CLI(Mode: match (true) {
          isSet($options['f']) => Modes::Foreground,
          isSet($options['i']) => Modes::Interactive,

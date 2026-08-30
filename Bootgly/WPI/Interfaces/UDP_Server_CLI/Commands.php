@@ -37,7 +37,7 @@ class Commands extends CLI\Terminal
    public Logger $Logger {
       get {
          if ( isSet($this->Logger) === false ) {
-            $this->Logger = new Logger(channel: static::class);
+            $this->Logger = new Logger(channel: static::class, global: true);
          }
 
          return $this->Logger;

@@ -29,7 +29,7 @@ class TrustedProxy implements Middleware
    public Logger $Logger {
       get {
          if ( isSet($this->Logger) === false ) {
-            $this->Logger = new Logger(channel: static::class);
+            $this->Logger = new Logger(channel: static::class, global: true);
          }
 
          return $this->Logger;

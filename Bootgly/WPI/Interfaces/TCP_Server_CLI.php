@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Interfaces;
 
 
 use const BOOTGLY_ENVIRONMENT;
+use const BOOTGLY_STORAGE_DIR;
 use const LOCK_EX;
 use const LOCK_NB;
 use const PHP_BINARY;
@@ -65,7 +66,9 @@ use function array_values;
 use function basename;
 use function bin2hex;
 use function chdir;
+use function chgrp;
 use function chmod;
+use function chown;
 use function count;
 use function defined;
 use function explode;
@@ -176,6 +179,8 @@ use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Data\Display;
+use Bootgly\ACI\Logs\Handlers;
+use Bootgly\ACI\Logs\Handlers\File as FileHandler;
 use Bootgly\ACI\Logs\Handlers\Pipe as PipeHandler;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Process;
@@ -197,6 +202,7 @@ use Bootgly\WPI\Events;
 use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Commands;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Tap;
 
 
 class TCP_Server_CLI implements Servers
@@ -231,7 +237,7 @@ class TCP_Server_CLI implements Servers
    public Logger $Logger {
       get {
          if ( isSet($this->Logger) === false ) {
-            $this->Logger = new Logger(channel: static::class);
+            $this->Logger = new Logger(channel: static::class, global: true);
          }
 
          return $this->Logger;
@@ -401,8 +407,10 @@ class TCP_Server_CLI implements Servers
    // /
    protected Connections $Connections;
 
-   // @ Monitor live-log viewer pipe (workers → master), opened pre-fork.
+   // @ Live-log viewer pipe (workers → master), opened pre-fork in every mode but Test.
    protected null|IPCPipe $LogPipe = null;
+   // @ Live-log tap hub (master-only): the unix socket `logs -f` sessions attach to.
+   protected null|Tap $LogTap = null;
 
 
    public function __construct (Modes $Mode = Modes::Monitor)
@@ -440,7 +448,7 @@ class TCP_Server_CLI implements Servers
 
       // @
       // @ Configure Logger
-      $this->Logger = new Logger(channel: 'TCP.Server.CLI');
+      $this->Logger = new Logger(channel: 'TCP.Server.CLI', global: true);
       // @ Configure Debugging Vars
       Vars::$debug = true;
       Vars::$print = true;
@@ -557,6 +565,22 @@ class TCP_Server_CLI implements Servers
 
             // @ Restore log display
             Display::show($display);
+            return true;
+         case '@log on':
+            // @ A `logs -f` session attached: route this process's records into the
+            //   pipe. Display is deliberately untouched (unlike Monitor's sink()) —
+            //   per-mode terminal behavior stays exactly as it is.
+            if ($this->LogPipe !== null) {
+               Logger::$Tap ??= new PipeHandler($this->LogPipe);
+            }
+            return true;
+         case '@log off':
+            // ? The MASTER's Monitor tap is the TUI's food — sessions never disarm
+            //   it. Workers always obey: their inherited Mode is a stale fork-time
+            //   copy, and the master only sends `log off` when no viewer consumes.
+            if ($this->Process->level === 'child' || $this->Mode !== Modes::Monitor) {
+               Logger::$Tap = null;
+            }
             return true;
       }
 
@@ -822,6 +846,10 @@ class TCP_Server_CLI implements Servers
          fclose($probeSocket);
       }
 
+      // ! Daemon runs detached: install the default sink BEFORE the daemon and worker
+      //   forks so every process inherits the static (post-fork writes never propagate).
+      $this->store();
+
       // ! Daemonize BEFORE any worker or auxiliary fork. The child that
       //   continues from here is the final master and therefore the real
       //   parent/reaper of every process created below.
@@ -892,6 +920,10 @@ class TCP_Server_CLI implements Servers
 
       // @ Set master process title
       $this->Process->title = $this->process . ': master process';
+
+      // @ Publish the live-log tap socket — master-only, post-fork, pre-demote
+      //   (its pathname joins the instance state saved just below).
+      $this->tap();
 
       // @ Save full process state (master + workers + host + port). In Daemon
       //   mode detach() already installed the final master PID before workers
@@ -980,7 +1012,9 @@ class TCP_Server_CLI implements Servers
          'port'    => $this->port ?? 0,
          'started' => $this->started,
          'status'  => $this->Status->name,
-         'type'    => 'WPI'
+         'type'    => 'WPI',
+         'tap'     => $this->LogTap === null ? '' : $this->LogTap->path,
+         'project' => defined('BOOTGLY_PROJECT') ? BOOTGLY_PROJECT->folder : ''
       ];
    }
 
@@ -1046,6 +1080,13 @@ class TCP_Server_CLI implements Servers
       //   `Timer::add()` from arming its alarm — leaving every timer this
       //   worker installs (e.g. the SSE supervisor) silently dead.
       Timer::del();
+
+      // @ Fork hygiene — a worker forked (or reforked) from a master that owns
+      //   the tap hub must not serve nor retain its descriptors. Its ARMED state
+      //   rides in for free: the child inherits the master's Logger::$Tap, which
+      //   is armed exactly while `logs -f` sessions are attached.
+      $this->LogTap?->drop();
+      $this->LogTap = null;
 
       // ! A hard-killed daemon master cannot signal its workers. Detect
       //   reparenting and stop locally so stale workers never outlive their
@@ -1381,6 +1422,12 @@ class TCP_Server_CLI implements Servers
    protected function tick (): void
    {
       $this->revive();
+
+      // @ Service the live-log tap (accepts/reaps/drains). Monitor drains through
+      //   flush() instead — a second reader here would steal the viewer's frames.
+      if ($this->Mode !== Modes::Monitor) {
+         $this->LogTap?->pump();
+      }
    }
 
    /**
@@ -1766,16 +1813,131 @@ class TCP_Server_CLI implements Servers
       }
    }
    /**
-    * Open the live-log pipe before forking (Monitor mode only) so workers inherit it.
+    * Install the default global log sink for detached (Daemon) runs.
+    *
+    * A daemon has no terminal: with no sinks configured, every server record would be
+    * silently dropped at the Logger entry guard. Installs one File sink (JSON lines,
+    * default rotation) at `storage/logs/{channel}.log` and notices where records land.
+    * A project that already configured `Logger::$Sinks` is never touched. Runs pre-fork
+    * so the daemon master and every worker inherit the static.
+    */
+   protected function store (): void
+   {
+      // ? Daemon-only fallback; a configured project keeps its own sinks
+      if ($this->Mode !== Modes::Daemon || Logger::$Sinks !== null) {
+         return;
+      }
+
+      // ! Default sink — one JSON file per channel under the storage dir
+      $path = BOOTGLY_STORAGE_DIR . 'logs/{channel}.log';
+      Logger::$Sinks = new Handlers;
+      Logger::$Sinks->push(new FileHandler($path));
+
+      // @ Announce through the sink itself (this server logger is global) — the sink is
+      //   installed first, so this notice is the file's first record
+      $this->Logger->log(
+         notice: "No global log sinks configured — Daemon logs will persist to $path@.;"
+      );
+
+      // ! A root launch demotes later: hand the sink directory (and the file the
+      //   notice just created, as root) to the configured runtime identity — the
+      //   same delegation own() performs for the state files. Without it every
+      //   post-demote write fails with EACCES and the black hole returns.
+      if (posix_getuid() === 0 && $this->user !== null) {
+         $userInfo = posix_getpwnam($this->user);
+         if ($userInfo !== false) {
+            $UID = (int) $userInfo['uid'];
+            $GID = (int) $userInfo['gid'];
+            if ($this->group !== null) {
+               $groupInfo = posix_getgrnam($this->group);
+               if ($groupInfo !== false) {
+                  $GID = (int) $groupInfo['gid'];
+               }
+            }
+            $directory = BOOTGLY_STORAGE_DIR . 'logs';
+            @chown($directory, $UID);
+            @chgrp($directory, $GID);
+            $notice = "$directory/{$this->Logger->channel}.log";
+            @chown($notice, $UID);
+            @chgrp($notice, $GID);
+         }
+      }
+   }
+   /**
+    * Open the live-log pipe before forking so workers inherit it — in EVERY mode
+    * except Test: the Monitor drains it into its viewer, and `logs -f` sessions
+    * drain it through the tap hub. One socketpair at startup is the whole cost;
+    * records only flow while `Logger::$Tap` is armed.
     */
    protected function pipe (): void
    {
-      if ($this->Mode === Modes::Monitor) {
+      if ($this->Mode !== Modes::Test) {
          // One JSON record per datagram: nonblocking pressure drops a whole
          // record instead of exposing an unterminated stream prefix.
          $this->LogPipe = new IPCPipe(STREAM_SOCK_DGRAM);
          $this->LogPipe->open();
       }
+   }
+   /**
+    * Publish the live-log tap: a per-instance unix socket external `logs -f`
+    * sessions attach to. Master-only, post-fork (workers inherit nothing here),
+    * pre-demote (binding in `storage/pids/` needs the launch privileges).
+    *
+    * Attach arms `Logger::$Tap` here and in every worker (via the command channel);
+    * detach disarms — nobody attached means no writes and no measurable cost.
+    */
+   protected function tap (): void
+   {
+      // ? No tap for suite-embedded servers, and none without the pipe
+      if ($this->Mode === Modes::Test || $this->LogPipe === null) {
+         return;
+      }
+
+      $Tap = new Tap(path: $this->Process->State->tapFile, Pipe: $this->LogPipe);
+      if ($Tap->open() === false) {
+         $this->Logger->log(notice: 'Live-log tap unavailable (socket bind failed).@.;');
+         return;
+      }
+
+      // ! Root boot: hand the socket to the configured runtime identity so the
+      //   demoted operator flow can attach (mirrors the state-file delegation)
+      if (posix_getuid() === 0 && $this->user !== null) {
+         $userInfo = posix_getpwnam($this->user);
+         if ($userInfo !== false) {
+            $GID = (int) $userInfo['gid'];
+            if ($this->group !== null) {
+               $groupInfo = posix_getgrnam($this->group);
+               if ($groupInfo !== false) {
+                  $GID = (int) $groupInfo['gid'];
+               }
+            }
+            @chown($Tap->path, (int) $userInfo['uid']);
+            @chgrp($Tap->path, $GID);
+         }
+      }
+
+      $Tap->onAttach = function (): void {
+         // @ Arm the master (Monitor already feeds the pipe through sink())
+         if ($this->Mode !== Modes::Monitor && $this->LogPipe !== null) {
+            Logger::$Tap ??= new PipeHandler($this->LogPipe);
+         }
+         // @ Arm every worker. The command slot is last-write-wins: an operator
+         //   command typed inside the fan-out window can eat this one, leaving a
+         //   split fleet until the session count next crosses 0↔1 — transient,
+         //   self-healing, and bounded by the signal fan-out (~0.1s per worker).
+         $this->Commands->save('log on')
+            && $this->Process->Signals->send(SIGUSR1, master: false, children: true);
+      };
+      $Tap->onDetach = function (): void {
+         // ? Monitor keeps its tap — it is the TUI's food
+         if ($this->Mode !== Modes::Monitor) {
+            Logger::$Tap = null;
+            $this->Commands->save('log off')
+               && $this->Process->Signals->send(SIGUSR1, master: false, children: true);
+         }
+      };
+
+      $this->LogTap = $Tap;
    }
    /**
     * Route this process's logs into the Monitor pipe and silence stdout (Monitor mode only).
@@ -1796,6 +1958,12 @@ class TCP_Server_CLI implements Servers
     */
    protected function flush (LogsViewer $Viewer): int
    {
+      // ? One drain point: with the tap hub up, it feeds the viewer AND the
+      //   attached `logs -f` sessions from the same read.
+      if ($this->LogTap !== null) {
+         return $this->LogTap->pump($Viewer);
+      }
+
       if ($this->LogPipe === null) {
          return 0;
       }
@@ -1891,6 +2059,19 @@ class TCP_Server_CLI implements Servers
       // @ Restore normal logging
       Logger::$Tap = null;
       Display::show(Display::MESSAGE);
+
+      // @ Reconcile the tap with the Monitor exit: with sessions still attached the
+      //   master re-arms (records keep flowing through tick()'s pump); with none,
+      //   workers disarm too — Monitor's sink() had armed them unconditionally.
+      if ($this->LogTap !== null && $this->Mode !== Modes::Monitor) {
+         if ($this->LogTap->attached > 0 && $this->LogPipe !== null) {
+            Logger::$Tap = new PipeHandler($this->LogPipe);
+         }
+         else {
+            $this->Commands->save('log off')
+               && $this->Process->Signals->send(SIGUSR1, master: false, children: true);
+         }
+      }
 
       // @ Enter Interactive mode if requested
       if ($this->Mode === Modes::Interactive) {
@@ -2435,6 +2616,10 @@ class TCP_Server_CLI implements Servers
                fclose($Listener);
             }
             $this->Listeners = [];
+
+            // @ Tear down the live-log tap (sessions closed, pathname removed)
+            $this->LogTap?->close();
+            $this->LogTap = null;
 
             // @ Clean all per-project state files
             $this->Process->State->clean();
@@ -3073,6 +3258,16 @@ class TCP_Server_CLI implements Servers
       $this->Listeners = [];
       foreach ($this->export() as $Resource) {
          fclose($Resource);
+      }
+
+      // @ The live-log tap and pipe never cross exec: close every session (they
+      //   see EOF and degrade to files-only; the fresh master rebinds the socket)
+      //   and both pipe ends — otherwise each reload leaks them into the new image.
+      $this->LogTap?->close();
+      $this->LogTap = null;
+      if ($this->LogPipe !== null) {
+         $this->LogPipe->close();
+         $this->LogPipe = null;
       }
 
       // ! Close only the old master's duplicate. LOCK_UN would affect the

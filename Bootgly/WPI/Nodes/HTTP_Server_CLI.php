@@ -275,7 +275,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          ? 'https'
          : 'http';
       // @ Configure Logger
-      $this->Logger = new Logger(channel: 'HTTP.Server.CLI');
+      $this->Logger = new Logger(channel: 'HTTP.Server.CLI', global: true);
 
       // . Request, Response, Router
       self::$Request = new Request;

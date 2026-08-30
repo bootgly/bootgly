@@ -70,7 +70,7 @@ class WS_Server_CLI extends TCP_Server_CLI implements WS, Server
          ? 'wss'
          : 'ws';
       // @ Configure Logger
-      $this->Logger = new Logger(channel: 'WS.Server.CLI');
+      $this->Logger = new Logger(channel: 'WS.Server.CLI', global: true);
 
       // . Decoders, Encoders
       self::$Decoder = new Decoder_;

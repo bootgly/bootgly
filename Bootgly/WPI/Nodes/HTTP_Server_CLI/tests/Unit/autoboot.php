@@ -74,5 +74,7 @@ return new Suite(
       '1.45-database_completion_wake',
       // # BG-23: the upload counter follows the server that boots (init() rebinds per path)
       '1.46-downloads_controller_rebinds_per_path',
+      // # IMP-8: Daemon installs a default log sink when none is configured
+      '1.47-daemon_default_sink',
    ]
 );

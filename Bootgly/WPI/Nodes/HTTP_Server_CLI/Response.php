@@ -1624,7 +1624,7 @@ class Response extends Server\Response
             : substr($URI, 0, $query);
       }
 
-      self::$Logger ??= new Logger(channel: self::class);
+      self::$Logger ??= new Logger(channel: self::class, global: true);
       self::$Logger->log(
          warning: "Deferred response timed out after {$Timeout->timeout}s.@.;",
          context: $context

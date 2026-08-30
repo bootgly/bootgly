@@ -59,7 +59,7 @@ class Commands extends CLI\Terminal
    public Logger $Logger {
       get {
          if ( isSet($this->Logger) === false ) {
-            $this->Logger = new Logger(channel: static::class);
+            $this->Logger = new Logger(channel: static::class, global: true);
          }
 
          return $this->Logger;
@@ -89,7 +89,8 @@ class Commands extends CLI\Terminal
       // TODO 'benchmark'
       'check',
       'error',
-      // TODO 'log'
+      // ? `log on`/`log off` are command-channel-only verbs (the `logs -f` tap
+      //   arms workers through SIGUSR1) — never typed at the prompt.
       // ? `test` is deliberately absent: it is driven programmatically by the
       //   `Modes::Test` suite autoboots, never typed at a live server's prompt.
       // ! \ Connection
@@ -179,7 +180,8 @@ class Commands extends CLI\Terminal
             error_reporting(E_ALL) && ini_set('display_errors', 'On') && true,
          'error off' =>
             error_reporting(0) && ini_set('display_errors', 'Off') && true,
-         // TODO 'log'
+         // ? `log on`/`log off` dispatch through the server's `@log ...` cases,
+         //   saved by the tap hub itself — no prompt handler here.
          // ? Not an operator command. Running a suite inside a live server
          //   drives every worker through `test init`/`test`/`test end` via
          //   SIGUSR1, reconfiguring them mid-flight while real traffic is being

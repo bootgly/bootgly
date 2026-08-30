@@ -41,7 +41,7 @@ class Router implements WPI\Connections\Packages
 
    public function __construct (Server &$Server, Connections &$Connections)
    {
-      $this->Logger = new Logger(channel: __CLASS__);
+      $this->Logger = new Logger(channel: __CLASS__, global: true);
       $this->Server = $Server;
       $this->Connections = $Connections;
    }

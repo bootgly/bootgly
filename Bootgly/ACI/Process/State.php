@@ -22,6 +22,7 @@ use function closedir;
 use function ctype_digit;
 use function fclose;
 use function fflush;
+use function file_exists;
 use function file_get_contents;
 use function filemtime;
 use function flock;
@@ -82,6 +83,8 @@ class State
    public string $pidFile;
    public string $pidLockFile;
    public string $commandFile;
+   /** Per-instance live-log tap socket pathname (bound by WPI server masters). */
+   public string $tapFile;
 
    // * Metadata
    private string $pidsDir;
@@ -142,6 +145,7 @@ class State
       $this->pidFile     = "{$this->pidsDir}$id.json";
       $this->pidLockFile = "{$this->pidsDir}$id.lock";
       $this->commandFile = "{$this->pidsDir}$id.command";
+      $this->tapFile     = "{$this->pidsDir}$id.logs.sock";
    }
 
    /**
@@ -770,13 +774,15 @@ class State
             continue;
          }
 
-         // @ One instance owns four inodes: the lock, its PID and command
-         //   files, and the downloads counter keyed to the same identity.
+         // @ One instance owns five inodes: the lock, its PID and command
+         //   files, the downloads counter and the live-log tap socket keyed
+         //   to the same identity.
          $id = substr($entry, 0, -5);
          @unlink($lock);
          @unlink("{$this->pidsDir}{$id}.json");
          @unlink("{$this->pidsDir}{$id}.command");
          @unlink("{$this->pidsDir}{$id}.lock.downloads");
+         @unlink("{$this->pidsDir}{$id}.logs.sock");
          $swept++;
       }
 
@@ -796,13 +802,18 @@ class State
          }
 
          $extension = substr($entry, $suffix + 1);
-         if ($extension !== 'json' && $extension !== 'command' && $extension !== 'downloads') {
+         if (
+            $extension !== 'json' && $extension !== 'command'
+            && $extension !== 'downloads' && $extension !== 'sock'
+         ) {
             continue;
          }
 
-         $id = $extension === 'downloads'
-            ? substr($entry, 0, -15)
-            : substr($entry, 0, $suffix);
+         $id = match ($extension) {
+            'downloads' => substr($entry, 0, -15),
+            'sock'      => substr($entry, 0, -10),
+            default     => substr($entry, 0, $suffix)
+         };
          if ($id === '' || is_file("{$this->pidsDir}{$id}.lock")) {
             continue;
          }
@@ -810,7 +821,8 @@ class State
          $file = $this->pidsDir . $entry;
          if (
             is_link($file)
-            || is_file($file) === false
+            // ? A tap socket is not a regular file — probe it by existence
+            || ($extension === 'sock' ? file_exists($file) === false : is_file($file) === false)
             || (int) @filemtime($file) > $cutoff
          ) {
             continue;

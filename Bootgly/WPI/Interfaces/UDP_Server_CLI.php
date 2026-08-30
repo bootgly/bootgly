@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Interfaces;
 
 
 use const BOOTGLY_ENVIRONMENT;
+use const BOOTGLY_STORAGE_DIR;
 use const LOCK_EX;
 use const LOCK_NB;
 use const PHP_BINARY;
@@ -97,6 +98,8 @@ use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Data\Display;
+use Bootgly\ACI\Logs\Handlers;
+use Bootgly\ACI\Logs\Handlers\File as FileHandler;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Process;
 use Bootgly\API\Endpoints\Server\Modes;
@@ -120,7 +123,7 @@ class UDP_Server_CLI implements Servers
    public Logger $Logger {
       get {
          if ( isSet($this->Logger) === false ) {
-            $this->Logger = new Logger(channel: static::class);
+            $this->Logger = new Logger(channel: static::class, global: true);
          }
 
          return $this->Logger;
@@ -216,7 +219,7 @@ class UDP_Server_CLI implements Servers
 
       // @
       // @ Configure Logger
-      $this->Logger = new Logger(channel: 'UDP.Server.CLI');
+      $this->Logger = new Logger(channel: 'UDP.Server.CLI', global: true);
       // @ Configure Debugging Vars
       Vars::$debug = true;
       Vars::$print = true;
@@ -568,6 +571,10 @@ class UDP_Server_CLI implements Servers
       }
       fclose($probeSocket);
 
+      // ! Daemon runs detached: install the default sink BEFORE the daemon and worker
+      //   forks so every process inherits the static (post-fork writes never propagate).
+      $this->store();
+
       // ! Select the final daemon master before it acquires the lock or forks
       //   workers. The flock owner PID is then a stable kernel identity and
       //   every advertised worker is its real child.
@@ -782,6 +789,34 @@ class UDP_Server_CLI implements Servers
             }
          },
          persistent: true
+      );
+   }
+
+   /**
+    * Install the default global log sink for detached (Daemon) runs.
+    *
+    * A daemon has no terminal: with no sinks configured, every server record would be
+    * silently dropped at the Logger entry guard. Installs one File sink (JSON lines,
+    * default rotation) at `storage/logs/{channel}.log` and notices where records land.
+    * A project that already configured `Logger::$Sinks` is never touched. Runs pre-fork
+    * so the daemon master and every worker inherit the static.
+    */
+   protected function store (): void
+   {
+      // ? Daemon-only fallback; a configured project keeps its own sinks
+      if ($this->Mode !== Modes::Daemon || Logger::$Sinks !== null) {
+         return;
+      }
+
+      // ! Default sink — one JSON file per channel under the storage dir
+      $path = BOOTGLY_STORAGE_DIR . 'logs/{channel}.log';
+      Logger::$Sinks = new Handlers;
+      Logger::$Sinks->push(new FileHandler($path));
+
+      // @ Announce through the sink itself (this server logger is global) — the sink is
+      //   installed first, so this notice is the file's first record
+      $this->Logger->log(
+         notice: "No global log sinks configured — Daemon logs will persist to $path@.;"
       );
    }
 
