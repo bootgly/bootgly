@@ -48,6 +48,22 @@ return new Test(
          ->assert();
 
       // @ Two sequential requests on one curl connection (stream 1 + stream 3)
+      // ! curl 7.x cannot drive this leg: its h2c prior-knowledge MULTI
+      //   transfer is broken on the CLIENT side — the second transfer dies
+      //   with `(16) Error in the HTTP2 framing layer` before a byte hits
+      //   the wire (the tool FINs the reused connection instead of opening
+      //   stream 3; confirmed by pcap), identically against this server and
+      //   a Node http2 reference, serial and --parallel alike; curl 8.x
+      //   drives it fine. Server-side sequential/concurrent stream coverage
+      //   lives in 2.1-requests and 2.2-multiplex — this leg only proves
+      //   REAL client interop, so it waits for a curl that can speak it.
+      if (preg_match('/^curl (\d+)\./', $features, $matches) === 1 && (int) $matches[1] < 8) {
+         yield (new Assertion(
+            description: 'curl < 8 breaks h2c multi-transfer client-side — connection reuse leg skipped'
+         ))->skip();
+         return;
+      }
+
       $output = (string) shell_exec(
          'curl -s --max-time 5 --http2-prior-knowledge'
          . ' -o - -w "|%{http_code}"'
