@@ -112,7 +112,8 @@ class Operation extends DatabaseOperation
       parent::fail($error);
 
       // @ Events — operation failed, announced once (guarded: zero-alloc when
-      //   no listeners)
+      //   no listeners; the Emitter isolates listeners, so teardown paths that
+      //   run through fail() cannot be unwound by a broken one)
       if ($failed === false) {
          $Emitter = Emitter::$Instance;
          $Emitter->check(Events::Failed) && $Emitter->emit(Events::Failed, $this);

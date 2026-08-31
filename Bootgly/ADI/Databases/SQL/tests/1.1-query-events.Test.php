@@ -3,6 +3,7 @@
 use Bootgly\ABI\Event;
 use Bootgly\ABI\Events\Emission;
 use Bootgly\ABI\Events\Emitter;
+use Bootgly\ABI\Events\Emitter\Observing;
 use Bootgly\ADI\Database\Operation\Result;
 use Bootgly\ADI\Databases\SQL\Events;
 use Bootgly\ADI\Databases\SQL\Operation;
@@ -20,8 +21,22 @@ return new Test(
       yield assert(
          assertion: Events::Connected instanceof Event
             && Events::Executed instanceof Event
-            && Events::Slow instanceof Event,
-         description: 'Connected/Executed/Slow implement Bootgly\ABI\Event'
+            && Events::Slow instanceof Event
+            && Events::Failed instanceof Event,
+         description: 'Connected/Executed/Slow/Failed implement Bootgly\ABI\Event'
+      );
+
+      // ! The Observing marker is the load-bearing half of the listener
+      //   contract: these events fire from driver read loops and teardown
+      //   paths, so an unmarked enum would let a broken listener unwind into
+      //   the engine and strand the pooled connection. Pinned by reflection —
+      //   no database extension required.
+      yield assert(
+         assertion: Events::Connected instanceof Observing
+            && Events::Executed instanceof Observing
+            && Events::Slow instanceof Observing
+            && Events::Failed instanceof Observing,
+         description: 'the SQL events declare the observers-only listener contract (Observing)'
       );
 
       $executed = [];

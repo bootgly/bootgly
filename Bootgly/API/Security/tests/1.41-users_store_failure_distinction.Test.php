@@ -18,7 +18,9 @@ use function defined;
 use function extension_loaded;
 use function password_hash;
 use function str_contains;
+use function str_starts_with;
 use RuntimeException;
+use Throwable;
 
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\ACI\Tests\Suite\Test;
@@ -119,11 +121,41 @@ return new Test(
       $Database->await($Transaction->Operation);
       $Invites = new Users($Transaction, $Password);
 
-      $free1 = $Invites->enroll('inv-1@bootgly.com', 'invite-one');
-      $depth1 = $Transaction->depth;
-      $duplicate = $Invites->enroll('taken@bootgly.com', 'invite-two');
-      $depth2 = $Transaction->depth;
-      $free2 = $Invites->enroll('inv-2@bootgly.com', 'invite-three');
+      // ! Structural pin — SQLite never aborts the block, so only the wire
+      //   trace can prove the fence exists here (its behavior is pinned live
+      //   by 1.42, which CI does not run).
+      $PreviousEmitter = Emitter::$Instance;
+      Emitter::$Instance = new Emitter;
+      $trace = [];
+      Emitter::$Instance->listen(Events::Executed, function (object $Emission) use (&$trace): void {
+         $Operation = $Emission->payload[0] ?? null;
+
+         if ($Operation instanceof Operation) {
+            $trace[] = $Operation->SQL;
+         }
+      });
+
+      try {
+         $free1 = $Invites->enroll('inv-1@bootgly.com', 'invite-one');
+         $depth1 = $Transaction->depth;
+         $duplicate = $Invites->enroll('taken@bootgly.com', 'invite-two');
+         $depth2 = $Transaction->depth;
+         $free2 = $Invites->enroll('inv-2@bootgly.com', 'invite-three');
+      }
+      finally {
+         Emitter::$Instance = $PreviousEmitter;
+      }
+
+      $fences = [
+         'saved' => 0,
+         'released' => 0,
+         'rolled' => 0,
+      ];
+      foreach ($trace as $SQL) {
+         if (str_starts_with($SQL, 'SAVEPOINT ')) { $fences['saved']++; }
+         if (str_starts_with($SQL, 'RELEASE SAVEPOINT ')) { $fences['released']++; }
+         if (str_starts_with($SQL, 'ROLLBACK TO SAVEPOINT ')) { $fences['rolled']++; }
+      }
       $Inside = $Invites->verify('taken@bootgly.com', 'taken-secret');
       $insideCheck = $Invites->check((string) $taken, 'taken-secret');
 
@@ -143,8 +175,9 @@ return new Test(
             && $insideCheck === true
             && $Commit->error === null
             && $Transaction->depth === 0
-            && ($Count->rows[0]['n'] ?? null) === 2,
-         description: 'a duplicate inside a Transaction stays a duplicate: the unit survives it, later verdicts stay honest, the savepoint fence is dropped and the commit is real'
+            && ($Count->rows[0]['n'] ?? null) === 2
+            && $fences === ['saved' => 3, 'released' => 2, 'rolled' => 1],
+         description: 'a duplicate inside a Transaction stays a duplicate: the unit survives it, later verdicts stay honest, every insert is fenced on the wire, and the commit is real'
       );
 
       // # D) USR-4 — the rehash-on-verify write is best-effort but observable
@@ -218,6 +251,18 @@ return new Test(
                && $observed[0][2] === 0,
             description: 'an upgrade write that lands on no row is announced by the store even though the driver recorded no error'
          );
+
+         // ! The announcement is best-effort end to end: a broken listener on
+         //   the store's own emission must not fail a proven-correct login
+         Emitter::$Instance->listen(Events::Failed, function (): void {
+            throw new RuntimeException('hostile rehash listener');
+         });
+         $Again = $Quiet->verify('quiet@bootgly.com', 'legacy-secret');
+
+         yield assert(
+            assertion: $Again instanceof Identity,
+            description: 'a throwing listener on the announced rehash cannot fail the login'
+         );
       }
       finally {
          Emitter::$Instance = $PreviousEmitter;
@@ -250,8 +295,30 @@ return new Test(
          $retriedError = $Operation->error;
          $Operation->fail('retried cause', '1062');
 
+         // ! Teardown paths run through fail() — a listener that throws must
+         //   not interrupt the failure lifecycle.
+         Emitter::$Instance->listen(Events::Failed, function (): void {
+            throw new RuntimeException('hostile listener');
+         });
+         $Hostile = new Operation(null, 'SELECT 2');
+         $escaped = null;
+         try {
+            $Hostile->fail('teardown cause', '2067');
+         }
+         catch (Throwable $Thrown) {
+            $escaped = $Thrown->getMessage();
+         }
+
          yield assert(
-            assertion: $announced === 2
+            assertion: $escaped === null
+               && $announced === 3
+               && $Hostile->error === 'teardown cause'
+               && $Hostile->code === '2067',
+            description: 'a throwing listener cannot interrupt the failure lifecycle — the operation still fails with its cause and code'
+         );
+
+         yield assert(
+            assertion: $announced === 3
                && $refails === 1
                && $firstCode === '23505'
                && $refailCode === null

@@ -11,7 +11,7 @@
 namespace Bootgly\ADI\Databases\SQL;
 
 
-use Bootgly\ABI\Event;
+use Bootgly\ABI\Events\Emitter\Observing;
 
 
 /**
@@ -27,8 +27,12 @@ use Bootgly\ABI\Event;
  * - `Failed`    — a SQL operation failed: a driver error, a framework
  *   refusal, or an issuer-reported write that did not land. Payload: the
  *   `Operation` (carries `->SQL`, `->error` and `->code`).
+ *
+ * Observing: these events are emitted from driver read loops and teardown
+ * paths, so their listeners are isolated — a listener Throwable is reported,
+ * never propagated into the engine.
  */
-enum Events implements Event
+enum Events implements Observing
 {
    case Connected;
    case Executed;
