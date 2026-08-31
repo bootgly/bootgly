@@ -17,5 +17,6 @@ return new Suite(
       '1.1-events',
       '1.2-provenance',
       '1.3-lifecycle',
+      '1.4-mount',
    ]
 );

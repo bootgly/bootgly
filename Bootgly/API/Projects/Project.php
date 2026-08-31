@@ -125,17 +125,19 @@ class Project
    }
 
    /**
-    * Boot the project.
+    * Mount the project environment without running its entry closure.
     *
-    * Defines BOOTGLY_PROJECT constant and registers in Projects on first call.
-    * A second boot in the same process throws a fatal Error.
-    *
-    * @param array<string> $arguments
-    * @param array<string, bool|int|string> $options
+    * Defines the BOOTGLY_PROJECT constant, registers in Projects, stamps the log
+    * provenance and loads configs, i18n catalogs and the per-project Composer
+    * autoloader — everything a worker command (`project <Name> schedule run`)
+    * needs to execute project code, minus the boot entry (which starts the app
+    * or server and, for servers, never returns). The Boot/Shutdown events stay
+    * paired with the entry lifecycle: a mounted-only process emits neither.
+    * A second mount (or boot) in the same process throws a fatal Error.
     */
-   public function boot (array $arguments = [], array $options = []): void
+   public function mount (): void
    {
-      // @ Register
+      // ? Register (once per process)
       if ( defined('BOOTGLY_PROJECT') ) {
          throw new Error(
             'Only one Project can be booted per process. '
@@ -171,6 +173,21 @@ class Project
       if (is_file($autoload) === true) {
          require_once $autoload;
       }
+   }
+
+   /**
+    * Boot the project: mount its environment, then run its entry closure.
+    *
+    * Defines BOOTGLY_PROJECT constant and registers in Projects on first call.
+    * A second boot in the same process throws a fatal Error.
+    *
+    * @param array<string> $arguments
+    * @param array<string, bool|int|string> $options
+    */
+   public function boot (array $arguments = [], array $options = []): void
+   {
+      // @ Environment (constant, provenance, configs, catalogs, autoload)
+      $this->mount();
 
       // ! Registration is complete — the project IS booted before its closure
       //   runs, because server closures never return (their loops exit the

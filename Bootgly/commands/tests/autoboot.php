@@ -37,5 +37,7 @@ return new Suite(
       // # logs live lane (project scope delegation + instance tiebreaker)
       '4.2-project-logs-scope',
       '4.3-logs-instances',
+      // # project-scoped schedule (mount + delegate — no server started)
+      '5.1-project-schedule',
    ]
 );

@@ -77,6 +77,16 @@ class ScheduleCommand extends Command
             return false;
          }
 
+         // ? A scaffolded schedule.php starts with every example commented out
+         if ($Schedule->Jobs === []) {
+            $Output->render(
+               '@#black:No jobs registered — declare them in schedule.php'
+               . ' (`$Schedule->add(...)->repeat(...)`).@;' . PHP_EOL
+            );
+
+            return true;
+         }
+
          foreach ($Schedule->Jobs as $Job) {
             $expression = isSet($Job->Cron) ? $Job->Cron->expression : '(no cadence)';
             $next = isSet($Job->Cron) ? date('Y-m-d H:i', $Job->Cron->advance(time())) : '-';

@@ -225,6 +225,13 @@ class ProjectCommand extends Command
             '<name>' => 'Project name (never a port — use --instance to pick one)'
          ]
       ],
+      'schedule' => [
+         'description' => 'Run a project\'s cron-style scheduled jobs',
+         'arguments'   => [
+            '<name>'   => 'Project name',
+            '<action>' => 'run (minute-aligned worker loop) or list'
+         ]
+      ],
    ];
    /** @var array<string,array<string>> */
    public array $options = [
@@ -305,6 +312,10 @@ class ProjectCommand extends Command
             $options
          ),
          'logs'    => $this->logs(
+            array_slice($arguments, 1),
+            $options
+         ),
+         'schedule' => $this->schedule(
             array_slice($arguments, 1),
             $options
          ),
@@ -970,33 +981,42 @@ class ProjectCommand extends Command
       //   port-qualified State inside the server; TUI apps adopt this entry (Input).
       $interfaces = Projects::read()[$projectName]['interfaces'] ?? [];
       if ($interfaces === ['CLI']) {
-         try {
-            $ownerPID = posix_getpid();
-            $State = new State(Projects::encode($projectName), (string) $ownerPID);
-            if ($State->lock(LOCK_EX | LOCK_NB) === true) {
-               $State->save([
-                  'master'  => $ownerPID,
-                  'workers' => [$ownerPID],
-                  'type'    => 'CLI',
-                  'started' => time(),
-                  'project' => $projectName
-               ]);
-               register_shutdown_function(static function () use ($State, $ownerPID): void {
-                  // ? Only the registering process cleans — forks inherit this hook
-                  if (posix_getpid() === $ownerPID) {
-                     $State->clean();
-                  }
-               });
-            }
-         }
-         catch (Throwable) {
-            // ? Registry identity is best-effort — an unsafe storage dir never blocks a boot
-         }
+         $this->enroll($projectName);
       }
 
       $Project->boot($bootArguments, $options);
 
       return true;
+   }
+
+   /**
+    * Register this console process in the instance registry (PID-qualified),
+    * tombstoning it on exit — the identity `show`/`stop`/`logs` address.
+    */
+   private function enroll (string $projectName): void
+   {
+      try {
+         $ownerPID = posix_getpid();
+         $State = new State(Projects::encode($projectName), (string) $ownerPID);
+         if ($State->lock(LOCK_EX | LOCK_NB) === true) {
+            $State->save([
+               'master'  => $ownerPID,
+               'workers' => [$ownerPID],
+               'type'    => 'CLI',
+               'started' => time(),
+               'project' => $projectName
+            ]);
+            register_shutdown_function(static function () use ($State, $ownerPID): void {
+               // ? Only the registering process cleans — forks inherit this hook
+               if (posix_getpid() === $ownerPID) {
+                  $State->clean();
+               }
+            });
+         }
+      }
+      catch (Throwable) {
+         // ? Registry identity is best-effort — an unsafe storage dir never blocks a boot
+      }
    }
 
    /**
@@ -1805,6 +1825,53 @@ class ProjectCommand extends Command
       // : One implementation — the kit `logs` command, project-scoped
       $options['project'] = $projectName;
       return CLI->Commands->find('logs')?->run([], $options) ?? false;
+   }
+
+   /**
+    * Run a project's cron-style scheduled jobs — the project-scoped face of
+    * `bootgly schedule`.
+    *
+    * Mounts the project environment (BOOTGLY_PROJECT, configs, catalogs,
+    * autoload) WITHOUT running its boot entry, so the existing ScheduleCommand
+    * resolves `<project>/schedule.php` — a WPI project's server never starts.
+    *
+    * @param array<string> $arguments
+    * @param array<string, bool|int|string> $options
+    *
+    * @return bool
+    */
+   public function schedule (array $arguments, array $options): bool
+   {
+      // ? Refuse flags this subcommand does not implement
+      if ($this->admit([], $options) === false) {
+         return false;
+      }
+
+      // ? Require project name and action
+      $projectName = $arguments[0] ?? null;
+      $action = $arguments[1] ?? null;
+      if (
+         $projectName === null || $projectName === ''
+         || ($action !== 'run' && $action !== 'list')
+      ) {
+         return $this->help(['schedule']);
+      }
+
+      // @ Mount the project environment (no boot entry — no server)
+      $Project = $this->open($projectName);
+      if ($Project === null) {
+         return false;
+      }
+      $Project->mount();
+
+      // @ The worker is a long-lived console process: give it the registry
+      //   identity `show`/`stop`/`logs` address (PID-qualified, like `start`)
+      if ($action === 'run') {
+         $this->enroll($projectName);
+      }
+
+      // : One implementation — the kit `schedule` command, project-mounted
+      return CLI->Commands->find('schedule')?->run([$action], $options) ?? false;
    }
 
    // @ Helpers
@@ -3843,6 +3910,7 @@ class ProjectCommand extends Command
          $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI restart@;' . PHP_EOL;
          $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI info@;' . PHP_EOL;
          $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI logs -f@; @#Black:(follow live — unrelated to `start -f`)@;' . PHP_EOL;
+         $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI schedule run@; @#Black:(cron-style worker — no server started)@;' . PHP_EOL;
          $exampleLines .= PHP_EOL;
          $exampleLines .= '@#Blue:bootgly project start Demo/HTTP_Server_CLI@;' . PHP_EOL;
          $exampleLines .= '@#Blue:bootgly project stop Demo/HTTP_Server_CLI@;' . PHP_EOL;
