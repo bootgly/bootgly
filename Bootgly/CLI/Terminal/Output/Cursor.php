@@ -18,6 +18,7 @@ use function function_exists;
 use function getmypid;
 use function intval;
 use function is_resource;
+use function microtime;
 use function preg_match;
 use function shell_exec;
 use function sprintf;
@@ -77,23 +78,38 @@ class Cursor
 
          // @ Run stty command to get cursor position
          $output = shell_exec('stty -g');
-         // @ Disable canonical mode and echo
-         shell_exec('stty -echo -icanon -icrnl');
+         // @ Disable canonical mode and echo; VMIN=0/VTIME=2 bounds every read at
+         //   200 ms — a pty is not a promise of a DSR responder (script-wrapped CI,
+         //   docker run -t, expect), and an unbounded read would block forever with
+         //   the terminal already in raw mode
+         shell_exec('stty -echo -icanon -icrnl min 0 time 2');
 
-         // @ Send ANSI code to retrieve cursor position
-         $this->Output->escape(self::_CURSOR_REPORT_POSITION);
+         try {
+            // @ Send ANSI code to retrieve cursor position
+            $this->Output->escape(self::_CURSOR_REPORT_POSITION);
 
-         // @ Read response from terminal
-         $input = fread(STDIN, 15);
-         // @ Parse cursor position from response
-         preg_match(
-            '/\x1b\[(\d+);(\d+)R/',
-            $input ?: '',
-            $matches
-         );
+            // @ Read from the terminal until the full report arrives — the reply
+            //   may come split across reads, and type-ahead may precede it
+            $input = '';
+            $deadline = microtime(true) + 0.25;
 
-         // @ Restore terminal settings
-         shell_exec(sprintf('stty %s', $output));
+            do {
+               $bytes = fread(STDIN, 15);
+               if ($bytes !== false && $bytes !== '') {
+                  $input .= $bytes;
+               }
+
+               // @ Parse cursor position from response
+               if (preg_match('/\x1b\[(\d+);(\d+)R/', $input, $matches) === 1) {
+                  break;
+               }
+            } while (microtime(true) < $deadline);
+         }
+         finally {
+            // @ Restore terminal settings — on every exit path, or an interrupted
+            //   query leaves the user's terminal raw (-icrnl -icanon -echo)
+            shell_exec(sprintf('stty %s', $output));
+         }
 
          $row = intval($matches[1] ?? 0);
          $column = intval($matches[2] ?? 0);

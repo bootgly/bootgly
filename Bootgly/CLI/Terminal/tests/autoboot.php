@@ -36,5 +36,8 @@ return new Suite(
       '12.2-input-extended-keys',
       '13.1-output-text-clear',
       '14.1-input-lines-editing',
+
+      // @ Appended to preserve every existing selected-case index.
+      '2.2-cursor-position-pty',
    ]
 );
