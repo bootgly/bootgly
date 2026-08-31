@@ -36,9 +36,10 @@ return new Test(
       yield assert(
          assertion: $Broken->finished
             && $Broken->error === '1064: syntax error near ='
+            && $Broken->code === '1064'
             && $MySQL->statements === []
             && $MySQL->check() === false,
-         description: 'A prepare error fails the operation without caching metadata'
+         description: 'A prepare error fails the operation with its errno and without caching metadata'
       );
 
       yield assert(
@@ -96,6 +97,7 @@ return new Test(
       yield assert(
          assertion: $Select->finished
             && $Select->error === '1317: Query execution was interrupted'
+            && $Select->code === '1317'
             && $MySQL->check() === false,
          description: 'Errors inside a result set fail the operation and free the queue'
       );

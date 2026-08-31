@@ -49,9 +49,11 @@ return new Test(
       yield assert(
          assertion: $Duplicate->error !== null
             && str_contains($Duplicate->error, 'UNIQUE constraint failed')
+            && $Duplicate->code === '2067'
             && $Next->error === null
+            && $Next->code === null
             && $Next->Result?->affected === 1,
-         description: 'The duplicate still reports the engine error and the next write succeeds'
+         description: 'The duplicate reports the engine error with its extended code and the next write succeeds'
       );
 
       $inherited = false;

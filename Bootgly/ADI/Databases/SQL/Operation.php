@@ -16,6 +16,7 @@ use function microtime;
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\ADI\Database\Connection;
 use Bootgly\ADI\Database\Operation as DatabaseOperation;
+use Bootgly\ADI\Database\Operation\OperationStates;
 use Bootgly\ADI\Database\Operation\Result;
 use Bootgly\ADI\Databases\SQL\Events;
 
@@ -34,6 +35,10 @@ class Operation extends DatabaseOperation
    public bool $prepared = false;
    public string $write = '';
    public string $status = '';
+   /** Machine-readable failure code — PostgreSQL SQLSTATE, MySQL errno or
+       SQLite extended result code, as the driver reports it. `null` when the
+       failure carries none (framework refusals, transport losses). */
+   public private(set) null|string $code = null;
    /** @var array<int,array<string,mixed>> */
    public array $rows = [];
    /** @var array<int,string> */
@@ -92,12 +97,26 @@ class Operation extends DatabaseOperation
    }
 
    /**
-    * Fail this operation with an error message.
+    * Fail this operation with an error message and an optional driver code.
     */
-   public function fail (string $error): self
+   public function fail (string $error, null|string $code = null): self
    {
+      // ! A re-fail replaces the message (pre-existing contract), so the code
+      //   must follow it — a stale code paired with a newer cause would let a
+      //   classifier read a lost connection as the earlier driver error.
+      $failed = $this->state === OperationStates::Failed;
+
       $this->write = '';
+      $this->code = $code;
+
       parent::fail($error);
+
+      // @ Events — operation failed, announced once (guarded: zero-alloc when
+      //   no listeners)
+      if ($failed === false) {
+         $Emitter = Emitter::$Instance;
+         $Emitter->check(Events::Failed) && $Emitter->emit(Events::Failed, $this);
+      }
 
       return $this;
    }
@@ -118,6 +137,7 @@ class Operation extends DatabaseOperation
       $this->types = [];
       $this->parameterTypes = [];
       $this->affected = 0;
+      $this->code = null;
 
       parent::retry($Connection);
 

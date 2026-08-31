@@ -1581,6 +1581,9 @@ class PostgreSQL extends Driver
 
       if ($type === 'E') {
          $message = $Message->fields['message'] ?? 'PostgreSQL error.';
+         // ! SQLSTATE — the locale-independent failure identity (field `C`)
+         $code = $Message->fields['code'] ?? '';
+         $code = is_string($code) ? $code : '';
 
          if ($Operation->statement !== '') {
             if ($Operation->prepared === false) {
@@ -1600,9 +1603,6 @@ class PostgreSQL extends Driver
                $Operation->prepared = false;
             }
             else {
-               $code = $Message->fields['code'] ?? '';
-               $code = is_string($code) ? $code : '';
-
                // ? Only errors that invalidate the server-side statement evict
                //   it — a runtime SQLSTATE (duplicate key, division by zero,
                //   timeout...) leaves the prepared statement usable.
@@ -1617,7 +1617,7 @@ class PostgreSQL extends Driver
             $message = 'PostgreSQL error.';
          }
 
-         return $Operation->fail((string) $message);
+         return $Operation->fail((string) $message, $code === '' ? null : $code);
       }
 
       if ($type === 'R') {

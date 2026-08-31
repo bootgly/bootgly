@@ -107,7 +107,14 @@ class SQLite extends Driver
          $this->execute($Operation);
       }
       catch (Throwable $Throwable) {
-         $Operation->fail($Throwable->getMessage());
+         // ! The exception code is the primary result code (19 for every
+         //   constraint class); only the handle's extended code separates a
+         //   UNIQUE violation from its siblings.
+         $code = $Throwable instanceof SQLite3Exception && $this->Handle !== null
+            ? $this->Handle->lastExtendedErrorCode()
+            : 0;
+
+         $Operation->fail($Throwable->getMessage(), $code > 0 ? (string) $code : null);
       }
 
       // :

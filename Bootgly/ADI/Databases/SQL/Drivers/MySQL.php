@@ -1554,7 +1554,9 @@ class MySQL extends Driver
          $this->Connection->transition();
       }
 
-      return $Operation->fail("{$code}: {$message}");
+      // : The errno is the locale-independent identity — the message half of
+      //   an ERR packet follows the server's language settings.
+      return $Operation->fail("{$code}: {$message}", $code === 0 ? null : (string) $code);
    }
 
    /**

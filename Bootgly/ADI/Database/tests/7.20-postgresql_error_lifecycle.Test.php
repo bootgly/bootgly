@@ -56,8 +56,9 @@ return new Test(
 
       yield assert(
          assertion: $Second->state === OperationStates::Failed
-            && $Second->error === 'duplicate key value violates unique constraint "users_email_key"',
-         description: 'The duplicate key ErrorResponse fails the operation'
+            && $Second->error === 'duplicate key value violates unique constraint "users_email_key"'
+            && $Second->code === '23505',
+         description: 'The duplicate key ErrorResponse fails the operation and keeps its SQLSTATE'
       );
 
       yield assert(

@@ -24,10 +24,14 @@ use Bootgly\ABI\Event;
  * - `Slow`      — a resolved query exceeded `Operation::$slow` seconds.
  *   Off by default (`$slow = 0.0` → zero overhead). Payload: the `Operation`,
  *   the elapsed seconds (float).
+ * - `Failed`    — a SQL operation failed: a driver error, a framework
+ *   refusal, or an issuer-reported write that did not land. Payload: the
+ *   `Operation` (carries `->SQL`, `->error` and `->code`).
  */
 enum Events implements Event
 {
    case Connected;
    case Executed;
    case Slow;
+   case Failed;
 }
