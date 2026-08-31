@@ -13,12 +13,15 @@ namespace Bootgly\ABI\Events;
 
 use function spl_object_id;
 use Closure;
+use Throwable;
 use UnitEnum;
 
+use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\Event;
 use Bootgly\ABI\Events\Emission;
 use Bootgly\ABI\Events\Emitter\Listener;
 use Bootgly\ABI\Events\Emitter\Listeners;
+use Bootgly\ABI\Events\Emitter\Observing;
 
 
 /**
@@ -87,10 +90,38 @@ final class Emitter
       // @
       $Emission = new Emission($Event, $payload);
 
+      // ! The event declares its listener contract. Observing events isolate
+      //   each listener: diagnostics observe, they never steer — a broken one
+      //   must not blind later listeners, abort delivery, or unwind into the
+      //   emitting engine path (an exception escaping into a driver teardown
+      //   loop leaves a dead connection counted as busy forever). Every other
+      //   event keeps the steering contract: a listener Throwable propagates
+      //   to the emitter, which may treat it as control flow — a refusal gate
+      //   before routing, a bounded error boundary after it.
+      $observing = $Event instanceof Observing;
+
       foreach ($this->Listeners[$id] as $Listener) {
-         $Listener instanceof Listener
-            ? $Listener->handle($Emission)
-            : $Listener($Emission);
+         if ($observing) {
+            try {
+               $Listener instanceof Listener
+                  ? $Listener->handle($Emission)
+                  : $Listener($Emission);
+            }
+            catch (Throwable $Throwable) {
+               // ? Contained, never silent — reported out-of-band (no-op
+               //   without an attached reporter)
+               Throwables::notify($Throwable, [
+                  'interface' => 'ABI',
+                  'phase' => 'Emitter',
+                  'event' => $Event->name,
+               ]);
+            }
+         }
+         else {
+            $Listener instanceof Listener
+               ? $Listener->handle($Emission)
+               : $Listener($Emission);
+         }
 
          // ? Propagation halted by a listener
          if ($Emission->stopped) {

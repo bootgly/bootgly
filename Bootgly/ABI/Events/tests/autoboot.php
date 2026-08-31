@@ -20,5 +20,6 @@ return new Suite(
       '1.4-no-listeners-noop',
       '1.5-listener-object',
       '1.6-event-isolation',
+      '1.7-listener-isolation',
    ]
 );
