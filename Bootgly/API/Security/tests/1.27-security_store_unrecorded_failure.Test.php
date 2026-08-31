@@ -135,8 +135,9 @@ return new Test(
          }
       };
 
-      // @ Control: a driver-recorded error stays on the Operation. The stores
-      //   keep their existing fail-closed public results and never call await().
+      // @ A driver-recorded error stays on the Operation. The credential store
+      //   raises it as the real cause without calling await(); the token stores
+      //   keep their documented fail-closed results (their own entries pending).
       $Recorded = new StoreFailureSQL(recorded: true);
       $RecordedUsers = new Users($Recorded, $Password);
       $RecordedTokens = new Tokens($Recorded);
@@ -152,8 +153,8 @@ return new Test(
          $Recorded->Operations
       );
 
-      // @ Control the catch branch too: a failure recorded while await() is
-      //   running keeps the existing fail-closed store results.
+      // @ The catch branch too: a failure recorded while await() is running
+      //   raises from the credential store and fails closed in the token stores.
       $RecordedAwait = new StoreFailureSQL(recorded: true, delayed: true);
       $RecordedAwaitUsers = new Users($RecordedAwait, $Password);
       $RecordedAwaitTokens = new Tokens($RecordedAwait);
@@ -204,7 +205,10 @@ return new Test(
 
       yield assert(
          assertion: $recorded === [
-            'users' => ['exception' => null, 'value' => null],
+            'users' => [
+               'exception' => RuntimeException::class . ': ' . StoreFailureSQL::RECORDED,
+               'value' => null,
+            ],
             'tokens' => ['exception' => null, 'value' => null],
             'trust' => ['exception' => null, 'value' => null],
          ]
@@ -214,7 +218,7 @@ return new Test(
                StoreFailureSQL::RECORDED,
                StoreFailureSQL::RECORDED,
             ],
-         description: 'Already-recorded Operation errors retain the stores\' fail-closed results; '
+         description: 'A recorded error raises its cause from the credential store and retains the token stores\' documented fail-closed results; '
             . json_encode([
                'results' => $recorded,
                'awaits' => $Recorded->awaits,
@@ -224,13 +228,16 @@ return new Test(
 
       yield assert(
          assertion: $recordedAwait === [
-            'users' => ['exception' => null, 'value' => null],
+            'users' => [
+               'exception' => RuntimeException::class . ': ' . StoreFailureSQL::RECORDED,
+               'value' => null,
+            ],
             'tokens' => ['exception' => null, 'value' => null],
             'trust' => ['exception' => null, 'value' => null],
          ]
             && $RecordedAwait->awaits === 3
             && $RecordedAwait->awaitedErrors === [null, null, null],
-         description: 'Failures recorded during await retain the stores\' fail-closed results; '
+         description: 'A failure recorded during await raises its cause from the credential store and retains the token stores\' documented fail-closed results; '
             . json_encode([
                'results' => $recordedAwait,
                'awaits' => $RecordedAwait->awaits,

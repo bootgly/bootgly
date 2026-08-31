@@ -7,6 +7,7 @@ use function array_key_exists;
 use function array_merge;
 use function assert;
 use function bin2hex;
+use function count;
 use function defined;
 use function extension_loaded;
 use function gc_collect_cycles;
@@ -320,8 +321,23 @@ return new Test(
          $TransactionTrust = new Trust($TrustTransaction);
          $TransactionTokens->freeze($clock);
          $TransactionTrust->freeze($clock);
-         $oldAccepted = $TransactionUsers->check($user, $oldPassword);
-         $currentAccepted = $TransactionUsers->check($user, $currentPassword);
+         // ! The credential store raises a stale-snapshot barrier failure as
+         //   the real cause instead of answering it as "wrong password".
+         $usersRaised = [];
+         $oldAccepted = null;
+         $currentAccepted = null;
+         try {
+            $oldAccepted = $TransactionUsers->check($user, $oldPassword);
+         }
+         catch (RuntimeException $Raised) {
+            $usersRaised[] = $Raised->getMessage();
+         }
+         try {
+            $currentAccepted = $TransactionUsers->check($user, $currentPassword);
+         }
+         catch (RuntimeException $Raised) {
+            $usersRaised[] = $Raised->getMessage();
+         }
          $revokedAccepted = $TransactionTokens->check(
             $IssuedToken->value,
             Purposes::Recovery
@@ -330,6 +346,7 @@ return new Test(
          $evidence['verdicts'] = [
             'old_password_accepted' => $oldAccepted,
             'current_password_accepted' => $currentAccepted,
+            'users_raised' => $usersRaised,
             'users_error' => $UsersTransaction->Operation?->error,
             'revoked_token_accepted' => $revokedAccepted,
             'tokens_error' => $TokensTransaction->Operation?->error,
@@ -571,8 +588,13 @@ return new Test(
       $trustError = $evidence['verdicts']['trust_error'] ?? null;
       $blockedError = $evidence['guard']['blocked_error'] ?? null;
       $secure = $fixture
-         && ($evidence['verdicts']['old_password_accepted'] ?? true) === false
-         && ($evidence['verdicts']['current_password_accepted'] ?? true) === false
+         && array_key_exists('old_password_accepted', $evidence['verdicts'])
+         && $evidence['verdicts']['old_password_accepted'] === null
+         && array_key_exists('current_password_accepted', $evidence['verdicts'])
+         && $evidence['verdicts']['current_password_accepted'] === null
+         && count($evidence['verdicts']['users_raised'] ?? []) === 2
+         && str_contains($evidence['verdicts']['users_raised'][0] ?? '', 'database is locked')
+         && str_contains($evidence['verdicts']['users_raised'][1] ?? '', 'database is locked')
          && is_string($usersError)
          && str_contains($usersError, 'database is locked')
          && ($evidence['verdicts']['revoked_token_accepted'] ?? true) === false

@@ -537,12 +537,15 @@ return new Test(
          assertion: ($USR1['begin']['error'] ?? null) === null
             && array_key_exists('result', $USR1['enroll'] ?? [])
             && $USR1['enroll']['result'] === null
-            && ($USR1['enroll']['error'] ?? null) === null
+            && str_contains(
+               (string) ($USR1['enroll']['error'] ?? ''),
+               'Database pool has no capacity for the operation.'
+            )
             && $USR1['pending'] === 0
             && ($USR1['rollback']['error'] ?? null) === null
             && ($USR1['followup']['error'] ?? null) === null
             && $USR1['late_rows'] === 0,
-         description: 'USR-1 control: a saturated enrollment is removed from pending and never commits after capacity returns; found: '
+         description: 'USR-1 control: a saturated enrollment raises the pool refusal, is removed from pending and never commits after capacity returns; found: '
             . json_encode($USR1)
       );
 

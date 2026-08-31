@@ -8,6 +8,8 @@ use function assert;
 use function defined;
 use function extension_loaded;
 use function password_hash;
+use function str_contains;
+use RuntimeException;
 
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\ADI\Databases\SQL;
@@ -127,17 +129,33 @@ return new Test(
          description: 'confirm() stamps the frozen epoch once and stays idempotent'
       );
 
-      // @ Fail closed on database errors
+      // @ Database errors are distinguishable — never a credential verdict
       $Database->query('DROP TABLE users');
 
+      $raised = 0;
+      $verdicts = [];
+      $calls = [
+         fn () => $Users->enroll('eve@bootgly.com', 'secret'),
+         fn () => $Users->verify('ana@bootgly.com', 'secret-two'),
+         fn () => $Users->check('1', 'secret-two'),
+         fn () => $Users->fetch('ana@bootgly.com'),
+         fn () => $Users->rotate('1', 'secret-three'),
+         fn () => $Users->confirm('1'),
+      ];
+      foreach ($calls as $call) {
+         try {
+            $verdicts[] = $call();
+         }
+         catch (RuntimeException $Exception) {
+            if (str_contains($Exception->getMessage(), 'no such table')) {
+               $raised++;
+            }
+         }
+      }
+
       yield assert(
-         assertion: $Users->enroll('eve@bootgly.com', 'secret') === null
-            && $Users->verify('ana@bootgly.com', 'secret-two') === null
-            && $Users->check('1', 'secret-two') === false
-            && $Users->fetch('ana@bootgly.com') === null
-            && $Users->rotate('1', 'secret-three') === false
-            && $Users->confirm('1') === false,
-         description: 'database errors fail closed across the credential surface'
+         assertion: $raised === 6 && $verdicts === [],
+         description: 'database errors raise the real cause across the credential surface instead of answering as a credential verdict'
       );
    }
 );

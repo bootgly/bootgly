@@ -11,11 +11,13 @@
 namespace Bootgly\API\Security;
 
 
+use function in_array;
 use function is_numeric;
 use function is_string;
 use RuntimeException;
 use stdClass;
 
+use Bootgly\ABI\Events\Emitter;
 use Bootgly\ADI\Databases\SQL as SQLDatabase;
 use Bootgly\ADI\Databases\SQL\Builder;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Locks;
@@ -24,6 +26,7 @@ use Bootgly\ADI\Databases\SQL\Builder\Dialects\SQLite as SQLiteDialect;
 use Bootgly\ADI\Databases\SQL\Builder\Expression;
 use Bootgly\ADI\Databases\SQL\Builder\Identifier;
 use Bootgly\ADI\Databases\SQL\Builder\Query;
+use Bootgly\ADI\Databases\SQL\Events;
 use Bootgly\ADI\Databases\SQL\Operation;
 use Bootgly\ADI\Databases\SQL\Transaction;
 use Bootgly\API\Security\Tokens\Clocked;
@@ -105,10 +108,12 @@ class Users
     * Register credentials for a new account.
     *
     * The insert relies on the unique index of the identifier column —
-    * duplicates fail there (no read-then-write race).
+    * duplicates fail there (no read-then-write race). Under a `Transaction`
+    * that anticipated failure is fenced by a savepoint, so a duplicate stays
+    * a duplicate instead of aborting the caller's whole unit of work.
     *
-    * @return null|string The new account id — `null` on duplicate or database error.
-    * @throws RuntimeException When a database wait fails without a recorded Operation error.
+    * @return null|string The new account id — `null` on a duplicate identifier.
+    * @throws RuntimeException When the database fails.
     */
    public function enroll (string $email, #[\SensitiveParameter] string $password): null|string
    {
@@ -117,17 +122,51 @@ class Users
          return null;
       }
 
+      // ! Transaction arm — fence the write the store expects to fail
+      $Transaction = $this->Database instanceof Transaction ? $this->Database : null;
+      if ($Transaction !== null) {
+         $this->Database->await($Transaction->save());
+      }
+
       // @
-      $Operation = $this->execute(
+      $Operation = $this->attempt(
          $this->Database
             ->table(new Identifier($this->table))
             ->insert()
             ->set(new Identifier($this->identifier), $email)
             ->set(new Identifier($this->secret), $this->Password->hash($password))
       );
-      // ? Duplicate identifier or database error
+      // ?
       if ($Operation->error !== null) {
+         // ? Only a recorded unique-key collision is the documented duplicate
+         //   answer. Anything else is a database failure the caller must see.
+         if ($this->collide($Operation) === false) {
+            // ! Best-effort localization — the original cause outranks a
+            //   teardown that cannot make progress on a dead connection.
+            if ($Transaction !== null) {
+               try {
+                  $this->Database->await($Transaction->rollback());
+               }
+               catch (RuntimeException) {
+               }
+            }
+
+            throw new RuntimeException($Operation->error);
+         }
+
+         // ? Duplicate — unwind to the fence (PostgreSQL aborts the whole
+         //   block on any statement failure; the savepoint rollback is what
+         //   revives it). A teardown failure here must throw: with the write
+         //   state unknown, "already registered" would be a false verdict.
+         if ($Transaction !== null) {
+            $this->Database->await($Transaction->rollback());
+         }
+
          return null;
+      }
+      // ?: The fence is no longer needed — drop it
+      if ($Transaction !== null) {
+         $this->Database->await($Transaction->release());
       }
 
       // @ Portable id resolution (no RETURNING on MySQL).
@@ -149,7 +188,7 @@ class Users
     * policy transparently on successful verification.
     *
     * @return null|Identity Claims: `email` (string), `verified` (bool).
-    * @throws RuntimeException When a database wait fails without a recorded Operation error.
+    * @throws RuntimeException When the database fails.
     */
    public function verify (string $email, #[\SensitiveParameter] string $password): null|Identity
    {
@@ -169,15 +208,24 @@ class Users
          return null;
       }
 
-      // ?: Rehash-on-verify — persist the upgraded hash
+      // ?: Rehash-on-verify — persist the upgraded hash. Best-effort by
+      //   contract: the credential fact is already proven, so an upgrade that
+      //   does not land must not fail the login — but it must not be invisible
+      //   either. A recorded driver error already announced itself through
+      //   `Events::Failed`; a write that landed on no row is announced here.
       if ($Verification->hash !== null) {
-         $this->execute(
+         $Operation = $this->attempt(
             $this->Database
                ->table(new Identifier($this->table))
                ->update()
                ->set(new Identifier($this->secret), $Verification->hash)
                ->filter(new Identifier($this->key), Operators::Equal, $row['id'])
          );
+
+         if ($Operation->error === null && $Operation->affected !== 1) {
+            $Emitter = Emitter::$Instance;
+            $Emitter->check(Events::Failed) && $Emitter->emit(Events::Failed, $Operation);
+         }
       }
 
       // :
@@ -190,7 +238,7 @@ class Users
    /**
     * Check a password for an account id (current-password gate).
     *
-    * @throws RuntimeException When a database wait fails without a recorded Operation error.
+    * @throws RuntimeException When the database fails.
     */
    public function check (string $user, #[\SensitiveParameter] string $password): bool
    {
@@ -211,7 +259,7 @@ class Users
     * Look up an account by identifier WITHOUT credentials (reset-request flow).
     *
     * @return null|Identity Claims: `email` (string), `verified` (bool).
-    * @throws RuntimeException When a database wait fails without a recorded Operation error.
+    * @throws RuntimeException When the database fails.
     */
    public function fetch (string $email): null|Identity
    {
@@ -236,7 +284,7 @@ class Users
     * `Trust->revoke()` and session regeneration — this store owns the
     * hash only, not the surrounding invalidation orchestration.
     *
-    * @throws RuntimeException When a database wait fails without a recorded Operation error.
+    * @throws RuntimeException When the database fails.
     */
    public function rotate (string $user, #[\SensitiveParameter] string $password): bool
    {
@@ -253,10 +301,6 @@ class Users
             ->set(new Identifier($this->secret), $this->Password->hash($password))
             ->filter(new Identifier($this->key), Operators::Equal, $user)
       );
-      // ?
-      if ($Operation->error !== null) {
-         return false;
-      }
 
       // :
       return $Operation->affected === 1;
@@ -265,7 +309,7 @@ class Users
    /**
     * Stamp the account e-mail as verified (idempotent).
     *
-    * @throws RuntimeException When a database wait fails without a recorded Operation error.
+    * @throws RuntimeException When the database fails.
     */
    public function confirm (string $user): bool
    {
@@ -283,10 +327,6 @@ class Users
             ->filter(new Identifier($this->key), Operators::Equal, $user)
             ->filter(new Identifier($this->verified), Operators::IsNull, null)
       );
-      // ?
-      if ($Operation->error !== null) {
-         return false;
-      }
 
       // : Idempotent — already-verified accounts also report success.
       return $this->locate($user) !== null;
@@ -373,9 +413,6 @@ class Users
                   ->filter(new Expression('1'), Operators::Equal, new Expression('0')),
                $Scope
             );
-            if ($Barrier->error !== null) {
-               return $Barrier;
-            }
             if ($Barrier->affected !== 0) {
                throw new RuntimeException('Database current-read barrier modified rows.');
             }
@@ -404,11 +441,6 @@ class Users
     */
    private function cast (Operation $Operation): null|array
    {
-      // ?
-      if ($Operation->error !== null) {
-         return null;
-      }
-
       $row = $Operation->rows[0] ?? null;
       // ?
       if ($row === null) {
@@ -440,11 +472,34 @@ class Users
    /**
     * Execute one credential query through the configured async SQL surface.
     *
-    * Recorded database errors stay on the returned Operation so this store
-    * can fail closed. An infrastructure failure with no Operation error
-    * propagates instead of becoming a credential verdict.
+    * A database failure — recorded on the Operation or raised by the wait —
+    * always propagates: an outage must stay distinguishable from a wrong
+    * password, an unknown account or a duplicate identifier, or an honest
+    * caller reads infrastructure trouble as a credential fact.
+    *
+    * @throws RuntimeException When the database fails.
     */
    private function execute (Builder|Query $Query, null|object $Scope = null): Operation
+   {
+      $Operation = $this->attempt($Query, $Scope);
+      // ?
+      if ($Operation->error !== null) {
+         throw new RuntimeException($Operation->error);
+      }
+
+      // :
+      return $Operation;
+   }
+
+   /**
+    * Attempt one query whose recorded failure is a tolerable outcome.
+    *
+    * Serves the writes the store treats as best-effort or classifies itself:
+    * `enroll()`'s fenced insert and `verify()`'s rehash persistence. Recorded
+    * database errors stay on the returned Operation; an infrastructure
+    * failure with no recorded outcome still propagates.
+    */
+   private function attempt (Builder|Query $Query, null|object $Scope = null): Operation
    {
       $Operation = $this->Database->query($Query, Scope: $Scope);
       // ?
@@ -462,15 +517,26 @@ class Users
          return $Operation;
       }
       catch (RuntimeException $Exception) {
-         // ? Only a recorded driver/database failure belongs to this store's
-         //   fail-closed return contract. Infrastructure failures without an
-         //   Operation error must stay distinguishable from a credential fact.
          if ($this->detect($Operation) === false) {
             throw $Exception;
          }
 
          return $Operation;
       }
+   }
+
+   /**
+    * Detect a unique-key collision recorded on the operation.
+    *
+    * The codes are the drivers' machine identities for a violated unique
+    * index: PostgreSQL SQLSTATE `23505`, MySQL errno `1062`, SQLite extended
+    * result codes `2067` (UNIQUE) and `1555` (PRIMARY KEY). An operation
+    * without a code — a refusal, a transport loss — never classifies as a
+    * duplicate, so an outage cannot answer as "already registered".
+    */
+   private function collide (Operation $Operation): bool
+   {
+      return in_array($Operation->code, ['23505', '1062', '2067', '1555'], true);
    }
 
    /**

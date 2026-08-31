@@ -54,5 +54,7 @@ return new Suite(
       '1.38-tokens_upsert_mysql_live',
       '1.39-tokens_expired_supersede_race',
       '1.40-jwt_vault_fleet_atomicity_live',
+      '1.41-users_store_failure_distinction',
+      '1.42-users_enroll_transaction_pgsql_live',
    ]
 );

@@ -277,12 +277,22 @@ return new Test(
          )->Result?->cell;
          $passwordRotated = $Users->rotate($user, $currentPassword);
          $TransactionUsers = new Users($UsersTransaction, $Password, $usersTable);
-         $oldAccepted = $TransactionUsers->check($user, $oldPassword);
+         // ! The credential store raises the serialization failure as the real
+         //   cause instead of answering the old password as merely "wrong".
+         $oldAccepted = null;
+         $usersRaised = null;
+         try {
+            $oldAccepted = $TransactionUsers->check($user, $oldPassword);
+         }
+         catch (RuntimeException $Raised) {
+            $usersRaised = $Raised->getMessage();
+         }
          $evidence['users'] = [
             'snapshot_old' => is_string($UserSnapshot)
                && password_verify($oldPassword, $UserSnapshot),
             'external_rotated' => $passwordRotated,
             'old_accepted' => $oldAccepted,
+            'raised' => $usersRaised,
             'operation' => $Inspect($UsersTransaction),
          ];
          $Rollback($UsersTransaction);
@@ -488,7 +498,9 @@ return new Test(
          return is_string($SQL) && str_ends_with(strtolower($SQL), ' for update');
       };
       $secure = $fixture
-         && ($evidence['users']['old_accepted'] ?? true) === false
+         && array_key_exists('old_accepted', $evidence['users'] ?? [])
+         && $evidence['users']['old_accepted'] === null
+         && $Serializes($evidence['users']['raised'] ?? null)
          && $Serializes($UsersOperation['error'] ?? null)
          && $Locked($UsersOperation['sql'] ?? null)
          && ($evidence['tokens']['revoked_accepted'] ?? true) === false
