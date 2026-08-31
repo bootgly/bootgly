@@ -36,6 +36,7 @@ class KeysJWKS
       }
 
       $KeySet = new KeySet;
+      $supported = 0;
       /** @var array<int|string,mixed> $keys */
       foreach ($keys as $jwk) {
          if (is_array($jwk) === false) {
@@ -43,7 +44,23 @@ class KeysJWKS
          }
 
          /** @var array<string,mixed> $jwk */
-         $KeySet->add(KeysJWK::parse($jwk, $algorithm));
+         // ? RFC 7517 §5 — skip JWKs this implementation does not support and
+         //   keep the rest. Only the parse is contained: a duplicate `kid`
+         //   among the surviving keys stays a hard failure in add().
+         try {
+            $Key = KeysJWK::parse($jwk, $algorithm);
+         }
+         catch (InvalidArgumentException) {
+            continue;
+         }
+
+         $KeySet->add($Key);
+         $supported++;
+      }
+
+      // ? Every entry was unsupported — fail loud, never with an empty set
+      if ($supported === 0) {
+         throw new InvalidArgumentException('JWKS contains no supported key.');
       }
 
       return $KeySet;

@@ -142,5 +142,36 @@ return new Test(
          assertion: $failed === true,
          description: 'empty JWKS is rejected'
       );
+
+      // @ RFC 7517 §5 — unsupported sibling keys are skipped, not fatal.
+      $Mixed = KeysJWKS::parse(['keys' => [
+         $jwk,
+         ['kty' => 'RSA', 'alg' => 'RSA-OAEP', 'use' => 'enc', 'kid' => 'enc1', 'n' => $jwk['n'], 'e' => $jwk['e']],
+         ['kty' => 'RSA', 'alg' => 'RS512', 'kid' => 'sig512', 'n' => $jwk['n'], 'e' => $jwk['e']],
+         ['kty' => 'EC', 'alg' => 'ES256', 'kid' => 'ec1', 'crv' => 'P-256', 'x' => 'AAA', 'y' => 'BBB'],
+      ]]);
+      $MixedVerifier = new JWT($public, 'RS256');
+      $MixedVerifier->trust($Mixed);
+
+      yield assert(
+         assertion: $MixedVerifier->inspect($token)->valid === true,
+         description: 'an honest RS256 token verifies beside enc/RS512/EC siblings'
+      );
+
+      // @ A document with no supported key still fails loud.
+      $failed = false;
+      try {
+         KeysJWKS::parse(['keys' => [
+            ['kty' => 'EC', 'alg' => 'ES256', 'kid' => 'ec1', 'crv' => 'P-256', 'x' => 'AAA', 'y' => 'BBB'],
+         ]]);
+      }
+      catch (InvalidArgumentException $E) {
+         $failed = $E->getMessage() === 'JWKS contains no supported key.';
+      }
+
+      yield assert(
+         assertion: $failed === true,
+         description: 'a JWKS with zero supported keys is rejected loud'
+      );
    }
 );
