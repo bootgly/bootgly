@@ -61,5 +61,8 @@ return new Suite(
       '19.6-markdown-highlight',
       '20.1-heatmap-render',
       '20.2-heatmap-live',
+
+      // @ Appended to preserve every existing selected-case index.
+      '3.5-select-filter-confinement',
    ]
 );

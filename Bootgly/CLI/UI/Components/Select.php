@@ -187,10 +187,14 @@ class Select extends Component
 
          case Keystrokes::CTRL_M->value: // Enter (raw terminals without icrnl)
          case PHP_EOL:
-            // ? Enter with an empty selection confirms the aimed option
+            // ? Enter with an empty selection confirms the aimed option — only
+            //   while the filter shows it: over "(no matches)" the aim points at
+            //   an option the frame does not draw, and confirming it would hand
+            //   the caller something the user never saw
             if (
                $this->selected === [] && $this->options !== []
                && in_array($this->aimed, $this->locked) === false
+               && in_array($this->aimed, $this->map, true) === true
             ) {
                // * Metadata
                $this->selected = [$this->aimed];
@@ -502,6 +506,13 @@ class Select extends Component
     */
    private function toggle (): void
    {
+      // ? An aim the filter hides is not actionable — Space over "(no matches)"
+      //   must not select what the frame does not draw (this also refuses the
+      //   empty-list toggle, whose aim points at no option at all)
+      if (in_array($this->aimed, $this->map, true) === false) {
+         return;
+      }
+
       // ? Locked options are display-only
       if (in_array($this->aimed, $this->locked) === true) {
          return;
