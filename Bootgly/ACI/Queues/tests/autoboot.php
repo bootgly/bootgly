@@ -40,5 +40,6 @@ return new Suite(
       '4.2-redis-desync',
       '1.10-recover-claim-window',
       '4.3-redis-persistent-identity',
+      '4.4-redis-tls-connect',
    ]
 );

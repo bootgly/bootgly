@@ -558,8 +558,11 @@ class Redis extends Driver
          $timeout = $Config->timeout;
          stream_set_timeout($Socket, (int) $timeout, (int) (fmod($timeout, 1) * 1000000));
 
-         // @ Disable Nagle: commands and replies are small — latency dominates
-         if (extension_loaded('sockets') === true) {
+         // @ Disable Nagle: commands and replies are small — latency dominates.
+         //   Raw TCP only: socket_import_stream() cannot represent a TLS stream —
+         //   it warns and returns false, and the framework escalates that warning
+         //   into an ErrorException above connect()'s own try
+         if ($Config->secure === false && extension_loaded('sockets') === true) {
             $Raw = socket_import_stream($Socket);
             if ($Raw !== false) {
                @socket_set_option($Raw, SOL_TCP, TCP_NODELAY, 1);
