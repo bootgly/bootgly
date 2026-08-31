@@ -107,7 +107,7 @@ abstract class Projects
    /** @var int[] */
    private static array $indexes = [];
    // @ registry
-   /** @var null|array<string,array{interfaces?:array<string>,default?:bool}> */
+   /** @var null|array<string,array{interfaces?:array<string>}> */
    private static null|array $registry = null;
 
 
@@ -188,7 +188,7 @@ abstract class Projects
     * returns a project-keyed map where each key is the project's canonical path
     * (relative to the projects root) and each value carries its `interfaces`.
     *
-    * @return array<string,array{interfaces?:array<string>,default?:bool}>
+    * @return array<string,array{interfaces?:array<string>}>
     */
    public static function read (): array
    {
@@ -258,42 +258,6 @@ abstract class Projects
 
       // @
       require_once $autoload;
-   }
-
-   /**
-    * Pick the default project path for one interface (`CLI`|`WPI`).
-    *
-    * Returns the entry flagged `'default' => true`; when none is flagged it
-    * falls back to the first registered project for that interface. The
-    * registry's alphabetical ordering is for readability only — the default
-    * is chosen by the flag, not by position. Returns null if the interface
-    * has no registered projects.
-    *
-    * @param string $interface
-    *
-    * @return null|string
-    */
-   public static function pick (string $interface): null|string
-   {
-      // !
-      $fallback = null;
-
-      // @
-      foreach (self::read() as $path => $meta) {
-         if (in_array($interface, $meta['interfaces'] ?? [], true) === false) {
-            continue;
-         }
-
-         $fallback ??= $path;
-
-         // ?: Explicit default wins over position
-         if (($meta['default'] ?? false) === true) {
-            return $path;
-         }
-      }
-
-      // :
-      return $fallback;
    }
 
    /**
@@ -374,7 +338,7 @@ abstract class Projects
     * reaches the disk, and a registration can then only fail on I/O.
     *
     * @param string $path
-    * @param array{interfaces?:array<string>,default?:bool} $meta
+    * @param array{interfaces?:array<string>} $meta
     *
     * @return bool
     */
@@ -414,7 +378,7 @@ abstract class Projects
     * machine-managed — hand-added comments inside the array are not preserved.
     *
     * @param string $path
-    * @param array{interfaces?:array<string>,default?:bool} $meta
+    * @param array{interfaces?:array<string>} $meta
     * @param null|string $file Registry file (defaults to the consumer registry).
     *
     * @return bool
@@ -432,14 +396,11 @@ abstract class Projects
 
       // @ Load the current registry
       $loaded = is_file($file) ? include $file : [];
-      /** @var array<string,array{interfaces?:array<string>,default?:bool}> $registry */
+      /** @var array<string,array{interfaces?:array<string>}> $registry */
       $registry = is_array($loaded) ? $loaded : [];
 
       // @ Insert the entry (alphabetical order for readability)
       $entry = ['interfaces' => array_values($interfaces)];
-      if (($meta['default'] ?? false) === true) {
-         $entry['default'] = true;
-      }
       $registry[$path] = $entry;
       ksort($registry);
 
@@ -468,7 +429,7 @@ abstract class Projects
     *
     * @param string $source Source project directory (platform project or fetched clone).
     * @param string $path Canonical target project path (e.g. `App/API`).
-    * @param array{interfaces?:array<string>,default?:bool} $meta
+    * @param array{interfaces?:array<string>} $meta
     * @param null|string $base Projects base directory (defaults to the consumer directory).
     * @param bool $refresh Replace an existing copy at the target — it is kept until the new one is complete.
     *
@@ -518,8 +479,7 @@ abstract class Projects
       // ?: Source and target are one directory (the framework checkout, where
       //    the platform folder IS the working one): nothing to copy, and a
       //    refresh would erase the source out from under itself. A path the
-      //    registry already lists is left alone — re-registering would rebuild
-      //    its entry and drop a `default` flag.
+      //    registry already lists is left alone.
       if (realpath($source) === realpath($target)) {
          $loaded = is_file($registry) ? include $registry : [];
          if (is_array($loaded) && array_key_exists($path, $loaded) === true) {
@@ -692,7 +652,7 @@ abstract class Projects
     *
     * @param array<string>|string $sources Stub directories layered onto the target, in order.
     * @param string $path Canonical target project path (e.g. `App/API`).
-    * @param array{interfaces?:array<string>,default?:bool,name?:string,description?:string,version?:string,author?:string,port?:int|string} $meta
+    * @param array{interfaces?:array<string>,name?:string,description?:string,version?:string,author?:string,port?:int|string} $meta
     * @param null|string $base Projects base directory (defaults to the consumer directory).
     *
     * @return bool
@@ -774,9 +734,6 @@ abstract class Projects
 
          // : Register in the allow-list
          $entry = ['interfaces' => array_values($meta['interfaces'] ?? [])];
-         if (($meta['default'] ?? false) === true) {
-            $entry['default'] = true;
-         }
          $done = self::register($path, $entry, "{$base}Bootgly.projects.php");
 
          return $done;
@@ -832,9 +789,7 @@ abstract class Projects
             static fn (string $interface): string => var_export($interface, true),
             $list
          ));
-         $default = ($meta['default'] ?? false) === true ? ", 'default' => true" : '';
-
-         $entries .= "   {$key} => ['interfaces' => [{$interfaces}]{$default}],\n";
+         $entries .= "   {$key} => ['interfaces' => [{$interfaces}]],\n";
       }
 
       $content = <<<REGISTRY
@@ -850,12 +805,12 @@ abstract class Projects
 
       // Unified project registry — the security allow-list.
       //
-      // Only the project paths declared here may be started (`bootgly project <path> start`)
-      // or autobooted by the Web platform. Each key is the project's canonical path,
+      // Only the project paths declared here may be started
+      // (`bootgly project <path> start`). Each key is the project's canonical path,
       // relative to this `projects/` directory, at any depth (subprojects). Each value
       // binds the project to one or more interfaces:
       //   - CLI → Console platform
-      //   - WPI → Web platform (the entry flagged `'default' => true` is the web SAPI default)
+      //   - WPI → Web platform (served by Bootgly's own CLI HTTP server)
 
       // Kept in alphabetical order by project path. This file is machine-managed by
       // `bootgly project create/import` — hand-added comments inside the array are

@@ -67,6 +67,10 @@ class Project
 
    // * Metadata
    protected bool $booted = false;
+   // ? Handoff mark — set by a process whose exit merely hands the project
+   //   over (a daemonize launcher, a reload exec, a forked helper child), so
+   //   its teardown never announces `Project.Shutdown`
+   public bool $detached = false;
 
 
    /**
@@ -168,14 +172,17 @@ class Project
          require_once $autoload;
       }
 
-      // @
-      ($this->boot)($arguments, $options);
-
+      // ! Registration is complete — the project IS booted before its closure
+      //   runs, because server closures never return (their loops exit the
+      //   process) and the events must not depend on that return
       $this->booted = true;
 
       // @ Events — project booted (guarded: zero-alloc when no listeners)
       $Emitter = Emitter::$Instance;
       $Emitter->check(Events::Boot) && $Emitter->emit(Events::Boot, $this);
+
+      // @
+      ($this->boot)($arguments, $options);
    }
 
    /**
@@ -183,12 +190,13 @@ class Project
     *
     * `__destruct` timing is GC-bound; for the booted project (held by the
     * BOOTGLY_PROJECT constant + the Projects registry) this lands at process
-    * teardown. A constructed-but-never-booted project never emits.
+    * teardown. A constructed-but-never-booted project never emits, and
+    * neither does a process marked `detached` — its exit is a handoff.
     */
    public function __destruct ()
    {
       // ?
-      if ($this->booted === false) {
+      if ($this->booted === false || $this->detached === true) {
          return;
       }
 

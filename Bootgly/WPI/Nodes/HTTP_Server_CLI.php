@@ -44,6 +44,7 @@ use function basename;
 use function clearstatcache;
 use function cli_set_process_title;
 use function count;
+use function defined;
 use function dirname;
 use function explode;
 use function fclose;
@@ -774,6 +775,11 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       if ($PID === 0) {
          // Auxiliary children must not retain descriptors that represent the
          // serving process or share the upload controller's flock identity.
+         // ! An auxiliary child's exit is a handoff — the project keeps serving
+         if (defined('BOOTGLY_PROJECT')) {
+            $Project = BOOTGLY_PROJECT;
+            $Project->detached = true;
+         }
          $this->Process->State->detach();
          Downloads::destroy();
          $AutoTLS = $this->AutoTLS;
@@ -1781,6 +1787,11 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
 
       // # Helper child
+      // ! An auxiliary child's exit is a handoff — the project keeps serving
+      if (defined('BOOTGLY_PROJECT')) {
+         $Project = BOOTGLY_PROJECT;
+         $Project->detached = true;
+      }
       fclose($Pair[0]);
       $this->attend($Pair[1], $master);
    }
@@ -2304,6 +2315,12 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
       // # Certifier child
       cli_set_process_title("{$this->process}: ACME certifier");
+      // ! An auxiliary child's exit is a handoff — the project keeps serving
+      if (defined('BOOTGLY_PROJECT')) {
+         $Project = BOOTGLY_PROJECT;
+         $Project->detached = true;
+      }
+
       $this->Process->State->detach();
       $master = $this->Process->master;
 

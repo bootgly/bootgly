@@ -225,5 +225,9 @@ return new Suites(
       ...(getenv('BOOTGLY_SECURITY_AUDIT') === '1'
          ? ['Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/Security/']
          : []),
+      // # WPI — the platform interface root (CLI-only SAPI guard)
+      //   (appended after the Security opt-in so its per-case index stays 109;
+      //   with the audit env armed this suite shifts one slot)
+      'Bootgly/WPI/tests/',
    ]
 );

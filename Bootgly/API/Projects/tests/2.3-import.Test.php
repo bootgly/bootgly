@@ -141,14 +141,14 @@ return new Test(
       mkdir("{$base}Group/Keep", 0755, true);
       file_put_contents("{$base}Group/Keep/Keep.Project.php", "<?php\nreturn null;\n");
       file_put_contents("{$base}Group/Keep/USER_WORK.txt", 'mine');
-      Projects::register('Group/Keep', ['interfaces' => ['CLI'], 'default' => true], "{$base}Bootgly.projects.php");
+      Projects::register('Group/Keep', ['interfaces' => ['CLI']], "{$base}Bootgly.projects.php");
       $done = Projects::import("{$fixtures}/Sample", 'Group', ['interfaces' => ['WPI']], $base, refresh: true);
       $registry = include "{$base}Bootgly.projects.php";
       yield assert(
          assertion: $done === false
             && is_file("{$base}Group/Keep/USER_WORK.txt") === true
             && is_file("{$base}Group/Group.Project.php") === false
-            && ($registry['Group/Keep']['default'] ?? null) === true,
+            && ($registry['Group/Keep']['interfaces'] ?? null) === ['CLI'],
          description: 'a refresh onto a project group is refused, and the group survives intact'
       );
 

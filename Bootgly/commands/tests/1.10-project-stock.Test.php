@@ -12,6 +12,7 @@ namespace Bootgly\commands;
 
 
 use const BOOTGLY_ROOT_DIR;
+use const PHP_BINARY;
 use function array_diff;
 use function assert;
 use function fclose;
@@ -33,7 +34,6 @@ use function stream_get_contents;
 use function unlink;
 
 use const Bootgly\ABI\BOOTSTRAP_FILENAME;
-
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\ACI\Tests\Temporaries;
 
@@ -163,8 +163,8 @@ return new Test(
          );
 
          // @ Each example keeps the binding ITS platform registers — not the
-         //   core's, not the option given to the created project — and is
-         //   never the web default
+         //   core's, not the option given to the created project — and a legacy
+         //   default flag in the platform registry is never propagated
          yield assert(
             assertion: ($Registry['Fake']['interfaces'] ?? null) === ['WPI']
                && ($Registry['Demo/HTTP_Server_CLI']['interfaces'] ?? null) === ['WPI']

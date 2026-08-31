@@ -5,8 +5,10 @@ namespace Bootgly\commands;
 
 use function array_diff;
 use function assert;
+use function explode;
 use function file_get_contents;
 use function file_put_contents;
+use function in_array;
 use function is_dir;
 use function is_file;
 use function json_encode;
@@ -25,8 +27,8 @@ return new Test(
       $Admit = new ReflectionMethod(ProjectCommand::class, 'admit');
       $Command = new ProjectCommand;
 
-      $create = ['platform', 'from', 'interfaces', 'description', 'version', 'author', 'port', 'default', 'yes', 'no-git'];
-      $import = ['platform', 'interfaces', 'default', 'yes'];
+      $create = ['platform', 'from', 'interfaces', 'description', 'version', 'author', 'port', 'yes', 'no-git'];
+      $import = ['platform', 'interfaces', 'yes'];
 
       // # A flag this command declares for ANOTHER subcommand is refused
       //   `--dry-run` is the seeder's. The parser accepts any `--flag` and the
@@ -37,6 +39,19 @@ return new Test(
       yield assert(
          assertion: $Admit->invoke($Command, $create, ['dry-run' => true]) === false,
          description: 'create() refuses --dry-run, the seeder flag'
+      );
+      // # The retired web-default flag is gone from the declared surface
+      //   (admit() refuses anything outside the list by mechanism, so the
+      //   removal is pinned on the production option table itself)
+      $declared = [];
+      foreach ($Command->options as $flags) {
+         foreach ($flags as $flag) {
+            $declared[] = explode('=', $flag)[0];
+         }
+      }
+      yield assert(
+         assertion: in_array('--default', $declared, true) === false,
+         description: 'the option table no longer declares --default'
       );
 
       // # …and every flag it does implement is admitted

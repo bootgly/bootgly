@@ -23,18 +23,14 @@ return new Test(
          description: 'the emitted registry binds the path to its interfaces'
       );
 
-      // @ Register a second entry with the default flag
+      // @ Register more entries
       Projects::register('App/Console', ['interfaces' => ['CLI']], $file);
-      Projects::register('Zeta/Web', ['interfaces' => ['WPI'], 'default' => true], $file);
+      Projects::register('Zeta/Web', ['interfaces' => ['WPI']], $file);
 
       $registry = include $file;
       yield assert(
          assertion: array_keys($registry) === ['App/API', 'App/Console', 'Zeta/Web'],
          description: 'entries are kept sorted alphabetically by project path'
-      );
-      yield assert(
-         assertion: ($registry['Zeta/Web']['default'] ?? null) === true,
-         description: 'the default flag is persisted'
       );
 
       // @ Re-register updates the existing key
@@ -43,6 +39,19 @@ return new Test(
       yield assert(
          assertion: ($registry['App/API']['interfaces'] ?? null) === ['CLI', 'WPI'],
          description: 're-registering a path updates its entry in place'
+      );
+
+      // @ A legacy file carrying the retired default flag is scrubbed on rewrite
+      file_put_contents(
+         $file,
+         "<?php\nreturn [\n   'Old/Web' => ['interfaces' => ['WPI'], 'default' => true],\n];\n"
+      );
+      Projects::register('App/API', ['interfaces' => ['WPI']], $file);
+      $registry = include $file;
+      yield assert(
+         assertion: str_contains((string) file_get_contents($file), "'default'") === false
+            && ($registry['Old/Web']['interfaces'] ?? null) === ['WPI'],
+         description: 'a legacy default flag is dropped on rewrite and its entry survives'
       );
 
       // ! Rejections

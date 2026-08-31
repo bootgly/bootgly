@@ -38,16 +38,6 @@ return new Test(
             assertion: $WPI[0] === 'Benchmark/HTTP_Server_CLI',
             description: 'registry (alphabetical) declaration order is preserved'
          );
-
-         // ! The Web default is the flagged entry, not the first WPI in file order
-         yield assert(
-            assertion: Projects::pick('WPI') === 'Demo/HTTP_Server_CLI',
-            description: 'pick() returns the flagged default, not the alphabetically first WPI'
-         );
-         yield assert(
-            assertion: Projects::pick('CLI') === 'Demo/CLI',
-            description: 'pick() falls back to the first registered when none is flagged'
-         );
       }
       finally {
          $Memo->setValue(null, $previous);

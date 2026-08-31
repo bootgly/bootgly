@@ -235,7 +235,6 @@ class ProjectCommand extends Command
       'Creation source: from scratch or a platform project' => ['--from=scratch', '--from=<source>'],
       'Interface bound to the new project (create/import)' => ['--interfaces=CLI', '--interfaces=WPI'],
       'New project metadata (create)' => ['--description=', '--version=', '--author=', '--port='],
-      'Flag the new project as the web default (create/import)' => ['--default'],
       'Skip confirmations (create/import)' => ['--yes'],
       'Do not create a git repository for the new project (create)' => ['--no-git'],
       'Replace an existing project, git history included (create --from)' => ['--refresh'],
@@ -394,7 +393,7 @@ class ProjectCommand extends Command
       //   implement must never be accepted and dropped.
       if (
          $this->admit(
-            ['platform', 'from', 'interfaces', 'description', 'version', 'author', 'port', 'default', 'yes', 'no-git', 'refresh'],
+            ['platform', 'from', 'interfaces', 'description', 'version', 'author', 'port', 'yes', 'no-git', 'refresh'],
             $options
          ) === false
       ) {
@@ -430,7 +429,7 @@ class ProjectCommand extends Command
             $Alert->Type::Failure->set();
             $Alert->message = 'Missing project path. Usage: @#cyan:bootgly project create <Name> '
                . '[--from=scratch|<source>] [--interfaces=CLI|WPI] [--port=] [--description=] '
-               . '[--version=] [--author=] [--default] [--yes]@;';
+               . '[--version=] [--author=] [--yes]@;';
             $Alert->render();
 
             return false;
@@ -494,7 +493,6 @@ class ProjectCommand extends Command
             $path,
             [
                'interfaces'  => [$interface],
-               'default'     => isSet($options['default']),
                'name'        => basename($path),
                'description' => (string) ($options['description'] ?? ''),
                'version'     => (string) ($options['version'] ?? '1.0.0'),
@@ -590,7 +588,6 @@ class ProjectCommand extends Command
       //   own) — adopt one with `bootgly project <Name> boot`.
       $done = Projects::import($source, $path, [
          'interfaces' => $interfaces,
-         'default'    => isSet($options['default']),
       ], refresh: true);
 
       return $this->report($done, $path);
@@ -614,7 +611,7 @@ class ProjectCommand extends Command
       $Output = CLI->Terminal->Output;
 
       // ? Refuse before anything is written, as create() does.
-      if ($this->admit(['platform', 'interfaces', 'default', 'yes'], $options) === false) {
+      if ($this->admit(['platform', 'interfaces', 'yes'], $options) === false) {
          return false;
       }
 
@@ -751,7 +748,6 @@ class ProjectCommand extends Command
       //   pushing from `projects/` — the project is the unit of versioning
       $done = Projects::import($tmp, $path, [
          'interfaces' => [$interface],
-         'default'    => isSet($options['default']),
       ]);
 
       $this->erase($tmp);
@@ -834,7 +830,7 @@ class ProjectCommand extends Command
    }
 
    /**
-    * List all discovered projects with their descriptions and default marker.
+    * List all discovered projects with their descriptions.
     *
     * @return bool
     */
@@ -847,7 +843,7 @@ class ProjectCommand extends Command
       $projects_WPI = $this->discover('WPI');
 
       // @ Merge in registry order (kept alphabetical by path)
-      /** @var array<string, array{description: string, default: bool}> $all */
+      /** @var array<string, array{description: string}> $all */
       $all = [];
       foreach (Projects::read() as $folder => $entry) {
          $meta = $projects_CLI[$folder] ?? $projects_WPI[$folder] ?? null;
@@ -857,7 +853,6 @@ class ProjectCommand extends Command
 
          $all[$folder] = [
             'description' => $meta['description'],
-            'default'     => ($entry['default'] ?? false) === true
          ];
       }
 
@@ -877,7 +872,7 @@ class ProjectCommand extends Command
       $gutter = strlen((string) $count) + 1;
       $indent = str_repeat(' ', $gutter + 1);
 
-      // @ One row per project — folder, default marker and wrapped description
+      // @ One row per project — folder and wrapped description
       $index = 1;
       $rows = [];
       foreach ($all as $folder => $info) {
@@ -886,9 +881,6 @@ class ProjectCommand extends Command
          $aligned = str_repeat(' ', max(0, $gutter - strlen($number)));
 
          $row = "{$aligned}@#Magenta:{$number}@; @#Yellow:{$folder}@;";
-         if ($info['default'] === true) {
-            $row .= ' @#Green:(default)@;';
-         }
 
          if ($info['description'] !== '') {
             // @phpstan-ignore-next-line -- wrap() resolves via __callStatic (pad precedent)
@@ -1853,8 +1845,8 @@ class ProjectCommand extends Command
       $imports = [];
       /** @var array<string> $transferred */
       $transferred = [];
-      /** @var array{interfaces?: array<string>, default?: bool, name?: string, description?: string, version?: string, author?: string, port?: int|string} $meta */
-      $meta = ['default' => isSet($options['default'])];
+      /** @var array{interfaces?: array<string>, name?: string, description?: string, version?: string, author?: string, port?: int|string} $meta */
+      $meta = [];
       $interface = '';
       $url = '';
       $target = '';
@@ -2379,7 +2371,6 @@ class ProjectCommand extends Command
          //   framework checkout, is left in place)
          $imported = Projects::import($import['source'], $path, [
             'interfaces' => $this->detect($import['source']) ?? ['CLI'],
-            'default'    => false,
          ], refresh: true);
 
          // ? Failures render at the failure site — the wizard keeps them on screen

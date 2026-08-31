@@ -1489,6 +1489,11 @@ class TCP_Server_CLI implements Servers
 
       if ($PID > 0) {
          $this->daemonized = true;
+         // ! The launcher's exit is a handoff — the daemon owns the project now
+         if (defined('BOOTGLY_PROJECT')) {
+            $Project = BOOTGLY_PROJECT;
+            $Project->detached = true;
+         }
          fclose($Pair[1]);
          stream_set_blocking($Pair[0], false);
 
@@ -2840,6 +2845,11 @@ class TCP_Server_CLI implements Servers
       // # Relay child — retain the inherited State descriptor: it is the sole
       //   continuous lock bridge after the old master detaches before exec.
       //   Reset inherited handlers and unrelated launcher state only.
+      // ! A relay's exit is a handoff — the project keeps serving elsewhere
+      if (defined('BOOTGLY_PROJECT')) {
+         $Project = BOOTGLY_PROJECT;
+         $Project->detached = true;
+      }
       if (is_resource($this->daemonReady)) {
          fclose($this->daemonReady);
          $this->daemonReady = null;
@@ -3290,6 +3300,13 @@ class TCP_Server_CLI implements Servers
       //   SURVIVES execve — without a reset the fresh master would be born
       //   deaf to every lifecycle signal (SIGTERM/SIGCHLD/SIGUSR2).
       pcntl_sigprocmask(SIG_SETMASK, []);
+      // ! The exec is a handoff — the fresh image re-runs boot() and
+      //   re-announces `Project.Boot`; no Shutdown belongs here (and the
+      //   failure exit below must not announce one either)
+      if (defined('BOOTGLY_PROJECT')) {
+         $Project = BOOTGLY_PROJECT;
+         $Project->detached = true;
+      }
       pcntl_exec(self::$binary, self::$argv, getenv());
 
       // ? exec only returns on failure — workers are already gone. The relay

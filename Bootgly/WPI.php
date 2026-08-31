@@ -12,14 +12,9 @@ namespace Bootgly;
 
 
 use const BOOTGLY_SAPI;
-use function basename;
-use function is_dir;
-use function is_file;
 use Exception;
 
-use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\API\Projects;
-use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
@@ -47,45 +42,16 @@ class WPI extends Projects // Web Programming Interface
 
    public function autoboot (): void
    {
-      // ?
+      // ? The Web platform is served exclusively by Bootgly's own CLI HTTP
+      //   server (one-way policy) — there is no web SAPI mode.
       switch (BOOTGLY_SAPI) {
          case 'cli':
             break;
          default:
-            // Debugging Vars
-            Vars::$debug = false;
-            Vars::$exit = true;
-
-            // ---
-
-            // @ Boot WPI for web SAPI
-            // @ Pick the default WPI project (flagged `default`, not by file order)
-            $default = Projects::pick('WPI');
-            if ($default === null) {
-               throw new Exception('No WPI projects configured.');
-            }
-            // ? Jail the web SAPI entrypoint against the security boundary
-            if (Projects::validate($default) === false) {
-               throw new Exception('Invalid default WPI project.');
-            }
-
-            $leaf = basename($default);
-            $projectDir = Projects::CONSUMER_DIR . $default . '/';
-            if (is_dir($projectDir) === false) {
-               $projectDir = Projects::AUTHOR_DIR . $default . '/';
-            }
-
-            $projectFile = $projectDir . $leaf . '.Project.php';
-
-            if (is_file($projectFile)) {
-               // ! Per-project Composer autoload — before the signature
-               self::load($projectDir);
-
-               $result = require $projectFile;
-               if ($result instanceof Project) {
-                  $result->boot();
-               }
-            }
+            throw new Exception(
+               'Bootgly serves the web through its own CLI HTTP server; '
+               . 'web SAPIs are not supported.'
+            );
       }
    }
 }

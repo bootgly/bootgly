@@ -1,6 +1,6 @@
 <?php
 
-namespace Bootgly\API\Projects\Project;
+namespace Bootgly\WPI;
 
 use Bootgly\ACI\Tests\Suite;
 
@@ -14,8 +14,6 @@ return new Suite(
    // * Data
    suiteName: __NAMESPACE__,
    tests: [
-      '1.1-events',
-      '1.2-provenance',
-      '1.3-lifecycle',
+      '1.1-sapi',
    ]
 );
