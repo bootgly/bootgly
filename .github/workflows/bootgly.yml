@@ -32,13 +32,34 @@ jobs:
         run: |
           php bootgly
           set +e
-          timeout --signal=TERM --kill-after=30 300 php bootgly test --bootgly
-          code=$?
+          started=$SECONDS
+          # The run gets its own session, so a process-group signal raised inside
+          # it cannot reach this shell: the step reports the run instead of dying
+          # with it. setsid does not relay a signal death (it returns the bare
+          # signal number), so the inner shell records the real status itself; a
+          # missing file means the run's own shell was killed under it.
+          STATUS="$RUNNER_TEMP/bootgly-test.status"
+          rm -f "$STATUS"
+          STATUS="$STATUS" setsid --wait bash -c \
+            'timeout --signal=TERM --kill-after=30 600 php bootgly test --bootgly; echo $? > "$STATUS"'
+          code=$(cat "$STATUS" 2>/dev/null)
+          if [ -z "$code" ]; then
+            echo '::error::the run session was killed from the outside — no status recorded'
+            code=137
+          fi
+          elapsed=$(( SECONDS - started ))
           set -e
-          if [ "$code" -eq 124 ] || [ "$code" -eq 137 ]; then
-            echo '::error::bootgly test stalled (300s timeout) — dumping processes and listeners'
+          if [ "$code" -ne 0 ]; then
+            echo "::error::bootgly test exited ${code} after ${elapsed}s"
+            if [ "$code" -eq 124 ]; then
+              echo '::error::the 600s budget expired — the run stalled'
+            elif [ "$code" -gt 128 ]; then
+              echo "::error::killed by signal $(( code - 128 )) — not the budget"
+            fi
             ps auxf || true
             ss -tlnp || true
+            free -m || true
+            sudo dmesg -T 2>/dev/null | tail -80 || true
           fi
           exit "$code"
       -
