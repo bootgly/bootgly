@@ -173,10 +173,32 @@ class Decoder_Chunked extends Decoder
             ];
          }
 
+         // ? Loop-progress backstop: the terminal chunk returned above, so
+         //   every size reaching here must be strictly positive. A size that
+         //   is not cannot advance the slicing below and would re-parse the
+         //   same bytes forever. `break`ing out would be worse than the spin —
+         //   it re-buffers the corrupt line as leftover and returns "need more
+         //   data", so the next read re-parses it and `leftover` grows without
+         //   bound while `maxSize` is 0 (HARDENIZE HCLI-1). Fail the response
+         //   instead.
+         if ($chunkSize <= 0) {
+            $this->body     = '';
+            $this->leftover = '';
+
+            return [
+               'failed'   => true,
+               'status'   => 'Invalid Chunked Encoding',
+               'consumed' => $size,
+            ];
+         }
+
          // ? Guard: the DECLARED chunk would push the decoded body past the
          //   cap — fail fast with a distinguishable overflow record, never a
-         //   fake completion (HCLI-11); the chunk data need not have arrived
-         if ($this->maxSize > 0 && strlen($this->body) + $chunkSize > $this->maxSize) {
+         //   fake completion (HCLI-11); the chunk data need not have arrived.
+         //   Compared as a remainder, never as a sum, so the aggregate itself
+         //   can never overflow into a passing value (HARDENIZE HCLI-1) — the
+         //   same form the server decoder settled on.
+         if ($this->maxSize > 0 && $chunkSize > $this->maxSize - strlen($this->body)) {
             $this->body     = '';
             $this->leftover = '';
 
@@ -191,6 +213,27 @@ class Decoder_Chunked extends Decoder
          $needed = $eol + 2 + $chunkSize + 2;
          if (strlen($data) < $needed) {
             break; // Need more data
+         }
+
+         // ? RFC 9112 §7.1 — `chunk = chunk-size [chunk-ext] CRLF chunk-data
+         //   CRLF`. The terminator used to be skipped blindly, so ANY two
+         //   octets passed for the CRLF and a stream every conformant hop
+         //   rejects completed here as a 200 (HARDENIZE HCLI-1) — the server
+         //   decoder answers 400 to the same bytes. The parse then resumed at
+         //   a boundary the origin chose rather than the one the protocol
+         //   defines, which is what would carry into a pooled connection the
+         //   day pipelined leftover is kept across requests.
+         $terminator = $eol + 2 + $chunkSize;
+
+         if ($data[$terminator] !== "\r" || $data[$terminator + 1] !== "\n") {
+            $this->body     = '';
+            $this->leftover = '';
+
+            return [
+               'failed'   => true,
+               'status'   => 'Invalid Chunked Encoding',
+               'consumed' => $size,
+            ];
          }
 
          // @ Extract chunk data

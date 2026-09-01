@@ -107,6 +107,7 @@ return new Suite(
          '17.6-declared_oversize_keepalive_later_read',
          '17.7-malformed_chunk_size',
          '17.8-negative_chunk_size',
+         '17.9-blind_chunk_terminator',
       ],
       // ! Last on purpose: these build a second client, which replaces the
       //   process-wide reactor. Nothing after them may rely on the previous one.
