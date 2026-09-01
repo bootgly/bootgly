@@ -43,16 +43,19 @@ jobs:
           # missing file means the run's own shell was killed under it.
           STATUS="$RUNNER_TEMP/bootgly-test.status"
           rm -f "$STATUS"
-          # Trace every signal-sending syscall in the tree: the run has been dying
-          # of a SIGKILL nobody in the log admits to sending, and this names the
-          # sender PID and its target.
+          # A test child that signals its whole process group reaches `timeout`
+          # when both share one; `timeout` then treats the stray SIGTERM as its
+          # own and SIGKILLs the run --kill-after seconds later. The runner gets
+          # a session of its own inside the budget, so a group signal raised by
+          # any descendant stops at the runner (which already survives SIGTERM).
+          # The trace names the sender of every signal, for the root-cause cycle.
           TRACE="$RUNNER_TEMP/bootgly-test.signals"
           tracer=""
           if command -v strace >/dev/null; then
-            tracer="strace -f -qq -e trace=kill,tgkill,tkill,rt_sigqueueinfo,pidfd_send_signal -o $TRACE"
+            tracer="strace -f -tt -qq -s 200 -e trace=kill,tgkill,tkill,rt_sigqueueinfo,pidfd_send_signal,execve -o $TRACE"
           fi
           STATUS="$STATUS" TRACER="$tracer" setsid --wait bash -c \
-            '$TRACER timeout --signal=TERM --kill-after=30 600 php bootgly test --bootgly; echo $? > "$STATUS"'
+            '$TRACER timeout --signal=TERM --kill-after=30 600 setsid --wait php bootgly test --bootgly; echo $? > "$STATUS"'
           code=$(cat "$STATUS" 2>/dev/null)
           if [ -z "$code" ]; then
             echo '::error::the run session was killed from the outside — no status recorded'
@@ -71,11 +74,19 @@ jobs:
             ss -tlnp || true
             free -m || true
             echo '::group::signal trace (SIGKILL/SIGTERM senders)'
-            grep -E 'SIGKILL|SIGTERM|SIGINT|SIGQUIT' "$TRACE" 2>/dev/null | tail -60 || true
+            grep -E 'kill\(0,|kill\(-|SIGKILL' "$TRACE" 2>/dev/null | tail -60 || true
             echo '::endgroup::'
             sudo dmesg -T 2>/dev/null | tail -40 || true
           fi
           exit "$code"
+      -
+        name: Upload signal trace
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bootgly-test-signals
+          path: ${{ runner.temp }}/bootgly-test.signals
+          if-no-files-found: ignore
       -
         name: Dump benchmark run artifacts
         if: failure()
