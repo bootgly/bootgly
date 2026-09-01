@@ -25,6 +25,7 @@ use function random_int;
 use function serialize;
 use function session_get_cookie_params;
 use function unserialize;
+use ReflectionClass;
 use RuntimeException;
 
 use Bootgly\ABI\Events\Emitter;
@@ -520,27 +521,49 @@ class Session
    /**
     * Init session defaults from PHP config.
     *
+    * A static assigned before the first Session wins: `php.ini` fills only
+    * the statics still holding their declared default, so a policy written
+    * at boot (`Session::$lifetime = 604800;`) is never silently replaced by
+    * `session.gc_maxlifetime` when the first session of the process starts.
+    *
     * @return void
     */
    protected static function init (): void
    {
+      // ! An untouched static still holds its declared default.
+      $Class = new ReflectionClass(self::class);
+      $untouched = static function (string $property) use ($Class): bool {
+         return $Class->getStaticPropertyValue($property)
+            === $Class->getProperty($property)->getDefaultValue();
+      };
+
       // @ GC
       if (
-         ($gcProbability = (int) ini_get('session.gc_probability'))
+         $untouched('gcProbability')
+         && ($gcProbability = (int) ini_get('session.gc_probability'))
          && ($gcDivisor = (int) ini_get('session.gc_divisor'))
       ) {
          static::$gcProbability = [$gcProbability, $gcDivisor];
       }
 
-      if ($gcMaxLifeTime = ini_get('session.gc_maxlifetime')) {
-         self::$lifetime = (int) $gcMaxLifeTime;
+      if (
+         $untouched('lifetime')
+         && ($gcMaxLifeTime = (int) ini_get('session.gc_maxlifetime')) > 0
+      ) {
+         self::$lifetime = $gcMaxLifeTime;
       }
 
       // @ Cookie
       $sessionCookieParams = session_get_cookie_params();
-      static::$cookieLifetime = $sessionCookieParams['lifetime'];
-      static::$cookiePath = $sessionCookieParams['path'];
-      static::$domain = $sessionCookieParams['domain'];
+      if ($untouched('cookieLifetime')) {
+         static::$cookieLifetime = $sessionCookieParams['lifetime'];
+      }
+      if ($untouched('cookiePath')) {
+         static::$cookiePath = $sessionCookieParams['path'];
+      }
+      if ($untouched('domain')) {
+         static::$domain = $sessionCookieParams['domain'];
+      }
       // ! `secure`/`httpOnly`/`sameSite` are framework-owned (audit F-9): they
       //   are NOT sourced from `php.ini`. Stock PHP ships
       //   `session.cookie_secure` and `session.cookie_httponly` OFF, which
