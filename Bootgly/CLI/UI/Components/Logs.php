@@ -636,7 +636,7 @@ class Logs
    {
       $color = $this->color($Record->Level);
 
-      $time = date('H:i:s', (int) $Record->timestamp);
+      $time = date('Y-m-d H:i:s', (int) $Record->timestamp);
       $severity = str_pad($Record->Level->render(), 9);
       $channel = $this->shorten($Record->channel);
 
@@ -645,7 +645,7 @@ class Logs
 
       // @ Budget the message to the remaining width
       $hidden = $extra > 0 ? " ⏎ +$extra lines" : '';
-      $prefix = "› [$time] $severity $channel: ";
+      $prefix = "› $time | $severity | $channel: ";
       $budget = max(0, $width - strlen($prefix) - strlen($hidden));
       if (strlen($message) > $budget) {
          $message = substr($message, 0, $budget);
@@ -659,8 +659,9 @@ class Logs
          : '';
 
       return $gutter . ' '
-         . self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . "[$time] " . self::_RESET_FORMAT
-         . self::wrap($color) . $severity . self::_RESET_FORMAT . ' '
+         . self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . "$time | " . self::_RESET_FORMAT
+         . self::wrap($color) . $severity . self::_RESET_FORMAT
+         . self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . ' | ' . self::_RESET_FORMAT
          . self::wrap(self::_BLUE_BRIGHT_FOREGROUND) . $channel . self::_RESET_FORMAT . ': '
          . self::wrap($color) . $message . self::_RESET_FORMAT
          . $more;

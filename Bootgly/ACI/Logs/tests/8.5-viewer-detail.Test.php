@@ -77,10 +77,11 @@ return new Test(
          $A = new Record(Levels::Info, 'Demo.App', 'GET /api/health → 200 in 0ms', $context);
          $List->feed((new JSONFormatter)->format($A));
          [, $rows] = $frame($List);
-         $listed = array_filter($rows, static fn (string $row): bool => str_contains($row, 'GET /api/health'));
+         $listed = array_values(array_filter($rows, static fn (string $row): bool => str_contains($row, 'GET /api/health')));
          yield assert(
-            assertion: count($listed) === 1 && str_contains(implode("\n", $rows), '"method"') === false,
-            description: 'list mode keeps one row per record (the context stays out of the list)'
+            assertion: count($listed) === 1 && str_contains(implode("\n", $rows), '"method"') === false
+               && str_contains($listed[0], date('Y-m-d H:i:s', (int) $A->timestamp) . ' | INFO      | Demo.App: GET /api/health'),
+            description: 'list mode keeps one row per record — date time | level | channel: message (the context stays out of the list)'
          );
 
          // # L1/L2/L3: the whole context is present, hung under its label, one key per row
