@@ -98,6 +98,7 @@ use Throwable;
 use const Bootgly\ABI\BOOTSTRAP_FILENAME;
 use const Bootgly\CLI;
 use Bootgly\ABI\Code\__String;
+use Bootgly\ACI\Logs\Data\Record;
 use Bootgly\ACI\Process\State;
 use Bootgly\ACI\Process\States;
 use Bootgly\ADI\Databases\SQL;
@@ -991,7 +992,8 @@ class ProjectCommand extends Command
 
    /**
     * Register this console process in the instance registry (PID-qualified),
-    * tombstoning it on exit — the identity `show`/`stop`/`logs` address.
+    * tombstoning it on exit — the identity `show`/`stop`/`logs` address — and
+    * stamp that PID as the instance of every record this process writes.
     */
    private function enroll (string $projectName): void
    {
@@ -1006,6 +1008,8 @@ class ProjectCommand extends Command
                'started' => time(),
                'project' => $projectName
             ]);
+            // @ Every record from here on carries this instance's registry qualifier
+            Record::$qualifier = (string) $ownerPID;
             register_shutdown_function(static function () use ($State, $ownerPID): void {
                // ? Only the registering process cleans — forks inherit this hook
                if (posix_getpid() === $ownerPID) {
@@ -1797,7 +1801,8 @@ class ProjectCommand extends Command
     * View and follow one project's logs — the project-scoped face of `bootgly logs`.
     *
     * Addressed by NAME, never by port: a console project has no port, and a server's
-    * port is only the `--instance` tiebreaker when several instances are live.
+    * port (or a console master PID) is the `--instance` qualifier — a record filter on
+    * both lanes and, with -f, the live-tap tiebreaker when several instances are live.
     *
     * @param array<string> $arguments
     * @param array<string, bool|int|string> $options

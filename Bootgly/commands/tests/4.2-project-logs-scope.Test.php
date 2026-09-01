@@ -84,6 +84,9 @@ return new Test(
          $output = $render(static function () use ($Command): void {
             $Command->logs(['Demo/HTTP_Server_CLI'], ['json' => true]);
          });
+         $narrowed = $render(static function () use ($Command): void {
+            $Command->logs(['Demo/HTTP_Server_CLI'], ['json' => true, 'instance' => '1']);
+         });
       }
       finally {
          $Logs->directory = $saved;
@@ -93,6 +96,11 @@ return new Test(
          assertion: str_contains($output, 'scoped-record')
             && str_contains($output, 'foreign-record') === false,
          description: 'the delegate filters by the project\'s provenance automatically'
+      );
+
+      yield assert(
+         assertion: $narrowed === '',
+         description: 'the project face passes --instance through: unstamped fixture lines never match'
       );
 
       // @ Cleanup

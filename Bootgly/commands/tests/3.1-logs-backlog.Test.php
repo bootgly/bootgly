@@ -30,16 +30,22 @@ return new Test(
       $dir = sys_get_temp_dir() . '/bootgly-logscmd-' . uniqid();
       mkdir($dir, 0o775, true);
 
-      $line = static function (float $timestamp, string $level, string $channel, string $message, string $project): string {
-         return json_encode([
+      $line = static function (float $timestamp, string $level, string $channel, string $message, string $project, null|string $instance = null): string {
+         $data = [
             'timestamp' => $timestamp, 'level' => $level, 'project' => $project,
             'channel' => $channel, 'message' => $message, 'context' => [], 'extra' => [],
-         ]) . "\n";
+         ];
+         // ? A legacy line (written before the field existed) carries no instance key
+         if ($instance !== null) {
+            $data['instance'] = $instance;
+         }
+         return json_encode($data) . "\n";
       };
       file_put_contents(
          "$dir/App.log",
-         $line(100.0, 'INFO', 'App', 'app-info', 'Alpha')
-            . $line(300.0, 'ERROR', 'App', 'app-error', 'Alpha')
+         $line(100.0, 'INFO', 'App', 'app-info', 'Alpha', '8080')
+            . $line(250.0, 'INFO', 'App', 'app-padded', 'Alpha', '08080')
+            . $line(300.0, 'ERROR', 'App', 'app-error', 'Alpha', '8443')
       );
       file_put_contents(
          "$dir/Core.log",
@@ -65,12 +71,13 @@ return new Test(
          return (string) stream_get_contents($Host->stream);
       };
 
-      // # Unfiltered: every record, merged ascending
+      // # Unfiltered: every record, merged ascending (the instance key is additive)
       $all = $render(['json' => true]);
       yield assert(
-         assertion: substr_count($all, "\n") === 3
+         assertion: substr_count($all, "\n") === 4
             && strpos($all, 'app-info') < strpos($all, 'core-warning')
-            && strpos($all, 'core-warning') < strpos($all, 'app-error'),
+            && strpos($all, 'core-warning') < strpos($all, 'app-padded')
+            && strpos($all, 'app-padded') < strpos($all, 'app-error'),
          description: 'all records print as JSON lines, merged ascending by timestamp'
       );
 
@@ -99,6 +106,32 @@ return new Test(
          description: '--project and --framework filter by record provenance'
       );
 
+      // # --instance narrows the backlog to one instance (BG-24)
+      $one = $render(['json' => true, 'project' => 'Alpha', 'instance' => '8443']);
+      yield assert(
+         assertion: str_contains($one, 'app-error') && str_contains($one, '"instance":"8443"')
+            && str_contains($one, 'app-info') === false
+            && str_contains($one, 'app-padded') === false
+            && str_contains($one, 'core-warning') === false,
+         description: '--instance keeps only that instance\'s records (import → re-format keeps the key)'
+      );
+
+      $kit = $render(['json' => true, 'instance' => '8080']);
+      yield assert(
+         assertion: str_contains($kit, 'app-info')
+            && str_contains($kit, 'app-padded') === false
+            && str_contains($kit, 'core-warning') === false
+            && str_contains($kit, 'app-error') === false,
+         description: 'kit-scope --instance matches the exact string: no legacy lines, no numeric coercion (08080 is not 8080)'
+      );
+
+      $none = $render(['json' => true, 'instance' => '99999']);
+      $human = $render(['instance' => '99999']);
+      yield assert(
+         assertion: $none === '' && str_contains($human, 'No log records matched.'),
+         description: 'an unknown instance prints nothing: the JSON stream stays empty, the human run says so'
+      );
+
       // # --since bounds by timestamp; invalid --since refuses
       $recent = $render(['json' => true, 'since' => '@150']);
       yield assert(
@@ -121,6 +154,23 @@ return new Test(
       yield assert(
          assertion: $refused === false,
          description: 'an unparseable --since refuses the run'
+      );
+
+      // # A bare --instance (no qualifier) refuses too — never silently ignored
+      $Bare = new LogsCommand;
+      $Bare->directory = $dir;
+      $Host = new Output('php://memory');
+      $Terminal->Output = $Host;
+      try {
+         $bare = $Bare->run([], ['json' => true, 'instance' => true]);
+      }
+      finally {
+         $Terminal->Output = $Restore;
+      }
+      rewind($Host->stream);
+      yield assert(
+         assertion: $bare === false && str_contains((string) stream_get_contents($Host->stream), 'Invalid --instance'),
+         description: 'a bare --instance is refused with a message, like a bare --since'
       );
 
       // @ Cleanup

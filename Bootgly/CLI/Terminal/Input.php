@@ -53,6 +53,7 @@ use RuntimeException;
 use Throwable;
 
 use Bootgly\ABI\IO\IPC\Pipe;
+use Bootgly\ACI\Logs\Data\Record;
 use Bootgly\ACI\Process\State;
 use Bootgly\API\Projects;
 use Bootgly\CLI\Terminal\Input\Keystrokes;
@@ -490,6 +491,10 @@ class Input
             throw new RuntimeException('Can not acquire the terminal process state lock.');
          }
       }
+
+      // @ Records of this TUI (and of its Client child) carry the master PID
+      //   qualifier — idempotent with the launcher's enroll()
+      Record::$qualifier = (string) $masterPID;
 
       // @ Fork only after the master owns the qualified lock. The child
       //   inherits that exact descriptor, while the kernel flock owner remains

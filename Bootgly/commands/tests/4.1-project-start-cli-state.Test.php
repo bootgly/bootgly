@@ -39,6 +39,7 @@ return new Test(
       <?php
 
       use const Bootgly\CLI;
+      use Bootgly\ACI\Logs\Data\Record;
       use Bootgly\ACI\Process\States;
       use Bootgly\API\Projects;
       use Bootgly\API\Projects\Project;
@@ -52,6 +53,10 @@ return new Test(
             $located = States::locate($id, $instance);
             echo 'in-boot:' . ($located !== null && $located['type'] === 'CLI' ? 'yes' : 'no') . "\n";
 
+            // # ...and stamped it as the instance of every record this process writes (BG-24)
+            $stamp = isset(Record::$qualifier) ? Record::$qualifier : null;
+            echo 'enroll-stamp:' . ($stamp === $instance ? 'pid' : 'other') . "\n";
+
             // # A TUI boot adopts the launcher's entry instead of throwing on the held lock
             CLI->Terminal->Input->reading(
                static function ($read, $write): void {},
@@ -59,6 +64,8 @@ return new Test(
             );
             $after = States::locate($id, $instance);
             echo 'post-reading:' . ($after !== null ? 'kept' : 'cleaned') . "\n";
+            $stamp = isset(Record::$qualifier) ? Record::$qualifier : null;
+            echo 'post-stamp:' . ($stamp === $instance ? 'pid' : 'other') . "\n";
          },
          exportable: false,
          name: 'Scratch'
@@ -79,6 +86,16 @@ return new Test(
       yield assert(
          assertion: str_contains($output, 'post-reading:kept'),
          description: 'Input::reading() adopts the launcher-held lock (no throw, no clean)'
+      );
+
+      yield assert(
+         assertion: str_contains($output, 'enroll-stamp:pid'),
+         description: 'the launcher stamps the console master PID as the record instance before the boot entry runs'
+      );
+
+      yield assert(
+         assertion: str_contains($output, 'post-stamp:pid'),
+         description: 'Input::reading() keeps the same instance qualifier (idempotent with the launcher)'
       );
 
       // # After exit, the launcher's shutdown hook tombstoned the entry

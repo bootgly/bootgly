@@ -10,7 +10,7 @@ return new Test(
       $dir = sys_get_temp_dir() . '/bootgly-backlog-merge-' . uniqid();
       mkdir($dir, 0o775, true);
 
-      $line = static function (float $timestamp, string $channel, string $message, null|string $project = null): string {
+      $line = static function (float $timestamp, string $channel, string $message, null|string $project = null, null|string $instance = null): string {
          $data = [
             'timestamp' => $timestamp,
             'level' => 'INFO',
@@ -22,6 +22,9 @@ return new Test(
          if ($project !== null) {
             $data['project'] = $project;
          }
+         if ($instance !== null) {
+            $data['instance'] = $instance;
+         }
          return json_encode($data) . "\n";
       };
 
@@ -30,7 +33,7 @@ return new Test(
          "$dir/A.log",
          $line(10.0, 'A', 'first')
             . "not-json\n"
-            . $line(30.0, 'A', 'third', 'Alpha')
+            . $line(30.0, 'A', 'third', 'Alpha', '8443')
       );
       file_put_contents(
          "$dir/B.log",
@@ -51,6 +54,11 @@ return new Test(
       yield assert(
          assertion: $Records[0]->project === 'framework' && $Records[2]->project === 'Alpha',
          description: 'legacy lines import as framework; stamped lines keep their provenance'
+      );
+
+      yield assert(
+         assertion: $Records[0]->instance === '' && $Records[2]->instance === '8443',
+         description: 'legacy lines import with an empty instance; stamped lines keep theirs'
       );
 
       // # --since bounds by record timestamp

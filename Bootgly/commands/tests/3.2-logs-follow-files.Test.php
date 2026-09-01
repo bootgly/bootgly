@@ -28,11 +28,16 @@ return new Test(
       $dir = sys_get_temp_dir() . '/bootgly-logsfollow-' . uniqid();
       mkdir($dir, 0o775, true);
 
-      $line = static function (string $level, string $message): string {
-         return json_encode([
+      $line = static function (string $level, string $message, null|string $instance = null): string {
+         $data = [
             'timestamp' => microtime(true), 'level' => $level, 'project' => 'framework',
             'channel' => 'App', 'message' => $message, 'context' => [], 'extra' => [],
-         ]) . "\n";
+         ];
+         // ? A legacy line (written before the field existed) carries no instance key
+         if ($instance !== null) {
+            $data['instance'] = $instance;
+         }
+         return json_encode($data) . "\n";
       };
       file_put_contents("$dir/App.log", $line('INFO', 'pre-existing'));
 
@@ -59,6 +64,25 @@ return new Test(
       yield assert(
          assertion: str_contains($chunk, 'kept-error') && str_contains($chunk, 'ignored-info') === false,
          description: 'appended lines pass through the record filters before printing'
+      );
+
+      // # --instance filters the file lane too — the lane that leaked other
+      //   instances under -f (BG-24)
+      $Filters = $Sieve->invoke($Command, ['instance' => '8443']);
+      $Following = $Source->invoke($Command, new Backlog($dir), $Filters);
+      $Following->current();
+      file_put_contents(
+         "$dir/App.log",
+         $line('INFO', 'kept-instance', '8443') . $line('INFO', 'other-instance', '8080') . $line('INFO', 'legacy-line'),
+         FILE_APPEND
+      );
+      $Following->next();
+      $chunk = (string) $Following->current();
+      yield assert(
+         assertion: str_contains($chunk, 'kept-instance')
+            && str_contains($chunk, 'other-instance') === false
+            && str_contains($chunk, 'legacy-line') === false,
+         description: 'the file lane honors --instance: other instances and legacy lines never flow'
       );
 
       // @ Cleanup

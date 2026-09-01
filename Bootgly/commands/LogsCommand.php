@@ -87,7 +87,7 @@ class LogsCommand extends Command
       'Keep following new records (unrelated to `project start -f`)' => ['-f', '--follow'],
       'Only one project\'s records' => ['--project=<Name>'],
       'Only framework records' => ['--framework'],
-      'One instance (port for servers, master PID for console)' => ['--instance=<id>'],
+      'Only one instance\'s records — port (servers) or master PID (console); with -f also its live tap' => ['--instance=<id>'],
       'Only one channel (comma-separates)' => ['--channel=<channel>'],
       'Minimum severity (debug..emergency)' => ['--level=<level>'],
       'Start point (strtotime, or 30s/15m/2h/7d)' => ['--since=<time>'],
@@ -221,7 +221,9 @@ class LogsCommand extends Command
     * Console instances have no socket — their records arrive through the file lane.
     * With `--project` and several live instances, an omitted `--instance` lists the
     * qualifiers and refuses (the `project restart` discipline). The kit scope attaches
-    * to every project's live taps.
+    * to every project's live taps. Here `--instance` only selects which live tap to
+    * attach — the same option also filters both lanes by the record's `instance`
+    * field (sieve()), so a targeted instance never bleeds through the file lane.
     *
     * @param array<string,mixed> $options
     * @return array{0:array<int,resource>,1:array<int,string>,2:bool} [sockets, notes, refused]
@@ -239,6 +241,7 @@ class LogsCommand extends Command
 
       // ! Candidate projects: one (project scope) or every registered one (kit scope)
       $paths = $scoped ? [$project] : array_keys(Projects::read());
+      $matched = false;
 
       foreach ($paths as $path) {
          $id = Projects::encode((string) $path);
@@ -251,6 +254,13 @@ class LogsCommand extends Command
                static fn ($qualifier) => (string) $qualifier === $instance,
                ARRAY_FILTER_USE_KEY
             );
+            $matched = $matched || $instances !== [];
+            // ? Nothing live answers to that qualifier — say so instead of a silent
+            //   follow (the record filter still narrows the files to that instance)
+            if ($scoped === true && $instances === []) {
+               $notes[] = "@#black:No instance $instance registered for@; @#cyan:$path@;@#black:"
+                  . " — reading its files only.@;@.;";
+            }
          }
          else if ($scoped === true && count($instances) > 1) {
             // ?: Several live instances and no tiebreaker — list and refuse
@@ -287,6 +297,11 @@ class LogsCommand extends Command
             stream_set_blocking($Socket, false);
             $Sockets[] = $Socket;
          }
+      }
+
+      // ? Kit scope: no project answers to that qualifier — the same note, once
+      if ($instance !== null && $scoped === false && $matched === false) {
+         $notes[] = "@#black:No instance $instance registered — reading files only.@;@.;";
       }
 
       // :
@@ -365,6 +380,20 @@ class LogsCommand extends Command
       else if (is_string($project) === true && $project !== '') {
          $Filters->push(new Callback(static function (Record $Record) use ($project): bool {
             return $Record->project === $project;
+         }));
+      }
+
+      // # Instance — the record's own stamp (port or master PID), exact string: a line
+      //   written before the field existed carries '' and never matches
+      $instance = $options['instance'] ?? null;
+      if ($instance !== null && (is_string($instance) === false || $instance === '')) {
+         // ? A bare `--instance` is refused, not ignored (the `--since` discipline)
+         $Output->render('@#red:Invalid --instance value.@; Pass the qualifier: --instance=<port|PID>.@.;');
+         return null;
+      }
+      if (is_string($instance) === true) {
+         $Filters->push(new Callback(static function (Record $Record) use ($instance): bool {
+            return $Record->instance === $instance;
          }));
       }
 

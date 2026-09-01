@@ -1,6 +1,7 @@
 <?php
 
 use const Bootgly\CLI;
+use Bootgly\ACI\Logs\Data\Record;
 use Bootgly\commands\ProjectCommand;
 use Bootgly\commands\ScheduleCommand;
 
@@ -42,3 +43,11 @@ $Command->schedule(['Sched', 'list'], []);
 
 // @ The mount left the project environment in place — no entry closure ran
 echo 'mounted:' . (defined('BOOTGLY_PROJECT') ? BOOTGLY_PROJECT->folder : 'no') . ';';
+
+// @ `list` mounts but never claims an instance — no record stamp (BG-24)
+echo 'stamp:' . (isset(Record::$qualifier) ? Record::$qualifier : 'undefined') . ';';
+
+// @ The `run` branch enrolls the worker (PID-qualified) — and stamps that PID
+(new ReflectionMethod(ProjectCommand::class, 'enroll'))->invoke($Command, 'Sched');
+$stamp = isset(Record::$qualifier) ? Record::$qualifier : null;
+echo 'enrolled:' . ($stamp === (string) posix_getpid() ? 'pid' : 'no') . ';';

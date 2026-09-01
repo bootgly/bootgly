@@ -74,6 +74,22 @@ return new Test(
          description: '--instance selects one instance; no live socket → note + file lane'
       );
 
+      // # An unknown --instance under a project scope says so instead of sitting silent
+      [$result, $output] = $probe(['project' => 'LogsInstancesTest', 'instance' => '7999']);
+      yield assert(
+         assertion: is_array($result) && $result[2] === false && $result[0] === []
+            && isSet($result[1][0]) && str_contains((string) $result[1][0], 'No instance 7999'),
+         description: 'an --instance no live instance matches → note + file lane, never a silent empty follow'
+      );
+
+      // # Kit scope (no --project): an --instance no project answers to notes it once
+      [$result, $output] = $probe(['instance' => '7999']);
+      yield assert(
+         assertion: is_array($result) && $result[2] === false && $result[0] === []
+            && isSet($result[1][0]) && str_contains((string) $result[1][0], 'No instance 7999'),
+         description: 'kit scope: an unmatched --instance is noted instead of followed in silence'
+      );
+
       // ! Cleanup
       $A->clean();
       $B->clean();

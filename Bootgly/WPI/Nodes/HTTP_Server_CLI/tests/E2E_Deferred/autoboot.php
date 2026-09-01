@@ -84,6 +84,8 @@ return new Suite(
       '4.1-sealing_decorates_deferred_success',
       '4.2-sealing_decorates_error_answers',
       '4.3-shipped_etag_compression_seal_deferred',
-      '4.4-throwing_seal_reaches_boundaries'
+      '4.4-throwing_seal_reaches_boundaries',
+      // BG-24: records carry the bound port as their instance (appended last — indexes stay stable)
+      '3.2-records_carry_the_booted_instance'
    ]
 );

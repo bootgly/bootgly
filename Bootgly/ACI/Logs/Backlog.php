@@ -106,7 +106,8 @@ class Backlog
     * Read every persisted record, merged ascending by timestamp across files.
     *
     * Malformed lines and lines above MAX_LINE_BYTES are skipped. Each line is rebuilt
-    * through Record::import(), so provenance defaults to `framework` for legacy lines.
+    * through Record::import(), so provenance defaults to `framework` and the instance to
+    * '' for legacy lines.
     *
     * @param float $since Only records stamped at or after this UNIX timestamp (0 = all).
     * @return Generator<int,Record>

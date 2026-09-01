@@ -31,7 +31,10 @@ class JSON implements Formatter
    /**
     * Render a record as one structured JSON object terminated by a newline.
     *
-    * Template tokens are rendered and ANSI styling is stripped, leaving plain text.
+    * Template tokens are rendered and ANSI styling is stripped, leaving plain text. The key
+    * set and order are fixed (timestamp, level, project, instance, channel, message, context,
+    * extra) and every key is always emitted: the live tap and the sink file must serialize
+    * the same record to identical bytes.
     *
     * @param Record $Record The record to format.
     * @return string A single-line JSON document.
@@ -47,6 +50,7 @@ class JSON implements Formatter
          'timestamp' => $Record->timestamp,
          'level'     => $Record->Level->render(),
          'project'   => $Record->project,
+         'instance'  => $Record->instance,
          'channel'   => $Record->channel,
          'message'   => $message,
          'context'   => $Record->context,

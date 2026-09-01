@@ -39,5 +39,7 @@ return new Suite(
       '4.3-logs-instances',
       // # project-scoped schedule (mount + delegate — no server started)
       '5.1-project-schedule',
+      // # record instance stamp of a bare TUI (appended last — earlier indexes stay stable)
+      '4.4-tui-instance-stamp',
    ]
 );

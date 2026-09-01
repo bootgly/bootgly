@@ -112,6 +112,16 @@ return new Test(
          description: 'the project is mounted (constant defined) and its boot entry never runs'
       );
 
+      yield assert(
+         assertion: str_contains($output, 'stamp:;'),
+         description: '`schedule list` mounts the project but never claims an instance: records stay unstamped'
+      );
+
+      yield assert(
+         assertion: str_contains($output, 'enrolled:pid;'),
+         description: 'enroll() (the `run` branch) stamps the worker PID as the record instance after the mount'
+      );
+
       // # A from-scratch create scaffolds schedule.php (tokens filled, zero jobs → hint)
       $output = (string) shell_exec(
          "$environment BOOTGLY_SCHEDULE_CREATE=1 " . escapeshellarg(PHP_BINARY) . " $fixture 2>/dev/null"

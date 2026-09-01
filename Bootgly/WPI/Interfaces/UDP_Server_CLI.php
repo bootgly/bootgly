@@ -98,6 +98,7 @@ use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Data\Display;
+use Bootgly\ACI\Logs\Data\Record;
 use Bootgly\ACI\Logs\Handlers;
 use Bootgly\ACI\Logs\Handlers\File as FileHandler;
 use Bootgly\ACI\Logs\Logger;
@@ -522,6 +523,11 @@ class UDP_Server_CLI implements Servers
          array_slice($argv, 1)
       );
       self::$directory = getcwd() ?: '';
+
+      // @ Stamp the instance on every record from here on — the qualifier the
+      //   registry keys this server by (the port is final since configure());
+      //   the daemon master and every worker fork below inherit it
+      Record::$qualifier = (string) ($this->port ?? 0);
 
       // ? Drop to the compact message line unless output is fully muted
       if (Display::$segments !== Display::NONE) {
