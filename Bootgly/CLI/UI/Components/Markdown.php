@@ -457,15 +457,21 @@ class Markdown extends Component
     */
    private function code (Node $Fence): array
    {
-      $lines = [];
-      $lines[] = $this->paint("```{$Fence->language}", 'fence');
-
-      // ! Untrusted source — ESC/C0 stripped before any rendering path
+      // ! Untrusted source — ESC/C0 stripped before any rendering path. The
+      //   info string is source too: the parser takes it verbatim, `paint()`
+      //   returns it unchanged in plain mode and the buffer reaches the
+      //   terminal unescaped, so echoing it raw handed the document author
+      //   the whole control vocabulary — BEL included, which completes an
+      //   OSC 52 clipboard write (H-1).
+      $language = $this->clean($Fence->language);
       $source = $this->clean($Fence->text);
+
+      $lines = [];
+      $lines[] = $this->paint("```{$language}", 'fence');
 
       // ?: Decorated output delegates to the language highlighter when one is plugged
       if ($Fence->text !== '' && $this->plain === false) {
-         $highlight = $this->Highlighters[strtolower($Fence->language)] ?? null;
+         $highlight = $this->Highlighters[strtolower($language)] ?? null;
          $highlighted = $highlight !== null ? $highlight($source) : null;
 
          if ($highlighted !== null) {
