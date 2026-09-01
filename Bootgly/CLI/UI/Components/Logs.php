@@ -11,29 +11,35 @@
 namespace Bootgly\CLI\UI\Components;
 
 
+use const JSON_PRETTY_PRINT;
 use const JSON_UNESCAPED_SLASHES;
 use const JSON_UNESCAPED_UNICODE;
 use const PREG_SPLIT_DELIM_CAPTURE;
 use const PREG_SPLIT_NO_EMPTY;
 use function array_filter;
 use function array_keys;
+use function array_push;
 use function array_slice;
 use function array_values;
 use function count;
 use function date;
+use function explode;
 use function implode;
 use function is_array;
 use function json_decode;
 use function json_encode;
 use function max;
 use function mb_strlen;
+use function mb_strwidth;
 use function mb_substr;
 use function min;
 use function ord;
 use function preg_replace;
 use function preg_split;
+use function rtrim;
 use function sort;
 use function str_pad;
+use function str_repeat;
 use function stripos;
 use function strlen;
 use function strpos;
@@ -41,6 +47,7 @@ use function strrpos;
 use function substr;
 use function trim;
 
+use Bootgly\ABI\Code\__String;
 use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\ACI\Logs\Data\Levels;
@@ -59,7 +66,9 @@ use Bootgly\CLI\Terminal\Output;
  * ring buffer, and rendered into a full-screen TUI: a status bar, a windowed/filtered log pane and a
  * keybindings footer. Multiline messages (e.g. exceptions) are **collapsed to a single line** so they
  * never pollute the stream; selecting a record (↑/↓) and pressing Enter opens a full detail view with
- * every line. Filtering (level threshold, channel toggles, incremental text search) is driven live.
+ * every line folded to the terminal width and `context`/`extra` pretty-printed one key per row —
+ * nothing is cut there. Filtering (level threshold, channel toggles, incremental text search) is
+ * driven live.
  */
 class Logs
 {
@@ -101,6 +110,7 @@ class Logs
    private array $Frozen = [];                   // buffer snapshot rendered while paused
    private int $top = 0;                          // window top index (paused navigation)
    private int $scroll = 0;                       // detail-view scroll offset
+   private int $extent = 0;                       // detail-view folded row count (End target)
 
 
    /**
@@ -409,6 +419,14 @@ class Logs
          case Keystrokes::PAGEDOWN->value:
             $this->scroll += $this->measure();
             break;
+         case Keystrokes::HOME->value:
+         case "\e[1~":
+            $this->scroll = 0;
+            break;
+         case Keystrokes::END->value:
+         case "\e[4~":
+            $this->scroll = $this->extent; // clamped to the last page by present()
+            break;
       }
 
       return true;
@@ -494,7 +512,7 @@ class Logs
       }
       $lines = array_values(array_filter($lines, static fn (string $line): bool => trim($line) !== ''));
 
-      $first = trim((string) ($lines[0] ?? ''));
+      $first = $this->scrub(trim((string) ($lines[0] ?? '')));
       $extra = max(0, count($lines) - 1);
 
       // :
@@ -550,6 +568,70 @@ class Logs
       return $output;
    }
 
+   /**
+    * Fold one logical line into rows of at most `$width` columns — escape-aware, wide
+    * characters counting two columns. No visible character is lost: words break at their
+    * gaps (the gap itself is dropped), a token wider than the width is hard-split and a
+    * whitespace-only overflow folds to a blank row. `fit()` stays the last net and is a
+    * no-op on folded rows (`mb_strwidth` never under-counts `mb_strlen`). One home for the
+    * `__callStatic` call of the three fold sites.
+    *
+    * @return array<int,string>
+    */
+   private function fold (string $line, int $width): array
+   {
+      // :
+      // @phpstan-ignore-next-line -- wrap() resolves via __callStatic (pad precedent)
+      return explode("\n", (string) __String::wrap($line, $width, "\n", cut: true));
+   }
+
+   /**
+    * Make one row measurable: expand tabs to the next 8-column stop (the width metric
+    * counts a tab as one column while a terminal advances up to eight) and drop the other
+    * control bytes — nothing the fold cannot measure reaches the frame.
+    */
+   private function scrub (string $row): string
+   {
+      // @@ Tabs — expanded against the columns already laid out on the row
+      while (($at = strpos($row, "\t")) !== false) {
+         $column = mb_strwidth(substr($row, 0, $at));
+         $row = substr($row, 0, $at) . str_repeat(' ', 8 - ($column % 8)) . substr($row, $at + 1);
+      }
+
+      // :
+      return (string) preg_replace('/[\x00-\x08\x0B-\x1F\x7F]/', '', $row);
+   }
+
+   /**
+    * Hang a pretty-printed JSON block under its label: the first row starts with the label,
+    * the continuation rows are indented by its width and every row is folded to the width
+    * left of it. A width too narrow to host the hang (under two labels) puts the label on
+    * its own row and gives the JSON the whole width — nothing is ever left to `fit()`.
+    *
+    * @param array<string,mixed> $data
+    * @return array<int,string>
+    */
+   private function hang (string $label, array $data, int $width): array
+   {
+      // !
+      $indent = strlen($label); // labels are ASCII: 'context: ' / 'extra:   '
+      $hanging = $width > 2 * $indent;
+      $inner = $hanging ? $width - $indent : $width;
+      $pad = $hanging ? str_repeat(' ', $indent) : '';
+      $head = self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . ($hanging ? $label : rtrim($label)) . self::_RESET_FORMAT;
+      $rows = $hanging ? [] : $this->fold($head, $width);
+
+      // @@ One pretty-printed JSON row at a time, each folded to the inner width
+      foreach (explode("\n", $this->encode($data)) as $line) {
+         foreach ($this->fold($line, $inner) as $piece) {
+            $rows[] = $hanging && $rows === [] ? $head . $piece : $pad . $piece;
+         }
+      }
+
+      // :
+      return $rows;
+   }
+
    private function format (Record $Record, int $width, bool $selected = false): string
    {
       $color = $this->color($Record->Level);
@@ -584,43 +666,56 @@ class Logs
          . $more;
    }
 
+   /**
+    * Render the expanded record: every row folded to the CURRENT terminal width (a resize
+    * re-folds on the next frame), `context`/`extra` pretty-printed one key per row hung under
+    * their label, and a window the vertical scroll walks row by row. Nothing is cut here —
+    * `fit()` stays the last net and is a no-op on folded rows.
+    */
    private function present (Record $Record): string
    {
       $width = Terminal::$width;
       $pane = $this->measure();
       $color = $this->color($Record->Level);
 
-      // @ Header
-      $lines = [];
-      $lines[] = self::wrap($color) . $Record->Level->render() . self::_RESET_FORMAT
-         . '  ' . self::wrap(self::_BLUE_BRIGHT_FOREGROUND) . $Record->channel . self::_RESET_FORMAT
-         . '  ' . self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . $Record->project . self::_RESET_FORMAT
+      // @ Header (folded too: a long channel or project wraps instead of being cut)
+      $header = self::wrap($color) . $Record->Level->render() . self::_RESET_FORMAT
+         . '  ' . self::wrap(self::_BLUE_BRIGHT_FOREGROUND) . $this->scrub($Record->channel) . self::_RESET_FORMAT
+         . '  ' . self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . $this->scrub($Record->project) . self::_RESET_FORMAT
+         . ($Record->instance !== ''
+            ? '  ' . self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . $this->scrub($Record->instance) . self::_RESET_FORMAT
+            : '')
          . '  ' . self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . date('Y-m-d H:i:s', (int) $Record->timestamp) . self::_RESET_FORMAT;
+      $lines = $this->fold($header, $width);
       $lines[] = '';
 
-      // @ Full message (every line; fitted to the width at frame build)
+      // @ Full message (every line, folded to the width)
       $plain = (string) preg_replace(self::ANSI, '', TemplateEscaped::render($Record->message));
       $body = preg_split('/\r\n|\r|\n/', $plain);
       foreach ($body === false ? [$plain] : $body as $row) {
-         $lines[] = $row;
+         array_push($lines, ...$this->fold($this->scrub($row), $width));
       }
 
-      // @ Context + extra
+      // @ Context + extra (pretty-printed, hung under their label)
       if ($Record->context !== []) {
          $lines[] = '';
-         $lines[] = self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . 'context: ' . self::_RESET_FORMAT . $this->encode($Record->context);
+         array_push($lines, ...$this->hang('context: ', $Record->context, $width));
       }
       if ($Record->extra !== []) {
-         $lines[] = self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . 'extra:   ' . self::_RESET_FORMAT . $this->encode($Record->extra);
+         array_push($lines, ...$this->hang('extra:   ', $Record->extra, $width));
       }
 
-      // @ Window
+      // @ Window — on the folded rows, so the scroll reaches every one of them
       $total = count($lines);
+      $this->extent = $total;
       $this->scroll = max(0, min($this->scroll, max(0, $total - $pane)));
       $Window = array_slice($lines, $this->scroll, $pane);
+      $range = $total > $pane
+         ? ($this->scroll + 1) . '–' . ($this->scroll + count($Window)) . ' of '
+         : '';
 
       $frame = $this->anchor();
-      $frame .= $this->fit(self::wrap(self::_BLACK_BRIGHT_BACKGROUND) . ' Log detail  ▏ ' . $total . ' lines' . self::_RESET_FORMAT) . "\e[K\n";
+      $frame .= $this->fit(self::wrap(self::_BLACK_BRIGHT_BACKGROUND) . ' Log detail  ▏ ' . $range . $total . ' lines' . self::_RESET_FORMAT) . "\e[K\n";
 
       $rows = 0;
       foreach ($Window as $row) {
@@ -631,7 +726,7 @@ class Logs
          $frame .= "\e[K\n";
       }
 
-      $frame .= $this->fit(self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . ' [↑↓ PgUp/Dn] scroll   [Esc/Enter/q] back' . self::_RESET_FORMAT) . "\e[K";
+      $frame .= $this->fit(self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . ' [↑↓ PgUp/Dn Home/End] scroll   [Esc/Enter/q] back' . self::_RESET_FORMAT) . "\e[K";
 
       return $frame;
    }
@@ -698,11 +793,13 @@ class Logs
    }
 
    /**
+    * Pretty-print a context/extra array for the detail pane — one key per row; `{}` on failure.
+    *
     * @param array<string,mixed> $data
     */
    private function encode (array $data): string
    {
-      $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+      $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
       return $json === false ? '{}' : $json;
    }

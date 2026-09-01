@@ -37,6 +37,7 @@ return new Suite(
       '8.3-handler-pipe',
       // # Live viewer
       '8.4-viewer',
+      '8.5-viewer-detail',
       // # Provenance (project + instance fields)
       '9.1-record-provenance',
       '9.2-file-project-placeholder',
