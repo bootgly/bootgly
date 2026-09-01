@@ -25,5 +25,6 @@ return new Suite(
       '10.7-schema_mysql_lock',
       '10.8-schema_mysql_column_change',
       '10.9-schema_non_finite_defaults',
+      '10.10-schema_timestamptz',
    ]
 );

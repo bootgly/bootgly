@@ -317,6 +317,7 @@ class PostgreSQL extends Dialect
          Types::Text => 'TEXT',
          Types::Time => 'TIME',
          Types::Timestamp => 'TIMESTAMP',
+         Types::Timestamptz => 'TIMESTAMPTZ',
          Types::Uuid => 'UUID',
       };
    }

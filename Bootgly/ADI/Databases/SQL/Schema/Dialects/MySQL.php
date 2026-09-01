@@ -417,6 +417,7 @@ class MySQL extends Dialect
          Types::Text => 'LONGTEXT',
          Types::Time => 'TIME',
          Types::Timestamp => 'TIMESTAMP',
+         Types::Timestamptz => 'TIMESTAMP',
          Types::Uuid => 'CHAR(36)',
       };
    }

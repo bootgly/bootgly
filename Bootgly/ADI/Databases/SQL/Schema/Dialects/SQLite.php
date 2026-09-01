@@ -274,6 +274,7 @@ class SQLite extends Dialect
          Types::Text => 'TEXT',
          Types::Time => 'TEXT',
          Types::Timestamp => 'TEXT',
+         Types::Timestamptz => 'TEXT',
          Types::Uuid => 'TEXT',
       };
    }

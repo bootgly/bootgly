@@ -28,5 +28,7 @@ enum Types
    case Text;
    case Time;
    case Timestamp;
+   /** Timestamp with time zone (PostgreSQL `TIMESTAMPTZ`; MySQL `TIMESTAMP`, stored as UTC; SQLite `TEXT`). */
+   case Timestamptz;
    case Uuid;
 }
