@@ -28,6 +28,7 @@ return new Suite(
       '6.1-secure_headers',
       '7.1-request_id',
       '8.1-trusted_proxy',
+      '8.2-trusted_proxy_cidr',
       '9.1-csrf',
       '9.2-csrf_token_masking',
       '10.1-validator',
