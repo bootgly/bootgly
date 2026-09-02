@@ -143,10 +143,15 @@ class Screen
       $pipes = [];
 
       try {
+         // ! tput measures the terminal it is attached to. With every
+         //   descriptor detached it answers terminfo's 80x24 whatever the
+         //   window is, so the controlling terminal is handed over on stdin
+         //   (tput never reads it). Without one, proc_open fails and the
+         //   caller falls back — the same answer, honestly reached.
          $process = @proc_open(
             [$binary, $capability],
             [
-               0 => ['file', '/dev/null', 'r'],
+               0 => ['file', '/dev/tty', 'r'],
                1 => ['pipe', 'w'],
                2 => ['file', '/dev/null', 'w'],
             ],
