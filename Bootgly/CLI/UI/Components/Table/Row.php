@@ -72,6 +72,11 @@ class Row
          $output .= ' ';
       }
 
+      // ! One cell is one space, the content padded to its column and one
+      //   space — the `width + 2` every border line draws. A trailing space
+      //   per cell on top of the separator's leading one widened every
+      //   column after the first by one, so tables with three or more
+      //   columns never lined up with their borders.
       foreach ($widths as $column_index => $width) {
          if ($column_index > 0) {
             $output .= ' ' . $borders['middle'];
@@ -83,12 +88,11 @@ class Row
             padding: ' ',
             type: $aligment
          );
-
-         if ($column_index > 0) {
-            $output .= ' ';
-         }
       }
 
+      if ($borders['right']) {
+         $output .= ' ';
+      }
       $output .= $borders['right'];
       $output .= "\n";
 
