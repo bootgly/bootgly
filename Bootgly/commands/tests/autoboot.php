@@ -44,5 +44,6 @@ return new Suite(
       '6.1-projects-show',
       '6.2-projects-list',
       '6.3-projects-show-fit',
+      '7.1-project-startup',
    ]
 );

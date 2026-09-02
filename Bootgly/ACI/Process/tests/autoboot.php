@@ -27,5 +27,7 @@ return new Suite(
       '1.11-state-lock-table',
       '1.12-states-discovery',
       '1.13-state-tapfile-sweep',
+      '1.14-inits-detect',
+      '1.15-service-render',
    ]
 );

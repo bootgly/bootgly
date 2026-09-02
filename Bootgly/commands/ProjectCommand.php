@@ -15,10 +15,13 @@ use const ARRAY_FILTER_USE_KEY;
 use const BOOTGLY_ROOT_DIR;
 use const BOOTGLY_STORAGE_DIR;
 use const BOOTGLY_WORKING_DIR;
+use const INI_SCANNER_RAW;
 use const LOCK_EX;
 use const LOCK_NB;
 use const LOCK_UN;
+use const PHP_BINARY;
 use const PHP_EOL;
+use const PHP_OS_FAMILY;
 use const SIGCONT;
 use const SIGKILL;
 use const SIGSTOP;
@@ -32,10 +35,13 @@ use function array_merge;
 use function array_slice;
 use function array_values;
 use function basename;
+use function chmod;
 use function count;
 use function escapeshellarg;
 use function file_get_contents;
+use function file_put_contents;
 use function function_exists;
+use function getenv;
 use function glob;
 use function implode;
 use function in_array;
@@ -44,11 +50,16 @@ use function is_array;
 use function is_dir;
 use function is_file;
 use function is_int;
+use function is_link;
 use function is_numeric;
 use function is_string;
 use function json_encode;
+use function lstat;
 use function microtime;
+use function mkdir;
+use function parse_ini_file;
 use function posix_get_last_error;
+use function posix_geteuid;
 use function posix_getpid;
 use function posix_getuid;
 use function posix_kill;
@@ -70,8 +81,11 @@ use Throwable;
 
 use const Bootgly\CLI;
 use Bootgly\ACI\Logs\Data\Record;
+use Bootgly\ACI\Process\Inits;
+use Bootgly\ACI\Process\Service;
 use Bootgly\ACI\Process\State;
 use Bootgly\ACI\Process\States;
+use Bootgly\ACI\Process\User;
 use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Databases\SQL\Schema\Migrations;
 use Bootgly\ADI\Databases\SQL\Schema\Runner as MigrationRunner;
@@ -181,6 +195,24 @@ class ProjectCommand extends Command
             '<action>' => 'run (minute-aligned worker loop) or list'
          ]
       ],
+      'startup' => [
+         'description' => 'Install the OS service that boots the project at startup (systemd)',
+         'arguments'   => [
+            '<name>' => 'Project name'
+         ]
+      ],
+      'unstartup' => [
+         'description' => 'Remove the OS service installed by startup',
+         'arguments'   => [
+            '<name>' => 'Project name'
+         ]
+      ],
+      'status' => [
+         'description' => 'Show the OS service of the project — installed, enabled, active',
+         'arguments'   => [
+            '<name>' => 'Project name'
+         ]
+      ],
    ];
    /** @var array<string,array<string>> */
    public array $options = [
@@ -189,6 +221,8 @@ class ProjectCommand extends Command
       'Preview seed run without executing SQL' => ['--dry-run'],
       'Keep following new records — logs (unrelated to `start -f`)' => ['-f', '--follow'],
       'Log filters and output shape (logs)' => ['--instance=<id>', '--channel=<channel>', '--level=<level>', '--since=<time>', '--json'],
+      'Account the OS service runs as — the current one by default (startup)' => ['--user=<name>'],
+      'Enable and start the OS service right away (startup)' => ['--now'],
    ];
 
 
@@ -253,6 +287,18 @@ class ProjectCommand extends Command
             $options
          ),
 
+         'startup' => $this->install(
+            array_slice($arguments, 1),
+            $options
+         ),
+         'unstartup' => $this->uninstall(
+            array_slice($arguments, 1),
+            $options
+         ),
+         'status'  => $this->inspect(
+            array_slice($arguments, 1),
+            $options
+         ),
          default   => $this->help($arguments)
       };
    }
@@ -1283,7 +1329,634 @@ class ProjectCommand extends Command
       return CLI->Commands->find('schedule')?->run([$action], $options) ?? false;
    }
 
+   /**
+    * `startup` — install the OS service that boots the project at startup,
+    * the `pm2 startup` of one project. systemd only, for now: a machine booted
+    * by anything else is named and refused, with the command a hand-written
+    * service must run.
+    *
+    * The unit runs `project <Name> start -f` — foreground, so `Type=simple`
+    * holds the process and the journal keeps its output — as `--user` (the
+    * current account by default) from this kit, restarted on failure; a
+    * project carrying a `schedule.php` gets a second unit for its worker.
+    * Root installs under /etc/systemd/system and, with `--now`, enables and
+    * starts right away. Anyone else gets the units staged under
+    * storage/systemd/ and the exact commands that install them.
+    *
+    * @param array<string> $arguments
+    * @param array<string, bool|int|string> $options
+    *
+    * @return bool
+    */
+   public function install (array $arguments, array $options): bool
+   {
+      $Output = CLI->Terminal->Output;
+
+      // ? Refuse before anything is written
+      if ($this->admit(['user', 'now'], $options) === false) {
+         return false;
+      }
+
+      // ? Require project name
+      $projectName = $arguments[0] ?? null;
+      if ($projectName === null || $projectName === '') {
+         return $this->help(['startup']);
+      }
+
+      // ? Validate project exists
+      $projectDir = $this->resolve($projectName);
+      if ($projectDir === null) {
+         return false;
+      }
+
+      // ? `--now` is a switch, never a value
+      if (isSet($options['now']) === true && $options['now'] !== true) {
+         $Output->render('@#red:Invalid --now value.@; It takes no value: pass @#cyan:--now@; alone.@.;');
+
+         return false;
+      }
+
+      // ! Service account — the current one unless `--user` names another
+      $user = $options['user'] ?? null;
+      if ($user !== null && (is_string($user) === false || $user === '')) {
+         // ? A bare `--user` is refused, not ignored
+         $Output->render('@#red:Invalid --user value.@; Pass the account: --user=<name>.@.;');
+
+         return false;
+      }
+      $User = new User;
+      if ($user === null) {
+         // ! Under sudo the invoking account owns the service, not root — an
+         //   environment variable only root's caller could have set honestly
+         $invoker = posix_geteuid() === 0 ? (string) getenv('SUDO_USER') : '';
+         $user = $invoker !== '' && $User->info($invoker) !== false ? $invoker : $User->current;
+      }
+      if ($user === '' || $User->info($user) === false) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Unknown user @#cyan:{$user}@;.";
+         $Alert->render();
+         $Output->render('The service must run as an existing account: @#cyan:--user=<name>@;.@.;');
+
+         return false;
+      }
+      // ? Only a machine booted by systemd is managed
+      if ($this->verify($projectName) === false) {
+         return false;
+      }
+
+      // ? The unit runs this very interpreter, by absolute path
+      if (str_starts_with(PHP_BINARY, '/') === false) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = 'This PHP build reports no absolute binary path — nothing a unit could run.';
+         $Alert->render();
+
+         return false;
+      }
+
+      // ! Units — the server, and the schedule worker when the project has one
+      $Services = $this->compose($projectName, $projectDir, $user);
+      if ($Services === []) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Nothing to boot at startup: @#cyan:{$projectName}@; is a console project without a schedule.php.";
+         $Alert->render();
+
+         return false;
+      }
+      $units = implode(' ', array_map(static fn (Service $Service): string => $Service->unit, $Services));
+      if ($user === 'root') {
+         foreach ($Services as $Service) {
+            $Output->render($Service->reload !== ''
+               ? '@#yellow:Note:@; the server runs as @#cyan:root@; — it demotes itself to the @#cyan:user@;/@#cyan:group@; of its own configure().@.;'
+               : '@#yellow:Warning:@; the schedule worker runs as @#cyan:root@; and never demotes — pass @#cyan:--user=<name>@;.@.;');
+         }
+      }
+
+      // ? The server unit holds the process with `start -f`: a project file
+      //   that never maps `-f` to the foreground mode detaches and exits 0,
+      //   which systemd reads as "done", not "failed"
+      $projectFile = $projectDir . basename($projectName) . '.Project.php';
+      $interfaces = Projects::read()[$projectName]['interfaces'] ?? [];
+      if (
+         in_array('WPI', $interfaces, true) === true
+         && str_contains((string) @file_get_contents($projectFile), 'Foreground') === false
+      ) {
+         $Output->render("@#yellow:Warning:@; @#cyan:projects/{$projectName}@; does not seem to map @#cyan:-f@; to @#cyan:Modes::Foreground@; — under systemd the server must stay in the foreground, as the shipped project files do.@.;");
+      }
+
+      // ? A unit of the same name stamped by another project or kit is a
+      //   collision, never an upgrade — refused before anything is staged or written
+      foreach ($Services as $Service) {
+         if ($Service->owned === true) {
+            continue;
+         }
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "@#cyan:{$Service->unit}@; is not this project's to write.";
+         $Alert->render();
+         $Output->render($this->describe($Service));
+
+         return false;
+      }
+
+      // ! What is already running — a rewritten unit reaches it only through a
+      //   restart, and an instance started by hand holds the port and the state
+      //   record the unit would claim (per unit: a server state against the
+      //   server unit, a console state against the worker unit)
+      $now = isSet($options['now']);
+      $running = [];
+      $conflicts = [];
+      $instances = States::scan(Projects::encode($projectName));
+      foreach ($Services as $Service) {
+         $running[$Service->unit] = $Service->installed && $Service->inspect()['active'] === 'active';
+         $kind = $Service->reload !== '' ? 'WPI' : 'CLI';
+         foreach ($instances as $qualifier => $data) {
+            if ($running[$Service->unit] === false && $data['type'] === $kind) {
+               $conflicts[$Service->unit] = (string) $qualifier;
+            }
+         }
+      }
+
+      // ? Anyone but root gets the units staged and the commands that install them
+      if (posix_geteuid() !== 0) {
+         // ! The staging directory is this account's alone: root will copy out
+         //   of it, so a link, a foreign owner or a mode others can write is
+         //   refused, never followed — the storage directory itself included
+         $staging = BOOTGLY_STORAGE_DIR . 'systemd/';
+         $storage = rtrim(BOOTGLY_STORAGE_DIR, '/');
+         if (is_link($storage) === false && is_dir($staging) === false && is_link(rtrim($staging, '/')) === false) {
+            @mkdir($staging, 0700, true);
+         }
+         $stat = @lstat(rtrim($staging, '/'));
+         if (
+            is_link($storage) === true
+            || is_link(rtrim($staging, '/')) === true
+            || $stat === false
+            || ($stat['mode'] & 0170000) !== 0040000
+            || $stat['uid'] !== posix_geteuid()
+            || ($stat['mode'] & 0077) !== 0
+         ) {
+            $Alert = new Alert($Output);
+            $Alert->Type::Failure->set();
+            $Alert->message = 'Refusing to stage into @#cyan:storage/systemd@;.';
+            $Alert->render();
+            $Output->render('It must be a directory of this account that nobody else can enter, under a @#cyan:storage@; that is not a link — root installs out of it.@.;');
+
+            return false;
+         }
+
+         $files = [];
+         foreach ($Services as $Service) {
+            $file = $staging . $Service->unit;
+            if (is_link($file) === true || @file_put_contents($file, $Service->render()) === false) {
+               $Alert = new Alert($Output);
+               $Alert->Type::Failure->set();
+               $Alert->message = "Could not write @#cyan:{$file}@;.";
+               $Alert->render();
+
+               return false;
+            }
+            // ! The staged unit is the caller's alone until root installs it
+            @chmod($file, 0600);
+            $files[] = escapeshellarg($file);
+            $Output->render("@#green:Generated@; @#cyan:storage/systemd/{$Service->unit}@;@.;");
+         }
+
+         $Output->render('@#yellow:Warning:@; installing under @#cyan:/etc/systemd/system@; needs root — the units were staged instead.@.;');
+         foreach ($conflicts as $unit => $qualifier) {
+            $Output->render("@#yellow:Warning:@; @#cyan:{$projectName}@; is already running by hand (instance @#cyan:{$qualifier}@;) — stop it with @#Blue:bootgly project {$projectName} stop@; before starting @#cyan:{$unit}@;.@.;");
+         }
+         $Output->render(
+            '@#Green:Install:@; @#Blue:sudo install -m 0644 -o root -g root ' . implode(' ', $files) . ' ' . Service::$directory
+            . ' && sudo systemctl daemon-reload && sudo systemctl enable ' . ($now === true ? '--now ' : '') . "{$units}@;@.;"
+         );
+
+         return false;
+      }
+
+      // ? With `--now` a hand-started instance would be fought for its port and
+      //   its state record: refused up front
+      if ($now === true && $conflicts !== []) {
+         $unit = array_key_first($conflicts);
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "@#cyan:{$projectName}@; is already running (instance @#cyan:{$conflicts[$unit]}@;).";
+         $Alert->render();
+         $Output->render("Stop the hand-started instance first — @#Blue:bootgly project {$projectName} stop@; — then let systemd own it.@.;");
+
+         return false;
+      }
+
+      // @ Install — every unit, then one reload, even when one of them failed
+      $installed = true;
+      foreach ($Services as $Service) {
+         if ($Service->install() === false) {
+            $Alert = new Alert($Output);
+            $Alert->Type::Failure->set();
+            $Alert->message = "Could not write @#cyan:{$Service->file}@;.";
+            $Alert->render();
+            $installed = false;
+
+            continue;
+         }
+         $Output->render("@#green:Installed@; @#cyan:{$Service->file}@;@.;");
+      }
+      if (Service::reload() === false) {
+         $Output->render('@#yellow:Note:@; @#cyan:systemctl daemon-reload@; failed — run it yourself before enabling.@.;');
+      }
+      // ?
+      if ($installed === false) {
+         $Output->render('@#yellow:Note:@; the units that were written stay under @#cyan:' . Service::$directory . '@;, not enabled — fix the cause and run @#cyan:startup@; again, or @#cyan:unstartup@; to remove them.@.;');
+
+         return false;
+      }
+
+      // @ Enable at boot — that is what `startup` promises; `--now` also starts
+      foreach ($Services as $Service) {
+         if ($Service->enable(now: $now) === false) {
+            $Alert = new Alert($Output);
+            $Alert->Type::Failure->set();
+            $Alert->message = "Could not enable @#cyan:{$Service->unit}@; — see @#cyan:systemctl status {$Service->unit}@;.";
+            $Alert->render();
+
+            return false;
+         }
+         // ? A service already running keeps the previous unit until restarted
+         if ($running[$Service->unit] === true) {
+            if ($Service->restart() === false) {
+               $Output->render("@#yellow:Note:@; could not restart @#cyan:{$Service->unit}@; — the running service still follows the previous unit.@.;");
+            }
+            else {
+               $Output->render("@#green:Restarted@; @#cyan:{$Service->unit}@;@.;");
+            }
+         }
+         // ?
+         if ($now === false && $running[$Service->unit] === false) {
+            $Output->render("@#green:Enabled@; @#cyan:{$Service->unit}@;@.;");
+
+            continue;
+         }
+         // ! `start` returns once the process is forked, not once it works:
+         //   a port already taken exits the master a moment later
+         usleep(1500000);
+         $state = $Service->inspect();
+         if ($state['active'] !== 'active') {
+            $Alert = new Alert($Output);
+            $Alert->Type::Failure->set();
+            $Alert->message = "Started, but @#cyan:{$state['active']}@;: @#cyan:{$Service->unit}@;";
+            $Alert->render();
+            $Output->render("See @#cyan:journalctl -u {$Service->unit}@; — a port already taken by a hand-started instance is the usual cause.@.;");
+
+            return false;
+         }
+         $Output->render("@#green:Enabled and started@; @#cyan:{$Service->unit}@;@.;");
+      }
+      $stopped = implode(' ', array_keys(array_filter($running, static fn (bool $active): bool => $active === false)));
+      if ($now === false && $stopped !== '') {
+         $Output->render("@#Green:Tip:@; start now with @#Blue:systemctl start {$stopped}@;.@.;");
+      }
+
+      $Alert = new Alert($Output);
+      $Alert->Type::Success->set();
+      $Alert->message = "Project @#cyan:{$projectName}@; boots at startup.";
+      $Alert->render();
+
+      // :
+      return true;
+   }
+
+   /**
+    * `unstartup` — remove the OS service `startup` installed, the
+    * `pm2 unstartup` of one project: disabled and stopped first, the unit files deleted, systemd
+    * reloaded. Root only; anyone else gets the commands.
+    *
+    * @param array<string> $arguments
+    * @param array<string, bool|int|string> $options
+    *
+    * @return bool
+    */
+   public function uninstall (array $arguments, array $options): bool
+   {
+      $Output = CLI->Terminal->Output;
+
+      // ? Refuse before anything is touched
+      if ($this->admit([], $options) === false) {
+         return false;
+      }
+
+      // ? Require project name
+      $projectName = $arguments[0] ?? null;
+      if ($projectName === null || $projectName === '') {
+         return $this->help(['unstartup']);
+      }
+
+      // ? A unit outlives its project: a path-safe name is enough to manage it
+      $projectDir = $this->find($projectName);
+      if ($projectDir === null) {
+         return false;
+      }
+
+      // ? Only a machine booted by systemd is managed
+      if ($this->verify($projectName) === false) {
+         return false;
+      }
+
+      // ! What an earlier install left, whatever the project carries today
+      $skipped = false;
+      $Services = array_filter(
+         $this->compose($projectName, $projectDir, '', every: true),
+         function (Service $Service) use ($Output, &$skipped): bool {
+            // ? A unit that is not this project's to remove is named and left alone
+            if ($Service->installed === true && $Service->owned === false) {
+               $Output->render("@#yellow:Note:@; @#cyan:{$Service->unit}@; left alone: " . $this->describe($Service));
+               $skipped = true;
+
+               return false;
+            }
+
+            return $Service->installed;
+         }
+      );
+      if ($Services === []) {
+         if ($skipped === false) {
+            $Output->render("@#yellow:Note:@; no service is installed for @#cyan:{$projectName}@;.@.;");
+         }
+
+         // :
+         return $skipped === false;
+      }
+      $units = implode(' ', array_map(static fn (Service $Service): string => $Service->unit, $Services));
+      $files = implode(' ', array_map(static fn (Service $Service): string => escapeshellarg($Service->file), $Services));
+
+      // ? Anyone but root gets the commands
+      if (posix_geteuid() !== 0) {
+         $Output->render('@#yellow:Warning:@; removing from @#cyan:/etc/systemd/system@; needs root.@.;');
+         $Output->render(
+            "@#Green:Remove:@; @#Blue:sudo systemctl disable --now {$units} && sudo rm {$files} && sudo systemctl daemon-reload@;@.;"
+         );
+
+         return false;
+      }
+
+      // @ Disable, stop and remove
+      foreach ($Services as $Service) {
+         if ($Service->disable(now: true) === false) {
+            $Output->render("@#yellow:Note:@; could not disable @#cyan:{$Service->unit}@; — see @#cyan:systemctl status {$Service->unit}@;.@.;");
+         }
+         if ($Service->uninstall() === false) {
+            $Alert = new Alert($Output);
+            $Alert->Type::Failure->set();
+            $Alert->message = "Could not remove @#cyan:{$Service->file}@;.";
+            $Alert->render();
+
+            return false;
+         }
+         $Output->render("@#green:Removed@; @#cyan:{$Service->file}@;@.;");
+      }
+      if (Service::reload() === false) {
+         $Output->render('@#yellow:Note:@; @#cyan:systemctl daemon-reload@; failed — run it yourself.@.;');
+      }
+
+      $Alert = new Alert($Output);
+      $Alert->Type::Success->set();
+      $Alert->message = "Project @#cyan:{$projectName}@; no longer boots at startup.";
+      $Alert->render();
+
+      // :
+      return true;
+   }
+
+   /**
+    * `status` — show the OS service of a project as systemd sees it: installed where,
+    * enabled at boot, active now. The instances themselves are `show`'s.
+    *
+    * @param array<string> $arguments
+    * @param array<string, bool|int|string> $options
+    *
+    * @return bool
+    */
+   public function inspect (array $arguments, array $options): bool
+   {
+      $Output = CLI->Terminal->Output;
+
+      // ?
+      if ($this->admit([], $options) === false) {
+         return false;
+      }
+
+      // ? Require project name
+      $projectName = $arguments[0] ?? null;
+      if ($projectName === null || $projectName === '') {
+         return $this->help(['status']);
+      }
+
+      // ? A unit outlives its project: a path-safe name is enough to manage it
+      $projectDir = $this->find($projectName);
+      if ($projectDir === null) {
+         return false;
+      }
+
+      // ? Only a machine booted by systemd is managed
+      if ($this->verify($projectName) === false) {
+         return false;
+      }
+
+      // @ One Fieldset per installed unit
+      $installed = false;
+      $skipped = false;
+      foreach ($this->compose($projectName, $projectDir, '', every: true) as $Service) {
+         if ($Service->installed === false) {
+            continue;
+         }
+         // ? A unit that is not this project's to show is named and skipped
+         if ($Service->owned === false) {
+            $Output->render("@.;@#yellow:Note:@; @#cyan:{$Service->unit}@; is not this project's: " . $this->describe($Service));
+            $skipped = true;
+
+            continue;
+         }
+         $installed = true;
+
+         $state = $Service->inspect();
+
+         $content = '';
+         $content .= '@#Green:' . str_pad('Unit', 14) . ' @; ' . $Service->unit . PHP_EOL;
+         $content .= '@#Green:' . str_pad('File', 14) . ' @; ' . $Service->file . PHP_EOL;
+         $content .= '@#Green:' . str_pad('Enabled', 14) . ' @; ' . $state['enabled'] . PHP_EOL;
+         $content .= '@#Green:' . str_pad('Active', 14) . ' @; ' . $state['active'];
+
+         $Output->write(PHP_EOL);
+         $Fieldset = new Fieldset($Output);
+         $Fieldset->title = '@#Cyan: Service Status @;';
+         $Fieldset->content = $content;
+         $Fieldset->render();
+
+         // ? A systemctl that cannot answer is not a unit with nothing to say
+         if ($state['enabled'] === 'unknown' && $state['active'] === 'unknown') {
+            $Output->render('@.;@#yellow:Note:@; @#cyan:systemctl@; could not be queried — ask as root, or check the system bus.@.;');
+         }
+      }
+
+      // ?
+      if ($installed === false) {
+         if ($skipped === false) {
+            $Output->render("@.;@#yellow:Note:@; no service is installed for @#cyan:{$projectName}@; — install one with @#Blue:bootgly project {$projectName} startup@;.@.;");
+         }
+
+         return true;
+      }
+
+      $Output->render("@.;@#Green:Tip:@; Use @#Blue:bootgly project {$projectName} show@; for the running instances.@.;");
+
+      // :
+      return true;
+   }
+
    // @ Helpers
+   /**
+    * Confirm this machine is booted by systemd — the only init `startup`
+    * manages. Anything else is named, with the command a hand-written service
+    * must run, so no platform is refused in silence.
+    */
+   private function verify (string $projectName): bool
+   {
+      $Output = CLI->Terminal->Output;
+
+      // ?:
+      $Init = PHP_OS_FAMILY === 'Linux' ? Inits::detect() : Inits::None;
+      if ($Init === Inits::Systemd) {
+         return true;
+      }
+
+      // ! Name the platform
+      $release = PHP_OS_FAMILY === 'Linux' ? @parse_ini_file('/etc/os-release', false, INI_SCANNER_RAW) : false;
+      $distro = is_array($release) && is_string($release['PRETTY_NAME'] ?? null)
+         ? trim($release['PRETTY_NAME'], '"')
+         : PHP_OS_FAMILY;
+      $comm = trim((string) @file_get_contents('/proc/1/comm'));
+      $booted = match (true) {
+         PHP_OS_FAMILY !== 'Linux' => 'is not Linux',
+         $Init === Inits::None => 'has no init running' . ($comm !== '' ? " (PID 1 is @#cyan:{$comm}@;)" : ''),
+         default => "is booted by @#cyan:{$Init->value}@;"
+      };
+
+      $Output->render("@#yellow:Warning:@; @#cyan:{$distro}@; {$booted}, which @#cyan:startup@; does not manage yet — only systemd is supported.@.;");
+      $Output->render('Register the service with your init by hand; from @#cyan:' . rtrim(BOOTGLY_WORKING_DIR, '/') . '@; it must run:@.;');
+      $Output->render(
+         '  @#Blue:' . escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(BOOTGLY_WORKING_DIR . 'bootgly')
+         . ' project ' . escapeshellarg($projectName) . ' start -f@;@.;'
+      );
+
+      return false;
+   }
+
+   /**
+    * Locate a project for the verbs that manage a unit which may outlive
+    * it: the registry when the project is still there, the path alone
+    * when it is not — the unit name derives from the path and nothing is
+    * executed. A path that fails the safety rules is refused either way.
+    */
+   private function find (string $projectName): null|string
+   {
+      // ?:
+      $registered = Projects::validate($projectName);
+      if (
+         $registered === true
+         && (is_dir(BOOTGLY_WORKING_DIR . "projects/{$projectName}/") || is_dir(BOOTGLY_ROOT_DIR . "projects/{$projectName}/"))
+      ) {
+         return $this->resolve($projectName);
+      }
+      if (Projects::check($projectName) === false) {
+         $Alert = new Alert(CLI->Terminal->Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Invalid project path: @#cyan:{$projectName}@;.";
+         $Alert->render();
+
+         return null;
+      }
+
+      CLI->Terminal->Output->render($registered === true
+         ? "@#yellow:Note:@; @#cyan:{$projectName}@; is registered but its directory is gone — managing its service by name.@.;"
+         : "@#yellow:Note:@; @#cyan:{$projectName}@; is not registered — managing its service by name.@.;");
+
+      // :
+      return BOOTGLY_WORKING_DIR . "projects/{$projectName}/";
+   }
+
+   /**
+    * Describe why a unit at a project's path is not that project's to touch —
+    * masked or linked, unstamped, or stamped by another project or kit.
+    */
+   private function describe (Service $Service): string
+   {
+      // ?:
+      if (is_link($Service->file) === true) {
+         return "@#cyan:{$Service->file}@; is a link — a masked unit, or a trap. @#cyan:systemctl unmask {$Service->unit}@; or remove the link first.@.;";
+      }
+      [$project, $kit] = $Service->owner;
+      if ($project === '' && $kit === '') {
+         return "@#cyan:{$Service->file}@; carries no Bootgly stamp — it was not installed by @#cyan:startup@;. Remove it by hand first.@.;";
+      }
+
+      // :
+      return "@#cyan:{$Service->file}@; is stamped for @#cyan:{$project}@; of @#cyan:{$kit}@; — rename one of the projects or remove that unit first.@.;";
+   }
+
+   /**
+    * Compose the units one project needs: its server (a WPI project) and its
+    * schedule worker (a project carrying `schedule.php`) — or both candidates
+    * regardless, with `$every`, to find what an earlier install left.
+    *
+    * @param string $projectName Canonical project path.
+    * @param string $projectDir Resolved project directory, with a trailing separator.
+    * @param string $user Account the units run as.
+    * @param bool $every Both candidates, whatever the project carries today.
+    *
+    * @return array<Service>
+    */
+   private function compose (string $projectName, string $projectDir, string $user, bool $every = false): array
+   {
+      $launcher = BOOTGLY_WORKING_DIR . 'bootgly';
+      $directory = rtrim(BOOTGLY_WORKING_DIR, '/');
+      // ! A project with a database starts after the usual servers, when they exist
+      $after = is_dir("{$projectDir}configs/database") === true
+         ? ['postgresql.service', 'mysql.service', 'mysqld.service', 'mariadb.service']
+         : [];
+
+      $Services = [];
+
+      $interfaces = Projects::read()[$projectName]['interfaces'] ?? [];
+      if ($every === true || in_array('WPI', $interfaces, true) === true) {
+         $Services[] = new Service(
+            name: Service::identify($projectName),
+            project: $projectName,
+            kit: $directory,
+            description: "Bootgly project {$projectName}",
+            command: [PHP_BINARY, $launcher, 'project', $projectName, 'start', '-f'],
+            user: $user,
+            after: $after,
+            // ! The master re-execs on SIGUSR2 — `systemctl reload` is a hot reload
+            reload: '/bin/kill -USR2 $MAINPID'
+         );
+      }
+      if ($every === true || is_file("{$projectDir}schedule.php") === true) {
+         $Services[] = new Service(
+            name: Service::identify($projectName, 'schedule'),
+            project: $projectName,
+            kit: $directory,
+            description: "Bootgly project {$projectName} — schedule worker",
+            command: [PHP_BINARY, $launcher, 'project', $projectName, 'schedule', 'run'],
+            user: $user,
+            after: $after
+         );
+      }
+
+      // :
+      return $Services;
+   }
+
    /**
     * Track a freshly minted project in a git repository of its own.
     *
@@ -1751,6 +2424,8 @@ class ProjectCommand extends Command
          $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI info@;' . PHP_EOL;
          $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI logs -f@; @#Black:(follow live — unrelated to `start -f`)@;' . PHP_EOL;
          $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI schedule run@; @#Black:(cron-style worker — no server started)@;' . PHP_EOL;
+         $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI startup --now@; @#Black:(systemd service — boots at startup)@;' . PHP_EOL;
+         $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI status@;' . PHP_EOL;
          $exampleLines .= PHP_EOL;
          $exampleLines .= '@#Blue:bootgly project start Demo/HTTP_Server_CLI@;' . PHP_EOL;
          $exampleLines .= '@#Blue:bootgly project stop Demo/HTTP_Server_CLI@;' . PHP_EOL;

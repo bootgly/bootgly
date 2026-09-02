@@ -80,6 +80,7 @@ projects/**/configs/**/.env.*
 /storage/queues/*
 /storage/schedule/*
 /storage/security/*
+/storage/systemd/*
 /storage/temp/*
 /storage/tests/*
 /storage/tests/snapshots/*
