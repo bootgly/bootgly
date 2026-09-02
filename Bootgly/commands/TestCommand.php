@@ -580,7 +580,7 @@ class TestCommand extends Command
             fwrite(
                STDERR,
                '[test] ' . (string) getcwd() . ' is under projects/ but no registered project owns it'
-               . ' — register it in projects/Bootgly.projects.php (bootgly project create/import).' . PHP_EOL
+               . ' — register it in projects/Bootgly.projects.php (bootgly projects create/import).' . PHP_EOL
             );
 
             return false;
@@ -598,7 +598,7 @@ class TestCommand extends Command
                fwrite(
                   STDERR,
                   '[test] no registered project carries a tests/' . BOOTSTRAP_FILENAME
-                  . ' — scaffold one with `bootgly project create <Name> --yes`.' . PHP_EOL
+                  . ' — scaffold one with `bootgly projects create <Name> --yes`.' . PHP_EOL
                );
 
                return false;
@@ -638,7 +638,7 @@ class TestCommand extends Command
                fwrite(
                   STDERR,
                   "[test] projects/{$situation} carries no tests/" . BOOTSTRAP_FILENAME
-                  . ' — scaffold one (see any `bootgly project create` project) and register its suites.' . PHP_EOL
+                  . ' — scaffold one (see any `bootgly projects create` project) and register its suites.' . PHP_EOL
                );
 
                return false;
@@ -1043,7 +1043,7 @@ class TestCommand extends Command
          fwrite(
             STDERR,
             '[test] no scope: this kit has no registered projects yet — create one with'
-            . ' `bootgly project create <Name> --yes`, then run `bootgly test` from its directory.' . PHP_EOL
+            . ' `bootgly projects create <Name> --yes`, then run `bootgly test` from its directory.' . PHP_EOL
          );
 
          return;

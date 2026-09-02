@@ -27,8 +27,8 @@ return new Test(
       // ! transfer() is the wizard's platform-import step: it refreshes an
       //   existing user-level copy by ERASING it and importing the platform
       //   source over it. Both refusals below used to come AFTER that erase.
-      $Transfer = new ReflectionMethod(ProjectCommand::class, 'transfer');
-      $Command = new ProjectCommand;
+      $Transfer = new ReflectionMethod(ProjectsCommand::class, 'transfer');
+      $Command = new ProjectsCommand;
 
       $registry = Projects::CONSUMER_DIR . 'Bootgly.projects.php';
       $snapshot = is_file($registry) ? file_get_contents($registry) : null;

@@ -18,7 +18,7 @@
 //   - WPI → Web platform (served by Bootgly's own CLI HTTP server)
 
 // Kept in alphabetical order by project path. This file is machine-managed by
-// `bootgly project create/import` — hand-added comments inside the array are
+// `bootgly projects create/import` — hand-added comments inside the array are
 // not preserved.
 return [
    'Benchmark/HTTP_Server_CLI'  => ['interfaces' => ['WPI']],

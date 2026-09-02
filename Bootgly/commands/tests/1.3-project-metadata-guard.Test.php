@@ -27,7 +27,7 @@ use Bootgly\API\Projects;
 return new Test(
    description: 'It should refuse invalid metadata and store quoted metadata safely, end to end',
    test: function () {
-      $Command = new ProjectCommand;
+      $Command = new ProjectsCommand;
 
       // ! The real registry is mutated by the success section — snapshot it,
       //   restore it either way, and drop the in-process memo so later suites

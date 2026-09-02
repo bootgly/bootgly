@@ -27,7 +27,7 @@ return new Test(
       //   to erase that copy first and validate afterwards; every probe below
       //   drives the real route against a platform project planted in the
       //   author folder, which trace() resolves first.
-      $Command = new ProjectCommand;
+      $Command = new ProjectsCommand;
 
       $registry = Projects::CONSUMER_DIR . 'Bootgly.projects.php';
       $snapshot = is_file($registry) ? file_get_contents($registry) : null;

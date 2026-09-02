@@ -171,7 +171,7 @@ class HelpCommand extends Command
       $Fieldset4->render();
 
       // # Commands examples
-      $exampleLines = '@#Blue:' . $script . ' project list@;' . PHP_EOL;
+      $exampleLines = '@#Blue:' . $script . ' projects list@;' . PHP_EOL;
       $exampleLines .= '@#Blue:' . $script . ' project Demo/HTTP_Server_CLI start@;' . PHP_EOL;
       $exampleLines .= '@#Blue:' . $script . ' project Demo/HTTP_Server_CLI stop@;';
       $Fieldset5 = new Fieldset($Output);

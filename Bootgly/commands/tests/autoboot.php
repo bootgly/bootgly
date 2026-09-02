@@ -41,5 +41,8 @@ return new Suite(
       '5.1-project-schedule',
       // # record instance stamp of a bare TUI (appended last — earlier indexes stay stable)
       '4.4-tui-instance-stamp',
+      '6.1-projects-show',
+      '6.2-projects-list',
+      '6.3-projects-show-fit',
    ]
 );

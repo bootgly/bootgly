@@ -5,8 +5,9 @@ namespace Bootgly\commands;
 
 use function array_diff;
 use function assert;
-use function exec;
+use function chmod;
 use function escapeshellarg;
+use function exec;
 use function file_get_contents;
 use function file_put_contents;
 use function fileperms;
@@ -15,7 +16,6 @@ use function implode;
 use function is_dir;
 use function is_file;
 use function is_link;
-use function chmod;
 use function mkdir;
 use function rmdir;
 use function scandir;
@@ -35,7 +35,7 @@ return new Test(
       //   Projects are the unit of versioning now: the clone that lands in
       //   `projects/` must be the repository the user keeps committing and
       //   pushing from.
-      $Command = new ProjectCommand;
+      $Command = new ProjectsCommand;
 
       $registry = Projects::CONSUMER_DIR . 'Bootgly.projects.php';
       $snapshot = is_file($registry) ? file_get_contents($registry) : null;

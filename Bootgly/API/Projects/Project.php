@@ -43,7 +43,7 @@ use Bootgly\API\Projects\Project\Events;
  * happens only when boot() is called.
  *
  * Every project MUST declare whether it is exportable: exportable projects
- * appear in the `bootgly project create` import picker; private ones do not.
+ * appear in the `bootgly projects create` import picker; private ones do not.
  *
  * Only one Project can be booted per process. Attempting to boot a second
  * Project throws a fatal Error.
@@ -76,12 +76,12 @@ class Project
    /**
     * @param Closure $boot Boot function executed by `bootgly project <Name> start` —
     *                      receives the command `$arguments` and `$options`.
-    * @param bool $exportable Whether the project appears in the `bootgly project create`
+    * @param bool $exportable Whether the project appears in the `bootgly projects create`
     *                         import picker to be copied into user workspaces.
     * @param string $name Human-readable project name (e.g. `My App`).
     * @param string $folder Projects-root-relative folder override (e.g. `App/API`).
     *                       Derived from the signature file location when omitted.
-    * @param string $description Short description shown by `bootgly project list`.
+    * @param string $description Short description shown by `bootgly projects list`.
     * @param string $version Project version — plain semver (e.g. `1.0.0`).
     * @param string $author Project author (person or organization).
     */

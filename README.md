@@ -143,13 +143,13 @@ curl -fsSL https://bootgly.com/install | bash
 Create more projects anytime — from scratch or importing a platform project (like the Demos):
 
 ```bash
-php bootgly project create
+php bootgly projects create
 ```
 
 Or import any Project from Platforms or git repository carrying the Bootgly project signature (a `*.Project.php` file at its root):
 
 ```bash
-php bootgly project import
+php bootgly projects import
 ```
 
 ### 📟 Bootgly CLI
@@ -202,7 +202,7 @@ php bootgly project import
 <details>
    <summary><kbd>Import `Demo/HTTP_Server_CLI` project and run the demo of HTTP Server</kbd></summary>
 
-   1) Import a Web project with the wizard (`php bootgly project import`);
+   1) Import a Web project with the wizard (`php bootgly projects import`);
    2) Run it in the terminal:
 
    ```bash

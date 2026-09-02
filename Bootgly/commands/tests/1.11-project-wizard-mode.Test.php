@@ -105,7 +105,7 @@ return new Test(
       //   step would look for a substring the stream never carries.
       $run = static function (array $arguments = [], string $input = "\n") use (&$output): int {
          $Process = proc_open(
-            ['php', BOOTGLY_ROOT_DIR . 'bootgly', 'project', 'create', ...$arguments],
+            ['php', BOOTGLY_ROOT_DIR . 'bootgly', 'projects', 'create', ...$arguments],
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             BOOTGLY_ROOT_DIR,
@@ -165,7 +165,7 @@ return new Test(
             description: 'Enter on the first mode resolves to the imported-projects branch'
          );
          yield assert(
-            assertion: str_contains($output, 'bootgly project list')
+            assertion: str_contains($output, 'bootgly projects list')
                && str_contains($output, 'bootgly project <Name> start'),
             description: 'the branch closes by pointing at the imported projects'
          );

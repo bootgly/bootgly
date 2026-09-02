@@ -37,8 +37,8 @@ return new Test(
       $file = escapeshellarg($script);
       $command = "{$binary} {$file}";
 
-      $Execute = new ReflectionMethod(ProjectCommand::class, 'execute');
-      $Command = new ProjectCommand;
+      $Execute = new ReflectionMethod(ProjectsCommand::class, 'execute');
+      $Command = new ProjectsCommand;
 
       // ! The wizard region: a gutter every row re-enters after
       $Host = new Output('php://memory');

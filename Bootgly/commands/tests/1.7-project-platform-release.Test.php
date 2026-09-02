@@ -39,8 +39,8 @@ return new Test(
       //   v1.0.0-beta.3 shipped exactly that: the kit pinned Bootgly at
       //   `chore: open 1.0.0-beta.4 development`, so a fresh install reported
       //   BOOTGLY_VERSION 1.0.0-beta.4-dev — a build that was never released.
-      $Align = new ReflectionMethod(ProjectCommand::class, 'align');
-      $Command = new ProjectCommand;
+      $Align = new ReflectionMethod(ProjectsCommand::class, 'align');
+      $Command = new ProjectsCommand;
 
       $base = sys_get_temp_dir() . '/bootgly-platform-release-' . getmypid()
          . '-' . bin2hex(random_bytes(4));

@@ -20,7 +20,7 @@ if [ "${1:-}" = 'docker-default' ]; then
    if [ ! -e "$MARKER" ]; then
       # @ First interactive run — canonical installer (wizard)
       if [ -t 0 ]; then
-         bootgly project create
+         bootgly projects create
          touch "$MARKER"
 
          exit 0

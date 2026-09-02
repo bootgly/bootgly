@@ -139,7 +139,7 @@ return new Test(
       // ! The platform is explicit on every run: `none` keeps the fresh-boot
       //   trigger alone, `web` asks for that platform (and its examples)
       $create = static fn (string $name, string $platform = 'none'): array => [
-         $entry, 'project', 'create', $name,
+         $entry, 'projects', 'create', $name,
          '--from=scratch', '--interfaces=CLI', '--yes', '--no-git', "--platform={$platform}",
       ];
 

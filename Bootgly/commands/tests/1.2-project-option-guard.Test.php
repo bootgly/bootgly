@@ -24,8 +24,8 @@ use Bootgly\API\Projects;
 return new Test(
    description: 'It should refuse an option the subcommand does not implement, before anything is written',
    test: function () {
-      $Admit = new ReflectionMethod(ProjectCommand::class, 'admit');
-      $Command = new ProjectCommand;
+      $Admit = new ReflectionMethod(ProjectsCommand::class, 'admit');
+      $Command = new ProjectsCommand;
 
       $create = ['platform', 'from', 'interfaces', 'description', 'version', 'author', 'port', 'yes', 'no-git'];
       $import = ['platform', 'interfaces', 'yes'];
@@ -33,7 +33,7 @@ return new Test(
       // # A flag this command declares for ANOTHER subcommand is refused
       //   `--dry-run` is the seeder's. The parser accepts any `--flag` and the
       //   option table only renders help, so it used to be taken and dropped —
-      //   `project create --dry-run` wrote the project while the caller read the
+      //   `projects create --dry-run` wrote the project while the caller read the
       //   run as a preview, and the create that followed was refused for a name
       //   the preview had consumed.
       yield assert(

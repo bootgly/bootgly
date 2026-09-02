@@ -72,7 +72,7 @@ return new Test(
          );
 
          $Process = proc_open(
-            ['php', BOOTGLY_ROOT_DIR . 'bootgly', 'project', 'create', 'WizName', '--from=PlantedWiz', '--platform=none'],
+            ['php', BOOTGLY_ROOT_DIR . 'bootgly', 'projects', 'create', 'WizName', '--from=PlantedWiz', '--platform=none'],
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             BOOTGLY_ROOT_DIR,
@@ -102,7 +102,7 @@ return new Test(
          // # The interfaces come from the SOURCE's registry entry, not from the
          //   new name — a shipped WPI project imported under another name stays WPI
          $Process = proc_open(
-            ['php', BOOTGLY_ROOT_DIR . 'bootgly', 'project', 'create', 'WizWeb', '--from=Demo/HTTP_Server_CLI', '--platform=none'],
+            ['php', BOOTGLY_ROOT_DIR . 'bootgly', 'projects', 'create', 'WizWeb', '--from=Demo/HTTP_Server_CLI', '--platform=none'],
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             BOOTGLY_ROOT_DIR,

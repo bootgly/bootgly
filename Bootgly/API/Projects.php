@@ -236,6 +236,71 @@ abstract class Projects
    }
 
    /**
+    * Discover the registered projects of one interface, with the metadata
+    * their signature files carry.
+    *
+    * @param string $interface CLI or WPI
+    *
+    * @return array<string, array{name: string, description: string, version: string, author: string}>
+    */
+   public static function discover (string $interface): array
+   {
+      // !
+      $projects = [];
+
+      // @ Try consumer dir first, then framework dir
+      $projectsDir = is_dir(self::CONSUMER_DIR) ? self::CONSUMER_DIR : self::AUTHOR_DIR;
+
+      // @ Iterate the registered paths for this interface (leaf-named project files)
+      foreach (self::filter($interface) as $path) {
+         $leaf = basename($path);
+         $file = $projectsDir . $path . '/' . $leaf . '.Project.php';
+         if (is_file($file)) {
+            $projects[$path] = self::inspect($file, $path);
+         }
+      }
+
+      // :
+      return $projects;
+   }
+
+   /**
+    * Inspect one project signature for its metadata.
+    *
+    * @param string $file The project file path
+    * @param string $folder The project folder name (fallback)
+    *
+    * @return array{name: string, description: string, version: string, author: string}
+    */
+   public static function inspect (string $file, string $folder): array
+   {
+      // !
+      $defaults = [
+         'name'        => $folder,
+         'description' => '',
+         'version'     => '',
+         'author'      => ''
+      ];
+
+      // @ The signature is read for its metadata only — never load the
+      //   project's Composer autoloader here: `list`/`info` read EVERY
+      //   project, and stacking N vendor bootstraps in one process makes a
+      //   read-only listing run everyone's dependency code
+      $Project = require $file;
+      if ($Project instanceof Project === false) {
+         return $defaults;
+      }
+
+      // :
+      return [
+         'name'        => $Project->name !== '' ? $Project->name : $folder,
+         'description' => $Project->description,
+         'version'     => $Project->version,
+         'author'      => $Project->author
+      ];
+   }
+
+   /**
     * Load a project's Composer autoloader when present.
     *
     * Composer is per project: dependencies live in `<project>/vendor/`, never
@@ -813,7 +878,7 @@ abstract class Projects
       //   - WPI → Web platform (served by Bootgly's own CLI HTTP server)
 
       // Kept in alphabetical order by project path. This file is machine-managed by
-      // `bootgly project create/import` — hand-added comments inside the array are
+      // `bootgly projects create/import` — hand-added comments inside the array are
       // not preserved.
       return [
       {$entries}];

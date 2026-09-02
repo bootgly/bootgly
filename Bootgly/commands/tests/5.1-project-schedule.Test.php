@@ -129,7 +129,7 @@ return new Test(
 
       yield assert(
          assertion: str_contains($output, 'scaffold:yes;') && str_contains($output, 'token:filled;'),
-         description: 'project create materializes a schedule.php with its run instructions — got: '
+         description: 'projects create materializes a schedule.php with its run instructions — got: '
             . trim($output)
       );
 

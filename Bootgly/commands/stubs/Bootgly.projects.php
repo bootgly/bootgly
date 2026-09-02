@@ -17,6 +17,6 @@
 //   - CLI → Console platform
 //   - WPI → Web platform (served by Bootgly's own CLI HTTP server)
 
-// The wizard (`bootgly project create`) fills this list when a project is
+// The wizard (`bootgly projects create`) fills this list when a project is
 // created or imported.
 return [];

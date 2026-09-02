@@ -9,6 +9,7 @@ return [
    new TestCommand,
    new LintCommand,
 
+   new ProjectsCommand,
    new ProjectCommand,
    new ScheduleCommand,
    new QueueCommand,

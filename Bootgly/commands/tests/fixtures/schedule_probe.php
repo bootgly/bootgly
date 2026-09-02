@@ -3,6 +3,7 @@
 use const Bootgly\CLI;
 use Bootgly\ACI\Logs\Data\Record;
 use Bootgly\commands\ProjectCommand;
+use Bootgly\commands\ProjectsCommand;
 use Bootgly\commands\ScheduleCommand;
 
 $root = getenv('BOOTGLY_SCHEDULE_ROOT');
@@ -24,10 +25,11 @@ require rtrim($root, '/') . '/autoboot.php';
 CLI->Commands->register(Command: new ScheduleCommand, Script: CLI);
 
 $Command = new ProjectCommand;
+$Projects = new ProjectsCommand;
 
 // @ A from-scratch create scaffolds a commented schedule.php in every project
 if (getenv('BOOTGLY_SCHEDULE_CREATE') === '1') {
-   $Command->create(['Fresh'], [
+   $Projects->create(['Fresh'], [
       'from' => 'scratch', 'interfaces' => 'CLI', 'yes' => true, 'no-git' => true,
    ]);
    echo 'scaffold:' . (is_file("$base/projects/Fresh/schedule.php") ? 'yes' : 'no') . ';';
