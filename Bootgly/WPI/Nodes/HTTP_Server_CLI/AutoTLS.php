@@ -75,9 +75,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\ACME_Client\Swaps;
 
 
 /**
- * Auto-TLS configuration — the typed form of the HTTP Server `secure` config.
+ * Auto-TLS configuration — the typed form of the HTTP Server TLS config.
  *
- * Passing an AutoTLS instance to `HTTP_Server_CLI::configure(secure:)` makes
+ * Passing an AutoTLS instance as `HTTP_Server_CLI\Configs(AutoTLS:)` makes
  * the server manage its own certificate: it boots on a temporary self-signed
  * certificate, obtains a real one from an ACME CA (Let's Encrypt by default)
  * in the background, hot-swaps it into the live listening sockets and renews

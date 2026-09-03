@@ -32,7 +32,7 @@ return new Test(
          $Client = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_EMBEDDED);
          $Client->react(TCP_Server_CLI::$Event);
          $Client->schedule(fn (mixed $value = null): Response => $Response->wait($value));
-         $Client->configure(host: '127.0.0.1', port: BOOTGLY_E2E_UPSTREAM_PORT);
+         $Client->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: BOOTGLY_E2E_UPSTREAM_PORT));
          foreach ($tune as $option => $value) {
             $Client->$option = $value;
          }

@@ -24,12 +24,12 @@ return new Test(
       $disconnected = false;
 
       $Client = new WS_Client_CLI(WS_Client_CLI::MODE_TEST);
-      $Client->configure(
+      $Client->configure(new WS_Client_CLI\Configs(
          host: '127.0.0.1',
          port: 8097,
          compression: false,
          handshakeTimeout: 1
-      );
+      ));
       $Client->on(Events::Connected, function ($Session) use (&$connected) {
          $connected = true;
       });

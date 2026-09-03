@@ -9,13 +9,13 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 
 /**
- * BG-20: `configure(deferredTimeout:)` is the documented way to size the
+ * BG-20: `configure(new Response\Configs(deferredTimeout:))` is the documented way to size the
  * server-wide deferral budget — the value `defer()` falls back to when a call
  * passes none. The knob must reach `Response::$deferredTimeout`, and a
  * re-configuration that omits it must keep what was already set.
  */
 return new Test(
-   description: 'configure(deferredTimeout:) should seed the server-wide deferral budget',
+   description: 'Response\Configs(deferredTimeout:) should seed the server-wide deferral budget',
    test: new Assertions(Case: function (): Generator {
       // ! Statics survive the suite: snapshot every one configure() writes
       $oldDeferred = Response::$deferredTimeout;
@@ -27,7 +27,10 @@ return new Test(
          $Server = new HTTP_Server_CLI(Mode: Modes::Test);
 
          // @@ A) The knob reaches the Response static
-         $Server->configure(host: '127.0.0.1', port: 0, workers: 1, deferredTimeout: 2.5);
+         $Server->configure(
+            new HTTP_Server_CLI\Configs(host: '127.0.0.1', port: 0, workers: 1),
+            new HTTP_Server_CLI\Response\Configs(deferredTimeout: 2.5)
+         );
 
          yield assert(
             assertion: Response::$deferredTimeout === 2.5,
@@ -36,7 +39,7 @@ return new Test(
          );
 
          // @@ B) Omitting it keeps the configured budget
-         $Server->configure(host: '127.0.0.1', port: 0, workers: 1);
+         $Server->configure(new HTTP_Server_CLI\Configs(host: '127.0.0.1', port: 0, workers: 1));
 
          yield assert(
             assertion: Response::$deferredTimeout === 2.5,
@@ -45,7 +48,10 @@ return new Test(
          );
 
          // @@ C) 0 restores the unbounded default
-         $Server->configure(host: '127.0.0.1', port: 0, workers: 1, deferredTimeout: 0);
+         $Server->configure(
+            new HTTP_Server_CLI\Configs(host: '127.0.0.1', port: 0, workers: 1),
+            new HTTP_Server_CLI\Response\Configs(deferredTimeout: 0)
+         );
 
          yield assert(
             assertion: Response::$deferredTimeout === 0,
@@ -54,7 +60,9 @@ return new Test(
          );
 
          // @@ D) The idle knob travels the same way
-         $Server->configure(host: '127.0.0.1', port: 0, workers: 1, connectionIdleTimeout: 7);
+         $Server->configure(
+            new HTTP_Server_CLI\Configs(host: '127.0.0.1', port: 0, workers: 1, connectionIdleTimeout: 7)
+         );
 
          yield assert(
             assertion: TCP_Server_CLI::$connectionIdleTimeout === 7,

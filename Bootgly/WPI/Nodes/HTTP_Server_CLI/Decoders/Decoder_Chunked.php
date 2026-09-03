@@ -424,7 +424,7 @@ class Decoder_Chunked extends Decoders implements Disconnecting, Feeding
                }
 
                // @ Validate total size against the configurable cap (audit F-6:
-               //   honors `requestMaxBodySize`; was a hard-coded 10 MB constant).
+               //   honors `Request\Configs(maxBodySize:)`; was a hard-coded 10 MB constant).
                //   Compared as a remainder, never as a sum, so the aggregate
                //   itself can never overflow into a passing value (audit M1).
                if ($chunkSize > Server\Request::$maxBodySize - $this->totalSize) {

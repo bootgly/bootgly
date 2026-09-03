@@ -100,7 +100,7 @@ return new Test(
       $address = stream_socket_get_name($Server, false);
       $Live = new TCP_Client_CLI(TCP_Client_CLI::MODE_TEST);
       [$host, $port] = explode(':', $address);
-      $Live->configure(host: $host, port: (int) $port);
+      $Live->configure(new TCP_Client_CLI\Configs(host: $host, port: (int) $port));
       $Socket = $Live->connect();
       $Peer = stream_socket_accept($Server);
       $adopted = null;

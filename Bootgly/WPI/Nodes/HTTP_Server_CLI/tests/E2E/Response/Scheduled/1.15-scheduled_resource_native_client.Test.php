@@ -29,7 +29,7 @@ return new Test(
    response: function (Request $Request, Response $Response, Router $Router)
    {
       // @ BG-13 S5: the zero-boilerplate form — the `Upstream` resource is
-      //   registered once in the suite autoboot (responseResources) and the
+      //   registered once in the suite autoboot (Response\Configs) and the
       //   route neither builds, adopts nor schedules a client. The reactor
       //   tick and CPU probes are the same evidence 1.12 collects by hand.
       yield $Router->route('/deferred/resource', function (Request $Request, Response $Response) {

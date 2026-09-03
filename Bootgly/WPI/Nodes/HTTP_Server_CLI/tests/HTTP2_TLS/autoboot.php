@@ -6,6 +6,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\tests\HTTP2_TLS;
 use const BOOTGLY_ROOT_DIR;
 use function array_map;
 use function array_values;
+use function count;
 use function define;
 use function defined;
 use function get_debug_type;
@@ -22,6 +23,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+
 
 require_once __DIR__ . '/../HTTP2/Client.php';
 
@@ -48,7 +50,7 @@ return new Suite(
 
       // @ Boot a TLS server with ALPN h2 (default when `secure` is set).
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: Modes::Test);
-      $HTTP_Server_CLI->configure(
+      $HTTP_Server_CLI->configure(new HTTP_Server_CLI\Configs(
          host: '0.0.0.0',
          port: 8086,
          workers: 1,
@@ -57,7 +59,7 @@ return new Suite(
             'local_pk' => BOOTGLY_ROOT_DIR . '@/certificates/localhost.key.pem',
             'verify_peer' => false,
          ]
-      );
+      ));
       $HTTP_Server_CLI->on(
          Events::RequestReceived,
          function ($Request, Response $Response): Response {

@@ -49,12 +49,12 @@ return new Suite(
       // @ Boot the HTTP server in Test mode with a fixed echo handler —
       //   the HTTP/2 client specs speak raw frames (prior knowledge).
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: Modes::Test);
-      $HTTP_Server_CLI->configure(
+      $HTTP_Server_CLI->configure(new HTTP_Server_CLI\Configs(
          host: '0.0.0.0',
          port: 8085,
          workers: 1,
          health: '/health'
-      );
+      ));
       // ! SSE teardown observability — Close hooks stamp these flags; the
       //   report routes read them (same worker: workers = 1)
       $hooked = 'pending';

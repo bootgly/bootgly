@@ -20,6 +20,7 @@ use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Authenticating\Guard;
 use Bootgly\WPI\Nodes\WS_Server_CLI;
+use Bootgly\WPI\Nodes\WS_Server_CLI\Configs;
 use Bootgly\WPI\Nodes\WS_Server_CLI\Events;
 
 
@@ -41,9 +42,9 @@ return new Project(
          default => Modes::Daemon
       });
       // @ Optional handshake auth (WS_AUTH=1): require `Authorization: Bearer secret`.
-      $guards = [];
+      $Guards = [];
       if (getenv('WS_AUTH')) {
-         $guards[] = new class extends Guard {
+         $Guards[] = new class extends Guard {
             public function authenticate (object $Request): bool
             {
                return $this->extract($Request) === 'secret';
@@ -66,13 +67,15 @@ return new Project(
       }
 
       $WS_Server_CLI->configure(
-         host: '0.0.0.0',
-         port: getenv('PORT') ? (int) getenv('PORT') : 8083,
-         workers: getenv('WS_WORKERS') ? (int) getenv('WS_WORKERS') : 1,
-         secure: $secure,
-         heartbeatInterval: getenv('WS_HEARTBEAT') ? (int) getenv('WS_HEARTBEAT') : 30,
-         compression: getenv('WS_NOCOMPRESS') ? false : true,
-         guards: $guards
+         new Configs(
+            host: '0.0.0.0',
+            port: getenv('PORT') ? (int) getenv('PORT') : 8083,
+            workers: getenv('WS_WORKERS') ? (int) getenv('WS_WORKERS') : 1,
+            secure: $secure,
+            heartbeatInterval: getenv('WS_HEARTBEAT') ? (int) getenv('WS_HEARTBEAT') : 30,
+            compression: getenv('WS_NOCOMPRESS') ? false : true,
+            Guards: $Guards
+         )
       );
       $WS_Server_CLI
          // # Chat — every connection joins the lobby. In multi-worker mode

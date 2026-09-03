@@ -18,6 +18,7 @@ use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\AutoTLS;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Configs;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
 
 
@@ -43,19 +44,23 @@ return new Project(
          isSet($options['m']) => Modes::Monitor,
          default => Modes::Daemon
       });
+      // ! Server configuration — configure() takes one Configs per concern:
+      //   HTTP_Server_CLI\Configs (here), Request\Configs and Response\Configs.
       $Server->configure(
-         host: '0.0.0.0',
-         port: getenv('PORT') ? (int) getenv('PORT') : (int) '__PORT__',
-         workers: 2,
-         // ? Auto-TLS (automatic HTTPS via Let's Encrypt) — set your domain and uncomment:
-         // secure: new AutoTLS(
-         //    domains: ['example.com'],
-         //    email: 'admin@example.com',
-         //    staging: true, // validate with the staging CA first — flip to false for the real certificate
-         // ),
-         user: 'debian',   // demote workers from root (root needed to bind port 80 for HTTP-01)
-         group: 'debian',
-         // health: '/health', // built-in K8s probe endpoint (answers before middlewares)
+         new Configs(
+            host: '0.0.0.0',
+            port: getenv('PORT') ? (int) getenv('PORT') : (int) '__PORT__',
+            workers: 2,
+            // ? Auto-TLS (automatic HTTPS via Let's Encrypt) — set your domain and uncomment:
+            // AutoTLS: new AutoTLS(
+            //    domains: ['example.com'],
+            //    email: 'admin@example.com',
+            //    staging: true, // validate with the staging CA first — flip to false for the real certificate
+            // ),
+            user: 'debian',   // demote workers from root (root needed to bind port 80 for HTTP-01)
+            group: 'debian',
+            // health: '/health', // built-in K8s probe endpoint (answers before middlewares)
+         )
       );
       $Server
          ->on(Events::RequestReceived, HTTP_Server_CLI::$Router->load(__DIR__ . '/router'))

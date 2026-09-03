@@ -18,6 +18,7 @@ use BackedEnum;
 use Closure;
 use InvalidArgumentException;
 
+use Bootgly\ABI\Configs as Configuring;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Environments;
@@ -39,6 +40,12 @@ use Bootgly\WPI\Nodes\WS_Server_CLI\Session;
 
 class WS_Server_CLI extends TCP_Server_CLI implements WS, Server
 {
+   // # Configs
+   /** The Configs carrying the socket — host, port and workers. */
+   protected const string TRANSPORT = WS_Server_CLI\Configs::class;
+   /** @var array<int,class-string<Configuring>> Every Configs this node applies. */
+   protected const array CONFIGS = [WS_Server_CLI\Configs::class];
+
    // * Config
    // ...inherited from TCP_Server_CLI
 
@@ -90,30 +97,37 @@ class WS_Server_CLI extends TCP_Server_CLI implements WS, Server
    /**
     * Configure the WebSocket Server.
     *
-    * @param array<string> $subprotocols Server-supported subprotocols, in preference order.
-    * @param array<object> $guards Handshake authentication guards (Phase 6).
+    * Every concern arrives as its own Configs value object, in any order:
+    * `configure(new WS_Server_CLI\Configs(host: '0.0.0.0', port: 8080, workers: 4))`.
+    *
+    * @param Configuring ...$Configs One Configs per concern.
     *
     * @return self The WebSocket Server instance, for chaining.
     */
-   public function configure (
-      string $host, int $port, int $workers,
-      null|array $secure = null,
-      null|string $user = null, null|string $group = null,
-      int $heartbeatInterval = 30,
-      null|int $idleTimeout = null,
-      int $maxFrameSize = 1048576,
-      int $maxMessageSize = 8388608,
-      array $subprotocols = [],
-      bool $compression = true,
-      array $guards = [],
-      null|int $maxConnections = null,
-      null|int $maxConnectionsPerIP = null,
-      null|Closure $fallback = null
-   ): self
+   public function configure (Configuring ...$Configs): self
    {
-      parent::configure($host, $port, $workers, $secure, $user, $group);
+      parent::configure(...$Configs);
 
-      if ($host === '0.0.0.0') {
+      // :
+      return $this;
+   }
+   /**
+    * Apply one Configs to this server.
+    *
+    * @throws InvalidArgumentException On a Configs this node does not accept.
+    */
+   protected function adopt (Configuring $Config): void
+   {
+      // ? Anything else belongs to the transport — which also rejects it
+      if ($Config instanceof WS_Server_CLI\Configs === false) {
+         parent::adopt($Config);
+
+         return;
+      }
+
+      parent::adopt($Config);
+
+      if ($Config->host === '0.0.0.0') {
          $this->domain ??= 'localhost';
       }
 
@@ -123,27 +137,25 @@ class WS_Server_CLI extends TCP_Server_CLI implements WS, Server
          : 'ws://';
 
       // @ Session policy
-      Session::$heartbeatInterval = $heartbeatInterval;
-      Session::$idleTimeout = $idleTimeout;
-      Session::$maxFrameSize = $maxFrameSize;
-      Session::$maxMessageSize = $maxMessageSize;
+      Session::$heartbeatInterval = $Config->heartbeatInterval;
+      Session::$idleTimeout = $Config->idleTimeout;
+      Session::$maxFrameSize = $Config->maxFrameSize;
+      Session::$maxMessageSize = $Config->maxMessageSize;
       // @ Handshake policy
-      Handshake::$subprotocols = $subprotocols;
-      Handshake::$compression = $compression;
-      Handshake::$Guards = $guards;
+      Handshake::$subprotocols = $Config->subprotocols;
+      Handshake::$compression = $Config->compression;
+      Handshake::$Guards = $Config->Guards;
       // @ Clear any prior custom upgrade predicate; on(HandshakeRequested) re-sets it.
       Handshake::$predicate = null;
       // @ HTTP fallback for plain (non-upgrade) requests — e.g. the client page
-      Handshake::$fallback = $fallback;
+      Handshake::$fallback = $Config->Fallback;
       // @ Connection-exhaustion caps
-      if ($maxConnections !== null) {
-         self::$maxConnections = $maxConnections;
+      if ($Config->maxConnections !== null) {
+         self::$maxConnections = $Config->maxConnections;
       }
-      if ($maxConnectionsPerIP !== null) {
-         self::$maxConnectionsPerIP = $maxConnectionsPerIP;
+      if ($Config->maxConnectionsPerIP !== null) {
+         self::$maxConnectionsPerIP = $Config->maxConnectionsPerIP;
       }
-
-      return $this;
    }
 
    /**

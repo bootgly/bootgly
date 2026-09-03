@@ -21,6 +21,7 @@ use function substr;
 use const Bootgly\CLI;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI;
+use Bootgly\WPI\Nodes\HTTP_Client_CLI\Configs;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Events;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response;
@@ -81,10 +82,12 @@ return new Project(
       // @ Create HTTPS Client
       $Client = new HTTP_Client_CLI;
       $Client->configure(
-         host: $host,
-         port: $port,
-         workers: 0,
-         secure: $secure
+         new Configs(
+            host: $host,
+            port: $port,
+            workers: 0,
+            secure: $secure
+         )
       );
 
       // @ Register HTTP hooks

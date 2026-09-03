@@ -52,11 +52,11 @@ return new Suite(
       //   over any user handler/middleware (health-probe rationale).
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: Modes::Test);
       try {
-         $HTTP_Server_CLI->configure(
+         $HTTP_Server_CLI->configure(new HTTP_Server_CLI\Configs(
             host: '0.0.0.0',
             port: 8098,
             workers: 1
-         );
+         ));
          $HTTP_Server_CLI->on(
             Events::RequestReceived,
             function ($Request, Response $Response): Response {

@@ -69,7 +69,7 @@ return new Test(
          $Retired = $AutoTLS->Swaps;
          $instance = $Retired->instance;
 
-         // The exact retirement `abort()`, `stop()` and `configure(secure: null)` perform.
+         // The exact retirement `abort()`, `stop()` and a `configure()` carrying no AutoTLS perform.
          $AutoTLS->retire();
 
          // Both halves are pinned here on purpose. Making `release()` itself

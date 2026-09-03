@@ -12,6 +12,7 @@
 use Bootgly\ACI\Events\Timer;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Interfaces\UDP_Client_CLI;
+use Bootgly\WPI\Interfaces\UDP_Client_CLI\Configs;
 use Bootgly\WPI\Interfaces\UDP_Client_CLI\Events;
 
 
@@ -28,9 +29,11 @@ return new Project(
    {
       $UDP_Client_CLI = new UDP_Client_CLI(UDP_Client_CLI::MODE_MONITOR);
       $UDP_Client_CLI->configure(
-         host: '127.0.0.1',
-         port: getenv('PORT') ? (int) getenv('PORT') : 9999,
-         workers: 1
+         new Configs(
+            host: '127.0.0.1',
+            port: getenv('PORT') ? (int) getenv('PORT') : 9999,
+            workers: 1
+         )
       );
       $UDP_Client_CLI
          ->on(Events::WorkerStarted, function ($UDP_Client_CLI) {

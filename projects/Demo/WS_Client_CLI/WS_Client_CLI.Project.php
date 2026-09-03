@@ -17,6 +17,7 @@ use function strlen;
 use const Bootgly\CLI;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Nodes\WS_Client_CLI;
+use Bootgly\WPI\Nodes\WS_Client_CLI\Configs;
 use Bootgly\WPI\Nodes\WS_Client_CLI\Events;
 
 
@@ -43,13 +44,15 @@ return new Project(
       }
 
       $WS_Client_CLI->configure(
-         host: getenv('WS_HOST') ?: '127.0.0.1',
-         port: getenv('PORT') ? (int) getenv('PORT') : 8083,
-         secure: $secure,
-         compression: getenv('WS_NOCOMPRESS') ? false : true,
-         // @ WS_RECONNECT=1 auto re-dials after an abrupt drop (backoff WS_RECONNECT_DELAY s).
-         reconnect: (bool) getenv('WS_RECONNECT'),
-         reconnectDelay: getenv('WS_RECONNECT_DELAY') ? (int) getenv('WS_RECONNECT_DELAY') : 1
+         new Configs(
+            host: getenv('WS_HOST') ?: '127.0.0.1',
+            port: getenv('PORT') ? (int) getenv('PORT') : 8083,
+            secure: $secure,
+            compression: getenv('WS_NOCOMPRESS') ? false : true,
+            // @ WS_RECONNECT=1 auto re-dials after an abrupt drop (backoff WS_RECONNECT_DELAY s).
+            reconnect: (bool) getenv('WS_RECONNECT'),
+            reconnectDelay: getenv('WS_RECONNECT_DELAY') ? (int) getenv('WS_RECONNECT_DELAY') : 1
+         )
       );
 
       // @ Optional upgrade headers.

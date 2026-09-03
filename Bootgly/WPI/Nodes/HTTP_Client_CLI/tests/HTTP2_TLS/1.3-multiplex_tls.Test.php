@@ -11,11 +11,11 @@ return new Test(
    description: 'It should multiplex batched requests over ONE ALPN-negotiated TLS connection',
    test: new Assertions(Case: function (): Generator {
       $Client = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_TEST);
-      $Client->configure('127.0.0.1', 8088, secure: [
+      $Client->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: 8088, secure: [
          'verify_peer' => false,
          'verify_peer_name' => false,
          'allow_self_signed' => true,
-      ]);
+      ]));
 
       $Client->batch();
       $Responses = [];

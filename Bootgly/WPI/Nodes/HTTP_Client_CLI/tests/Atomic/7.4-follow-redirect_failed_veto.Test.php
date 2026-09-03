@@ -62,7 +62,7 @@ return new Test(
       usleep(200000);
 
       $Client = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_TEST);
-      $Client->configure('127.0.0.1', $port);
+      $Client->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: $port));
       $Client->timeout = 5;
       $Client->connectTimeout = 2;
       // ! A retry budget is on purpose: the veto, not the budget, must stop it

@@ -991,13 +991,13 @@ class ACME_Client
       $Client = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_EMBEDDED);
       // ! ACME speaks HTTP/1.1 by design: no ALPN h2 offer — directory
       //   endpoints and the local swap helpers are h1-only transports
-      $Client->configure(
+      $Client->configure(new HTTP_Client_CLI\Configs(
          host: $dial,
          port: $target['port'],
          workers: 0,
          secure: $secure,
          enableHTTP2: false
-      );
+      ));
       // Fullchain responses are capped at 1 MiB by the certificate store;
       // reserve 64 KiB for status/headers and reject before accumulation.
       $Client->maxResponseBytes = 1114112;

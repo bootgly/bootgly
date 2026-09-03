@@ -163,6 +163,7 @@ use function time;
 use function umask;
 use function unlink;
 use function usleep;
+use ArgumentCountError;
 use BackedEnum;
 use Closure;
 use InvalidArgumentException;
@@ -171,6 +172,7 @@ use Socket;
 use Throwable;
 
 use const Bootgly\CLI;
+use Bootgly\ABI\Configs as Configuring;
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ABI\Debugging\Shutdown;
 use Bootgly\ABI\Events\Emitter;
@@ -195,6 +197,7 @@ use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Screen;
 use Bootgly\CLI\UI\Components\Logs as LogsViewer;
+use Bootgly\WPI\Endpoints\Configurable;
 use Bootgly\WPI\Endpoints\Servers;
 use Bootgly\WPI\Endpoints\Servers\Decoder;
 use Bootgly\WPI\Endpoints\Servers\Encoder;
@@ -202,12 +205,21 @@ use Bootgly\WPI\Event;
 use Bootgly\WPI\Events;
 use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Commands;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Configs;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Tap;
 
 
 class TCP_Server_CLI implements Servers
 {
+   use Configurable;
+
+   // # Configs
+   /** The Configs carrying the socket — host, port and workers. */
+   protected const string TRANSPORT = Configs::class;
+   /** @var array<int,class-string<Configuring>> Every Configs this node applies. */
+   protected const array CONFIGS = [Configs::class];
+
    private const string RELOAD_HANDOFF_PATH = 'BOOTGLY_RELOAD_HANDOFF_PATH';
    private const string RELOAD_HANDOFF_TOKEN = 'BOOTGLY_RELOAD_HANDOFF_TOKEN';
    private const string RELOAD_HANDOFF_PID = 'BOOTGLY_RELOAD_HANDOFF_PID';
@@ -589,41 +601,74 @@ class TCP_Server_CLI implements Servers
    }
    /**
     * Configure the TCP Server.
-    * 
-    * @param string $host Domain name or IP address
-    * @param int $port Port number
-    * @param int $workers Number of workers
-   * @param array<string,mixed>|null $secure Secure SSL/TLS Stream Context
-    * @param string|null $user User to drop privileges to after socket binding
-    * @param string|null $group Group to drop privileges to after socket binding
-    * 
-    * @return self
+    *
+    * Every concern arrives as its own Configs value object, in any order:
+    * `configure(new TCP_Server_CLI\Configs(host: '0.0.0.0', port: 8080, workers: 4))`.
+    *
+    * @param Configuring ...$Configs One Configs per concern.
+    *
+    * @throws ArgumentCountError When no Configs ever carried the transport.
+    * @throws InvalidArgumentException On a repeated or unsupported Configs.
+    *
+    * @return self The TCP Server instance, for chaining.
     */
-   public function configure (
-      string $host,
-      int $port,
-      int $workers,
-      null|array $secure = null,
-      null|string $user = null,
-      null|string $group = null
-   ): self
+   public function configure (Configuring ...$Configs): self
    {
       $this->Status = Status::Configuring;
 
+      // @ One Configs per concern — the whole set is validated, then applied
+      $this->apply($Configs);
+
+      // :
+      return $this;
+   }
+   /**
+    * Apply one Configs to this server.
+    *
+    * Nodes override it to consume their own Configs and delegate the rest.
+    *
+    * @throws InvalidArgumentException On a Configs this node does not accept.
+    */
+   protected function adopt (Configuring $Config): void
+   {
       // TODO validate configuration user data inputs
 
-      #$this->domain = $domain;
+      if ($Config instanceof Configs) {
+         // ? A parent's transport Configs would configure only half of a node
+         //   extending this one — the socket without its protocol policy.
+         //   Unreachable while CONFIGS names the same class as TRANSPORT: this
+         //   is the backstop for a node whose two constants drift apart.
+         $Transport = static::TRANSPORT;
 
-      $this->host = $host;
-      $this->port = $port;
-      $this->workers = $workers;
+         if ($Config instanceof $Transport === false) {
+            $node = static::class;
+            $received = $Config::class;
 
-      $this->secure = $secure;
+            throw new InvalidArgumentException(
+               "{$node}->configure() does not accept {$received}."
+            );
+         }
 
-      $this->user = $user;
-      $this->group = $group;
+         #$this->domain = $Config->domain;
 
-      return $this;
+         $this->host = $Config->host;
+         $this->port = $Config->port;
+         $this->workers = $Config->workers;
+
+         $this->secure = $Config->secure;
+
+         $this->user = $Config->user;
+         $this->group = $Config->group;
+
+         return;
+      }
+
+      $node = static::class;
+      $received = $Config::class;
+
+      throw new InvalidArgumentException(
+         "{$node}->configure() does not accept {$received}."
+      );
    }
    /**
     * Register an event handler for the TCP Server.

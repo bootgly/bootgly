@@ -162,11 +162,11 @@ if (
       public function launch (int $port, L3Select $Selector): void
       {
          self::$Event = $Selector;
-         $this->configure(
+         $this->configure(new HTTP_Server_CLI\Configs(
             host: '127.0.0.1',
             port: $port,
             workers: 1,
-         );
+         ));
 
          $started = $this->start();
          $Selector->mark('start_returned', [

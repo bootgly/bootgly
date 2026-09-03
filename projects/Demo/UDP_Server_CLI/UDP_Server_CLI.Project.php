@@ -12,6 +12,7 @@
 use Bootgly\API\Projects\Project;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI;
+use Bootgly\WPI\Interfaces\UDP_Server_CLI\Configs;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI\Events;
 
 
@@ -33,9 +34,11 @@ return new Project(
          default => Modes::Daemon
       });
       $UDP_Server_CLI->configure(
-         host: '0.0.0.0',
-         port: getenv('PORT') ? (int) getenv('PORT') : 9999,
-         workers: max(1, (int) shell_exec('nproc') ?: 1),
+         new Configs(
+            host: '0.0.0.0',
+            port: getenv('PORT') ? (int) getenv('PORT') : 9999,
+            workers: max(1, (int) shell_exec('nproc') ?: 1),
+         )
       );
       $UDP_Server_CLI->on(Events::DatagramReceive, fn ($data) => $data);
 

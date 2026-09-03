@@ -138,6 +138,7 @@ use Throwable;
 
 use const Bootgly\ABI\BOOTSTRAP_FILENAME;
 use const Bootgly\WPI;
+use Bootgly\ABI\Configs as Configuring;
 use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
 use Bootgly\ABI\IO\FS\File;
@@ -175,6 +176,16 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test as E2ETest;
 
 class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 {
+   // # Configs
+   /** The Configs carrying the socket — host, port and workers. */
+   protected const string TRANSPORT = HTTP_Server_CLI\Configs::class;
+   /** @var array<int,class-string<Configuring>> Every Configs this node applies. */
+   protected const array CONFIGS = [
+      HTTP_Server_CLI\Configs::class,
+      Request\Configs::class,
+      Response\Configs::class
+   ];
+
    // * Config
    // ...inherited from TCP_Server_CLI
 
@@ -189,14 +200,14 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    /**
     * @var bool Whether HTTP/2 is served at all — gates both the TLS-ALPN
     * advertisement and the cleartext prior-knowledge preface probe.
-    * Driven by `configure(enableHTTP2:)`; `false` makes the server
+    * Driven by `Configs(enableHTTP2:)`; `false` makes the server
     * HTTP/1.x-only.
     */
    public static bool $enableHTTP2 = true;
    // # Health
    /**
     * @var null|string Built-in health-check endpoint path (K8s
-    * liveness/readiness probes). Driven by `configure(health:)`; when set
+    * liveness/readiness probes). Driven by `Configs(health:)`; when set
     * (e.g. `'/health'`), GET/HEAD requests to this exact path are answered
     * by `Encoders\Check` BEFORE the middleware pipeline — user middlewares
     * can never break a probe. `null` (default) disables it.
@@ -205,7 +216,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    // # Auto-TLS
    /**
     * Auto-TLS (ACME) configuration — set by
-    * `configure(secure: new AutoTLS(...))`; null keeps Auto-TLS off.
+    * `Configs(AutoTLS: new AutoTLS(...))`; null keeps Auto-TLS off.
     */
    public protected(set) null|AutoTLS $AutoTLS = null;
    /**
@@ -341,30 +352,14 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    /**
     * Configure the HTTP Server.
     *
-    * @param null|array<string,Closure(object):Response\Resource> $responseResources Lazy response resource factories.
-    * @param null|int $connectionIdleTimeout Seconds of transport silence before an established connection is closed (`0` disables; a parked deferred response counts as activity).
-    * @param null|int|float $deferredTimeout Seconds a deferred response may stay parked before `Response\Timeout` is delivered at its wait point (`0` = unbounded; a per-call `defer()` timeout wins).
+    * Every concern arrives as its own Configs value object, in any order:
+    * `configure(new HTTP_Server_CLI\Configs(host: '0.0.0.0', port: 8080, workers: 4))`.
+    *
+    * @param Configuring ...$Configs `HTTP_Server_CLI\Configs`, `Request\Configs` and/or `Response\Configs`.
     *
     * @return self The HTTP Server instance, for chaining 
     */
-   public function configure (
-      string $host, int $port, int $workers,
-      null|array|AutoTLS $secure = null,
-      null|string $user = null, null|string $group = null,
-      null|bool $enableHTTP2 = null,
-      null|int $requestMaxFileSize = null, null|int $requestMaxBodySize = null,
-      null|int $requestMaxMultipartFieldSize = null,
-      null|int $requestMaxMultipartHeaderSize = null,
-      null|int $requestMaxMultipartFields = null,
-      null|int $requestMaxMultipartFiles = null,
-      null|int $downloadsMaxBytesOnDisk = null,
-      null|int $maxConnections = null,
-      null|int $maxConnectionsPerIP = null,
-      null|array $responseResources = null,
-      null|string $health = null,
-      null|int $connectionIdleTimeout = null,
-      null|int|float $deferredTimeout = null
-   ): self
+   public function configure (Configuring ...$Configs): self
    {
       // ? configure() is a PRE-START contract. Only the initial Booting and
       //   repeat Configuring states are legal: Starting has already crossed
@@ -376,6 +371,74 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
          return $this;
       }
+
+      parent::configure(...$Configs);
+
+      // :
+      return $this;
+   }
+   /**
+    * Apply one Configs to this server.
+    *
+    * @throws InvalidArgumentException On a Configs this node does not accept.
+    */
+   protected function adopt (Configuring $Config): void
+   {
+      // # Request limits
+      if ($Config instanceof Request\Configs) {
+         if ($Config->maxFileSize !== null) {
+            Request::$maxFileSize = $Config->maxFileSize;
+         }
+         if ($Config->maxBodySize !== null) {
+            Request::$maxBodySize = $Config->maxBodySize;
+         }
+         if ($Config->maxMultipartFieldSize !== null) {
+            Request::$maxMultipartFieldSize = $Config->maxMultipartFieldSize;
+         }
+         if ($Config->maxMultipartHeaderSize !== null) {
+            Request::$maxMultipartHeaderSize = $Config->maxMultipartHeaderSize;
+         }
+         if ($Config->maxMultipartFields !== null) {
+            Request::$maxMultipartFields = $Config->maxMultipartFields;
+         }
+         if ($Config->maxMultipartFiles !== null) {
+            Request::$maxMultipartFiles = $Config->maxMultipartFiles;
+         }
+         if ($Config->downloadsMaxBytesOnDisk !== null) {
+            Downloads::$maxBytesOnDisk = $Config->downloadsMaxBytesOnDisk;
+         }
+
+         return;
+      }
+
+      // # Response
+      if ($Config instanceof Response\Configs) {
+         // @ Deferred responses — budget before a parked defer() is answered 503
+         if ($Config->deferredTimeout !== null) {
+            Response::$deferredTimeout = $Config->deferredTimeout;
+         }
+         if ($Config->Resources !== null) {
+            self::$Response->Resources->load($Config->Resources);
+         }
+
+         return;
+      }
+
+      // ? Anything else belongs to the transport — which also rejects it
+      if ($Config instanceof HTTP_Server_CLI\Configs === false) {
+         parent::adopt($Config);
+
+         return;
+      }
+
+      // ! Server — the resolution below rewrites `$secure` before the
+      //   transport is ever handed it
+      $port = $Config->port;
+      $user = $Config->user;
+      $group = $Config->group;
+      $secure = $Config->AutoTLS ?? $Config->secure;
+      $enableHTTP2 = $Config->enableHTTP2;
+      $health = $Config->health;
 
       // @ Auto-TLS — resolve the typed config into a plain SSL context array.
       //   Reconfiguration tears the previous Auto-TLS runtime down (helper,
@@ -553,9 +616,13 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          unset(self::$Protocols['h2']);
       }
 
-      parent::configure($host, $port, $workers, $secure, $user, $group);
+      parent::adopt($Config);
 
-      if ($host === '0.0.0.0') {
+      // ! The resolved context (Auto-TLS credential, safe server defaults,
+      //   ALPN offer) replaces the raw one the transport just adopted.
+      $this->secure = $secure;
+
+      if ($Config->host === '0.0.0.0') {
          $this->domain ??= 'localhost';
       }
 
@@ -564,48 +631,17 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          ? 'https://'
          : 'http://';
 
-      // @ Request limits
-      if ($requestMaxFileSize !== null) {
-         Request::$maxFileSize = $requestMaxFileSize;
-      }
-      if ($requestMaxBodySize !== null) {
-         Request::$maxBodySize = $requestMaxBodySize;
-      }
-      if ($requestMaxMultipartFieldSize !== null) {
-         Request::$maxMultipartFieldSize = $requestMaxMultipartFieldSize;
-      }
-      if ($requestMaxMultipartHeaderSize !== null) {
-         Request::$maxMultipartHeaderSize = $requestMaxMultipartHeaderSize;
-      }
-      if ($requestMaxMultipartFields !== null) {
-         Request::$maxMultipartFields = $requestMaxMultipartFields;
-      }
-      if ($requestMaxMultipartFiles !== null) {
-         Request::$maxMultipartFiles = $requestMaxMultipartFiles;
-      }
-      if ($downloadsMaxBytesOnDisk !== null) {
-         Downloads::$maxBytesOnDisk = $downloadsMaxBytesOnDisk;
-      }
       // @ Connection-exhaustion caps (audit F-2)
-      if ($maxConnections !== null) {
-         self::$maxConnections = $maxConnections;
+      if ($Config->maxConnections !== null) {
+         self::$maxConnections = $Config->maxConnections;
       }
-      if ($maxConnectionsPerIP !== null) {
-         self::$maxConnectionsPerIP = $maxConnectionsPerIP;
+      if ($Config->maxConnectionsPerIP !== null) {
+         self::$maxConnectionsPerIP = $Config->maxConnectionsPerIP;
       }
       // @ Idle connections — retained deferred work counts as activity
-      if ($connectionIdleTimeout !== null) {
-         self::$connectionIdleTimeout = $connectionIdleTimeout;
+      if ($Config->connectionIdleTimeout !== null) {
+         self::$connectionIdleTimeout = $Config->connectionIdleTimeout;
       }
-      // @ Deferred responses — budget before a parked defer() is answered 503
-      if ($deferredTimeout !== null) {
-         Response::$deferredTimeout = $deferredTimeout;
-      }
-      if ($responseResources !== null) {
-         self::$Response->Resources->load($responseResources);
-      }
-
-      return $this;
    }
 
    /**
@@ -3039,7 +3075,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       //   without blocking on flock() or tearing down the master on each
       //   client destruction.
       $TCP_Client_CLI = new TCP_Client_CLI(mode: TCP_Client_CLI::MODE_TEST);
-      $TCP_Client_CLI->configure(
+      $TCP_Client_CLI->configure(new TCP_Client_CLI\Configs(
          // ? Wildcard listeners are unconnectable as-is — drive the harness
          //   through the matching loopback
          host: match ($TCP_Server_CLI->host) {
@@ -3048,7 +3084,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             default => $TCP_Server_CLI->host ?? 'localhost',
          },
          port: $TCP_Server_CLI->port ?? 80,
-      );
+      ));
       $TCP_Client_CLI->on(
          TCP_Client_Events::ClientConnect,
          static function ($Socket, $Connection)

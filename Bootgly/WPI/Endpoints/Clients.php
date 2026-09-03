@@ -11,10 +11,20 @@
 namespace Bootgly\WPI\Endpoints;
 
 
+use Bootgly\ABI\Configs as Configuring;
 use Bootgly\API\Endpoints\Client;
 
 
 interface Clients extends Client
 {
-   public function configure (string $host, int $port, int $workers): self;
+   /**
+    * Configure the Client.
+    *
+    * Every concern arrives as its own Configs value object, in any order.
+    *
+    * @param Configuring ...$Configs One Configs per concern.
+    *
+    * @return self The Client instance, for chaining.
+    */
+   public function configure (Configuring ...$Configs): self;
 }

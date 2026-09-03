@@ -76,5 +76,9 @@ return new Suite(
       '1.46-downloads_controller_rebinds_per_path',
       // # IMP-8: Daemon installs a default log sink when none is configured
       '1.47-daemon_default_sink',
+      // # rc.1: one Configs per concern, named-only construction
+      '1.48-configure_configs_contract',
+      // # rc.1: every Request\Configs field owns one inbound limit
+      '1.49-request_configs_limits',
    ]
 );

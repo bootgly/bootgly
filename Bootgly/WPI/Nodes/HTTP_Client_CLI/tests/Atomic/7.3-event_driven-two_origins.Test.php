@@ -70,7 +70,7 @@ return new Test(
          $result = '';
 
          $Client = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_TEST);
-         $Client->configure('127.0.0.1', $port);
+         $Client->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: $port));
          $Client->timeout = 8;
 
          $Client->on(

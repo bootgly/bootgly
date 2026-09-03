@@ -60,7 +60,7 @@ return new Test(
       // @ D4 — a reactor-stack dial (no current Fiber) must queue, never dial
       $A = $make();
       $A->react($Host->Event);
-      $A->configure(host: '127.0.0.1', port: 1);
+      $A->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: 1));
       $handled = $A->attempt($forge());
       $state = $A->inspect();
 
@@ -124,7 +124,7 @@ return new Test(
       // @ Tripwire — a bridge that never suspends must abort deterministically
       $B = $make();
       $B->react($Host->Event);
-      $B->configure(host: '127.0.0.1', port: 1);
+      $B->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: 1));
       $B->schedule(static fn (mixed $value = null): mixed => null);
       $Planted = $forge();
       $B->plant($Planted);
@@ -166,7 +166,7 @@ return new Test(
       // @ Admission rejection — recognized, scrapped, absorbed
       $C = $make();
       $C->react($Host->Event);
-      $C->configure(host: '127.0.0.1', port: 1);
+      $C->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: 1));
       $C->schedule(static function (mixed $value = null): mixed {
          throw new RuntimeException('Fiber I/O resource failed selector admission.');
       });
@@ -190,7 +190,7 @@ return new Test(
       // @ Foreign RuntimeExceptions are NOT laundered into a teardown
       $D = $make();
       $D->react($Host->Event);
-      $D->configure(host: '127.0.0.1', port: 1);
+      $D->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: 1));
       $D->schedule(static function (mixed $value = null): mixed {
          throw new RuntimeException('boom');
       });

@@ -41,7 +41,7 @@ return new Test(
 
          // ? Keep the mock cursor aligned while follow() still hijacks the client
          if ($Client->port !== 9999) {
-            $Client->configure('127.0.0.1', 9999);
+            $Client->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: 9999));
          }
 
          $Client->connectTimeout = 30; // @ Restore default

@@ -250,13 +250,13 @@ try {
 
    $Create = static function (): H2Server {
       $Server = new H2Server(Modes::Foreground);
-      $Server->configure(
+      $Server->configure(new HTTP_Server_CLI\Configs(
          host: '127.0.0.1',
          port: 0,
          workers: 1,
          user: 'daemon',
          group: 'daemon',
-      );
+      ));
 
       return $Server;
    };
@@ -367,11 +367,11 @@ try {
    $data['worker_euid_before'] = posix_geteuid();
 
    $Server = new H2Server(Modes::Foreground);
-   $Server->configure(
+   $Server->configure(new HTTP_Server_CLI\Configs(
       host: '127.0.0.1',
       port: 0,
       workers: 1,
-   );
+   ));
    $Socket = $Server->instance();
    $data['worker_socket'] = is_resource($Socket);
    $data['worker_euid_after'] = posix_geteuid();

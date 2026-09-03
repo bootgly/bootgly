@@ -32,7 +32,7 @@ return new Suite(
 
       // @ Boot a TLS (wss://) server with the bundled localhost certificate.
       $WS_Server_CLI = new WS_Server_CLI(Mode: Modes::Test);
-      $WS_Server_CLI->configure(
+      $WS_Server_CLI->configure(new WS_Server_CLI\Configs(
          host: '0.0.0.0',
          port: 8089,
          workers: 1,
@@ -42,7 +42,7 @@ return new Suite(
             'verify_peer' => false,
          ],
          heartbeatInterval: 0
-      );
+      ));
       $WS_Server_CLI->on(Events::MessageReceived, function ($Session, $Message) {
          return "echo: {$Message->payload}";
       });

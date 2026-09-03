@@ -125,13 +125,13 @@ if (
       options: ['verify_peer' => false]
    );
    $Server = new L1ReloadServer;
-   $Server->configure(
+   $Server->configure(new HTTP_Server_CLI\Configs(
       host: '127.0.0.1',
       port: $mainPort,
       workers: 1,
-      secure: $AutoTLS,
+      AutoTLS: $AutoTLS,
       enableHTTP2: false
-   );
+   ));
    if (Challenges::save($token, $authorization, $AutoTLS->challenges) === false) {
       exit(3);
    }

@@ -71,7 +71,7 @@ return new Test(
                'allow_self_signed' => true
             ]
             : null;
-         $Client->configure('127.0.0.1', $port, secure: $secure);
+         $Client->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: $port, secure: $secure));
          $Client->connectTimeout = $connectTimeout;
          $Client->timeout = 5.0;
          // ! Keep the compatibility wall clock deliberately loose: these
@@ -185,7 +185,7 @@ return new Test(
       }
       if ($PID > 0) {
          $Client = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_TEST);
-         $Client->configure('127.0.0.1', $port);
+         $Client->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: $port));
          $Client->connectTimeout = 5;
          $Client->timeout = 5;
          $Client->deadline = microtime(true) + 8.0;

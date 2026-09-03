@@ -60,7 +60,7 @@ return new Test(
          }
 
          $Client = new WS_Client_CLI(WS_Client_CLI::MODE_TEST);
-         $Client->configure('127.0.0.1', 1, compression: false);
+         $Client->configure(new WS_Client_CLI\Configs(host: '127.0.0.1', port: 1, compression: false));
          $Client->reset();
 
          $Connection = new Connection($Writer, Client: $Client);

@@ -74,7 +74,7 @@ return new Test(
          $pid = $echo($port);
          usleep(200000);
 
-         $Client->configure('127.0.0.1', $port);
+         $Client->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: $port));
          $Client->request('GET', '/one');
          $Socket = $Client->connect();
 

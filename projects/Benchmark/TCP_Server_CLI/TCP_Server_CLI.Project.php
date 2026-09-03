@@ -20,6 +20,7 @@ use function strlen;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Configs;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Events as TCP_Server_Events;
 
 
@@ -54,9 +55,11 @@ return new Project(
 
       $Server
          ->configure(
-            host: '0.0.0.0',
-            port: getenv('PORT') ? (int) getenv('PORT') : 8083,
-            workers: getenv('BOOTGLY_WORKERS') ? (int) getenv('BOOTGLY_WORKERS') : max(1, (int) ((int) (exec('nproc 2>/dev/null') ?: 1) / 2)),
+            new Configs(
+               host: '0.0.0.0',
+               port: getenv('PORT') ? (int) getenv('PORT') : 8083,
+               workers: getenv('BOOTGLY_WORKERS') ? (int) getenv('BOOTGLY_WORKERS') : max(1, (int) ((int) (exec('nproc 2>/dev/null') ?: 1) / 2)),
+            )
          )
          ->on(
             TCP_Server_Events::DataReceive,

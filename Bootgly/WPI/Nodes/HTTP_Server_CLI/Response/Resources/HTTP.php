@@ -42,9 +42,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource\Scheduling;
  * Register it once and call it from `defer()`:
  *
  * ```php
- * $HTTP_Server_CLI->configure(responseResources: [
+ * $HTTP_Server_CLI->configure(new HTTP_Server_CLI\Response\Configs(Resources: [
  *    'Upstream' => static fn (object $Context): HTTP => new HTTP(host: 'api.example.com', secure: [])
- * ]);
+ * ]));
  *
  * $Response->defer(function (Response $Response) {
  *    $Upstream = $Response->Upstream->request(method: 'GET', URI: '/users/1');
@@ -110,7 +110,7 @@ class HTTP extends Resource implements Scheduling
       // ? The client parks on the worker reactor — outside a server there is
       //   nothing to park on
       if (isSet(TCP_Server_CLI::$Event) === false) {
-         throw new RuntimeException('HTTP response resource requires the HTTP server reactor — construct it from a responseResources factory.');
+         throw new RuntimeException('HTTP response resource requires the HTTP server reactor — construct it from a Response\Configs(Resources:) factory.');
       }
 
       // * Data
@@ -119,13 +119,13 @@ class HTTP extends Resource implements Scheduling
       //   across deferrals
       $Client = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_EMBEDDED);
       $Client->react(TCP_Server_CLI::$Event);
-      $Client->configure(
+      $Client->configure(new HTTP_Client_CLI\Configs(
          host: $host,
          port: $port ?? ($secure === null ? 80 : 443),
          secure: $secure,
          pool: $pool,
          enableHTTP2: $enableHTTP2
-      );
+      ));
       $Client->timeout = $timeout;
       $Client->connectTimeout = $connectTimeout;
       $Client->maxRedirects = $maxRedirects;
@@ -247,7 +247,7 @@ class HTTP extends Resource implements Scheduling
       // ? A context whose attach was refused while another owned this
       //   resource has no bridge of its own installed
       if ($this->stale) {
-         throw new LogicException('HTTP response resource was attached to another response while owned — a carried instance cannot serve interleaved deferred contexts; register it as a responseResources factory instead.');
+         throw new LogicException('HTTP response resource was attached to another response while owned — a carried instance cannot serve interleaved deferred contexts; register it as a Response\Configs(Resources:) factory instead.');
       }
 
       // ! The generation token proves the Fiber is a live deferred context —

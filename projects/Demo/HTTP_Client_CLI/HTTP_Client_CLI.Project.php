@@ -13,9 +13,10 @@ namespace Demo\HTTP_Client_CLI;
 
 use function getenv;
 
-use Bootgly\API\Projects\Project;
 use const Bootgly\CLI;
+use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI;
+use Bootgly\WPI\Nodes\HTTP_Client_CLI\Configs;
 
 
 return new Project(
@@ -36,8 +37,10 @@ return new Project(
 
       $HTTP_Client_CLI = new HTTP_Client_CLI;
       $HTTP_Client_CLI->configure(
-         host: $host,
-         port: $port,
+         new Configs(
+            host: $host,
+            port: $port,
+         )
       );
 
       $Output->render('@.;@#cyan:→ Sending GET / to ' . $host . ':' . $port . '@;@.;');

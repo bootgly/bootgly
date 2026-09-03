@@ -39,7 +39,7 @@ return new Test(
          }
       };
       $Client->react($Host->Event);
-      $Client->configure(host: '127.0.0.1', port: 1);
+      $Client->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: 1));
       $Client->connectTimeout = 1;
 
       // ? Capacity is RELEASED during the very wait that expires: the abort

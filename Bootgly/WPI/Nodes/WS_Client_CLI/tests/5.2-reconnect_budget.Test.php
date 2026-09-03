@@ -17,7 +17,7 @@ return new Test(
       $disconnected = 0;
 
       $Client = new WS_Client_CLI(WS_Client_CLI::MODE_TEST);
-      $Client->configure(
+      $Client->configure(new WS_Client_CLI\Configs(
          host: '127.0.0.1',
          port: 8199,
          compression: false,
@@ -26,7 +26,7 @@ return new Test(
          reconnectDelay: 1,
          reconnectTimeout: 2,    // total campaign budget (seconds)
          handshakeTimeout: 1
-      );
+      ));
       $Client->on(Events::Disconnected, function ($Session) use (&$disconnected) {
          $disconnected++;
       });

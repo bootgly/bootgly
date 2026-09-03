@@ -241,16 +241,18 @@ return new Suite(
 
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: Modes::Test);
       $HTTP_Server_CLI->configure(
-         host: '0.0.0.0',
-         // ? 8097 — off the contested 8080 (Docker containers/dev servers
-         //   commonly bind it on the host) and outside the 8081-8096 range
-         //   already claimed by the other E2E suites.
-         port: 8097,
-         workers: 1,
-         health: '/health',
+         new HTTP_Server_CLI\Configs(
+            host: '0.0.0.0',
+            // ? 8097 — off the contested 8080 (Docker containers/dev servers
+            //   commonly bind it on the host) and outside the 8081-8096 range
+            //   already claimed by the other E2E suites.
+            port: 8097,
+            workers: 1,
+            health: '/health'
+         ),
          // @ BG-13 zero-boilerplate resources — built lazily in the worker,
          //   one embedded client per deferral (Resources::fork() rebuilds them)
-         responseResources: [
+         new HTTP_Server_CLI\Response\Configs(Resources: [
             'Upstream' => static fn (object $Context): HTTP => new HTTP(
                host: '127.0.0.1',
                port: BOOTGLY_E2E_UPSTREAM_PORT
@@ -267,7 +269,7 @@ return new Suite(
                port: BOOTGLY_E2E_UPSTREAM_TLS_PORT,
                secure: ['cafile' => "{$certificates}localhost.cert.pem"]
             ),
-         ]
+         ])
       );
 
       $HTTP_Server_CLI->start();

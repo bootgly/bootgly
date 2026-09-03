@@ -25,7 +25,7 @@ return new Test(
             $this->await($Socket);
          }
       };
-      $Client->configure(host: '192.0.2.1', port: 81);
+      $Client->configure(new TCP_Client_CLI\Configs(host: '192.0.2.1', port: 81));
       $Client->connectTimeout = 1;
 
       $Socket = stream_socket_client(

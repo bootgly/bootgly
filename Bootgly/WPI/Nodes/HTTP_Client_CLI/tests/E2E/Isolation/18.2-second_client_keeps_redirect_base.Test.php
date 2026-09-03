@@ -39,7 +39,7 @@ return new Test(
 
          // ! Configured elsewhere, never dialed (HCLI-2)
          $Other = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_TEST);
-         $Other->configure('127.0.0.1', 19809);
+         $Other->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: 19809));
 
          $Response = $Client->request(method: 'GET', URI: '/r/start');
 

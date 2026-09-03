@@ -35,7 +35,7 @@ return new Suite(
       $oldDeferred = Response::$deferredTimeout;
       try {
          $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: Modes::Test);
-         $HTTP_Server_CLI->configure(
+         $HTTP_Server_CLI->configure(new HTTP_Server_CLI\Configs(
             host: '0.0.0.0',
             // ? 8103 — 8081-8097 belong to the other E2E suites, 8098 to
             //   ACME_Challenge (and the E2E upstream fixture), 8099 to ACME_Swap,
@@ -48,7 +48,7 @@ return new Suite(
             //   outlives it within a spec: a reap lands in [N, N+1) s after the
             //   last activity tick on the one-second timer wheel
             connectionIdleTimeout: 2
-         );
+         ));
 
          $HTTP_Server_CLI->start();
 

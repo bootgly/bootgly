@@ -23,7 +23,10 @@ use Bootgly\ACI\Logs\Logger;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Configs as ServerConfigs;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Configs as RequestConfigs;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Configs as ResponseConfigs;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database as DatabaseResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\KV as KVResource;
 
@@ -51,19 +54,25 @@ return new Project(
          default => Modes::Daemon
       });
       $HTTP_Server_CLI->configure(
-         host: '0.0.0.0',
-         port: getenv('PORT') ? (int) getenv('PORT') : 8082,
-         workers: 1,
-         responseResources: [
-            'Database' => DatabaseResource::provide(__DIR__ . '/configs/'),
-            'KV' => KVResource::provide(__DIR__ . '/configs/'),
-         ],
-         // requestMaxFileSize: 500 * 1024 * 1024,        // 500 MB (default) — max size per uploaded file part
-         // requestMaxBodySize: 10 * 1024 * 1024,         // 10 MB (default) — max total non-multipart body
-         // requestMaxMultipartFieldSize: 1 * 1024 * 1024, // 1 MB (default) — max size per text field value
-         // requestMaxMultipartHeaderSize: 8 * 1024,        // 8 KB (default) — max size of a single part's headers
-         // requestMaxMultipartFields: 1024,                // 1024 (default) — max number of text fields per request
-         // requestMaxMultipartFiles: 1024,                 // 1024 (default) — max number of file parts per request
+         new ServerConfigs(
+            host: '0.0.0.0',
+            port: getenv('PORT') ? (int) getenv('PORT') : 8082,
+            workers: 1
+         ),
+         // new RequestConfigs(
+         //    maxFileSize: 500 * 1024 * 1024,         // 500 MB (default) — max size per uploaded file part
+         //    maxBodySize: 10 * 1024 * 1024,          // 10 MB (default) — max total non-multipart body
+         //    maxMultipartFieldSize: 1 * 1024 * 1024, // 1 MB (default) — max size per text field value
+         //    maxMultipartHeaderSize: 8 * 1024,       // 8 KB (default) — max size of a single part's headers
+         //    maxMultipartFields: 1024,               // 1024 (default) — max number of text fields per request
+         //    maxMultipartFiles: 1024,                // 1024 (default) — max number of file parts per request
+         // ),
+         new ResponseConfigs(
+            Resources: [
+               'Database' => DatabaseResource::provide(__DIR__ . '/configs/'),
+               'KV' => KVResource::provide(__DIR__ . '/configs/'),
+            ]
+         )
       );
       $HTTP_Server_CLI
          // # Routes — the active set is selected in router/router.index.php

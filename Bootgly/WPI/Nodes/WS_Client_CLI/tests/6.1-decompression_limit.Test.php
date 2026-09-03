@@ -123,12 +123,12 @@ return new Test(
          }
 
          $Client = new WS_Client_CLI(WS_Client_CLI::MODE_TEST);
-         $Client->configure(
+         $Client->configure(new WS_Client_CLI\Configs(
             host: '127.0.0.1',
             port: 1,
             maxMessageSize: $limit,
             compression: true
-         );
+         ));
          $Client->reset();
 
          $Connection = new Connection($Writer, Client: $Client);

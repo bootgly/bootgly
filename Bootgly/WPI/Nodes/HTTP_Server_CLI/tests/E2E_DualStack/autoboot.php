@@ -28,7 +28,7 @@ return new Suite(
       HTTP_Server_CLI::pretest($Suite, 'E2E_DualStack');
 
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: Modes::Test);
-      $HTTP_Server_CLI->configure(
+      $HTTP_Server_CLI->configure(new HTTP_Server_CLI\Configs(
          // ! Dual-stack listener — Bootgly always builds TCP listeners with
          //   'ipv6_v6only' => false, so IPv4 hops land on this socket as
          //   IPv4-mapped '::ffff:a.b.c.d' peers (MW-6 regression surface)
@@ -40,7 +40,7 @@ return new Suite(
          port: 8101,
          workers: 1,
          health: '/health'
-      );
+      ));
 
       $HTTP_Server_CLI->start();
 

@@ -568,7 +568,7 @@ return new Test(
       }
       fclose($Plain);
       $Own = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_EMBEDDED);
-      $Own->configure(host: '127.0.0.1', port: (int) $plainPort);
+      $Own->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: (int) $plainPort));
       $Own->connectTimeout = 1;
       $Own->timeout = 2;
       $Fiber = new Fiber(function () use ($Own, &$results): void {

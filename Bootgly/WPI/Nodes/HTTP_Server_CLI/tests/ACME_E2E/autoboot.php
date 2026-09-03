@@ -89,12 +89,12 @@ return new Suite(
 
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: Modes::Test);
       try {
-         $HTTP_Server_CLI->configure(
+         $HTTP_Server_CLI->configure(new HTTP_Server_CLI\Configs(
             host: '0.0.0.0',
             port: 8100,
             workers: 1,
-            secure: $AutoTLS
-         );
+            AutoTLS: $AutoTLS
+         ));
          $HTTP_Server_CLI->on(
             Events::RequestReceived,
             function ($Request, Response $Response): Response {

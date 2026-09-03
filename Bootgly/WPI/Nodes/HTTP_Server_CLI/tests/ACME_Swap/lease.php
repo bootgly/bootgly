@@ -26,11 +26,11 @@ require rtrim($root, '/') . '/autoboot.php';
 Display::show(Display::NONE);
 
 $Server = new HTTP_Server_CLI(Modes::Test);
-$Server->configure(
+$Server->configure(new HTTP_Server_CLI\Configs(
    host: '127.0.0.1',
    port: 18200,
    workers: 1,
-   secure: new AutoTLS(
+   AutoTLS: new AutoTLS(
       domains: ['localhost'],
       email: 'lease@bootgly.test',
       path: $path,
@@ -38,7 +38,7 @@ $Server->configure(
       port: 8078,
       options: ['verify_peer' => false]
    )
-);
+));
 
 $Prime = new ReflectionMethod($Server, 'prime');
 $Prime->invoke($Server);

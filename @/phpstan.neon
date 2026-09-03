@@ -24,6 +24,13 @@ parameters:
       - identifier: property.readOnlyAssignOutOfClass
       - identifier: assign.propertyReadOnly
       -
+         # Named-arguments guard slot: `$Named` is deliberately never read — it
+         # exists so a positional call lands on a type no value can satisfy.
+         message: '#has an unused parameter \$Named\.#'
+         identifier: constructor.unusedParameter
+         paths:
+            - ../Bootgly/WPI/*
+      -
          message: '#.*BOOTGLY_PROJECT not found\.#'
          identifier: constant.notFound
       -

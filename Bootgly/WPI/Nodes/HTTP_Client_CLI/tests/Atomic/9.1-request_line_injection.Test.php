@@ -141,7 +141,7 @@ return new Test(
 
       try {
          $Client = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_TEST);
-         $Client->configure('127.0.0.1', $port);
+         $Client->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: $port));
          $Client->connectTimeout = 2;
          $Client->timeout = 2;
 
@@ -325,7 +325,7 @@ return new Test(
       // # Memo integrity — the public fields are diagnostic mirrors, never
       //   the authority for bytes reused after an application callback.
       $MemoClient = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_TEST);
-      $MemoClient->configure('example.test', 80);
+      $MemoClient->configure(new HTTP_Client_CLI\Configs(host: 'example.test', port: 80));
       $MemoRequest = new Request;
       $MemoRequest('GET', '/memo');
       $memoLength = null;

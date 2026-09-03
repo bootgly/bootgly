@@ -27,7 +27,7 @@ return new Test(
       function (HTTP_Client_CLI $Client) use (&$dialsBefore): Response {
          // ! min=1 pre-dials one connection on the first request; max=2 leaves
          //   headroom that must NOT be used while the warm connection idles.
-         $Client->configure('127.0.0.1', 9999, pool: ['min' => 1, 'max' => 2]);
+         $Client->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: 9999, pool: ['min' => 1, 'max' => 2]));
 
          $dialsBefore = $Client->Connections->connections;
 
@@ -39,7 +39,7 @@ return new Test(
          $dialsAfter = $Client->Connections->connections;
 
          // @ Restore the default pool bounds for the next specs
-         $Client->configure('127.0.0.1', 9999, pool: ['min' => 0, 'max' => 1]);
+         $Client->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: 9999, pool: ['min' => 0, 'max' => 1]));
 
          return $Response;
       },

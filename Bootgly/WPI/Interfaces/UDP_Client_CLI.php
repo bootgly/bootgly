@@ -39,11 +39,13 @@ use function register_shutdown_function;
 use function stream_context_create;
 use function stream_socket_client;
 use function time;
+use ArgumentCountError;
 use BackedEnum;
 use Closure;
 use InvalidArgumentException;
 use Throwable;
 
+use Bootgly\ABI\Configs as Configuring;
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Timer;
@@ -51,15 +53,25 @@ use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Process;
 use Bootgly\API\Projects;
+use Bootgly\WPI\Endpoints\Configurable;
 use Bootgly\WPI\Event;
 use Bootgly\WPI\Events;
 use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\UDP_Client_CLI\Commands;
+use Bootgly\WPI\Interfaces\UDP_Client_CLI\Configs;
 use Bootgly\WPI\Interfaces\UDP_Client_CLI\Connections;
 
 
 class UDP_Client_CLI
 {
+   use Configurable;
+
+   // # Configs
+   /** The Configs carrying the socket — host, port and workers. */
+   protected const string TRANSPORT = Configs::class;
+   /** @var array<int,class-string<Configuring>> Every Configs this node applies. */
+   protected const array CONFIGS = [Configs::class];
+
    public Logger $Logger {
       get {
          if ( isSet($this->Logger) === false ) {
@@ -198,17 +210,69 @@ class UDP_Client_CLI
       return null;
    }
 
-   public function configure (string $host, int $port, int $workers = 0): self
+   /**
+    * Configure the UDP Client.
+    *
+    * Every concern arrives as its own Configs value object, in any order:
+    * `configure(new UDP_Client_CLI\Configs(host: '127.0.0.1', port: 8080))`.
+    *
+    * @param Configuring ...$Configs One Configs per concern.
+    *
+    * @throws ArgumentCountError When no Configs ever carried the transport.
+    * @throws InvalidArgumentException On a repeated or unsupported Configs.
+    *
+    * @return self The UDP Client instance, for chaining.
+    */
+   public function configure (Configuring ...$Configs): self
    {
       self::$status = self::STATUS_CONFIGURING;
 
+      // @ One Configs per concern — the whole set is validated, then applied
+      $this->apply($Configs);
+
+      // :
+      return $this;
+   }
+   /**
+    * Apply one Configs to this client.
+    *
+    * Nodes override it to consume their own Configs and delegate the rest.
+    *
+    * @throws InvalidArgumentException On a Configs this node does not accept.
+    */
+   protected function adopt (Configuring $Config): void
+   {
       // TODO validate configuration user data inputs
 
-      $this->host = $host;
-      $this->port = $port;
-      $this->workers = $workers;
+      if ($Config instanceof Configs) {
+         // ? A parent's transport Configs would configure only half of a node
+         //   extending this one — the socket without its protocol policy.
+         //   Unreachable while CONFIGS names the same class as TRANSPORT: this
+         //   is the backstop for a node whose two constants drift apart.
+         $Transport = static::TRANSPORT;
 
-      return $this;
+         if ($Config instanceof $Transport === false) {
+            $node = static::class;
+            $received = $Config::class;
+
+            throw new InvalidArgumentException(
+               "{$node}->configure() does not accept {$received}."
+            );
+         }
+
+         $this->host = $Config->host;
+         $this->port = $Config->port;
+         $this->workers = $Config->workers;
+
+         return;
+      }
+
+      $node = static::class;
+      $received = $Config::class;
+
+      throw new InvalidArgumentException(
+         "{$node}->configure() does not accept {$received}."
+      );
    }
    /**
     * Register an event handler for the UDP Client.

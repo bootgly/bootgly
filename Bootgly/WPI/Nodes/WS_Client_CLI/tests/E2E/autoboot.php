@@ -32,12 +32,12 @@ return new Suite(
       // @ Boot a live WebSocket server (Test mode) with a pure-echo handler so the
       //   framework client specs can round-trip text/binary/compressed frames.
       $WS_Server_CLI = new WS_Server_CLI(Mode: Modes::Test);
-      $WS_Server_CLI->configure(
+      $WS_Server_CLI->configure(new WS_Server_CLI\Configs(
          host: '0.0.0.0',
          port: 8094,
          workers: 1,
          heartbeatInterval: 0
-      );
+      ));
       $WS_Server_CLI->on(Events::MessageReceived, function ($Session, $Message) {
          // @ Out-of-band echo preserves opcode/binary/empty exactly.
          $Session->send($Message->payload, $Message->binary);

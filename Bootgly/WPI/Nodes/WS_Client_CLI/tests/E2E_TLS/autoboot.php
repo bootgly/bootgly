@@ -33,7 +33,7 @@ return new Suite(
 
       // @ Boot a wss:// server with the bundled localhost certificate.
       $WS_Server_CLI = new WS_Server_CLI(Mode: Modes::Test);
-      $WS_Server_CLI->configure(
+      $WS_Server_CLI->configure(new WS_Server_CLI\Configs(
          host: '0.0.0.0',
          port: 8095,
          workers: 1,
@@ -43,7 +43,7 @@ return new Suite(
             'verify_peer' => false,
          ],
          heartbeatInterval: 0
-      );
+      ));
       $WS_Server_CLI->on(Events::MessageReceived, function ($Session, $Message) {
          // @ Out-of-band echo preserves opcode/binary/empty exactly.
          $Session->send($Message->payload, $Message->binary);

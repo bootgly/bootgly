@@ -30,7 +30,7 @@ final class ConsoleServer extends HTTP_Server_CLI
 }
 
 $Server = new ConsoleServer(Modes::Interactive);
-$Server->configure(host: '127.0.0.1', port: $port, workers: 2);
+$Server->configure(new HTTP_Server_CLI\Configs(host: '127.0.0.1', port: $port, workers: 2));
 $Server->on(
    Events::RequestReceived,
    static function ($Request, Response $Response): Response {

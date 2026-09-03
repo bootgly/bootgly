@@ -16,8 +16,8 @@ return new Test(
       $ClientA = new WS_Client_CLI(WS_Client_CLI::MODE_TEST);
       $ClientB = new WS_Client_CLI(WS_Client_CLI::MODE_TEST);
 
-      $ClientA->configure(host: '127.0.0.1', port: 1, heartbeatInterval: 5, maxFrameSize: 1000, maxMessageSize: 100000);
-      $ClientB->configure(host: '127.0.0.1', port: 2, heartbeatInterval: 9, maxFrameSize: 2000, maxMessageSize: 200000);
+      $ClientA->configure(new WS_Client_CLI\Configs(host: '127.0.0.1', port: 1, heartbeatInterval: 5, maxFrameSize: 1000, maxMessageSize: 100000));
+      $ClientB->configure(new WS_Client_CLI\Configs(host: '127.0.0.1', port: 2, heartbeatInterval: 9, maxFrameSize: 2000, maxMessageSize: 200000));
 
       $cbA = function () { return 'A'; };
       $cbB = function () { return 'B'; };

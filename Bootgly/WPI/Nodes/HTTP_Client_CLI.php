@@ -67,6 +67,7 @@ use LogicException;
 use RuntimeException;
 use WeakMap;
 
+use Bootgly\ABI\Configs as Configuring;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Logs\Data\Display;
@@ -81,6 +82,7 @@ use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Pool;
 use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Modules\HTTP2\Errors;
+use Bootgly\WPI\Nodes\HTTP_Client_CLI\Configs;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Events;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Encoder;
@@ -93,6 +95,12 @@ use Bootgly\WPI\Nodes\HTTP_Client_CLI\Tests\Suite\Test as E2ETest;
 
 class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 {
+   // # Configs
+   /** The Configs carrying the socket — host and port. */
+   protected const string TRANSPORT = Configs::class;
+   /** @var array<int,class-string<Configuring>> Every Configs this node applies. */
+   protected const array CONFIGS = [Configs::class];
+
    // * Config
    // | Redirect
    /** Maximum number of redirects to follow (0 = disabled). */
@@ -240,24 +248,41 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    /**
     * Configure the HTTP Client.
     *
-    * @param string $host Target host to connect to.
-    * @param int $port Target port to connect to.
-    * @param int $workers Number of worker processes.
-   * @param array<string,mixed>|null $secure Secure SSL/TLS Stream Context options.
-    * @param array<string,int>|null $pool Connection pool bounds: ['min' => N, 'max' => N].
-    * @param null|bool $enableHTTP2 HTTP/2 negotiation (null = ALPN when secure; true = also h2c; false = never).
+    * Every concern arrives as its own Configs value object, in any order:
+    * `configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: 8080))`.
     *
-    * @return self
+    * @param Configuring ...$Configs One Configs per concern.
+    *
+    * @return self The HTTP Client instance, for chaining.
     */
-   public function configure (
-      string $host,
-      int $port,
-      int $workers = 0,
-      null|array $secure = null,
-      null|array $pool = null,
-      null|bool $enableHTTP2 = null
-   ): self
+   public function configure (Configuring ...$Configs): self
    {
+      parent::configure(...$Configs);
+
+      // :
+      return $this;
+   }
+   /**
+    * Apply one Configs to this client.
+    *
+    * @throws InvalidArgumentException On a Configs this node does not accept.
+    */
+   protected function adopt (Configuring $Config): void
+   {
+      // ? Anything else belongs to the transport — which also rejects it
+      if ($Config instanceof Configs === false) {
+         parent::adopt($Config);
+
+         return;
+      }
+
+      // ! Client — the resolution below rewrites `$secure` before the
+      //   transport is ever handed it
+      $host = $Config->host;
+      $secure = $Config->secure;
+      $pool = $Config->pool;
+      $enableHTTP2 = $Config->enableHTTP2;
+
       // @ Auto-set peer_name for hostname verification if secure transport is enabled
       if ($secure !== null && !isset($secure['peer_name'])) {
          $secure['peer_name'] = $host;
@@ -272,7 +297,11 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          $secure['alpn_protocols'] ??= 'h2,http/1.1';
       }
 
-      parent::configure($host, $port, $workers, $secure);
+      parent::adopt($Config);
+
+      // ! The resolved context (peer name, ALPN offer) replaces the raw one the
+      //   transport just adopted.
+      $this->secure = $secure;
 
       // ---
       // ! The pool is per-origin by construction: reconfiguring retires every
@@ -286,8 +315,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       $this->Pool = new Pool($pool);
       $this->warmed = false;
-
-      return $this;
    }
 
    /**
@@ -1946,7 +1973,9 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             }
 
             // @ Reconfigure for the new target (retires the previous origin's pool)
-            $this->configure($resolved['host'], $resolved['port'], secure: $secure);
+            $this->configure(
+               new Configs(host: $resolved['host'], port: $resolved['port'], secure: $secure)
+            );
 
             $this->wire();
 
@@ -2601,11 +2630,14 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          // ? Only when a hop actually moved the client: a restore is a full
          //   re-target, and it would retire the pool of a chain that ended home
          if ($this->host !== $host || $this->port !== $port || $this->secure !== $configured) {
-            $this->configure($host ?? '127.0.0.1', $port ?? 80, secure: $configured);
+            $this->configure(
+               new Configs(host: $host ?? '127.0.0.1', port: $port ?? 80, secure: $configured)
+            );
          }
 
-         // ! Last, not first: `configure()` takes `$workers` by default and would
-         //   overwrite the restore with 0 — every hop zeroed it on the way here
+         // ! Last, not first: `Configs` defaults `workers` to 0 and `configure()`
+         //   applies it unconditionally, so it would overwrite the restore with
+         //   0 — every hop zeroed it on the way here
          $this->workers = $workers;
       }
 
@@ -2876,7 +2908,9 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       // @ Create a single reusable HTTP client instance (lightweight test mode)
       $HTTP_Client_CLI = new self(self::MODE_TEST);
-      $HTTP_Client_CLI->configure('127.0.0.1', $port, secure: $secure);
+      $HTTP_Client_CLI->configure(
+         new Configs(host: '127.0.0.1', port: $port, secure: $secure)
+      );
 
       // # Run each test synchronously (sequential mode)
       // Each request completes before the next starts, keeping

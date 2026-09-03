@@ -19,7 +19,9 @@ use const Bootgly\CLI;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Configs as ServerConfigs;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Configs as RequestConfigs;
 
 
 return new Project(
@@ -40,19 +42,23 @@ return new Project(
          default => Modes::Daemon
       });
       $HTTP_Server_CLI->configure(
-         host: '0.0.0.0',
-         port: getenv('PORT') ? (int) getenv('PORT') : 443,
-         workers: 4,
-         // requestMaxFileSize: 500 * 1024 * 1024, // 500 MB (default)
-         // requestMaxBodySize: 10 * 1024 * 1024,  // 10 MB (default)
-         secure: [
-            'local_cert' => BOOTGLY_ROOT_DIR . '@/certificates/localhost.cert.pem',
-            'local_pk' => BOOTGLY_ROOT_DIR . '@/certificates/localhost.key.pem',
+         new ServerConfigs(
+            host: '0.0.0.0',
+            port: getenv('PORT') ? (int) getenv('PORT') : 443,
+            workers: 4,
+            secure: [
+               'local_cert' => BOOTGLY_ROOT_DIR . '@/certificates/localhost.cert.pem',
+               'local_pk' => BOOTGLY_ROOT_DIR . '@/certificates/localhost.key.pem',
 
-            'verify_peer' => false,
-         ],
-         // Drop privileges after binding to port 443
-         user: 'www-data',
+               'verify_peer' => false,
+            ],
+            // Drop privileges after binding to port 443
+            user: 'www-data',
+         ),
+         // new RequestConfigs(
+         //    maxFileSize: 500 * 1024 * 1024, // 500 MB (default)
+         //    maxBodySize: 10 * 1024 * 1024,  // 10 MB (default)
+         // ),
       );
       $HTTP_Server_CLI
          ->on(Events::RequestReceived, fn ($Request, $Response) => $Response(body: 'Hello, Secure World!'))

@@ -17,6 +17,7 @@ use const Bootgly\CLI;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Configs;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
 use Bootgly\WPI\Queues;
 
@@ -41,9 +42,11 @@ return new Project(
          default => Modes::Daemon
       });
       $HTTP_Server_CLI->configure(
-         host: '0.0.0.0',
-         port: getenv('PORT') ? (int) getenv('PORT') : 8083,
-         workers: 1,
+         new Configs(
+            host: '0.0.0.0',
+            port: getenv('PORT') ? (int) getenv('PORT') : 8083,
+            workers: 1,
+         )
       );
 
       $HTTP_Server_CLI

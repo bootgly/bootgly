@@ -118,7 +118,7 @@ return new Test(
             $Request->encodedPort = $this->port;
          }
       };
-      $Client->configure('127.0.0.1', $port);
+      $Client->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: $port));
       $Client->timeout = 3;
       $Client->on(
          Events::ResponseReceive,

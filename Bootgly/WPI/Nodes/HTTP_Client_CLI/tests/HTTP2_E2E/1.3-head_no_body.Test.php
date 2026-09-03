@@ -10,7 +10,7 @@ return new Test(
    description: 'It should complete a HEAD request over HTTP/2 without a response body',
    test: new Assertions(Case: function (): Generator {
       $Client = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_TEST);
-      $Client->configure('127.0.0.1', 8087, enableHTTP2: true);
+      $Client->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: 8087, enableHTTP2: true));
 
       $Response = $Client->request(method: 'HEAD', URI: '/echo');
 

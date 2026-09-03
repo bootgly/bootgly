@@ -25,7 +25,10 @@ use Bootgly\ACI\Process\Events as ProcessEvents;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Configs as ServerConfigs;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events as HTTP_Server_Events;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Configs as RequestConfigs;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Configs as ResponseConfigs;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database as DatabaseResource;
 
 
@@ -68,13 +71,13 @@ return new Project(
       $Handler = require __DIR__ . "/router/{$routerFile}";
       $warmupToken = getenv('BENCHMARK_WARMUP_TOKEN');
 
-      $responseResources = null;
+      $Resources = null;
 
       // # The Database response resource is needed by both routers:
       //   - techempower:  /db, /query, /fortunes, /updates
       //   - bootgly:      /database/resource/*, /database/runner/*
       if ($router === 'techempower' || $router === 'bootgly') {
-         $responseResources = [
+         $Resources = [
             'Database' => DatabaseResource::provide(__DIR__ . '/configs/'),
          ];
       }
@@ -110,12 +113,18 @@ return new Project(
 
       $Server
          ->configure(
-            host: '0.0.0.0',
-            port: getenv('PORT') ? (int) getenv('PORT') : 8082,
-            workers: getenv('BOOTGLY_WORKERS') ? (int) getenv('BOOTGLY_WORKERS') : max(1, (int) ((int)(exec('nproc 2>/dev/null') ?: 1) / 2)),
-            responseResources: $responseResources,
-            // requestMaxFileSize: 500 * 1024 * 1024, // 500 MB (default)
-            // requestMaxBodySize: 10 * 1024 * 1024,  // 10 MB (default)
+            new ServerConfigs(
+               host: '0.0.0.0',
+               port: getenv('PORT') ? (int) getenv('PORT') : 8082,
+               workers: getenv('BOOTGLY_WORKERS') ? (int) getenv('BOOTGLY_WORKERS') : max(1, (int) ((int)(exec('nproc 2>/dev/null') ?: 1) / 2)),
+            ),
+            // new RequestConfigs(
+            //    maxFileSize: 500 * 1024 * 1024, // 500 MB (default)
+            //    maxBodySize: 10 * 1024 * 1024,  // 10 MB (default)
+            // ),
+            new ResponseConfigs(
+               Resources: $Resources
+            )
          )
          // # Test (Benchmarking)
          ->on(HTTP_Server_Events::RequestReceived, $Handler);

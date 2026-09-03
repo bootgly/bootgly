@@ -12,11 +12,12 @@ use function usleep;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\API\Endpoints\Server\Modes;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Authentication\Basic;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Authenticating\Guard;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Authentication\Basic;
 use Bootgly\WPI\Nodes\WS_Server_CLI;
 use Bootgly\WPI\Nodes\WS_Server_CLI\Events;
 use Bootgly\WPI\Nodes\WS_Server_CLI\tests\E2E\Client;
+
 
 require_once __DIR__ . '/../E2E/Client.php';
 
@@ -59,13 +60,13 @@ return new Suite(
       );
 
       $WS_Server_CLI = new WS_Server_CLI(Mode: Modes::Test);
-      $WS_Server_CLI->configure(
+      $WS_Server_CLI->configure(new WS_Server_CLI\Configs(
          host: '0.0.0.0',
          port: 8091,
          workers: 1,
          heartbeatInterval: 0,
-         guards: [$Bearer, $Basic]
-      );
+         Guards: [$Bearer, $Basic]
+      ));
       $WS_Server_CLI->on(Events::MessageReceived, function ($Session, $Message) {
          return "id={$Session->identity};claims=" . json_encode($Session->claims);
       });

@@ -33,7 +33,7 @@ return new Test(
          }
       };
       $Client->react($Host->Event);
-      $Client->configure(host: '127.0.0.1', port: 1);
+      $Client->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: 1));
       $Client->connectTimeout = 1;
       // ? An honest expiring wait: sleep to the park deadline, wake with nothing
       $Client->schedule(static function (mixed $value = null): mixed {

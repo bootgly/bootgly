@@ -19,11 +19,11 @@ $_SERVER['SCRIPT_FILENAME'] = '';
 require rtrim($root, '/') . '/autoboot.php';
 
 $Server = new HTTP_Server_CLI;
-$Server->configure(
+$Server->configure(new HTTP_Server_CLI\Configs(
    host: '127.0.0.1',
    port: $port,
    workers: 1,
-   secure: new AutoTLS(
+   AutoTLS: new AutoTLS(
       domains: ['localhost'],
       email: 'certifier@bootgly.test',
       directory: "https://127.0.0.1:{$CA}/directory",
@@ -32,7 +32,7 @@ $Server->configure(
       verify: false,
       allowPrivate: true
    )
-);
+));
 $Server->on(
    Events::RequestReceived,
    static function ($Request, Response $Response): Response {

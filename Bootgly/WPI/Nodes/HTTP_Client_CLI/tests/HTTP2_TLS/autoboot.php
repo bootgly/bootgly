@@ -32,7 +32,7 @@ return new Suite(
       // @ Boot a TLS server with ALPN h2 (default when `secure` is set) —
       //   the HTTP_Client_CLI specs negotiate via ALPN.
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: Modes::Test);
-      $HTTP_Server_CLI->configure(
+      $HTTP_Server_CLI->configure(new HTTP_Server_CLI\Configs(
          host: '0.0.0.0',
          port: 8088,
          workers: 1,
@@ -41,7 +41,7 @@ return new Suite(
             'local_pk' => BOOTGLY_ROOT_DIR . '@/certificates/localhost.key.pem',
             'verify_peer' => false,
          ]
-      );
+      ));
       $HTTP_Server_CLI->on(
          Events::RequestReceived,
          function ($Request, Response $Response): Response {

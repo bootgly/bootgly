@@ -290,14 +290,14 @@ try {
       port: 18080,
    );
    $Server = new HTTP_Server_CLI(Modes::Foreground);
-   $Server->configure(
+   $Server->configure(new HTTP_Server_CLI\Configs(
       host: '127.0.0.1',
       port: 18443,
       workers: 1,
-      secure: $Secure,
+      AutoTLS: $Secure,
       user: 'daemon',
       group: 'daemon',
-   );
+   ));
    $data['configured'] = true;
 
    $instance = $Secure->instance;
@@ -383,14 +383,14 @@ try {
    // terminally release its Swaps copy. Replacing it with a different object
    // has the opposite contract: release only the retired namespace while the
    // replacement's independently committed lease remains live.
-   $Server->configure(
+   $Server->configure(new HTTP_Server_CLI\Configs(
       host: '127.0.0.1',
       port: 18443,
       workers: 1,
-      secure: $Secure,
+      AutoTLS: $Secure,
       user: 'daemon',
       group: 'daemon',
-   );
+   ));
    $SameLeaseProbe = @fopen($lease, 'r+b');
    $data['same_reconfigure_lease_retained'] = $Server->AutoTLS === $Secure
       && is_resource($SameLeaseProbe)
@@ -402,14 +402,14 @@ try {
    // identity, or retiring the old AutoTLS would terminally release the clone's
    // installed rendezvous.
    $Clone = clone $Secure;
-   $Server->configure(
+   $Server->configure(new HTTP_Server_CLI\Configs(
       host: '127.0.0.1',
       port: 18443,
       workers: 1,
-      secure: $Clone,
+      AutoTLS: $Clone,
       user: 'daemon',
       group: 'daemon',
-   );
+   ));
    if ($Drop() === false) {
       throw new RuntimeException('L2 clone replacement control could not enter runtime identity.');
    }
@@ -434,14 +434,14 @@ try {
       challenges: "{$base}/challenges",
       port: 18080,
    );
-   $Server->configure(
+   $Server->configure(new HTTP_Server_CLI\Configs(
       host: '127.0.0.1',
       port: 18443,
       workers: 1,
-      secure: $Replacement,
+      AutoTLS: $Replacement,
       user: 'daemon',
       group: 'daemon',
-   );
+   ));
    $replacementLease = "{$swaps}/{$Replacement->instance}.owner.lock";
    $OldLeaseProbe = @fopen($lease, 'r+b');
    $data['replacement_old_lease_released'] = $Server->AutoTLS === $Replacement
@@ -488,14 +488,14 @@ try {
    new ReflectionProperty(HTTP_Server_CLI::class, 'helperReady')->setValue($Server, true);
    $rejectedFailure = '';
    try {
-      $Server->configure(
+      $Server->configure(new HTTP_Server_CLI\Configs(
          host: '127.0.0.1',
          port: 18443,
          workers: 1,
-         secure: $Rejected,
+         AutoTLS: $Rejected,
          user: 'daemon',
          group: 'daemon',
-      );
+      ));
    }
    catch (RuntimeException $Exception) {
       $rejectedFailure = $Exception->getMessage();
@@ -517,14 +517,14 @@ try {
    // Retire the control object's challenge charter before forking an isolated
    // real server. The parent remains mapped root so it can clean both the
    // root-only canary and every UID-1 artifact after the child exits.
-   $Server->configure(
+   $Server->configure(new HTTP_Server_CLI\Configs(
       host: '127.0.0.1',
       port: 18443,
       workers: 1,
       secure: null,
       user: 'daemon',
       group: 'daemon',
-   );
+   ));
    $ReconfiguredLeaseProbe = @fopen($replacementLease, 'r+b');
    $data['reconfigure_lease_released'] = $Server->AutoTLS === null
       && is_resource($ReconfiguredLeaseProbe)
@@ -614,14 +614,14 @@ try {
             options: ['verify_peer' => false],
          );
          $StartServer = new HTTP_Server_CLI(Modes::Test);
-         $StartServer->configure(
+         $StartServer->configure(new HTTP_Server_CLI\Configs(
             host: '127.0.0.1',
             port: $TLSPort,
             workers: 1,
-            secure: $StartSecure,
+            AutoTLS: $StartSecure,
             user: 'daemon',
             group: 'daemon',
-         );
+         ));
          $StartServer->on(
             Events::RequestReceived,
             static function ($Request, Response $Response): Response {

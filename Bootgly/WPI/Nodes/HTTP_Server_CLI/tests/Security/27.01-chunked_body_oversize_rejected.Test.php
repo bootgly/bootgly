@@ -10,7 +10,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
 
 /**
  * PoC — Audit F-6 (size cap): the chunked total-size cap must gate on the
- * configurable `Request::$maxBodySize` (the `requestMaxBodySize` knob), not a
+ * configurable `Request::$maxBodySize` (the `Request\Configs(maxBodySize:)` knob), not a
  * private 10 MB constant. Here a chunk declaring 16 MiB exceeds the default
  * 10 MB cap and must be rejected `413 Request Entity Too Large` on the declared
  * chunk-size, before any body data is read.

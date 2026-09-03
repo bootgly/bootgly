@@ -12,11 +12,11 @@ return new Test(
       $Client = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_TEST);
       // ! enableHTTP2 false: the client never offers 'h2' — the h2-capable
       //   server must transparently serve the h1 path
-      $Client->configure('127.0.0.1', 8088, secure: [
+      $Client->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: 8088, secure: [
          'verify_peer' => false,
          'verify_peer_name' => false,
          'allow_self_signed' => true,
-      ], enableHTTP2: false);
+      ], enableHTTP2: false));
 
       $Response = $Client->request(method: 'GET', URI: '/fallback');
 

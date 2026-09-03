@@ -44,18 +44,18 @@ final class FailingServer extends HTTP_Server_CLI
 
 FailingServer::$phase = $phase;
 $Server = new FailingServer;
-$Server->configure(
+$Server->configure(new HTTP_Server_CLI\Configs(
    host: '127.0.0.1',
    port: $port,
    workers: 2,
-   secure: new AutoTLS(
+   AutoTLS: new AutoTLS(
       domains: ['localhost'],
       email: 'startup@bootgly.test',
       path: "{$storage}/autotls/",
       port: $gate,
       options: ['verify_peer' => false]
    )
-);
+));
 $Server->on(
    Events::RequestReceived,
    static function ($Request, Response $Response): Response {

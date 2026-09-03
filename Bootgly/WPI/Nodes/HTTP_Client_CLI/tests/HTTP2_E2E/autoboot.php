@@ -33,11 +33,11 @@ return new Suite(
       // @ Boot the real HTTP server (h2c prior-knowledge on by default) —
       //   the HTTP_Client_CLI specs negotiate HTTP/2 over cleartext.
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: Modes::Test);
-      $HTTP_Server_CLI->configure(
+      $HTTP_Server_CLI->configure(new HTTP_Server_CLI\Configs(
          host: '0.0.0.0',
          port: 8087,
          workers: 1
-      );
+      ));
       $HTTP_Server_CLI->on(
          Events::RequestReceived,
          function ($Request, Response $Response): Response {

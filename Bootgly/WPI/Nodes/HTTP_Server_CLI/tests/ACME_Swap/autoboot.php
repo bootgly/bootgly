@@ -50,18 +50,18 @@ return new Suite(
       //   (port 8078, unprivileged) forks the persistent helper.
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: Modes::Test);
       try {
-         $HTTP_Server_CLI->configure(
+         $HTTP_Server_CLI->configure(new HTTP_Server_CLI\Configs(
             host: '0.0.0.0',
             port: 8099,
             workers: 2,
-            secure: new AutoTLS(
+            AutoTLS: new AutoTLS(
                domains: ['localhost'],
                email: 'acme-e2e@bootgly.com',
                path: $storage,
                port: 8078,
                options: ['verify_peer' => false]
             )
-         );
+         ));
          $HTTP_Server_CLI->on(
             Events::RequestReceived,
             function ($Request, Response $Response): Response {

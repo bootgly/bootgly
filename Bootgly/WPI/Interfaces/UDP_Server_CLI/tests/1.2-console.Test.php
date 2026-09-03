@@ -24,7 +24,7 @@ return new Test(
 
       try {
          $Server = new UDP_Server_CLI(Modes::Test);
-         $Server->configure(host: '127.0.0.1', port: 19998, workers: 1);
+         $Server->configure(new UDP_Server_CLI\Configs(host: '127.0.0.1', port: 19998, workers: 1));
 
          $StatusProperty = new ReflectionProperty($Server, 'Status');
          $StatusProperty->setValue($Server, Status::Running);

@@ -29,7 +29,7 @@ return new Test(
          //   whose protected Socket is injected with a real bound UDP socket:
          //   accept() reads it through __get()
          $Server = new UDP_Server_CLI(Modes::Test);
-         $Server->configure(host: '127.0.0.1', port: 19997, workers: 1);
+         $Server->configure(new UDP_Server_CLI\Configs(host: '127.0.0.1', port: 19997, workers: 1));
 
          $Socket = stream_socket_server(
             'udp://127.0.0.1:0', $code, $message, STREAM_SERVER_BIND

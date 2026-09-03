@@ -11,11 +11,11 @@ return new Test(
    test: new Assertions(Case: function (): Generator {
       $Client = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_TEST);
       // ! enableHTTP2 stays null: secure + default = offer 'h2,http/1.1' via ALPN
-      $Client->configure('127.0.0.1', 8088, secure: [
+      $Client->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: 8088, secure: [
          'verify_peer' => false,
          'verify_peer_name' => false,
          'allow_self_signed' => true,
-      ]);
+      ]));
 
       $Response = $Client->request(method: 'GET', URI: '/alpn');
 

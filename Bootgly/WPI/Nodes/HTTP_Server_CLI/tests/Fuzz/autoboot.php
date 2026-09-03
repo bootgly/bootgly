@@ -41,11 +41,11 @@ return new Suite(
       // ! Single worker is intentional — fuzz invariants exercise per-worker
       //   state to keep failure reproduction deterministic.
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: Modes::Test);
-      $HTTP_Server_CLI->configure(
+      $HTTP_Server_CLI->configure(new HTTP_Server_CLI\Configs(
          host: '0.0.0.0',
          port: 8081,
          workers: 1
-      );
+      ));
 
       $HTTP_Server_CLI->start();
 

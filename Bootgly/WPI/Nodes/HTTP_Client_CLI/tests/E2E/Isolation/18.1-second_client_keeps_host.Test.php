@@ -25,7 +25,7 @@ return new Test(
       //   more — never dialed, never asked for a request — so the only state it
       //   can touch is the one `configure()` writes (HCLI-2).
       $Other = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_TEST);
-      $Other->configure('127.0.0.1', 19809);
+      $Other->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: 19809));
 
       return $Client->request(method: 'GET', URI: '/who');
    },

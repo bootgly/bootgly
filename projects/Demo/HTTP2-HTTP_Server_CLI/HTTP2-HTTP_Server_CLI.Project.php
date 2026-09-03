@@ -17,6 +17,7 @@ use const Bootgly\CLI;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Configs;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
@@ -39,11 +40,13 @@ return new Project(
          default => Modes::Daemon
       });
       $HTTP_Server_CLI->configure(
-         host: '0.0.0.0',
-         port: getenv('PORT') ? (int) getenv('PORT') : 8090,
-         workers: getenv('WORKERS') ? (int) getenv('WORKERS') : 1
-         // enableHTTP2: true (default) — h2c prior knowledge is served with
-         // zero setup; pass `secure:` to also negotiate h2 over TLS-ALPN.
+         new Configs(
+            host: '0.0.0.0',
+            port: getenv('PORT') ? (int) getenv('PORT') : 8090,
+            workers: getenv('WORKERS') ? (int) getenv('WORKERS') : 1
+            // enableHTTP2: true (default) — h2c prior knowledge is served with
+            // zero setup; pass `secure:` to also negotiate h2 over TLS-ALPN.
+         )
       );
       $HTTP_Server_CLI
          ->on(Events::RequestReceived, function ($Request, Response $Response): Response {

@@ -16,6 +16,7 @@ use function getenv;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI;
+use Bootgly\WPI\Interfaces\TCP_Client_CLI\Configs;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Events;
 
 
@@ -32,9 +33,11 @@ return new Project(
    {
       $TCP_Client_CLI = new TCP_Client_CLI(TCP_Client_CLI::MODE_MONITOR);
       $TCP_Client_CLI->configure(
-         host: '127.0.0.1',
-         port: getenv('PORT') ? (int) getenv('PORT') : 8082,
-         workers: 1
+         new Configs(
+            host: '127.0.0.1',
+            port: getenv('PORT') ? (int) getenv('PORT') : 8082,
+            workers: 1
+         )
       );
 
       // This runs a Benchmark for 10 seconds with 1 Worker

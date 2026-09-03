@@ -18,6 +18,7 @@ use function max;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Nodes\WS_Server_CLI;
+use Bootgly\WPI\Nodes\WS_Server_CLI\Configs;
 use Bootgly\WPI\Nodes\WS_Server_CLI\Events;
 
 
@@ -37,16 +38,18 @@ return new Project(
       $Server = new WS_Server_CLI(Mode: Modes::Daemon);
 
       $Server->configure(
-         host: '0.0.0.0',
-         port: getenv('PORT') ? (int) getenv('PORT') : 8085,
-         workers: getenv('BOOTGLY_WORKERS')
-            ? (int) getenv('BOOTGLY_WORKERS')
-            : max(1, (int) ((int) (exec('nproc 2>/dev/null') ?: 1) / 2)),
-         // # No server-initiated pings during a short run — measure framing, not liveness.
-         heartbeatInterval: 0,
-         // # permessage-deflate stays offered, but the benchmark client does not
-         //   offer it, so no deflate is negotiated (raw-framing throughput).
-         compression: getenv('WS_NOCOMPRESS') ? false : true
+         new Configs(
+            host: '0.0.0.0',
+            port: getenv('PORT') ? (int) getenv('PORT') : 8085,
+            workers: getenv('BOOTGLY_WORKERS')
+               ? (int) getenv('BOOTGLY_WORKERS')
+               : max(1, (int) ((int) (exec('nproc 2>/dev/null') ?: 1) / 2)),
+            // # No server-initiated pings during a short run — measure framing, not liveness.
+            heartbeatInterval: 0,
+            // # permessage-deflate stays offered, but the benchmark client does not
+            //   offer it, so no deflate is negotiated (raw-framing throughput).
+            compression: getenv('WS_NOCOMPRESS') ? false : true
+         )
       );
 
       // @ Broadcast: every connection joins one room; each inbound frame fans

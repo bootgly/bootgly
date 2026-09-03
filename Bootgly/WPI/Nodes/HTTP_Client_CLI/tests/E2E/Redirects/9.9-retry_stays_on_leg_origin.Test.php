@@ -96,7 +96,7 @@ return new Test(
 
          // ? Realign if the origin was not restored
          if ($Client->port !== 9999) {
-            $Client->configure('127.0.0.1', 9999);
+            $Client->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: 9999));
          }
 
          return $Response;

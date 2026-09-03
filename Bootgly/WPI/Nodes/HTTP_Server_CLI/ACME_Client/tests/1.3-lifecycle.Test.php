@@ -10,8 +10,8 @@ return new Test(
    description: 'AutoTLS lifecycle: server configuration is strictly pre-start',
    test: function () {
       $Server = new HTTP_Server_CLI(Modes::Test);
-      $Server->configure(host: '127.0.0.1', port: 19080, workers: 1);
-      $Server->configure(host: '127.0.0.1', port: 19081, workers: 1);
+      $Server->configure(new HTTP_Server_CLI\Configs(host: '127.0.0.1', port: 19080, workers: 1));
+      $Server->configure(new HTTP_Server_CLI\Configs(host: '127.0.0.1', port: 19081, workers: 1));
 
       yield assert(
          assertion: $Server->port === 19081,
@@ -27,7 +27,7 @@ return new Test(
       ];
       foreach ($States as $Status) {
          $Property->setValue($Server, $Status);
-         $Server->configure(host: '127.0.0.1', port: 19999, workers: 2);
+         $Server->configure(new HTTP_Server_CLI\Configs(host: '127.0.0.1', port: 19999, workers: 2));
 
          yield assert(
             assertion: $Server->port === 19081,

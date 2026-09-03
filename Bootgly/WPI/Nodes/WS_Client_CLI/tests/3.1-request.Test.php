@@ -22,7 +22,7 @@ return new Test(
          }
       };
       $client = fn (): WS_Client_CLI => new WS_Client_CLI(WS_Client_CLI::MODE_TEST)
-         ->configure(host: '127.0.0.1', port: 9);
+         ->configure(new WS_Client_CLI\Configs(host: '127.0.0.1', port: 9));
 
       yield new Assertion(description: 'a CR/LF in the URI is rejected')
          ->expect($rejects(fn () => $client()->connect("/x\r\nX-Injected: 1")))

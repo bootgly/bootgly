@@ -160,6 +160,14 @@ class Resources
     */
    public function load (array $definitions): static
    {
+      $Context = $this->Context;
+
+      if ($Context === null) {
+         throw new RuntimeException('Response resource definitions require a context.');
+      }
+
+      // ? Validate the whole batch first — a name refused halfway through
+      //   would leave the definitions it preceded already registered
       foreach ($definitions as $name => $Factory) {
          if (is_string($name) === false) {
             throw new InvalidArgumentException('Response resource definitions must be keyed by name.');
@@ -169,8 +177,13 @@ class Resources
             throw new InvalidArgumentException('Response resource definition must be a Closure factory.');
          }
 
+         self::reserve($Context, $name);
+      }
+
+      // @ Register — the batch proved legal
+      foreach ($definitions as $name => $Factory) {
          /** @var Closure(object):Resource $Factory */
-         $this->define($name, $Factory);
+         $this->register($name, $Factory);
       }
 
       return $this;

@@ -35,7 +35,7 @@ return new Test(
          }
       };
       $Client->react($Event);
-      $Client->configure(host: '127.0.0.1', port: 1);
+      $Client->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: 1));
       $Client->connectTimeout = 1;
       $Client->maxRetries = 1;
       $Client->retryDelay = 0.4;

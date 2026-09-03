@@ -10,7 +10,7 @@ return new Test(
    description: 'It should follow a same-origin 302 redirect as a NEW stream on the same HTTP/2 Session',
    test: new Assertions(Case: function (): Generator {
       $Client = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_TEST);
-      $Client->configure('127.0.0.1', 8087, enableHTTP2: true);
+      $Client->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: 8087, enableHTTP2: true));
 
       $Response = $Client->request(method: 'GET', URI: '/redirect');
 

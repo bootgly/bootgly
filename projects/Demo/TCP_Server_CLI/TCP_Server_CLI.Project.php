@@ -16,6 +16,7 @@ use function getenv;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Configs;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Events;
 
 
@@ -37,9 +38,11 @@ return new Project(
          default => Modes::Daemon
       });
       $TCP_Server_CLI->configure(
-         host: '0.0.0.0',
-         port: getenv('PORT') ? (int) getenv('PORT') : 8080,
-         workers: 12
+         new Configs(
+            host: '0.0.0.0',
+            port: getenv('PORT') ? (int) getenv('PORT') : 8080,
+            workers: 12
+         )
       );
       // @ Raw TCP responder: reply to any received data with a minimal HTTP/1.1
       //   "Hello, World!" response (Content-Length: 13). Self-contained handler.

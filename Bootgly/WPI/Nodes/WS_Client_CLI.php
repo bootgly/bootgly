@@ -22,6 +22,7 @@ use BackedEnum;
 use Closure;
 use InvalidArgumentException;
 
+use Bootgly\ABI\Configs as Configuring;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI\Event;
@@ -29,6 +30,7 @@ use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\WPI\Modules\WS;
 use Bootgly\WPI\Modules\WS\Client;
+use Bootgly\WPI\Nodes\WS_Client_CLI\Configs;
 use Bootgly\WPI\Nodes\WS_Client_CLI\Decoders\Decoder_;
 use Bootgly\WPI\Nodes\WS_Client_CLI\Decoders\Decoder_Framing;
 use Bootgly\WPI\Nodes\WS_Client_CLI\Events;
@@ -44,7 +46,7 @@ use Bootgly\WPI\Nodes\WS_Client_CLI\Session;
  *
  * ```php
  * $Client = new WS_Client_CLI();
- * $Client->configure(host: '127.0.0.1', port: 8083);
+ * $Client->configure(new WS_Client_CLI\Configs(host: '127.0.0.1', port: 8083));
  * $Client
  *    ->on(Events::Connected, fn (Session $S) => $S->send('hello'))
  *    ->on(Events::MessageReceived, fn (Session $S, Message $M) => print($M->payload))
@@ -54,12 +56,18 @@ use Bootgly\WPI\Nodes\WS_Client_CLI\Session;
  */
 class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
 {
+   // # Configs
+   /** The Configs carrying the socket — host and port. */
+   protected const string TRANSPORT = Configs::class;
+   /** @var array<int,class-string<Configuring>> Every Configs this node applies. */
+   protected const array CONFIGS = [Configs::class];
+
    // * Config
    // ...inherited from TCP_Client_CLI
 
    // * Data
    protected bool $compression = true;
-   // # Session policy (set by configure(); read by Session + the frame decoder).
+   // # Session policy (set by adopt(); read by Session + the frame decoder).
    //   Instance-scoped so multiple clients in one process do not share policy.
    public protected(set) int $heartbeatInterval = 0;
    public protected(set) int $maxFrameSize = 1048576;
@@ -121,66 +129,68 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
    /**
     * Configure the WebSocket Client.
     *
-    * @param int $workers Inherited from the transport, kept for signature compatibility
-    *   with `TCP_Client_CLI::configure()`. The WS client opens a single blocking
-    *   connection via `connect()` and does not fork, so this has no effect.
-    * @param array<string,mixed>|null $secure Secure SSL/TLS Stream Context options (enables wss://).
-    * @param bool $reconnect Auto re-dial after an abrupt drop (EOF / transport error). Off by default.
-    * @param int $reconnectAttempts Max reconnect attempts before giving up (0 = unlimited).
-    * @param int $reconnectDelay Base backoff in seconds (doubles each attempt, capped).
-    * @param int $reconnectMaxDelay Backoff cap in seconds.
-    * @param int $reconnectTimeout Total wall-clock budget in seconds for the whole reconnect
-    *   campaign (0 = unbounded). Guarantees the loop terminates even with unlimited attempts,
-    *   so a permanently dead port cannot re-dial forever.
-    * @param int $handshakeTimeout Seconds to receive + verify the 101 after dialing (0 = unbounded).
-    * @param float $closeTimeout Maximum seconds to drain a queued close frame. Zero
-    *   force-closes immediately when the frame cannot be written synchronously.
+    * Every concern arrives as its own Configs value object, in any order:
+    * `configure(new WS_Client_CLI\Configs(host: '127.0.0.1', port: 8083))`.
+    *
+    * @param Configuring ...$Configs One Configs per concern.
     *
     * @return self The WebSocket Client instance, for chaining.
     */
-   public function configure (
-      string $host, int $port, int $workers = 0,
-      null|array $secure = null,
-      int $heartbeatInterval = 0,
-      int $maxFrameSize = 1048576,
-      int $maxMessageSize = 8388608,
-      bool $compression = true,
-      bool $reconnect = false,
-      int $reconnectAttempts = 0,
-      int $reconnectDelay = 1,
-      int $reconnectMaxDelay = 30,
-      int $reconnectTimeout = 60,
-      int $handshakeTimeout = 10,
-      float $closeTimeout = 5.0
-   ): self
+   public function configure (Configuring ...$Configs): self
    {
+      parent::configure(...$Configs);
+
+      // :
+      return $this;
+   }
+   /**
+    * Apply one Configs to this client.
+    *
+    * @throws InvalidArgumentException On a Configs this node does not accept.
+    */
+   protected function adopt (Configuring $Config): void
+   {
+      // ? Anything else belongs to the transport — which also rejects it
+      if ($Config instanceof Configs === false) {
+         parent::adopt($Config);
+
+         return;
+      }
+
+      // ! Client — the resolution below rewrites `$secure` before the
+      //   transport is ever handed it
+      $host = $Config->host;
+      $secure = $Config->secure;
+
       // @ Auto-set peer_name for hostname verification if secure transport is enabled.
       if ($secure !== null && ! isSet($secure['peer_name'])) {
          $secure['peer_name'] = $host;
       }
 
-      parent::configure($host, $port, $workers, $secure);
+      parent::adopt($Config);
+
+      // ! The resolved context (peer name) replaces the raw one the transport
+      //   just adopted.
+      $this->secure = $secure;
 
       // @ permessage-deflate offer toggle.
-      $this->compression = $compression;
+      $this->compression = $Config->compression;
       // @ Handshake policy — bound the wait for the server's 101 so a peer that
       //   accepts TCP but never answers the upgrade cannot stall the loop forever.
-      $this->handshakeTimeout = $handshakeTimeout;
-      $this->closeTimeout = max(0.0, $closeTimeout);
+      $this->handshakeTimeout = $Config->handshakeTimeout;
+      $this->closeTimeout = max(0.0, $Config->closeTimeout);
       // @ Reconnect policy — auto re-dial with capped exponential backoff after an
       //   abrupt drop. Graceful closes (user/server close, fault) never reconnect.
-      $this->reconnect = $reconnect;
-      $this->reconnectAttempts = $reconnectAttempts;
-      $this->reconnectDelay = $reconnectDelay;
-      $this->reconnectMaxDelay = $reconnectMaxDelay;
-      $this->reconnectTimeout = $reconnectTimeout;
+      $this->reconnect = $Config->reconnect;
+      $this->reconnectAttempts = $Config->reconnectAttempts;
+      $this->reconnectDelay = $Config->reconnectDelay;
+      $this->reconnectMaxDelay = $Config->reconnectMaxDelay;
+      $this->reconnectTimeout = $Config->reconnectTimeout;
 
       // @ Session policy (instance-scoped)
-      $this->heartbeatInterval = $heartbeatInterval;
-      $this->maxFrameSize = $maxFrameSize;
-      $this->maxMessageSize = $maxMessageSize;
-
-      return $this;
+      $this->heartbeatInterval = $Config->heartbeatInterval;
+      $this->maxFrameSize = $Config->maxFrameSize;
+      $this->maxMessageSize = $Config->maxMessageSize;
    }
 
    /**

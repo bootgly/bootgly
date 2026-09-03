@@ -71,7 +71,7 @@ return new Test(
          }
       };
       $Client->react($Event);
-      $Client->configure(host: '127.0.0.1', port: (int) $port);
+      $Client->configure(new HTTP_Client_CLI\Configs(host: '127.0.0.1', port: (int) $port));
       $Client->connectTimeout = 1;
       $Client->timeout = 2;
 
