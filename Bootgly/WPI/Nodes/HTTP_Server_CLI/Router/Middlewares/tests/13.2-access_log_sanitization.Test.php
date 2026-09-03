@@ -4,6 +4,8 @@
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Data\Levels;
 use Bootgly\ACI\Logs\Data\Record;
+use Bootgly\ACI\Logs\Formatters\JSON;
+use Bootgly\ACI\Logs\Formatters\Line;
 use Bootgly\ACI\Logs\Handler;
 use Bootgly\ACI\Logs\Handlers;
 use Bootgly\ACI\Tests\Assertion;
@@ -54,7 +56,7 @@ return new Test(
             description: 'Every `@`, space and control byte leaves the message %XX-encoded',
             fallback: $Record->message
          )
-            ->expect(preg_match('/^GET \/a%40#red:b%20c%1B → 200 in [0-9.]+ms@\.;$/', $Record->message) === 1)
+            ->expect(preg_match('/^GET \/a%40#red:b%20c%1B → 200 in [0-9.]+ms$/', $Record->message) === 1)
             ->to->be(true)
             ->assert();
          yield new Assertion(
@@ -93,7 +95,7 @@ return new Test(
             description: 'A long target is capped at LIMIT characters, ending with an ellipsis',
             fallback: $Record->message
          )
-            ->expect(mb_strlen($matches[1] ?? '') === AccessLog::LIMIT && str_ends_with($matches[1] ?? '', '…'))
+            ->expect(mb_strlen($matches[1] ?? '') <= AccessLog::LIMIT && str_ends_with($matches[1] ?? '', '…'))
             ->to->be(true)
             ->assert();
          yield new Assertion(
@@ -103,6 +105,23 @@ return new Test(
             ->to->be($long)
             ->assert();
 
+         // @ A cap landing inside an escape must not leave half of one
+         $Record = $probe('/' . str_repeat('a', 98) . str_repeat('é', 20));
+         $matches = [];
+         preg_match('/^GET (\S+) → /u', $Record->message, $matches);
+         $target = $matches[1] ?? '';
+         yield new Assertion(
+            description: 'A target capped in the middle of a %XX escape drops the whole escape',
+            fallback: $target
+         )
+            ->expect(
+               str_ends_with($target, '…')
+               && strlen($target) <= AccessLog::LIMIT + 2
+               && preg_match('/%[0-9A-F]?…$/', $target) !== 1
+            )
+            ->to->be(true)
+            ->assert();
+
          // @ The query
          $Record = $probe('/p?token=secret@x');
          yield new Assertion(
@@ -110,6 +129,49 @@ return new Test(
             fallback: $Record->message
          )
             ->expect(str_starts_with($Record->message, 'GET /p → ') && $Record->context['URI'] === '/p')
+            ->to->be(true)
+            ->assert();
+
+         // @ A target that is not valid UTF-8 must not cost the record: the
+         //   JSON encoder would refuse the whole envelope
+         $Record = $probe("/a\xC3\x28b");
+         $Encoded = new JSON;
+         $decoded = json_decode($Encoded->format($Record), true);
+         yield new Assertion(
+            description: 'A non-UTF-8 target is stored encoded, flagged, and the JSON record still carries every field',
+            fallback: json_encode(['context' => $Record->context, 'json' => $Encoded->format($Record)])
+         )
+            ->expect(
+               ($Record->context['URI'] ?? null) === '/a%C3(b'
+               && ($Record->context['encoded'] ?? null) === true
+               && is_array($decoded)
+               && ($decoded['channel'] ?? null) === 'HTTP.Server.CLI.access'
+               && ($decoded['context']['peer'] ?? null) === '127.0.0.1'
+               && ($decoded['context']['code'] ?? null) === 200
+            )
+            ->to->be(true)
+            ->assert();
+
+         // @ The same guarantee for a record the middleware did not build: the
+         //   log formatters substitute what they cannot encode instead of
+         //   dropping the envelope — every channel keeps its records
+         $Foreign = new Record(Levels::Warning, 'chan', "boom \xC3\x28", ['URI' => "/a\xC3\x28b", 'code' => 404]);
+         $document = json_decode(trim(new JSON()->format($Foreign)), true);
+         Display::show(Display::MESSAGE, Display::CONTEXT);
+         $dumped = new Line()->format($Foreign);
+         Display::show(Display::MESSAGE);
+         yield new Assertion(
+            description: 'A record carrying bytes that are not UTF-8 survives both formatters, substituted, never collapsed',
+            fallback: json_encode(['document' => $document, 'dumped' => $dumped], JSON_INVALID_UTF8_SUBSTITUTE)
+         )
+            ->expect(
+               is_array($document)
+               && ($document['channel'] ?? null) === 'chan'
+               && ($document['level'] ?? null) === 'WARNING'
+               && ($document['context']['code'] ?? null) === 404
+               && str_contains((string) ($document['context']['URI'] ?? ''), "\u{FFFD}")
+               && str_contains($dumped, '"code":404')
+            )
             ->to->be(true)
             ->assert();
 

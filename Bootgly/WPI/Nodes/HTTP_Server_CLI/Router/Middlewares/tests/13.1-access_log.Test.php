@@ -9,6 +9,7 @@ use Bootgly\ACI\Logs\Handlers;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Cache;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Exchange;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
@@ -67,7 +68,7 @@ return new Test(
             description: 'The default line: method, target without the query, status and duration',
             fallback: (string) $Record?->message
          )
-            ->expect(preg_match('/^GET \/path → 200 in [0-9.]+ms@\.;$/', (string) $Record?->message) === 1)
+            ->expect(preg_match('/^GET \/path → 200 in [0-9.]+ms$/', (string) $Record?->message) === 1)
             ->to->be(true)
             ->assert();
          $context = $Record?->context ?? [];
@@ -163,25 +164,20 @@ return new Test(
             ->to->be(0)
             ->assert();
 
-         $key = AccessLog::class . '#' . spl_object_id($AccessLog);
+         // ! The captured snapshot shares the generation's exchange — that is
+         //   how the sealing pass reaches the entry, with nothing parked on
+         //   the Request itself
          $Snapshot = new Request;
          $Snapshot->address = '10.0.0.7';
-         $Snapshot->{$key} = $Request->{$key};
+         Exchange::admit($Snapshot, $Exchange);
          $Sealed = new Response(code: 204, body: 'abc');
          $AccessLog->seal($Snapshot, $Sealed);
          yield new Assertion(
-            description: 'seal() records the wire (status, bytes, address) and writes nothing; the id already stamped stands',
-            fallback: json_encode(['records' => count($Capture->Records), 'entry' => (array) $Request->{$key}])
+            description: 'seal() records the wire (status, bytes, address) and writes nothing',
+            fallback: json_encode(['records' => count($Capture->Records)])
          )
-            ->expect(
-               count($Capture->Records) === 0
-               && $Request->{$key}->code === 204
-               && $Request->{$key}->bytes === 3
-               && $Request->{$key}->address === '10.0.0.7'
-               && $Request->{$key}->id === 'req-2'
-               && $Request->{$key}->deferred === true
-            )
-            ->to->be(true)
+            ->expect(count($Capture->Records))
+            ->to->be(0)
             ->assert();
 
          $Exchange->finish($Sealed);
@@ -226,9 +222,10 @@ return new Test(
                && $Record?->Level === Levels::Notice
                && ($Record->context['cancelled'] ?? null) === true
                && array_key_exists('code', $Record->context) && $Record->context['code'] === null
+               && array_key_exists('bytes', $Record->context) && $Record->context['bytes'] === null
                && ($Record->context['deferred'] ?? null) === true
                && ($Record->context['ms'] ?? 0) >= 5
-               && preg_match('/^GET \/path → cancelled after [0-9.]+ms@\.;$/', $Record->message) === 1
+               && preg_match('/^GET \/path → cancelled after [0-9.]+ms$/', $Record->message) === 1
             )
             ->to->be(true)
             ->assert();
@@ -254,8 +251,79 @@ return new Test(
             description: 'A throw after an inline completion logs the settled status, not 500',
             fallback: json_encode(['records' => count($Capture->Records), 'context' => $Record?->context])
          )
-            ->expect($thrown instanceof LogicException && count($Capture->Records) === 1 && ($Record?->context['code'] ?? null) === 201 && ($Record->context['throwable'] ?? null) === null)
+            ->expect($thrown instanceof LogicException && count($Capture->Records) === 1 && ($Record?->context['code'] ?? null) === 201 && ($Record->context['throwable'] ?? null) === LogicException::class)
             ->to->be(true)
+            ->assert();
+         Exchange::track($Response, null);
+
+         // @ An outer middleware that throws while the deferral is still in
+         //   flight: the wire belongs to the generation, so its status wins
+         //   over the 500 this throw would produce
+         $Capture->Records = [];
+         [$Request, $Response] = $createMocks(requestProps: $props);
+         $Exchange = new Exchange;
+         Exchange::track($Response, $Exchange);
+         $thrown = null;
+         try {
+            $AccessLog->process($Request, $Response, static function (object $Request, object $Response): object {
+               $Response->deferred = true;
+               throw new DomainException('outer middleware');
+            });
+         }
+         catch (DomainException $Throwable) {
+            $thrown = $Throwable;
+         }
+         yield new Assertion(
+            description: 'A throw around a deferral in flight writes nothing yet — the lifecycle still owns the outcome',
+            fallback: json_encode(['records' => count($Capture->Records), 'context' => ($Capture->Records[0] ?? null)?->context])
+         )
+            ->expect($thrown instanceof DomainException && count($Capture->Records) === 0)
+            ->to->be(true)
+            ->assert();
+
+         $Exchange->finish(new Response(code: 200, body: 'wire'));
+         $Record = $Capture->Records[0] ?? null;
+         yield new Assertion(
+            description: 'It then writes the status the wire carried, flagged deferred, with the Throwable that was raised around it',
+            fallback: json_encode(['records' => count($Capture->Records), 'context' => $Record?->context])
+         )
+            ->expect(
+               count($Capture->Records) === 1
+               && $Record?->Level === Levels::Info
+               && ($Record->context['code'] ?? null) === 200
+               && ($Record->context['deferred'] ?? null) === true
+               && ($Record->context['throwable'] ?? null) === DomainException::class
+            )
+            ->to->be(true)
+            ->assert();
+         Exchange::track($Response, null);
+
+         // @ Two settlements, one line: the guard is what makes the claim true
+         $Capture->Records = [];
+         [$Request, $Response] = $createMocks(requestProps: $props);
+         $Exchange = new Exchange;
+         Exchange::track($Response, $Exchange);
+         $AccessLog->process($Request, $Response, static function (object $Request, object $Response): object {
+            $Response->deferred = true;
+            return $Response(code: 200, body: 'x');
+         });
+         $Snapshot = new Request;
+         Exchange::admit($Snapshot, $Exchange);
+         $AccessLog->seal($Snapshot, new Response(code: 200, body: 'x'));
+         $Exchange->finish(new Response(code: 200, body: 'x'));
+         $Exchange->finish(null);
+         // ! No settlement path can run twice on its own — the exchange is
+         //   terminal once — so the guard is proven where it lives: the entry
+         //   itself refuses a second line, whatever calls for one
+         $Entries = new ReflectionProperty(AccessLog::class, 'Entries');
+         $Write = new ReflectionMethod(AccessLog::class, 'write');
+         $Write->invoke($AccessLog, $Entries->getValue($AccessLog)[$Exchange]);
+         yield new Assertion(
+            description: 'A second settlement — a re-seal, a cancellation after the answer, a second writer — never adds a line',
+            fallback: json_encode(['records' => count($Capture->Records)])
+         )
+            ->expect(count($Capture->Records))
+            ->to->be(1)
             ->assert();
          Exchange::track($Response, null);
 
@@ -283,15 +351,62 @@ return new Test(
 
          // @ A Formatter builds the message from the neutralized fields
          $Capture = $capture();
-         $Custom = $build(new AccessLog(Formatter: static fn (array $entry): string => "{$entry['method']} {$entry['target']} {$entry['code']} {$entry['URI']}"), $Capture);
+         $Custom = $build(new AccessLog(Formatter: static fn (array $entry): string => implode('|', [$entry['method'], $entry['target'], $entry['code'], $entry['URI'] ?? 'absent'])), $Capture);
          [$Request, $Response] = $createMocks(requestProps: ['URI' => '/a@b', 'protocol' => 'HTTP/1.1']);
          $Custom->process($Request, $Response, static fn (object $Request, object $Response): object => $Response(code: 200, body: ''));
          yield new Assertion(
-            description: 'The Formatter receives the context plus the neutralized target and method; its return is the message',
+            description: 'The Formatter gets the neutralized target and method, never the raw target — a message it builds cannot carry a directive',
             fallback: (string) ($Capture->Records[0] ?? null)?->message
          )
             ->expect(($Capture->Records[0] ?? null)?->message)
-            ->to->be('GET /a%40b 200 /a@b@.;')
+            ->to->be('GET|/a%40b|200|absent')
+            ->assert();
+
+         // @ A Formatter that fails costs its shape, not the line nor the request
+         $Capture = $capture();
+         $Broken = $build(new AccessLog(Formatter: static function (array $entry): string {
+            throw new RuntimeException('formatter blew up');
+         }), $Capture);
+         [$Request, $Response] = $createMocks(requestProps: $props);
+         $failed = false;
+         try {
+            $Result = $Broken->process($Request, $Response, static fn (object $Request, object $Response): object => $Response(code: 200, body: ''));
+         }
+         catch (Throwable) {
+            $failed = true;
+         }
+         yield new Assertion(
+            description: 'A throwing Formatter never fails the request, and the default line is written anyway',
+            fallback: json_encode(['failed' => $failed, 'records' => count($Capture->Records), 'message' => ($Capture->Records[0] ?? null)?->message])
+         )
+            ->expect(
+               $failed === false
+               && ($Result ?? null) === $Response
+               && count($Capture->Records) === 1
+               && preg_match('/^GET \/path → 200 in [0-9.]+ms$/', (string) $Capture->Records[0]->message) === 1
+            )
+            ->to->be(true)
+            ->assert();
+
+         // @ The route response cache must stay shareable: whatever the
+         //   middleware keeps per request never reaches the key the cache
+         //   composes from the Request's principal bags
+         $Compose = new ReflectionMethod(Cache::class, 'compose');
+         $keys = [];
+         for ($i = 0; $i < 2; $i++) {
+            $Live = new Request;
+            $Live->method = 'GET';
+            $Live->address = '127.0.0.1';
+            $Logged = $build(new AccessLog, $capture());
+            $Logged->process($Live, $createMocks()[1], static fn (object $Request, object $Response): object => $Response(code: 200, body: ''));
+            $keys[] = $Compose->invoke(null, $Live, false);
+         }
+         yield new Assertion(
+            description: 'The middleware leaves the principal bag untouched, so two identical requests still compose ONE route-cache key',
+            fallback: json_encode(['keys' => $keys, 'attributes' => $Live->attributes])
+         )
+            ->expect($keys[0] === $keys[1] && $Live->attributes === [])
+            ->to->be(true)
             ->assert();
 
          // @ A failing sink never fails the request

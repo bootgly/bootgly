@@ -11,6 +11,7 @@
 namespace Bootgly\ACI\Logs\Formatters;
 
 
+use const JSON_INVALID_UTF8_SUBSTITUTE;
 use const JSON_UNESCAPED_SLASHES;
 use const JSON_UNESCAPED_UNICODE;
 use const PHP_EOL;
@@ -84,7 +85,7 @@ class Line implements Formatter
       // @ Inline context dump
       $context = '';
       if (($segments & Display::CONTEXT) !== 0 && $Record->context !== []) {
-         $encoded = json_encode($Record->context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+         $encoded = json_encode($Record->context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
          if ($encoded !== false) {
             $context = ' '
                      . self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . $encoded . self::_RESET_FORMAT;

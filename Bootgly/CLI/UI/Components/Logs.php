@@ -11,6 +11,7 @@
 namespace Bootgly\CLI\UI\Components;
 
 
+use const JSON_INVALID_UTF8_SUBSTITUTE;
 use const JSON_PRETTY_PRINT;
 use const JSON_UNESCAPED_SLASHES;
 use const JSON_UNESCAPED_UNICODE;
@@ -800,7 +801,7 @@ class Logs
     */
    private function encode (array $data): string
    {
-      $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+      $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
 
       return $json === false ? '{}' : $json;
    }

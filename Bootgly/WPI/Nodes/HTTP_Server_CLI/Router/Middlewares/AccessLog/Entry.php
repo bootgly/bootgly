@@ -17,10 +17,14 @@ use function hrtime;
 /**
  * One request as the AccessLog sees it.
  *
- * Opened before the onion runs and parked on the Request's attribute bag, so
- * the snapshot a deferral captures carries this very object; completed by
- * whichever side settles the request — the synchronous unwind, the sealing
- * pass, the lifecycle's terminal transition — and written exactly once.
+ * Opened before the onion runs and held by the middleware — against the
+ * generation's lifecycle token while a deferral is in flight, so the sealing
+ * pass reaches it through the captured snapshot. Completed by whichever side
+ * settles the request — the synchronous unwind, the sealing pass, the
+ * lifecycle's terminal transition — and written exactly once.
+ *
+ * Every field is public: the entry is the middleware's own record, not a user
+ * input and not state anything else reads.
  */
 final class Entry
 {
@@ -41,12 +45,13 @@ final class Entry
    public null|int $code = null;
    /** Body bytes as the middleware saw them — null when no body was seen (a throw, a handoff). */
    public null|int $bytes = null;
-   /** The class of the Throwable that left the onion, on the synchronous throw path. */
+   /** The class of the Throwable that left the onion around this request. */
    public null|string $throwable = null;
-
-   // * Metadata
+   /** Whether the response was generated after the onion unwound. */
    public bool $deferred = false;
+   /** Whether the generation ended with no answer — the client left, or it was abandoned. */
    public bool $cancelled = false;
+   /** Whether the line was written; the entry accepts exactly one. */
    public bool $written = false;
 
 

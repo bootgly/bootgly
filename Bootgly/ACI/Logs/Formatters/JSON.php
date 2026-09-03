@@ -11,6 +11,7 @@
 namespace Bootgly\ACI\Logs\Formatters;
 
 
+use const JSON_INVALID_UTF8_SUBSTITUTE;
 use const JSON_UNESCAPED_SLASHES;
 use const JSON_UNESCAPED_UNICODE;
 use const PHP_EOL;
@@ -55,7 +56,7 @@ class JSON implements Formatter
          'message'   => $message,
          'context'   => $Record->context,
          'extra'     => $Record->extra,
-      ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+      ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
 
       // :
       return ($json === false ? '{}' : $json) . PHP_EOL;
