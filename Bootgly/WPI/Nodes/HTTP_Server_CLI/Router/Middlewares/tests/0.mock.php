@@ -139,6 +139,8 @@ return function (
       public object $Header;
       public object $Body;
       public int $code = 200;
+      // Mirrors Response::$deferred — false on the synchronous cycle
+      public bool $deferred = false;
 
       public function __construct (object $Header)
       {

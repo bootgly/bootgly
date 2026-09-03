@@ -35,6 +35,8 @@ return new Suite(
       '11.1-authentication',
       '11.2-authentication_remember',
       '11.3-authentication_fallback_redirect',
-      '12.1-authorization'
+      '12.1-authorization',
+      '13.1-access_log',
+      '13.2-access_log_sanitization'
    ]
 );

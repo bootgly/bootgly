@@ -86,6 +86,9 @@ return new Suite(
       '4.3-shipped_etag_compression_seal_deferred',
       '4.4-throwing_seal_reaches_boundaries',
       // BG-24: records carry the bound port as their instance (appended last — indexes stay stable)
-      '3.2-records_carry_the_booted_instance'
+      '3.2-records_carry_the_booted_instance',
+      // FEAT-1: the AccessLog middleware writes one line per request, cancelled ones included (appended last)
+      '5.1-access_log_lines_per_outcome',
+      '5.2-access_log_cancelled_and_timeout'
    ]
 );
