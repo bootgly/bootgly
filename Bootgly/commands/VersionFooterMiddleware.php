@@ -37,9 +37,9 @@ class VersionFooterMiddleware implements Middleware
          return $result;
       }
 
-      // @ Skip footer in machine-readable output mode (e.g. --format=json)
+      // @ Skip footer in machine-readable output mode (--format=json, --json)
       $format = $options['format'] ?? null;
-      if (is_string($format) && strtolower($format) === 'json') {
+      if ((is_string($format) && strtolower($format) === 'json') || isSet($options['json']) === true) {
          return $result;
       }
 

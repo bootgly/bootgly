@@ -229,5 +229,9 @@ return new Suites(
       //   (appended after the Security opt-in so its per-case index stays 109;
       //   with the audit env armed this suite shifts one slot)
       'Bootgly/WPI/tests/',
+      // # ABI/Data/SemVer — SemVer 2.0.0 value (grammar + §11 precedence)
+      'Bootgly/ABI/Data/SemVer/',
+      // # ACI/VCS — git engine, tags, remotes, submodules (fixture repositories under the temp dir)
+      'Bootgly/ACI/VCS/',
    ]
 );

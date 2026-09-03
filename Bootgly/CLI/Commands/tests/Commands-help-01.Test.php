@@ -103,11 +103,11 @@ return new Test(
          description: 'lint -h renders help via the standardized short form'
       );
 
-      // @ boot --help — a command-local flag surfaces alongside the globals
-      [$status, $output] = $run(['boot', '--help']);
+      // @ kit --help — a command-local flag surfaces alongside the globals
+      [$status, $output] = $run(['kit', '--help']);
       yield assert(
          assertion: $status === 0 && str_contains($output, '--resources'),
-         description: 'boot --help lists its --resources local option'
+         description: 'kit --help lists its --resources local option'
       );
 
       // @ demo --help — a command with no local options still inherits help

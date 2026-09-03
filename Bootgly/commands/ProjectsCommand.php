@@ -94,7 +94,6 @@ use Bootgly\CLI\UI\Components\Select;
 use Bootgly\CLI\UI\Components\Table;
 use Bootgly\CLI\UI\Components\Textbox;
 use Bootgly\CLI\UX\Components\Wizard;
-use Bootgly\commands\BootCommand;
 
 
 /**
@@ -1535,7 +1534,7 @@ class ProjectsCommand extends Command
 
    /**
     * Prepare the working directory (kit) on first run: platform submodules
-    * (system git) and resource directories (`boot --resources`).
+    * (system git) and resource directories (`kit boot --resources`).
     *
     * @param array<string, bool|int|string> $options
     *
@@ -1675,9 +1674,8 @@ class ProjectsCommand extends Command
       // # Resource directories
       $fresh = is_file(BOOTGLY_WORKING_DIR . 'projects/Bootgly.projects.php') === false;
       if ($fresh === true) {
-         $Boot = new BootCommand;
-
-         if ($Boot->run([], ['resources' => true]) === false) {
+         // ! `kit boot` — the resource directories, laid down once
+         if (new KitCommand()->boot(['resources' => true]) === false) {
             return false;
          }
       }

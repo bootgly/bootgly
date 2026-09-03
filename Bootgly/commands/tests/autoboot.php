@@ -45,5 +45,14 @@ return new Suite(
       '6.2-projects-list',
       '6.3-projects-show-fit',
       '7.1-project-startup',
+      // # kit upgrade / downgrade (fixture kits under the temp dir)
+      '8.1-kit-list',
+      '8.2-kit-move',
+      '8.3-kit-guards',
+      '8.4-kit-template',
+      '8.5-kit-running',
+      '8.6-kit-swap-purity',
+      '8.7-kit-partial',
+      '8.8-kit-boot',
    ]
 );

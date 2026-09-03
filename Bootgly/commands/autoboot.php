@@ -4,8 +4,8 @@ namespace Bootgly\commands;
 return [
    new DemoCommand,
    new SetupCommand,
+   new KitCommand,
 
-   new BootCommand,
    new TestCommand,
    new LintCommand,
 
