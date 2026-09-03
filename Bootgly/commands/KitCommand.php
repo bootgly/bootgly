@@ -26,6 +26,7 @@ use function clearstatcache;
 use function copy;
 use function explode;
 use function file_exists;
+use function getmypid;
 use function implode;
 use function in_array;
 use function is_dir;
@@ -36,12 +37,20 @@ use function mkdir;
 use function preg_match;
 use function preg_replace;
 use function realpath;
+use function rename;
+use function rmdir;
 use function rtrim;
 use function str_pad;
 use function str_replace;
+use function strlen;
 use function strtolower;
 use function substr;
 use function trim;
+use function unlink;
+use FilesystemIterator;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
+use SplFileInfo;
 use Throwable;
 
 use const Bootgly\CLI;
@@ -299,15 +308,21 @@ class KitCommand extends Command
 
       $templates = rtrim($this->templates, '/');
 
-      // # scripts/ — the framework's template, mirrored
+      // # scripts/ — the framework's template, mirrored into a staging directory
+      //   and renamed into place: a copy that fails leaves nothing behind that a
+      //   later run's `is_dir` could take for the real thing
       if (is_dir("{$kit}/scripts") === false) {
+         $staging = "{$kit}/.scripts." . getmypid() . '.partial';
+         $this->wipe($staging);
+         $mirrored = $this->mirror("{$templates}/scripts/", "{$staging}/")
+            && @rename($staging, "{$kit}/scripts")
+            && is_dir("{$kit}/scripts");
          // ?
-         if ($this->mirror("{$templates}/scripts/", "{$kit}/scripts/") === false) {
+         if ($mirrored === false) {
+            $this->wipe($staging);
             $Alert->Type::Failure->set();
             $Alert->message = 'Could not lay down @#cyan:scripts/@; in the kit.';
             $Alert->render();
-            // ! Whatever landed is a partial copy the next run would take for done
-            $Output->render("   Remove @#cyan:{$kit}/scripts@; and run again.@.;");
 
             return false;
          }
@@ -319,18 +334,22 @@ class KitCommand extends Command
 
       // # storage/ — the layout, created: the framework ships no template, and a
       //   checkout that has been run carries sessions, pid files and key material
-      //   that belong to it alone
+      //   that belong to it alone. A layout that cannot be completed is removed
+      $created = false;
       if (is_dir("{$kit}/storage") === false) {
          $laid = @mkdir("{$kit}/storage", 0755, true);
+         $created = $laid;
          foreach (self::STORAGE as $inner) {
             $laid = $laid && @mkdir("{$kit}/storage/{$inner}", 0755, true);
          }
          // ?
          if ($laid === false) {
+            if ($created === true) {
+               $this->wipe("{$kit}/storage");
+            }
             $Alert->Type::Failure->set();
             $Alert->message = 'Could not lay down @#cyan:storage/@; in the kit.';
             $Alert->render();
-            $Output->render("   Remove @#cyan:{$kit}/storage@; and run again.@.;");
 
             return false;
          }
@@ -371,25 +390,39 @@ class KitCommand extends Command
    }
 
    /**
-    * Mirror a template directory into the kit.
+    * Mirror a template directory into the kit and prove the copy carried it.
     *
+    * The source is walked BEFORE the copy: every regular file (and link) is
+    * looked for at the target afterwards, and an entry the copy cannot carry
+    * at all — a FIFO, a socket, a device, which `copy_recursively()` skips
+    * without a word — fails the mirror up front. A file born in the source
+    * during the copy is not in the snapshot, so a live tree is not a failure.
     * `copy_recursively()` returns nothing, but the framework turns every
-    * warning into a throw: a directory it cannot read, a file it cannot copy,
-    * a target it cannot create all surface here as a failure. No second walk
-    * of the source afterwards — a template tree can be alive (the framework
-    * checkout's own), and a file born between the copy and a re-walk is not a
-    * hole in the copy.
+    * warning into a throw: an unreadable directory or file surfaces here.
     *
     * @param string $source The template directory, with its trailing separator.
     * @param string $target The kit directory, with its trailing separator.
     *
-    * @return bool True when the copy completed and the target is there.
+    * @return bool True when every entry of the snapshot exists at the target.
     */
    private function mirror (string $source, string $target): bool
    {
       // ?
       if (is_dir($source) === false) {
          return false;
+      }
+
+      // ! The snapshot — and the entries no copy can carry
+      $expected = [];
+      $Entries = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($source, FilesystemIterator::SKIP_DOTS));
+      foreach ($Entries as $Entry) {
+         /** @var SplFileInfo $Entry */
+         if ($Entry->isLink() === false && $Entry->isFile() === false && $Entry->isDir() === false) {
+            return false;
+         }
+         if ($Entry->isDir() === false) {
+            $expected[] = substr($Entry->getPathname(), strlen($source));
+         }
       }
 
       try {
@@ -399,8 +432,43 @@ class KitCommand extends Command
          return false;
       }
 
+      // @@
+      clearstatcache(true);
+      foreach ($expected as $relative) {
+         if (is_file("{$target}{$relative}") === false && is_link("{$target}{$relative}") === false) {
+            return false;
+         }
+      }
+
       // :
       return is_dir($target);
+   }
+
+   /**
+    * Remove a directory this command created — a staging copy, a layout that
+    * could not be completed. Never anything the user owns: the callers only
+    * point it at what they made a moment ago.
+    *
+    * @param string $directory
+    */
+   private function wipe (string $directory): void
+   {
+      // ?
+      if (is_link($directory) === true || is_dir($directory) === false) {
+         @unlink($directory);
+
+         return;
+      }
+
+      $Entries = new RecursiveIteratorIterator(
+         new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS),
+         RecursiveIteratorIterator::CHILD_FIRST
+      );
+      foreach ($Entries as $Entry) {
+         /** @var SplFileInfo $Entry */
+         $Entry->isDir() === true && $Entry->isLink() === false ? @rmdir($Entry->getPathname()) : @unlink($Entry->getPathname());
+      }
+      @rmdir($directory);
    }
 
    /**
@@ -769,10 +837,10 @@ class KitCommand extends Command
 
       // # The releases — the remote's tags win over stale local ones
       $Output = CLI->Terminal->Output;
-      $stream = $this->verbosity > 0 && $this->json === false
+      $Stream = $this->verbosity > 0 && $this->json === false
          ? function (string $line) use ($Output): void { $Output->write("   {$line}" . PHP_EOL); }
          : null;
-      $fetched = $VCS->Git->fetch($remote, [], $stream) === 0;
+      $fetched = $VCS->Git->fetch($remote, [], $Stream) === 0;
       $this->document['fetched'] = $fetched;
       if ($fetched === false) {
          $this->warn("Could not fetch the releases from @#cyan:{$shown}@;.", 'Using the releases already known locally.');
@@ -1325,14 +1393,14 @@ class KitCommand extends Command
       clearstatcache(true);
 
       $Output = CLI->Terminal->Output;
-      $stream = function (string $line) use ($Output): void {
+      $Stream = function (string $line) use ($Output): void {
          if ($this->json === false) {
             $Output->write("   {$line}" . PHP_EOL);
          }
       };
 
       // @ The kit
-      $status = $VCS->Git->checkout("refs/tags/{$tag}", $stream);
+      $status = $VCS->Git->checkout("refs/tags/{$tag}", $Stream);
       clearstatcache(true);
       // ? git never ran — nothing changed
       if ($status === 126) {
@@ -1368,7 +1436,7 @@ class KitCommand extends Command
       }
 
       // @ The submodules follow the index
-      $status = $VCS->Submodules->update($stream);
+      $status = $VCS->Submodules->update($Stream);
       clearstatcache(true);
       if ($status !== 0) {
          return 'partial-submodules';
@@ -1544,9 +1612,13 @@ class KitCommand extends Command
     * the JSON document.
     *
     * Control characters, C0 and C1 alike, would drive the terminal (title,
-    * colours, erased lines); `@` would drive the Output markup; a byte that
-    * is not UTF-8 would make the JSON encoder throw. Line breaks go too,
-    * unless the text is a multi-line note.
+    * colours, erased lines); an `@` that could open or close Output markup —
+    * one not followed by a letter or a digit (`@#`, `@;`, `@.`, `@:`, `@@`,
+    * `@*`, `@\\`), or one right after `*`, `~`, `_`, `-` (the closers) — would
+    * drive it and goes; a plain `@` between word characters, legal in a path
+    * and in a ref, stays; a byte that is not UTF-8 would make the JSON
+    * encoder throw.
+    * Line breaks go too, unless the text is a multi-line note.
     *
     * @param string $text
     * @param bool $breaks Keep line feeds.
@@ -1567,6 +1639,6 @@ class KitCommand extends Command
       }
 
       // :
-      return str_replace('@', '', $cleaned);
+      return preg_replace('/(?<=[*~_-])@|@(?![\p{L}\p{N}])/u', '', $cleaned) ?? str_replace('@', '', $cleaned);
    }
 }

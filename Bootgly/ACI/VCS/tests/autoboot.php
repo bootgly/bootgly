@@ -17,5 +17,6 @@ return new Suite(
       '1.1-git-engine',
       '1.2-tags-remotes',
       '1.3-submodules',
+      '1.4-git-environment',
    ]
 );

@@ -38,13 +38,13 @@ return new Test(
       mkdir($base, 0775, true);
 
       $G = '-c user.name=Bootgly -c user.email=tests@bootgly.local -c commit.gpgsign=false';
-      $run = static function (string $directory, string $command): string {
+      $Run = static function (string $directory, string $command): string {
          $output = [];
          exec('git -C ' . escapeshellarg($directory) . " {$command} 2>/dev/null", $output);
 
          return $output[0] ?? '';
       };
-      $erase = function (string $target) use (&$erase): void {
+      $Erase = function (string $target) use (&$Erase): void {
          if (is_link($target) === true || is_file($target) === true) {
             unlink($target);
 
@@ -54,7 +54,7 @@ return new Test(
             return;
          }
          foreach (array_diff((array) scandir($target), ['.', '..']) as $entry) {
-            $erase("{$target}/{$entry}");
+            $Erase("{$target}/{$entry}");
          }
          rmdir($target);
       };
@@ -63,23 +63,23 @@ return new Test(
          // # Four commits, tagged every which way
          $repo = "{$base}/repo";
          mkdir($repo, 0775, true);
-         $run($repo, 'init --quiet -b main');
+         $Run($repo, 'init --quiet -b main');
          $commits = [];
          for ($index = 1; $index <= 4; $index++) {
             file_put_contents("{$repo}/f.txt", "c{$index}\n");
-            $run($repo, 'add f.txt');
-            $run($repo, "{$G} commit --quiet -m c{$index}");
-            $commits[$index] = $run($repo, 'rev-parse HEAD');
+            $Run($repo, 'add f.txt');
+            $Run($repo, "{$G} commit --quiet -m c{$index}");
+            $commits[$index] = $Run($repo, 'rev-parse HEAD');
          }
-         $run($repo, "{$G} tag -a v0.9.0 -m 'first cut' {$commits[1]}");
-         $run($repo, "tag v1.0.0-beta.9 {$commits[2]}");
-         $run($repo, "{$G} tag -a v1.0.0-beta.10 -m 'Beta ten' -m 'Second paragraph.' {$commits[3]}");
-         $run($repo, "{$G} tag -a v1.0.0 -m 'Stable' {$commits[4]}");
-         $run($repo, "tag latest {$commits[4]}");
-         $blob = $run($repo, 'rev-parse HEAD:f.txt');
-         $run($repo, "tag v2.0.0 {$blob}");
+         $Run($repo, "{$G} tag -a v0.9.0 -m 'first cut' {$commits[1]}");
+         $Run($repo, "tag v1.0.0-beta.9 {$commits[2]}");
+         $Run($repo, "{$G} tag -a v1.0.0-beta.10 -m 'Beta ten' -m 'Second paragraph.' {$commits[3]}");
+         $Run($repo, "{$G} tag -a v1.0.0 -m 'Stable' {$commits[4]}");
+         $Run($repo, "tag latest {$commits[4]}");
+         $blob = $Run($repo, 'rev-parse HEAD:f.txt');
+         $Run($repo, "tag v2.0.0 {$blob}");
          // ! Same precedence as `v0.9.0`, another name — the order must stay total
-         $run($repo, "tag 0.9.0 {$commits[1]}");
+         $Run($repo, "tag 0.9.0 {$commits[1]}");
 
          $VCS = new VCS($repo);
          $tags = $VCS->Tags->list();
@@ -148,7 +148,7 @@ return new Test(
          );
       }
       finally {
-         $erase($base);
+         $Erase($base);
       }
    }
 );

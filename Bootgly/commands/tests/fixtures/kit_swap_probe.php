@@ -25,7 +25,7 @@ $loads = [];
 // ! "Swapped" the moment either mark shows: the release's HEAD in `.git/HEAD`,
 //   or a file only the release carries already on disk — git writes the tree
 //   BEFORE it moves HEAD, so the file closes most of that window
-$swapped = static function () use (&$kit, &$target, &$sentinel): bool {
+$Swapped = static function () use (&$kit, &$target, &$sentinel): bool {
    if ($kit === null) {
       return false;
    }
@@ -33,8 +33,8 @@ $swapped = static function () use (&$kit, &$target, &$sentinel): bool {
    return trim((string) @file_get_contents("{$kit}/.git/HEAD")) === $target
       || ($sentinel !== null && file_exists($sentinel));
 };
-spl_autoload_register(function (string $class) use (&$loads, $swapped): void {
-   $loads[] = [$class, $swapped()];
+spl_autoload_register(function (string $class) use (&$loads, $Swapped): void {
+   $loads[] = [$class, $Swapped()];
 }, true, true);
 
 $report = ['result' => null, 'moved' => false, 'after' => [], 'loads' => 0, 'output' => ''];
@@ -45,8 +45,8 @@ require "{$root}/autoboot.php";
 //   so a class it or a destructor loads is counted too; the test reads this file
 register_shutdown_function(static function () use (&$report, &$loads, $base): void {
    $after = [];
-   foreach ($loads as [$class, $swapped]) {
-      if ($swapped === true) {
+   foreach ($loads as [$class, $Swapped]) {
+      if ($Swapped === true) {
          $after[] = $class;
       }
    }

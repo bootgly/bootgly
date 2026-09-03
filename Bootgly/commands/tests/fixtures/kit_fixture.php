@@ -19,7 +19,7 @@
 return static function (string $base): array {
    // ! Pinned identity: fixtures must not depend on the machine's git config
    $G = '-c user.name=Bootgly -c user.email=tests@bootgly.local -c commit.gpgsign=false -c protocol.file.allow=always';
-   $run = static function (string $directory, string $command) use ($G): string {
+   $Run = static function (string $directory, string $command) use ($G): string {
       $output = [];
       exec('git -C ' . escapeshellarg($directory) . " {$G} {$command} 2>/dev/null", $output);
 
@@ -29,40 +29,40 @@ return static function (string $base): array {
    // # The framework: f1..f4, one tag each
    $framework = "{$base}/framework";
    mkdir($framework, 0775, true);
-   $run($framework, 'init --quiet -b main');
+   $Run($framework, 'init --quiet -b main');
    $shas = [];
    $tags = ['v1.0.0-beta.1', 'v1.0.0-beta.2', 'v1.0.0', 'v2.0.0'];
    mkdir("{$framework}/Bootgly/commands", 0775, true);
    foreach ($tags as $index => $tag) {
       file_put_contents("{$framework}/autoboot.php", "<?php // {$tag}\n");
       file_put_contents("{$framework}/constant.txt", "constant\n");
-      $run($framework, 'add autoboot.php constant.txt');
+      $Run($framework, 'add autoboot.php constant.txt');
       // ! The command itself ships from the second release on — the first predates it
       if ($tag !== 'v1.0.0-beta.1') {
          file_put_contents("{$framework}/Bootgly/commands/KitCommand.php", "<?php // {$tag}\n");
-         $run($framework, 'add Bootgly/commands/KitCommand.php');
+         $Run($framework, 'add Bootgly/commands/KitCommand.php');
       }
-      $run($framework, "commit --quiet -m {$tag}");
-      $shas[$tag] = $run($framework, 'rev-parse HEAD');
-      $run($framework, "tag -a {$tag} -m {$tag}");
+      $Run($framework, "commit --quiet -m {$tag}");
+      $shas[$tag] = $Run($framework, 'rev-parse HEAD');
+      $Run($framework, "tag -a {$tag} -m {$tag}");
    }
 
    // # The canonical kit: one commit per release, the framework pinned at that release
    $canon = "{$base}/canon";
    mkdir($canon, 0775, true);
-   $run($canon, 'init --quiet -b main');
+   $Run($canon, 'init --quiet -b main');
    file_put_contents("{$canon}/bootgly", "#!/usr/bin/env php\n<?php // launcher\n");
    file_put_contents("{$canon}/.gitignore", "/projects/\n/storage/\n");
-   $run($canon, 'add bootgly .gitignore');
-   $run($canon, "submodule add --quiet " . escapeshellarg($framework) . ' Bootgly');
+   $Run($canon, 'add bootgly .gitignore');
+   $Run($canon, "submodule add --quiet " . escapeshellarg($framework) . ' Bootgly');
    $commits = [];
    $notes = ['v1.0.0-beta.1' => 'Beta one', 'v1.0.0-beta.2' => 'Beta two', 'v1.0.0' => "Stable\n\nThe first stable release.", 'v2.0.0' => 'Two'];
    foreach ($tags as $tag) {
-      $run("{$canon}/Bootgly", "checkout --quiet {$shas[$tag]}");
-      $run($canon, 'add Bootgly');
+      $Run("{$canon}/Bootgly", "checkout --quiet {$shas[$tag]}");
+      $Run($canon, 'add Bootgly');
       if ($tag !== 'v1.0.0-beta.1') {
          file_put_contents("{$canon}/README.md", "# Kit {$tag}\n");
-         $run($canon, 'add README.md');
+         $Run($canon, 'add README.md');
       }
       // ! v1.0.0 brings a directory the kit did not have; v2.0.0 tracks a file
       //   under an IGNORED directory (as the kit does with `!@/autoboot.php`) —
@@ -70,34 +70,34 @@ return static function (string $base): array {
       if ($tag === 'v1.0.0') {
          mkdir("{$canon}/docs", 0775, true);
          file_put_contents("{$canon}/docs/notes.md", "# Notes {$tag}\n");
-         $run($canon, 'add docs/notes.md');
+         $Run($canon, 'add docs/notes.md');
       }
       if ($tag === 'v2.0.0') {
          mkdir("{$canon}/storage", 0775, true);
          file_put_contents("{$canon}/storage/seed.json", "{\"seed\":true}\n");
          file_put_contents("{$canon}/storage/café.json", "{\"release\":true}\n");
-         $run($canon, 'add -f storage/seed.json storage/café.json');
+         $Run($canon, 'add -f storage/seed.json storage/café.json');
       }
-      $run($canon, "commit --quiet -m " . escapeshellarg("bump Bootgly to {$tag}"));
-      $commits[$tag] = $run($canon, 'rev-parse HEAD');
-      $run($canon, "tag -a {$tag} -m " . escapeshellarg($notes[$tag]));
+      $Run($canon, "commit --quiet -m " . escapeshellarg("bump Bootgly to {$tag}"));
+      $commits[$tag] = $Run($canon, 'rev-parse HEAD');
+      $Run($canon, "tag -a {$tag} -m " . escapeshellarg($notes[$tag]));
 
       // ! A docs-only commit right after v1.0.0 — main past a release
       if ($tag === 'v1.0.0') {
          file_put_contents("{$canon}/README.md", "# Kit v1.0.0 — docs\n");
-         $run($canon, 'add README.md');
-         $run($canon, 'commit --quiet -m docs');
-         $commits['past'] = $run($canon, 'rev-parse HEAD');
+         $Run($canon, 'add README.md');
+         $Run($canon, 'commit --quiet -m docs');
+         $commits['past'] = $Run($canon, 'rev-parse HEAD');
       }
    }
 
    // # Populations
-   $clone = static function (string $name, string $at) use ($base, $canon, $run): string {
+   $Clone = static function (string $name, string $at) use ($base, $canon, $Run): string {
       $kit = "{$base}/{$name}";
       exec('git -c protocol.file.allow=always clone --quiet '
          . escapeshellarg($canon) . ' ' . escapeshellarg($kit) . ' 2>/dev/null');
-      $run($kit, "checkout --quiet {$at}");
-      $run($kit, 'submodule update --quiet --init Bootgly');
+      $Run($kit, "checkout --quiet {$at}");
+      $Run($kit, 'submodule update --quiet --init Bootgly');
       // ! The user's data — ignored by the kit, never touched by a move
       mkdir("{$kit}/projects/App", 0775, true);
       file_put_contents("{$kit}/projects/App/notes.txt", "mine\n");
@@ -108,18 +108,18 @@ return static function (string $base): array {
 
       return $kit;
    };
-   $template = static function (string $name, string $tag) use ($base, $canon, $framework, $shas, $run): string {
+   $Template = static function (string $name, string $tag) use ($base, $canon, $framework, $shas, $Run): string {
       $kit = "{$base}/{$name}";
       mkdir($kit, 0775, true);
-      $run($kit, 'init --quiet -b main');
+      $Run($kit, 'init --quiet -b main');
       foreach (['bootgly', '.gitignore'] as $file) {
          file_put_contents("{$kit}/{$file}", (string) file_get_contents("{$canon}/{$file}"));
       }
-      $run($kit, 'add bootgly .gitignore');
-      $run($kit, 'submodule add --quiet ' . escapeshellarg($framework) . ' Bootgly');
-      $run("{$kit}/Bootgly", "checkout --quiet {$shas[$tag]}");
-      $run($kit, 'add Bootgly');
-      $run($kit, 'commit --quiet -m "Initial commit"');
+      $Run($kit, 'add bootgly .gitignore');
+      $Run($kit, 'submodule add --quiet ' . escapeshellarg($framework) . ' Bootgly');
+      $Run("{$kit}/Bootgly", "checkout --quiet {$shas[$tag]}");
+      $Run($kit, 'add Bootgly');
+      $Run($kit, 'commit --quiet -m "Initial commit"');
       mkdir("{$kit}/projects/App", 0775, true);
       file_put_contents("{$kit}/projects/App/notes.txt", "mine\n");
 
@@ -132,8 +132,8 @@ return static function (string $base): array {
       'shas' => $shas,
       'commits' => $commits,
       'tags' => $tags,
-      'run' => $run,
-      'clone' => $clone,
-      'template' => $template,
+      'run' => $Run,
+      'clone' => $Clone,
+      'template' => $Template,
    ];
 };

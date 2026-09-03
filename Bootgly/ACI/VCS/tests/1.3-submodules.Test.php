@@ -36,13 +36,13 @@ return new Test(
       mkdir($base, 0775, true);
 
       $G = '-c user.name=Bootgly -c user.email=tests@bootgly.local -c commit.gpgsign=false -c protocol.file.allow=always';
-      $run = static function (string $directory, string $command): string {
+      $Run = static function (string $directory, string $command): string {
          $output = [];
          exec('git -C ' . escapeshellarg($directory) . " {$command} 2>/dev/null", $output);
 
          return $output[0] ?? '';
       };
-      $erase = function (string $target) use (&$erase): void {
+      $Erase = function (string $target) use (&$Erase): void {
          if (is_link($target) === true || is_file($target) === true) {
             unlink($target);
 
@@ -52,7 +52,7 @@ return new Test(
             return;
          }
          foreach (array_diff((array) scandir($target), ['.', '..']) as $entry) {
-            $erase("{$target}/{$entry}");
+            $Erase("{$target}/{$entry}");
          }
          rmdir($target);
       };
@@ -61,29 +61,29 @@ return new Test(
          // # A submodule with three commits
          $sub = "{$base}/sub";
          mkdir($sub, 0775, true);
-         $run($sub, 'init --quiet -b main');
+         $Run($sub, 'init --quiet -b main');
          $shas = [];
          for ($index = 1; $index <= 3; $index++) {
             file_put_contents("{$sub}/f.txt", "c{$index}\n");
             file_put_contents("{$sub}/g.txt", "constant\n");
-            $run($sub, 'add f.txt g.txt');
-            $run($sub, "{$G} commit --quiet -m c{$index}");
-            $shas[$index] = $run($sub, 'rev-parse HEAD');
+            $Run($sub, 'add f.txt g.txt');
+            $Run($sub, "{$G} commit --quiet -m c{$index}");
+            $shas[$index] = $Run($sub, 'rev-parse HEAD');
          }
 
          // # A superproject pinning it twice: first at c2, then at c3
          $super = "{$base}/super";
          mkdir($super, 0775, true);
-         $run($super, 'init --quiet -b main');
-         $run($super, "{$G} commit --quiet --allow-empty -m base");
-         $run($super, "{$G} submodule add --quiet " . escapeshellarg($sub) . ' Sub');
-         $run("{$super}/Sub", "checkout --quiet {$shas[2]}");
-         $run($super, 'add Sub');
-         $run($super, "{$G} commit --quiet -m pin-c2");
-         $older = $run($super, 'rev-parse HEAD');
-         $run("{$super}/Sub", "checkout --quiet {$shas[3]}");
-         $run($super, 'add Sub');
-         $run($super, "{$G} commit --quiet -m pin-c3");
+         $Run($super, 'init --quiet -b main');
+         $Run($super, "{$G} commit --quiet --allow-empty -m base");
+         $Run($super, "{$G} submodule add --quiet " . escapeshellarg($sub) . ' Sub');
+         $Run("{$super}/Sub", "checkout --quiet {$shas[2]}");
+         $Run($super, 'add Sub');
+         $Run($super, "{$G} commit --quiet -m pin-c2");
+         $older = $Run($super, 'rev-parse HEAD');
+         $Run("{$super}/Sub", "checkout --quiet {$shas[3]}");
+         $Run($super, 'add Sub');
+         $Run($super, "{$G} commit --quiet -m pin-c3");
 
          $VCS = new VCS($super);
 
@@ -103,7 +103,7 @@ return new Test(
          // # Changes inside the submodule
          file_put_contents("{$super}/Sub/g.txt", "edited\n");
          $state = $VCS->Submodules->inspect('Sub');
-         $run("{$super}/Sub", 'checkout --quiet -- g.txt');
+         $Run("{$super}/Sub", 'checkout --quiet -- g.txt');
 
          yield assert(
             assertion: ($state['changes']['g.txt'] ?? null) === ' M',
@@ -111,7 +111,7 @@ return new Test(
          );
 
          // # A submodule moved away from the pin
-         $run("{$super}/Sub", "checkout --quiet {$shas[1]}");
+         $Run("{$super}/Sub", "checkout --quiet {$shas[1]}");
          $state = $VCS->Submodules->inspect('Sub');
 
          yield assert(
@@ -120,9 +120,9 @@ return new Test(
          );
 
          // # A staged gitlink — the release workflow itself
-         $run($super, 'add Sub');
+         $Run($super, 'add Sub');
          $state = $VCS->Submodules->inspect('Sub');
-         $run($super, 'reset --quiet -- Sub');
+         $Run($super, 'reset --quiet -- Sub');
 
          yield assert(
             assertion: $state['pinned'] === $shas[1] && $state['committed'] === $shas[3],
@@ -165,7 +165,7 @@ return new Test(
          );
       }
       finally {
-         $erase($base);
+         $Erase($base);
       }
    }
 );

@@ -50,7 +50,7 @@ return new Test(
    test: function () {
       $base = sys_get_temp_dir() . '/bootgly-kit-swap-' . getmypid() . '-' . bin2hex(random_bytes(4));
       mkdir($base, 0775, true);
-      $erase = function (string $target) use (&$erase): void {
+      $Erase = function (string $target) use (&$Erase): void {
          if (is_link($target) === true || is_file($target) === true) {
             unlink($target);
 
@@ -60,7 +60,7 @@ return new Test(
             return;
          }
          foreach (array_diff((array) scandir($target), ['.', '..']) as $entry) {
-            $erase("{$target}/{$entry}");
+            $Erase("{$target}/{$entry}");
          }
          rmdir($target);
       };
@@ -77,10 +77,10 @@ return new Test(
          }
          $environment['KIT_PROBE_ROOT'] = BOOTGLY_ROOT_DIR;
 
-         $spawn = static function (string $mode) use ($environment, $base): array {
-            $where = "{$base}/{$mode}";
-            mkdir($where, 0775, true);
-            $environment['KIT_PROBE_BASE'] = $where;
+         $Spawn = static function (string $mode) use ($environment, $base): array {
+            $Where = "{$base}/{$mode}";
+            mkdir($Where, 0775, true);
+            $environment['KIT_PROBE_BASE'] = $Where;
             $environment['KIT_PROBE_MODE'] = $mode;
 
             $pipes = [];
@@ -88,7 +88,7 @@ return new Test(
                [PHP_BINARY, '-d', 'opcache.jit=0', '-r', 'require $argv[1];', '--', __DIR__ . '/fixtures/kit_swap_probe.php'],
                [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
                $pipes,
-               $where,
+               $Where,
                $environment
             );
             if (is_resource($process) === false) {
@@ -100,13 +100,13 @@ return new Test(
             fclose($pipes[2]);
             proc_close($process);
             // ! Written by the probe's shutdown function — destructors included
-            $report = is_file("{$where}/report.json") ? json_decode((string) file_get_contents("{$where}/report.json"), true) : null;
+            $report = is_file("{$Where}/report.json") ? json_decode((string) file_get_contents("{$Where}/report.json"), true) : null;
 
             return [is_array($report) ? $report : null, $errors];
          };
 
          // # Human mode: plan lines render before the swap, the footer after it
-         [$report, $errors] = $spawn('human');
+         [$report, $errors] = $Spawn('human');
 
          yield assert(
             assertion: $report !== null && $report['result'] === true && $report['moved'] === true,
@@ -124,7 +124,7 @@ return new Test(
 
          // # JSON mode: nothing renders before the swap and nothing after it either (the
          //   footer is skipped) — the document is the only write, from resident code
-         [$report, $errors] = $spawn('json');
+         [$report, $errors] = $Spawn('json');
          $document = $report === null ? null : json_decode(trim($report['output']), true);
 
          yield assert(
@@ -134,7 +134,7 @@ return new Test(
          );
       }
       finally {
-         $erase($base);
+         $Erase($base);
       }
    }
 );

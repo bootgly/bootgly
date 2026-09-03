@@ -48,7 +48,7 @@ return new Test(
    test: function () {
       $base = sys_get_temp_dir() . '/bootgly-kit-running-' . getmypid() . '-' . bin2hex(random_bytes(4));
       mkdir($base, 0775, true);
-      $erase = function (string $target) use (&$erase): void {
+      $Erase = function (string $target) use (&$Erase): void {
          if (is_link($target) === true || is_file($target) === true) {
             unlink($target);
 
@@ -58,7 +58,7 @@ return new Test(
             return;
          }
          foreach (array_diff((array) scandir($target), ['.', '..']) as $entry) {
-            $erase("{$target}/{$entry}");
+            $Erase("{$target}/{$entry}");
          }
          rmdir($target);
       };
@@ -86,7 +86,7 @@ return new Test(
          $fixture = (require __DIR__ . '/fixtures/kit_fixture.php')($base);
          $canon = $fixture['canon'];
          $commits = $fixture['commits'];
-         $run = $fixture['run'];
+         $Run = $fixture['run'];
 
          $Kit = new class ($fixture['clone']('kit', 'refs/tags/v1.0.0-beta.1'), $canon) extends KitCommand {
             public function __construct (string $kit, string $repository)
@@ -96,7 +96,7 @@ return new Test(
                $this->repository = $repository;
             }
          };
-         $probe = static function (KitCommand $Command, array $arguments, array $options): array {
+         $Probe = static function (KitCommand $Command, array $arguments, array $options): array {
             $Host = new Output('php://memory');
             $Terminal = CLI->Terminal;
             $Restore = $Terminal->Output;
@@ -120,22 +120,22 @@ return new Test(
          );
 
          // # Same major, so the instance is the only question
-         [$result, $document] = $probe($Kit, ['upgrade', 'v1.0.0-beta.2'], ['json' => true]);
+         [$result, $document] = $Probe($Kit, ['upgrade', 'v1.0.0-beta.2'], ['json' => true]);
 
          yield assert(
             assertion: $result === false && ($document['status'] ?? null) === 'refused'
                && str_contains($document['reason'] ?? '', 'Not confirmed')
                && in_array("{$path} ({$port})", $document['running'] ?? [], true)
-               && $run($kit, 'rev-parse HEAD') === $commits['v1.0.0-beta.1'],
+               && $Run($kit, 'rev-parse HEAD') === $commits['v1.0.0-beta.1'],
             description: 'the running instance is named and, without --yes, the kit does not move'
          );
 
-         [$result, $document] = $probe($Kit, ['upgrade', 'v1.0.0-beta.2'], ['json' => true, 'yes' => true]);
+         [$result, $document] = $Probe($Kit, ['upgrade', 'v1.0.0-beta.2'], ['json' => true, 'yes' => true]);
 
          yield assert(
             assertion: $result === true && ($document['status'] ?? null) === 'moved'
                && in_array("{$path} ({$port})", $document['running'] ?? [], true)
-               && $run($kit, 'rev-parse HEAD') === $commits['v1.0.0-beta.2'],
+               && $Run($kit, 'rev-parse HEAD') === $commits['v1.0.0-beta.2'],
             description: 'with --yes the move proceeds, still naming the instance to reload'
          );
       }
@@ -145,7 +145,7 @@ return new Test(
          foreach (glob(BOOTGLY_STORAGE_DIR . "pids/{$id}.{$port}.*") ?: [] as $file) {
             @unlink($file);
          }
-         $erase($base);
+         $Erase($base);
       }
    }
 );

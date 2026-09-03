@@ -43,7 +43,7 @@ return new Test(
    test: function () {
       $base = sys_get_temp_dir() . '/bootgly-kit-partial-' . getmypid() . '-' . bin2hex(random_bytes(4));
       mkdir($base, 0775, true);
-      $erase = function (string $target) use (&$erase): void {
+      $Erase = function (string $target) use (&$Erase): void {
          if (is_link($target) === true || is_file($target) === true) {
             unlink($target);
 
@@ -53,7 +53,7 @@ return new Test(
             return;
          }
          foreach (array_diff((array) scandir($target), ['.', '..']) as $entry) {
-            $erase("{$target}/{$entry}");
+            $Erase("{$target}/{$entry}");
          }
          rmdir($target);
       };
@@ -63,12 +63,12 @@ return new Test(
          $canon = $fixture['canon'];
          $framework = $fixture['framework'];
          $shas = $fixture['shas'];
-         $run = $fixture['run'];
+         $Run = $fixture['run'];
 
          // # `partial` is sticky on BOTH no-op branches: a kit on the newest release whose
          //   submodule never followed says so again when `upgrade` names nothing
          $apex = $fixture['clone']('apex', 'refs/tags/v1.0.0');
-         $run($apex, 'config submodule.Bootgly.update none');
+         $Run($apex, 'config submodule.Bootgly.update none');
          $Apex = new class ($apex, $canon) extends KitCommand {
             public function __construct (string $kit, string $repository)
             {
@@ -102,7 +102,7 @@ return new Test(
             assertion: $verdicts[0] === false && ($verdicts[1]['status'] ?? null) === 'partial'
                && $verdicts[2] === false && ($verdicts[3]['status'] ?? null) === 'partial'
                && str_contains($verdicts[3]['reason'] ?? '', 'off the pin')
-               && $run($apex, 'rev-parse HEAD') === $fixture['commits']['v2.0.0'],
+               && $Run($apex, 'rev-parse HEAD') === $fixture['commits']['v2.0.0'],
             description: 'on the newest release with a submodule off the pin, a bare `kit upgrade` is `partial` again — never "already on the newest release"'
          );
 
@@ -112,15 +112,15 @@ return new Test(
          // # Then a release the kit's framework cannot fetch: f5 arrives upstream,
          //   v3.0.0 pins it, and the kit's submodule remote is unreachable
          file_put_contents("{$framework}/autoboot.php", "<?php // v3.0.0\n");
-         $run($framework, 'add autoboot.php');
-         $run($framework, 'commit --quiet -m v3.0.0');
-         $f5 = $run($framework, 'rev-parse HEAD');
-         $run($framework, 'tag -a v3.0.0 -m v3.0.0');
-         $run($canon, "update-index --add --cacheinfo 160000,{$f5},Bootgly");
-         $run($canon, 'commit --quiet -m "bump Bootgly to v3.0.0"');
-         $v3 = $run($canon, 'rev-parse HEAD');
-         $run($canon, 'tag -a v3.0.0 -m "Three"');
-         $run($kit, 'config submodule.Bootgly.url ' . escapeshellarg("{$base}/nowhere"));
+         $Run($framework, 'add autoboot.php');
+         $Run($framework, 'commit --quiet -m v3.0.0');
+         $f5 = $Run($framework, 'rev-parse HEAD');
+         $Run($framework, 'tag -a v3.0.0 -m v3.0.0');
+         $Run($canon, "update-index --add --cacheinfo 160000,{$f5},Bootgly");
+         $Run($canon, 'commit --quiet -m "bump Bootgly to v3.0.0"');
+         $v3 = $Run($canon, 'rev-parse HEAD');
+         $Run($canon, 'tag -a v3.0.0 -m "Three"');
+         $Run($kit, 'config submodule.Bootgly.url ' . escapeshellarg("{$base}/nowhere"));
 
          $Kit = new class ($kit, $canon) extends KitCommand {
             public function __construct (string $kit, string $repository)
@@ -154,7 +154,7 @@ return new Test(
             description: 'the run fails with status `partial` — not `refused` — naming the way out'
          );
          yield assert(
-            assertion: $run($kit, 'rev-parse HEAD') === $v3 && $run("{$kit}/Bootgly", 'rev-parse HEAD') === $shas['v1.0.0-beta.2'],
+            assertion: $Run($kit, 'rev-parse HEAD') === $v3 && $Run("{$kit}/Bootgly", 'rev-parse HEAD') === $shas['v1.0.0-beta.2'],
             description: 'the kit is on the release while the framework submodule stayed on the old pin — the mixed state the document describes'
          );
 
@@ -162,7 +162,7 @@ return new Test(
          //   `submodule.<name>.update = none` is a user's own config — the pin moved,
          //   the checkout did not, and only the re-inspection can tell
          $frozen = $fixture['clone']('frozen', 'refs/tags/v1.0.0-beta.1');
-         $run($frozen, 'config submodule.Bootgly.update none');
+         $Run($frozen, 'config submodule.Bootgly.update none');
          $Frozen = new class ($frozen, $canon) extends KitCommand {
             public function __construct (string $kit, string $repository)
             {
@@ -191,8 +191,8 @@ return new Test(
          yield assert(
             assertion: $result === false && ($document['status'] ?? null) === 'partial'
                && str_contains($document['reason'] ?? '', 'submodules did not follow')
-               && $run($frozen, 'rev-parse HEAD') === $fixture['commits']['v1.0.0-beta.2']
-               && $run("{$frozen}/Bootgly", 'rev-parse HEAD') === $shas['v1.0.0-beta.1'],
+               && $Run($frozen, 'rev-parse HEAD') === $fixture['commits']['v1.0.0-beta.2']
+               && $Run("{$frozen}/Bootgly", 'rev-parse HEAD') === $shas['v1.0.0-beta.1'],
             description: 'a submodule update that exits 0 but leaves the submodule off its pin is `partial` — the state, not the exit code, is the verdict'
          );
 
@@ -257,7 +257,7 @@ return new Test(
             yield assert(
                assertion: $result === false && ($document['status'] ?? null) === 'partial'
                   && str_contains($document['reason'] ?? '', 'did not fully apply')
-                  && is_file("{$sealed}/docs/notes.md") === false && $run($sealed, 'rev-parse HEAD') === $fixture['commits']['v1.0.0'],
+                  && is_file("{$sealed}/docs/notes.md") === false && $Run($sealed, 'rev-parse HEAD') === $fixture['commits']['v1.0.0'],
                description: 'a checkout git reports as done but left unwritten is `partial`, never `moved`'
             );
 
@@ -294,18 +294,18 @@ return new Test(
             yield assert(
                assertion: $result === false && ($document['status'] ?? null) === 'partial'
                   && str_contains($document['reason'] ?? '', 'did not fully apply')
-                  && is_file("{$stuck}/docs/notes.md") === true && $run($stuck, 'rev-parse HEAD') === $fixture['commits']['v1.0.0-beta.2'],
+                  && is_file("{$stuck}/docs/notes.md") === true && $Run($stuck, 'rev-parse HEAD') === $fixture['commits']['v1.0.0-beta.2'],
                description: 'a file of the outgoing release that git could not unlink makes the move `partial` — the leftover is on disk, HEAD moved'
             );
          }
 
          // # A release that DROPS a submodule: its checkout stays as a directory, and
          //   that is not a leftover — the move is complete
-         $run($canon, 'rm --quiet --cached Bootgly');
-         $run($canon, 'rm --quiet -f .gitmodules');
-         $run($canon, 'commit --quiet -m "drop the framework submodule"');
-         $v4 = $run($canon, 'rev-parse HEAD');
-         $run($canon, 'tag -a v4.0.0 -m "Four"');
+         $Run($canon, 'rm --quiet --cached Bootgly');
+         $Run($canon, 'rm --quiet -f .gitmodules');
+         $Run($canon, 'commit --quiet -m "drop the framework submodule"');
+         $v4 = $Run($canon, 'rev-parse HEAD');
+         $Run($canon, 'tag -a v4.0.0 -m "Four"');
          $dropped = $fixture['clone']('dropped', 'refs/tags/v1.0.0-beta.2');
          $Dropped = new class ($dropped, $canon) extends KitCommand {
             public function __construct (string $kit, string $repository)
@@ -334,21 +334,21 @@ return new Test(
 
          yield assert(
             assertion: $result === true && ($document['status'] ?? null) === 'moved'
-               && $run($dropped, 'rev-parse HEAD') === $v4 && is_dir("{$dropped}/Bootgly") === true,
+               && $Run($dropped, 'rev-parse HEAD') === $v4 && is_dir("{$dropped}/Bootgly") === true,
             description: 'a release that drops a submodule moves cleanly — the checkout left behind is a directory, never mistaken for an un-unlinked file'
          );
 
          // # A blob that became a directory is not a leftover either (v6.0.0 turns README.md into README.md/index.md)
-         $run($canon, 'checkout --quiet refs/tags/v2.0.0');
-         $run($canon, 'rm --quiet README.md');
+         $Run($canon, 'checkout --quiet refs/tags/v2.0.0');
+         $Run($canon, 'rm --quiet README.md');
          // ! PHP's realpath cache still knows README.md as a file — a directory of the same name is unreachable through it
          clearstatcache(true);
          mkdir("{$canon}/README.md", 0775, true);
          file_put_contents("{$canon}/README.md/index.md", "# Kit v6.0.0\n");
-         $run($canon, 'add README.md');
-         $run($canon, 'commit --quiet -m "README.md becomes a directory"');
-         $v6 = $run($canon, 'rev-parse HEAD');
-         $run($canon, 'tag -a v6.0.0 -m "Six"');
+         $Run($canon, 'add README.md');
+         $Run($canon, 'commit --quiet -m "README.md becomes a directory"');
+         $v6 = $Run($canon, 'rev-parse HEAD');
+         $Run($canon, 'tag -a v6.0.0 -m "Six"');
          $flipped = $fixture['clone']('flipped', 'refs/tags/v1.0.0-beta.2');
          $Flipped = new class ($flipped, $canon) extends KitCommand {
             public function __construct (string $kit, string $repository)
@@ -377,23 +377,23 @@ return new Test(
 
          yield assert(
             assertion: $result === true && ($document['status'] ?? null) === 'moved'
-               && $run($flipped, 'rev-parse HEAD') === $v6 && is_dir("{$flipped}/README.md") === true,
+               && $Run($flipped, 'rev-parse HEAD') === $v6 && is_dir("{$flipped}/README.md") === true,
             description: 'a path that was a file and became a directory is a complete move, not a leftover'
          );
 
          // # A release that ADDS a submodule where the user already keeps a repository of
          //   their own: the checkout leaves the directory alone, `submodule update` (no
          //   --init) cannot register it — `partial`, with the remedy that actually works
-         $run($canon, 'submodule add --quiet ' . escapeshellarg($fixture['framework']) . ' Extra');
-         $run($canon, 'commit --quiet -m "add the Extra submodule"');
-         $v7 = $run($canon, 'rev-parse HEAD');
-         $run($canon, 'tag -a v7.0.0 -m "Seven"');
+         $Run($canon, 'submodule add --quiet ' . escapeshellarg($fixture['framework']) . ' Extra');
+         $Run($canon, 'commit --quiet -m "add the Extra submodule"');
+         $v7 = $Run($canon, 'rev-parse HEAD');
+         $Run($canon, 'tag -a v7.0.0 -m "Seven"');
          $occupied = $fixture['clone']('occupied', 'refs/tags/v1.0.0-beta.2');
          mkdir("{$occupied}/Extra", 0775, true);
-         $run("{$occupied}/Extra", 'init --quiet -b main');
+         $Run("{$occupied}/Extra", 'init --quiet -b main');
          file_put_contents("{$occupied}/Extra/mine.txt", "mine\n");
-         $run("{$occupied}/Extra", 'add mine.txt');
-         $run("{$occupied}/Extra", 'commit --quiet -m mine');
+         $Run("{$occupied}/Extra", 'add mine.txt');
+         $Run("{$occupied}/Extra", 'commit --quiet -m mine');
          $Occupied = new class ($occupied, $canon) extends KitCommand {
             public function __construct (string $kit, string $repository)
             {
@@ -423,12 +423,12 @@ return new Test(
             assertion: $result === false && ($document['status'] ?? null) === 'partial'
                && str_contains($document['detail'] ?? '', 'git submodule update --init -- Extra')
                && str_contains($document['detail'] ?? '', 'is not that submodule')
-               && file_get_contents("{$occupied}/Extra/mine.txt") === "mine\n" && $run($occupied, 'rev-parse HEAD') === $v7,
+               && file_get_contents("{$occupied}/Extra/mine.txt") === "mine\n" && $Run($occupied, 'rev-parse HEAD') === $v7,
             description: 'a new submodule landing on the user\'s own directory is `partial` with the `--init` remedy — the directory and its files are untouched'
          );
       }
       finally {
-         $erase($base);
+         $Erase($base);
       }
    }
 );

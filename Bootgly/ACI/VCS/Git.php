@@ -136,10 +136,12 @@ final class Git
          unset($environment[$variable]);
       }
       // ! Messages in one language, and no prompt a headless run would hang on —
-      //   neither the terminal's nor an askpass helper's
+      //   neither the terminal's nor an askpass helper's (a GUI dialog nobody is
+      //   there to answer): the helpers leave the environment — an empty value
+      //   would not reach the child at all — and ssh is told never to ask
       $environment['LC_ALL'] = 'C';
       $environment['GIT_TERMINAL_PROMPT'] = '0';
-      $environment['GIT_ASKPASS'] = '';
+      unset($environment['GIT_ASKPASS'], $environment['SSH_ASKPASS']);
       $environment['SSH_ASKPASS_REQUIRE'] = 'never';
 
       $this->output = '';

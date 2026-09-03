@@ -45,7 +45,7 @@ return new Test(
    test: function () {
       $base = sys_get_temp_dir() . '/bootgly-kit-guards-' . getmypid() . '-' . bin2hex(random_bytes(4));
       mkdir($base, 0775, true);
-      $erase = function (string $target) use (&$erase): void {
+      $Erase = function (string $target) use (&$Erase): void {
          if (is_link($target) === true || is_file($target) === true) {
             unlink($target);
 
@@ -55,7 +55,7 @@ return new Test(
             return;
          }
          foreach (array_diff((array) scandir($target), ['.', '..']) as $entry) {
-            $erase("{$target}/{$entry}");
+            $Erase("{$target}/{$entry}");
          }
          rmdir($target);
       };
@@ -65,9 +65,9 @@ return new Test(
          $canon = $fixture['canon'];
          $commits = $fixture['commits'];
          $shas = $fixture['shas'];
-         $run = $fixture['run'];
+         $Run = $fixture['run'];
 
-         $bind = static function (string $kit) use ($canon): KitCommand {
+         $Bind = static function (string $kit) use ($canon): KitCommand {
             return new class ($kit, $canon) extends KitCommand {
                public function __construct (string $kit, string $repository)
                {
@@ -83,7 +83,7 @@ return new Test(
                }
             };
          };
-         $probe = static function (KitCommand $Command, array $arguments, array $options): array {
+         $Probe = static function (KitCommand $Command, array $arguments, array $options): array {
             $Host = new Output('php://memory');
             $Terminal = CLI->Terminal;
             $Restore = $Terminal->Output;
@@ -99,7 +99,7 @@ return new Test(
 
             return [$result, is_array($document) ? $document : []];
          };
-         $blocked = static function (array $document, string $what, null|string $path = null): bool {
+         $Blocked = static function (array $document, string $what, null|string $path = null): bool {
             foreach ($document['blockers'] ?? [] as $blocker) {
                if (str_contains($blocker['what'], $what) && ($path === null || in_array($path, $blocker['paths'], true))) {
                   return true;
@@ -110,9 +110,9 @@ return new Test(
          };
 
          $kit = $fixture['clone']('kit', 'refs/tags/v1.0.0-beta.1');
-         $Kit = $bind($kit);
-         $still = static fn (): bool => $run($kit, 'rev-parse HEAD') === $commits['v1.0.0-beta.1']
-            && $run("{$kit}/Bootgly", 'rev-parse HEAD') === $shas['v1.0.0-beta.1'];
+         $Kit = $Bind($kit);
+         $Still = static fn (): bool => $Run($kit, 'rev-parse HEAD') === $commits['v1.0.0-beta.1']
+            && $Run("{$kit}/Bootgly", 'rev-parse HEAD') === $shas['v1.0.0-beta.1'];
 
          // # The user's data is dirty every which way — and never blocks
          file_put_contents("{$kit}/projects/App/notes.txt", "edited\n");
@@ -123,43 +123,43 @@ return new Test(
 
          // # A tracked file of the kit, edited
          file_put_contents("{$kit}/bootgly", "#!/usr/bin/env php\n<?php // edited\n");
-         [$result, $document] = $probe($Kit, ['upgrade', 'v1.0.0-beta.2'], ['json' => true]);
+         [$result, $document] = $Probe($Kit, ['upgrade', 'v1.0.0-beta.2'], ['json' => true]);
 
          yield assert(
             assertion: $result === false && ($document['status'] ?? null) === 'refused'
-               && $blocked($document, 'uncommitted changes', 'bootgly') && count($document['blockers'] ?? []) === 1 && $still(),
+               && $Blocked($document, 'uncommitted changes', 'bootgly') && count($document['blockers'] ?? []) === 1 && $Still(),
             description: 'an edited kit file is refused by name — the dirty projects/ and storage/ are not mentioned'
          );
-         $run($kit, 'checkout --quiet -- bootgly');
+         $Run($kit, 'checkout --quiet -- bootgly');
 
          // # A staged file
          file_put_contents("{$kit}/staged.txt", "staged\n");
-         $run($kit, 'add staged.txt');
-         [$result, $document] = $probe($Kit, ['upgrade', 'v1.0.0-beta.2'], ['json' => true]);
+         $Run($kit, 'add staged.txt');
+         [$result, $document] = $Probe($Kit, ['upgrade', 'v1.0.0-beta.2'], ['json' => true]);
 
          yield assert(
-            assertion: $result === false && $blocked($document, 'uncommitted changes', 'staged.txt') && $still(),
+            assertion: $result === false && $Blocked($document, 'uncommitted changes', 'staged.txt') && $Still(),
             description: 'a staged file is refused by name'
          );
-         $run($kit, 'reset --quiet -- staged.txt');
+         $Run($kit, 'reset --quiet -- staged.txt');
          unlink("{$kit}/staged.txt");
 
          // # An untracked file the release would overwrite — v1.0.0-beta.2 adds README.md
          file_put_contents("{$kit}/README.md", "# Mine\n");
-         [$result, $document] = $probe($Kit, ['upgrade', 'v1.0.0-beta.2'], ['json' => true]);
+         [$result, $document] = $Probe($Kit, ['upgrade', 'v1.0.0-beta.2'], ['json' => true]);
 
          yield assert(
-            assertion: $result === false && $blocked($document, 'would overwrite', 'README.md') && $still(),
+            assertion: $result === false && $Blocked($document, 'would overwrite', 'README.md') && $Still(),
             description: 'an untracked file the release carries is refused by name'
          );
          unlink("{$kit}/README.md");
 
          // # An IGNORED file the release would overwrite — v2.0.0 tracks storage/seed.json
          file_put_contents("{$kit}/storage/seed.json", "{\"mine\":true}\n");
-         [$result, $document] = $probe($Kit, ['upgrade', 'v2.0.0'], ['json' => true, 'yes' => true]);
+         [$result, $document] = $Probe($Kit, ['upgrade', 'v2.0.0'], ['json' => true, 'yes' => true]);
 
          yield assert(
-            assertion: $result === false && $blocked($document, 'would overwrite', 'storage/seed.json') && $still()
+            assertion: $result === false && $Blocked($document, 'would overwrite', 'storage/seed.json') && $Still()
                && file_get_contents("{$kit}/storage/seed.json") === "{\"mine\":true}\n",
             description: 'an ignored file the release carries is refused by name — git would have overwritten it in silence'
          );
@@ -167,57 +167,57 @@ return new Test(
 
          // # ...a path git would C-quote (`"caf\303\251.json"`) is matched all the same
          file_put_contents("{$kit}/storage/café.json", "MY OWN DATA\n");
-         [$result, $document] = $probe($Kit, ['upgrade', 'v2.0.0'], ['json' => true, 'yes' => true]);
+         [$result, $document] = $Probe($Kit, ['upgrade', 'v2.0.0'], ['json' => true, 'yes' => true]);
 
          yield assert(
-            assertion: $result === false && $blocked($document, 'would overwrite', 'storage/café.json') && $still()
+            assertion: $result === false && $Blocked($document, 'would overwrite', 'storage/café.json') && $Still()
                && file_get_contents("{$kit}/storage/café.json") === "MY OWN DATA\n",
             description: 'a non-ASCII path the release carries is refused by its real name — git\'s quoting does not hide it'
          );
          unlink("{$kit}/storage/café.json");
 
          // # A submodule moved away from the pin
-         $run("{$kit}/Bootgly", "checkout --quiet {$shas['v1.0.0-beta.2']}");
-         [$result, $document] = $probe($Kit, ['upgrade', 'v1.0.0-beta.2'], ['json' => true]);
+         $Run("{$kit}/Bootgly", "checkout --quiet {$shas['v1.0.0-beta.2']}");
+         [$result, $document] = $Probe($Kit, ['upgrade', 'v1.0.0-beta.2'], ['json' => true]);
 
          yield assert(
-            assertion: $result === false && $blocked($document, 'checked out away') && $run($kit, 'rev-parse HEAD') === $commits['v1.0.0-beta.1'],
+            assertion: $result === false && $Blocked($document, 'checked out away') && $Run($kit, 'rev-parse HEAD') === $commits['v1.0.0-beta.1'],
             description: 'a framework submodule checked out away from the pin is refused'
          );
 
          // # ...and staged as the new pin
-         $run($kit, 'add Bootgly');
-         [$result, $document] = $probe($Kit, ['upgrade', 'v1.0.0-beta.2'], ['json' => true]);
+         $Run($kit, 'add Bootgly');
+         [$result, $document] = $Probe($Kit, ['upgrade', 'v1.0.0-beta.2'], ['json' => true]);
 
          yield assert(
-            assertion: $result === false && $blocked($document, 'is staged'),
+            assertion: $result === false && $Blocked($document, 'is staged'),
             description: 'a staged gitlink is refused'
          );
-         $run($kit, 'reset --quiet -- Bootgly');
-         $run($kit, 'submodule update --quiet -- Bootgly');
+         $Run($kit, 'reset --quiet -- Bootgly');
+         $Run($kit, 'submodule update --quiet -- Bootgly');
 
          // # A submodule with its own changes
          file_put_contents("{$kit}/Bootgly/constant.txt", "edited\n");
-         [$result, $document] = $probe($Kit, ['upgrade', 'v1.0.0-beta.2'], ['json' => true]);
+         [$result, $document] = $Probe($Kit, ['upgrade', 'v1.0.0-beta.2'], ['json' => true]);
 
          yield assert(
-            assertion: $result === false && $blocked($document, 'Bootgly has uncommitted changes', 'constant.txt') && $still(),
+            assertion: $result === false && $Blocked($document, 'Bootgly has uncommitted changes', 'constant.txt') && $Still(),
             description: 'an edited file inside the framework submodule is refused by name'
          );
-         $run("{$kit}/Bootgly", 'checkout --quiet -- constant.txt');
+         $Run("{$kit}/Bootgly", 'checkout --quiet -- constant.txt');
 
          // # Untracked files the release does not carry never block — even under a
          //   directory the release brings (v1.0.0 adds docs/notes.md)
          file_put_contents("{$kit}/notes.local", "kept\n");
          mkdir("{$kit}/docs", 0775, true);
          file_put_contents("{$kit}/docs/other.md", "mine\n");
-         [$result, $document] = $probe($Kit, ['upgrade', 'v1.0.0'], ['json' => true]);
+         [$result, $document] = $Probe($Kit, ['upgrade', 'v1.0.0'], ['json' => true]);
 
          yield assert(
             assertion: $result === true && ($document['status'] ?? null) === 'moved'
                && is_file("{$kit}/notes.local") && is_file("{$kit}/docs/other.md") && is_file("{$kit}/docs/notes.md")
                && is_file("{$kit}/projects/App/new.txt")
-               && $run($kit, 'rev-parse HEAD') === $commits['v1.0.0'],
+               && $Run($kit, 'rev-parse HEAD') === $commits['v1.0.0'],
             description: 'with the kit clean of its own changes the move proceeds — unrelated untracked files (a sibling in the new docs/ included) and the dirty projects/ survive'
          );
 
@@ -260,7 +260,7 @@ return new Test(
          yield assert(
             assertion: $result === false && str_contains($spoken, 'appeared meanwhile') && str_contains($spoken, 'storage/seed.json')
                && file_get_contents("{$kit}/storage/seed.json") === "WRITTEN DURING THE PROMPT\n"
-               && $run($kit, 'rev-parse HEAD') === $commits['v1.0.0'],
+               && $Run($kit, 'rev-parse HEAD') === $commits['v1.0.0'],
             description: 'a file the release carries, created during the confirmation, blocks the checkout by name — nothing moves, the file is intact'
          );
          unlink("{$kit}/storage/seed.json");
@@ -269,31 +269,31 @@ return new Test(
          //   (`escapeshellarg` drops the byte under a UTF-8 locale — the pathspec goes by file)
          file_put_contents("{$kit}/caf\xe9.txt", "latin-1\n");
          file_put_contents("{$base}/pathspec", "caf\xe9.txt");
-         $run($kit, 'add --pathspec-from-file=' . escapeshellarg("{$base}/pathspec"));
-         [$result, $document] = $probe($Kit, ['upgrade', 'v2.0.0'], ['json' => true, 'yes' => true]);
-         $run($kit, 'reset --quiet --pathspec-from-file=' . escapeshellarg("{$base}/pathspec"));
+         $Run($kit, 'add --pathspec-from-file=' . escapeshellarg("{$base}/pathspec"));
+         [$result, $document] = $Probe($Kit, ['upgrade', 'v2.0.0'], ['json' => true, 'yes' => true]);
+         $Run($kit, 'reset --quiet --pathspec-from-file=' . escapeshellarg("{$base}/pathspec"));
          unlink("{$kit}/caf\xe9.txt");
 
          yield assert(
             assertion: $result === false && ($document['status'] ?? null) === 'refused'
-               && $blocked($document, 'uncommitted changes') && count($document['blockers'][0]['paths'] ?? []) === 1,
+               && $Blocked($document, 'uncommitted changes') && count($document['blockers'][0]['paths'] ?? []) === 1,
             description: 'a blocker path that is not valid UTF-8 does not sink the JSON document — it is substituted, not thrown'
          );
 
          // # ...but the very file the release carries, present in that directory, blocks
-         $Back = $bind($kit);
-         $probe($Back, ['downgrade', 'v1.0.0-beta.2'], ['json' => true]);
+         $Back = $Bind($kit);
+         $Probe($Back, ['downgrade', 'v1.0.0-beta.2'], ['json' => true]);
          file_put_contents("{$kit}/docs/notes.md", "# Mine\n");
-         [$result, $document] = $probe($Kit, ['upgrade', 'v1.0.0'], ['json' => true]);
+         [$result, $document] = $Probe($Kit, ['upgrade', 'v1.0.0'], ['json' => true]);
 
          yield assert(
-            assertion: $result === false && $blocked($document, 'would overwrite', 'docs/notes.md')
-               && $run($kit, 'rev-parse HEAD') === $commits['v1.0.0-beta.2'],
+            assertion: $result === false && $Blocked($document, 'would overwrite', 'docs/notes.md')
+               && $Run($kit, 'rev-parse HEAD') === $commits['v1.0.0-beta.2'],
             description: 'the one file the release carries under that directory is refused by name'
          );
       }
       finally {
-         $erase($base);
+         $Erase($base);
       }
    }
 );

@@ -37,7 +37,7 @@ return new Test(
    test: function () {
       $base = sys_get_temp_dir() . '/bootgly-kit-list-' . getmypid() . '-' . bin2hex(random_bytes(4));
       mkdir($base, 0775, true);
-      $erase = function (string $target) use (&$erase): void {
+      $Erase = function (string $target) use (&$Erase): void {
          if (is_link($target) === true || is_file($target) === true) {
             unlink($target);
 
@@ -47,7 +47,7 @@ return new Test(
             return;
          }
          foreach (array_diff((array) scandir($target), ['.', '..']) as $entry) {
-            $erase("{$target}/{$entry}");
+            $Erase("{$target}/{$entry}");
          }
          rmdir($target);
       };
@@ -56,9 +56,10 @@ return new Test(
          $fixture = (require __DIR__ . '/fixtures/kit_fixture.php')($base);
          $canon = $fixture['canon'];
          $commits = $fixture['commits'];
+         $Run = $fixture['run'];
 
          // ! The command bound to a fixture kit and its canonical repository
-         $bind = static function (string $kit) use ($canon): KitCommand {
+         $Bind = static function (string $kit) use ($canon): KitCommand {
             return new class ($kit, $canon) extends KitCommand {
                public function __construct (string $kit, string $repository)
                {
@@ -74,7 +75,7 @@ return new Test(
                }
             };
          };
-         $probe = static function (KitCommand $Command, array $arguments, array $options): array {
+         $Probe = static function (KitCommand $Command, array $arguments, array $options): array {
             $Host = new Output('php://memory');
             $Terminal = CLI->Terminal;
             $Restore = $Terminal->Output;
@@ -92,7 +93,7 @@ return new Test(
 
          // # A cloned kit on v1.0.0-beta.1 — bound with a trailing slash, as BOOTGLY_WORKING_DIR carries one
          $kit = $fixture['clone']('kit-clone', 'refs/tags/v1.0.0-beta.1');
-         [$result, $output] = $probe($bind("{$kit}/"), ['list'], ['json' => true]);
+         [$result, $output] = $Probe($Bind("{$kit}/"), ['list'], ['json' => true]);
          $document = json_decode($output, true);
 
          yield assert(
@@ -118,7 +119,7 @@ return new Test(
             description: 'a kit on a release is located on it, distance 0'
          );
 
-         [$result, $output] = $probe($bind($kit), ['list'], []);
+         [$result, $output] = $Probe($Bind($kit), ['list'], []);
 
          yield assert(
             assertion: $result === true && str_contains($output, 'v1.0.0-beta.1') && str_contains($output, 'current')
@@ -128,7 +129,7 @@ return new Test(
 
          // # A kit one commit past v1.0.0
          $past = $fixture['clone']('kit-past', $commits['past']);
-         [, $output] = $probe($bind($past), ['list'], ['json' => true]);
+         [, $output] = $Probe($Bind($past), ['list'], ['json' => true]);
          $document = json_decode($output, true);
 
          yield assert(
@@ -139,7 +140,7 @@ return new Test(
 
          // # ...even when a tag of another shape sits nearer
          $fixture['run']($past, 'tag nightly HEAD');
-         [, $output] = $probe($bind($past), ['list'], ['json' => true]);
+         [, $output] = $Probe($Bind($past), ['list'], ['json' => true]);
          $document = json_decode($output, true);
 
          yield assert(
@@ -148,10 +149,10 @@ return new Test(
          );
 
          // # A kit generated from the template: no tag reaches its squashed commit
-         $template = $fixture['template']('kit-template', 'v1.0.0-beta.2');
-         [, $output] = $probe($bind($template), ['list'], ['json' => true]);
+         $Template = $fixture['template']('kit-template', 'v1.0.0-beta.2');
+         [, $output] = $Probe($Bind($Template), ['list'], ['json' => true]);
          $document = json_decode($output, true);
-         $remote = $fixture['run']($template, 'remote get-url bootgly');
+         $remote = $fixture['run']($Template, 'remote get-url bootgly');
 
          yield assert(
             assertion: is_array($document) && $document['current']['tag'] === 'v1.0.0-beta.2'
@@ -160,11 +161,31 @@ return new Test(
             description: 'a template kit gets the canonical remote added (and says so) and is located by its Bootgly pin'
          );
 
+         // # The framework submodule is matched by PATH, whatever its name in .gitmodules
+         $renamed = $fixture['template']('renamed', 'v1.0.0-beta.1');
+         $Run($renamed, 'config --file .gitmodules submodule.Bootgly.path Bootgly');
+         $Run($renamed, 'config --file .gitmodules --rename-section submodule.Bootgly submodule.framework');
+         $Run($renamed, 'add .gitmodules');
+         $Run($renamed, 'commit --quiet -m "rename the submodule section"');
+         [$result, $output] = $Probe($Bind($renamed), ['list'], ['json' => true]);
+         $document = json_decode($output, true);
+         $misplaced = $fixture['template']('misplaced', 'v1.0.0-beta.1');
+         $Run($misplaced, 'mv Bootgly Framework');
+         $Run($misplaced, 'commit --quiet -m "move the submodule"');
+         [$again, $output] = $Probe($Bind($misplaced), ['list'], ['json' => true]);
+         $other = json_decode($output, true);
+
+         yield assert(
+            assertion: $result === true && is_array($document) && $document['status'] === 'listed'
+               && $again === false && is_array($other) && str_contains($other['reason'], 'not a Bootgly kit'),
+            description: 'a submodule named otherwise at path Bootgly is the kit\'s framework; one named Bootgly at another path is not'
+         );
+
          // # Not a kit
          $plain = "{$base}/plain";
          mkdir($plain, 0775, true);
          $fixture['run']($plain, 'init --quiet -b main');
-         [$result, $output] = $probe($bind($plain), ['list'], ['json' => true]);
+         [$result, $output] = $Probe($Bind($plain), ['list'], ['json' => true]);
          $document = json_decode($output, true);
 
          yield assert(
@@ -174,9 +195,9 @@ return new Test(
          );
 
          // # The verbs and the options are checked before anything is read
-         [$result] = $probe($bind($kit), ['list'], ['yes' => true]);
-         [$again, $output] = $probe($bind($kit), ['nope'], []);
-         [$bare, $help] = $probe($bind($kit), [], []);
+         [$result] = $Probe($Bind($kit), ['list'], ['yes' => true]);
+         [$again, $output] = $Probe($Bind($kit), ['nope'], []);
+         [$bare, $help] = $Probe($Bind($kit), [], []);
 
          yield assert(
             assertion: $result === false && $again === false && str_contains($output, 'Unknown kit verb')
@@ -185,11 +206,11 @@ return new Test(
          );
 
          // # ...and under --json each of those is one refused document, not an alert
-         [$result, $output] = $probe($bind($kit), ['list'], ['json' => true, 'yes' => true]);
+         [$result, $output] = $Probe($Bind($kit), ['list'], ['json' => true, 'yes' => true]);
          $option = json_decode($output, true);
-         [$again, $output] = $probe($bind($kit), ['nope'], ['json' => true]);
+         [$again, $output] = $Probe($Bind($kit), ['nope'], ['json' => true]);
          $verb = json_decode($output, true);
-         [$bare, $output] = $probe($bind($kit), [], ['json' => true]);
+         [$bare, $output] = $Probe($Bind($kit), [], ['json' => true]);
          $none = json_decode($output, true);
 
          yield assert(
@@ -200,7 +221,7 @@ return new Test(
          );
       }
       finally {
-         $erase($base);
+         $Erase($base);
       }
    }
 );
