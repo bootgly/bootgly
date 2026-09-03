@@ -27,7 +27,7 @@ if (defined('BOOTGLY_STORAGE_DIR') === false) {
    define('BOOTGLY_STORAGE_DIR', BOOTGLY_STORAGE_BASE . DIRECTORY_SEPARATOR);
 }
 
-define('BOOTGLY_VERSION', '1.0.0-rc.1');
+define('BOOTGLY_VERSION', '1.0.0-dev');
 
 // ? Platform interface override for embedded runtimes (e.g. WASM) that behave as a console.
 // BOOTGLY_SAPI answers "which platform interface"; PHP_SAPI stays for "what can this process actually do".
