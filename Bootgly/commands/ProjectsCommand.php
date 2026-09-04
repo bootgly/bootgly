@@ -58,7 +58,6 @@ use function mb_strlen;
 use function mb_substr;
 use function posix_getuid;
 use function preg_match;
-use function preg_replace;
 use function proc_close;
 use function proc_open;
 use function rmdir;
@@ -106,7 +105,7 @@ class ProjectsCommand extends Command
 {
    // * Config
    /** The wizard Validator and the non-interactive create enforce the same port rule: 1–65535, no leading zeros. */
-   private const string PORT_PATTERN = '#^(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5])$#';
+   private const string PORT_PATTERN = '#^(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5])$#D';
    /** Scratch-route defaults — `weigh()` judges these values and `create()` consumes them. */
    private const string INTERFACE = 'CLI';
    private const string PORT = '8080';
@@ -345,7 +344,7 @@ class ProjectsCommand extends Command
       $source = $this->trace($from);
       // ?
       if ($source === null) {
-         $message = "Source project @#cyan:{$from}@; not found in the platform folders.";
+         $message = "Source project @#cyan:" . $this->clean($from) . "@; not found in the platform folders.";
          // ? Platforms not initialized in the kit are invisible to trace()
          if (
             BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR
@@ -475,7 +474,7 @@ class ProjectsCommand extends Command
       if ($interface !== 'CLI' && $interface !== 'WPI') {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = "Invalid interface: @#cyan:{$interface}@;. Use CLI or WPI.";
+         $Alert->message = "Invalid interface: @#cyan:" . $this->clean($interface) . "@;. Use CLI or WPI.";
          $Alert->render();
 
          return false;
@@ -1312,7 +1311,7 @@ class ProjectsCommand extends Command
             if ($source === null) {
                $Alert = new Alert($Wizard->Output);
                $Alert->Type::Failure->set();
-               $Alert->message = "Source project @#cyan:{$from}@; not found in the platform folders.";
+               $Alert->message = "Source project @#cyan:" . $this->clean($from) . "@; not found in the platform folders.";
                $Alert->render();
 
                throw new Exception('source not found');
@@ -2026,7 +2025,7 @@ class ProjectsCommand extends Command
          if ($platform !== 'console' && $platform !== 'web') {
             $Alert = new Alert(CLI->Terminal->Output);
             $Alert->Type::Failure->set();
-            $Alert->message = "Invalid platform: @#cyan:{$platform}@;. "
+            $Alert->message = "Invalid platform: @#cyan:" . $this->clean($platform) . "@;. "
                . 'Use console, web, console,web or none.';
             $Alert->render();
 
@@ -2036,34 +2035,6 @@ class ProjectsCommand extends Command
 
       // :
       return $platforms;
-   }
-
-   /**
-    * Clean untrusted text for display in a rendered message.
-    *
-    * Anything a user supplies — a clone URL, a project path — reaches the
-    * terminal through `Output::render()`, which reads `@` directives, and
-    * through the terminal itself, which reads control bytes. A crafted URL in
-    * a README can therefore write the clipboard (OSC 52) or set the title from
-    * a REFUSAL message, and the refusal is the deterministic path: `vet()`
-    * rejects such a name every time.
-    *
-    * Only the `@` that would OPEN a directive is dropped — the trigger set of
-    * `ABI\Templates\Template\Escaped` — so `git@github.com:owner/repo.git`,
-    * the mainstream SSH clone URL, survives intact.
-    *
-    * @param string $text
-    *
-    * @return string
-    */
-   private function clean (string $text): string
-   {
-      // :
-      return (string) preg_replace(
-         '%[\x00-\x1F\x7F]|\xC2[\x80-\x9F]|@(?=[#!\\\\.:@*~_;-])|(?<=[*~_-])@%',
-         '',
-         $text
-      );
    }
 
    /**
@@ -2127,14 +2098,14 @@ class ProjectsCommand extends Command
       // ? Interface
       $interface = strtoupper((string) ($options['interfaces'] ?? self::INTERFACE));
       if ($interface !== 'CLI' && $interface !== 'WPI') {
-         return "Invalid interface: @#cyan:{$interface}@;. Use CLI or WPI.";
+         return "Invalid interface: @#cyan:" . $this->clean($interface) . "@;. Use CLI or WPI.";
       }
 
       // ? Port validity — the same rule the wizard Validator enforces;
       //   `(int) 'not-a-port'` would otherwise bind the server on port 0
       $port = (string) ($options['port'] ?? self::PORT);
       if (preg_match(self::PORT_PATTERN, $port) !== 1) {
-         return "Invalid port: @#cyan:{$port}@;. Use a number between 1 and 65535.";
+         return "Invalid port: @#cyan:" . $this->clean($port) . "@;. Use a number between 1 and 65535.";
       }
 
       // ? Control characters — generate() refuses them too, but its refusal

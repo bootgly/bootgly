@@ -369,7 +369,10 @@ abstract class Projects
    public static function vet (string $path): bool
    {
       // :
-      return preg_match('#^[A-Z][A-Za-z0-9_-]*(?:/[A-Z][A-Za-z0-9_-]*)*$#', $path) === 1;
+      // ! `/D` — without it PCRE's `$` also matches before a final newline, so
+      //   `"App\n"` passed this closed alphabet and reached the registry as a
+      //   key with an embedded newline
+      return preg_match('#^[A-Z][A-Za-z0-9_-]*(?:/[A-Z][A-Za-z0-9_-]*)*$#D', $path) === 1;
    }
 
    /**

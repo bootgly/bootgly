@@ -1681,40 +1681,4 @@ class KitCommand extends Command
       // : `@#cyan:` / `@_:` open a style, `@;` closes it, `@.;` breaks a line, `@---;` rules
       return preg_replace('/@(?:[#_]\w*:|\.+;|-+;|;)/', '', $markup) ?? $markup;
    }
-
-   /**
-    * Clean text that came from outside — a tag annotation, a path, a remote
-    * name, the caller's own argument — before it enters a rendered line or
-    * the JSON document.
-    *
-    * Control characters, C0 and C1 alike, would drive the terminal (title,
-    * colours, erased lines); an `@` that could open or close Output markup —
-    * one not followed by a letter or a digit (`@#`, `@;`, `@.`, `@:`, `@@`,
-    * `@*`, `@\\`), or one right after `*`, `~`, `_`, `-` (the closers) — would
-    * drive it and goes; a plain `@` between word characters, legal in a path
-    * and in a ref, stays; a byte that is not UTF-8 would make the JSON
-    * encoder throw.
-    * Line breaks go too, unless the text is a multi-line note.
-    *
-    * @param string $text
-    * @param bool $breaks Keep line feeds.
-    *
-    * @return string
-    */
-   private function clean (string $text, bool $breaks = false): string
-   {
-      // ! C0, C1, and the zero-width / bidi format characters that disguise a path
-      $invisible = '\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{2066}-\x{206F}\x{FEFF}';
-      $controls = $breaks
-         ? "/[\\x00-\\x09\\x0B-\\x1F\\x7F\\x{80}-\\x{9F}{$invisible}]/u"
-         : "/[\\x00-\\x1F\\x7F\\x{80}-\\x{9F}{$invisible}]/u";
-      $cleaned = preg_replace($controls, '', $text);
-      // ? Not UTF-8 at all: keep printable ASCII (and the break) only
-      if ($cleaned === null) {
-         $cleaned = preg_replace($breaks ? '/[^\x0A\x20-\x7E]/' : '/[^\x20-\x7E]/', '?', $text) ?? '';
-      }
-
-      // :
-      return preg_replace('/(?<=[*~_-])@|@(?![\p{L}\p{N}])/u', '', $cleaned) ?? str_replace('@', '', $cleaned);
-   }
 }

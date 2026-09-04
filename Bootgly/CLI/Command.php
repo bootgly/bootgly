@@ -17,8 +17,10 @@ use function implode;
 use function in_array;
 use function ltrim;
 use function max;
+use function preg_replace;
 use function rtrim;
 use function str_pad;
+use function str_replace;
 use function strlen;
 use function strtok;
 use Closure;
@@ -133,6 +135,54 @@ abstract class Command
    }
 
    /**
+    * Clean text that came from outside — a tag annotation, a path, a remote
+    * name, the caller's own argument — before it enters a rendered line or
+    * the JSON document.
+    *
+    * Control characters, C0 and C1 alike, would drive the terminal (title,
+    * colours, erased lines); an `@` that could open or close Output markup —
+    * one not followed by a letter or a digit (`@#`, `@;`, `@.`, `@:`, `@@`,
+    * `@*`, `@\\`), or one right after `*`, `~`, `_`, `-` (the closers) — would
+    * drive it and goes; a plain `@` between word characters, legal in a path
+    * and in a ref, stays; a byte that is not UTF-8 would make the JSON
+    * encoder throw.
+    * Line breaks go too, unless the text is a multi-line note.
+    *
+    * @param string $text
+    * @param bool $breaks Keep line feeds.
+    *
+    * @return string
+    */
+   protected function clean (string $text, bool $breaks = false): string
+   {
+      // ! C0, C1, and the zero-width / bidi format characters that disguise a path
+      $invisible = '\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{2066}-\x{206F}\x{FEFF}';
+      $controls = $breaks
+         ? "/[\\x00-\\x09\\x0B-\\x1F\\x7F\\x{80}-\\x{9F}{$invisible}]/u"
+         : "/[\\x00-\\x1F\\x7F\\x{80}-\\x{9F}{$invisible}]/u";
+      $cleaned = preg_replace($controls, '', $text);
+      // ? Not UTF-8 at all: keep printable ASCII (and the break) only
+      if ($cleaned === null) {
+         $cleaned = preg_replace($breaks ? '/[^\x0A\x20-\x7E]/' : '/[^\x20-\x7E]/', '?', $text) ?? '';
+      }
+
+      // @@ To a FIXED POINT: one pass is not closed under its own deletions —
+      //   in `*@@`, dropping the first `@` leaves the second one preceded by
+      //   `*`, which is the reset directive. Each pass shortens the text or
+      //   ends the loop.
+      do {
+         $previous = $cleaned;
+         $cleaned = preg_replace('/(?<=[*~_-])@|@(?![\p{L}\p{N}])/u', '', $cleaned)
+            ?? str_replace('@', '', $cleaned);
+      }
+      while ($cleaned !== $previous);
+
+      // :
+      return $cleaned;
+   }
+
+
+   /**
     * Refuse an option this subcommand does not implement.
     *
     * The parser accepts any `--flag` (`CLI/Commands/Arguments.php`) and a
@@ -174,14 +224,14 @@ abstract class Command
 
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = "Unknown option @#cyan:--{$option}@; for this command.";
+         $Alert->message = 'Unknown option @#cyan:--' . $this->clean($option) . '@; for this command.';
          $Alert->render();
 
          // ! The Alert clips a long line, so the actionable half gets its own —
          //   knowing the flag is refused is loud, knowing where it applies is
          //   what lets the caller fix the command.
          if ($applies !== '') {
-            $Output->render("@#Green:Note:@; @#Blue:--{$option}@; is: {$applies}.@.;");
+            $Output->render('@#Green:Note:@; @#Blue:--' . $this->clean($option) . "@; is: {$applies}.@.;");
          }
 
          return false;

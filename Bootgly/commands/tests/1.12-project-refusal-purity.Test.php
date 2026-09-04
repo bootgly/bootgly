@@ -270,6 +270,45 @@ return new Test(
             description: 'a refusal renders a hostile path as text, never as markup or an escape'
          );
 
+         // @ Every OTHER user-supplied value in a refusal, too: the path was
+         //   scrubbed and its siblings were not, so `--port` alone emitted a
+         //   verbatim OSC 52 from a message. Each of these refuses BEFORE the
+         //   kit is touched, so what is under test is only what reaches the
+         //   terminal. `Ev*@@il` carries no control byte at all — it is the
+         //   scrub re-forming a directive out of its own deletions.
+         $osc = "\x1b]52;c;cHduZWQ=\x07";
+         $raw = [
+            '--port' => ['projects', 'create', 'App', '--yes', '--platform=none',
+               '--interfaces=WPI', "--port={$osc}@#red:X"],
+            '--interfaces' => ['projects', 'create', 'App', '--yes', '--platform=none',
+               "--interfaces={$osc}x"],
+            '--platform' => ['projects', 'create', 'App', '--yes', "--platform={$osc}x"],
+            '--from' => ['projects', 'create', 'App', '--yes', '--platform=none',
+               "--from={$osc}EvilSource"],
+            'an unknown flag' => ['projects', 'create', 'App', '--yes', "--{$osc}x=1"],
+            'a path re-forming a directive' => ['projects', 'create', 'Ev*@@il',
+               '--yes', '--platform=none', '--interfaces=CLI'],
+            'a path splitting a directive' => ['projects', 'create', "Ev@\x01#red:il",
+               '--yes', '--platform=none', '--interfaces=CLI'],
+         ];
+         $leaked = [];
+         foreach ($raw as $label => $arguments) {
+            [, $said] = $run([$entry, ...$arguments], $environment, $directory);
+            $erase("{$directory}/projects");
+            $erase("{$directory}/scripts");
+            $erase("{$directory}/storage");
+
+            if (str_contains($said, "\x1b]") === true || str_contains($said, "\x1b[31m") === true) {
+               $leaked[] = $label;
+            }
+         }
+
+         yield assert(
+            assertion: $leaked === [],
+            description: 'no refusal hands the terminal an escape or a directive it was given, '
+               . 'leaked by: ' . json_encode($leaked)
+         );
+
          // @ ...and the scrub must not overshoot: `git@host:owner/repo.git` is
          //   the mainstream SSH clone URL, and the `@` in it opens no
          //   directive. Deleting it would show a URL that does not exist —
