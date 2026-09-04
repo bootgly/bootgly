@@ -11,8 +11,8 @@
 namespace Demo\HTTPS_Server_CLI;
 
 
+use const BOOTGLY_PROJECT;
 use const BOOTGLY_ROOT_DIR;
-use function defined;
 use function getenv;
 
 use const Bootgly\CLI;
@@ -62,18 +62,18 @@ return new Project(
       );
       $HTTP_Server_CLI
          ->on(Events::RequestReceived, fn ($Request, $Response) => $Response(body: 'Hello, Secure World!'))
-         ->on(Events::ServerStarted, function ($HTTP_Server_CLI) {
+         // # Launch banner — fired on the process that owns the terminal. On Daemon
+         //   mode the master is already detached, so the launcher renders it here;
+         //   `ServerStarted` would write to a closed stream and print nothing.
+         ->on(Events::ServerAdvertised, function ($HTTP_Server_CLI) {
             $Output = CLI->Terminal->Output;
-            $protocol = $HTTP_Server_CLI->socket ?? 'https://';
-            $host = $HTTP_Server_CLI->host ?? '0.0.0.0';
-            $port = $HTTP_Server_CLI->port ?? 0;
 
             $Output->render('@.;@#green:✓ Bootgly HTTPS Server started@;@.;');
-            $Output->render('  Listening on @#cyan:' . $protocol . $host . ':' . $port . '@;@.;');
+            $HTTP_Server_CLI->advertise();
             $Output->render('  @#green:● Ready for connections@;@..;');
 
-            $projectName = defined('BOOTGLY_PROJECT') ? BOOTGLY_PROJECT->folder : 'Demo/HTTPS_Server_CLI';
-            $Output->render('@#Green:Tip:@; Use @#Black:bootgly project stop ' . $projectName . '@; to stop the server.@..;');
+            $project = BOOTGLY_PROJECT->folder;
+            $Output->render("@#Green:Tip:@; Use @#Black:`bootgly project stop {$project}`@; to stop the server.@..;");
          })
          ->on(Events::ServerStopped, function ($HTTP_Server_CLI) {
             $Output = CLI->Terminal->Output;

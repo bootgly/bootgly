@@ -11,7 +11,7 @@
 namespace Benchmark\HTTP_Server_CLI;
 
 
-use function defined;
+use const BOOTGLY_PROJECT;
 use function exec;
 use function getenv;
 use function is_string;
@@ -130,19 +130,18 @@ return new Project(
          ->on(HTTP_Server_Events::RequestReceived, $Handler);
 
       $Server
-         ->on(HTTP_Server_Events::ServerStarted, function ($HTTP_Server_CLI) {
+         // # Launch banner — fired on the process that owns the terminal. On Daemon
+         //   mode the master is already detached, so the launcher renders it here;
+         //   `ServerStarted` would write to a closed stream and print nothing.
+         ->on(HTTP_Server_Events::ServerAdvertised, function ($HTTP_Server_CLI) {
                $Output = CLI->Terminal->Output;
 
-               $protocol = $HTTP_Server_CLI->socket ?? 'http://';
-               $host = $HTTP_Server_CLI->host ?? '0.0.0.0';
-               $port = $HTTP_Server_CLI->port ?? 0;
-
                $Output->render('@.;@#green:✓ Bootgly HTTP Server started@;@.;');
-               $Output->render('  Listening on @#cyan:' . $protocol . $host . ':' . $port . '@;@.;');
+               $HTTP_Server_CLI->advertise();
                $Output->render('  @#green:● Ready for connections@;@..;');
 
-               $projectName = defined('BOOTGLY_PROJECT') ? BOOTGLY_PROJECT->folder : 'Benchmark/HTTP_Server_CLI';
-               $Output->render('@#Green:Tip:@; Use @#Black:`bootgly project stop` ' . $projectName . '@; to stop the server.@..;');
+               $project = BOOTGLY_PROJECT->folder;
+               $Output->render("@#Green:Tip:@; Use @#Black:`bootgly project stop {$project}`@; to stop the server.@..;");
             })
          ->on(HTTP_Server_Events::ServerStopped, function ($HTTP_Server_CLI) {
                $Output = CLI->Terminal->Output;

@@ -58,14 +58,17 @@ return new Project(
             uri: {$Request->URI}
             BODY);
          })
-         ->on(Events::ServerStarted, function ($HTTP_Server_CLI) {
+         // # Launch banner — fired on the process that owns the terminal. On Daemon
+         //   mode the master is already detached, so the launcher renders it here;
+         //   `ServerStarted` would write to a closed stream and print nothing.
+         ->on(Events::ServerAdvertised, function ($HTTP_Server_CLI) {
             $Output = CLI->Terminal->Output;
 
-            $host = $HTTP_Server_CLI->host ?? '0.0.0.0';
             $port = $HTTP_Server_CLI->port ?? 0;
 
             $Output->render('@.;@#green:✓ Bootgly HTTP/2 demo started@;@.;');
-            $Output->render("  Listening on @#cyan:http://{$host}:{$port}@; (h2c prior knowledge + HTTP/1.1)@.;");
+            $HTTP_Server_CLI->advertise();
+            $Output->render('  Serving @#Black:h2c prior knowledge + HTTP/1.1@;@.;');
             $Output->render("  Try: @#yellow:curl --http2-prior-knowledge http://127.0.0.1:{$port}/@;@.;");
             $Output->render("  Compliance: @#yellow:h2spec -h 127.0.0.1 -p {$port}@;@..;");
          });

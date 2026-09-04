@@ -107,15 +107,15 @@ return new Project(
 
             return "echo: {$Message->payload}";
          })
-         ->on(Events::ServerStarted, function ($WS_Server_CLI) {
+         // # Launch banner — fired on the process that owns the terminal. On Daemon
+         //   mode the master is already detached, so the launcher renders it here;
+         //   `ServerStarted` would write to a closed stream and print nothing.
+         ->on(Events::ServerAdvertised, function ($WS_Server_CLI) {
             $Output = CLI->Terminal->Output;
 
-            $protocol = $WS_Server_CLI->socket ?? 'ws://';
-            $host = $WS_Server_CLI->host ?? '0.0.0.0';
-            $port = $WS_Server_CLI->port ?? 0;
-
             $Output->render('@.;@#green:✓ Bootgly WebSocket Server started@;@.;');
-            $Output->render('  Listening on @#cyan:' . $protocol . $host . ':' . $port . '@;@..;');
+            $WS_Server_CLI->advertise();
+            $Output->render('  @#green:● Ready for connections@;@..;');
          })
          ->on(Events::ServerStopped, function ($WS_Server_CLI) {
             $Output = CLI->Terminal->Output;

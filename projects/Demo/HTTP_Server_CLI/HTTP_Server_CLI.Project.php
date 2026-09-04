@@ -11,8 +11,8 @@
 namespace Demo\HTTP_Server_CLI;
 
 
+use const BOOTGLY_PROJECT;
 use const BOOTGLY_STORAGE_DIR;
-use function defined;
 use function getenv;
 
 use const Bootgly\CLI;
@@ -78,20 +78,20 @@ return new Project(
          // # Routes — the active set is selected in router/router.index.php
          //   (swap the require there to switch demos)
          ->on(Events::RequestReceived, HTTP_Server_CLI::$Router->load(__DIR__ . '/router'))
-         ->on(Events::ServerStarted, function ($HTTP_Server_CLI) {
+         // # Launch banner — fired on the process that owns the terminal. On Daemon
+         //   mode the master is already detached, so the launcher renders it here;
+         //   `ServerStarted` would write to a closed stream and print nothing.
+         ->on(Events::ServerAdvertised, function ($HTTP_Server_CLI) {
             $Output = CLI->Terminal->Output;
 
-            $protocol = $HTTP_Server_CLI->socket ?? 'http://';
-            $host = $HTTP_Server_CLI->host ?? '0.0.0.0';
-            $port = $HTTP_Server_CLI->port ?? 0;
-
             $Output->render('@.;@#green:✓ Bootgly HTTP Server started@;@.;');
-            $Output->render('  Listening on @#cyan:' . $protocol . $host . ':' . $port . '@;@.;');
+            $HTTP_Server_CLI->advertise();
             $Output->render('  @#green:● Ready for connections@;@..;');
 
-            $projectName = defined('BOOTGLY_PROJECT') ? BOOTGLY_PROJECT->folder : 'Demo/HTTP_Server_CLI';
-            $Output->render('@#Green:Tip:@; Use @#Black:`bootgly project stop` ' . $projectName . '@; to stop the server.@..;');
-
+            $project = BOOTGLY_PROJECT->folder;
+            $Output->render("@#Green:Tip:@; Use @#Black:`bootgly project stop {$project}`@; to stop the server.@..;");
+         })
+         ->on(Events::ServerStarted, function ($HTTP_Server_CLI) {
             // @ Demo log/heartbeat — rotating-level logs from a few channels.
             //   Generated only where they belong: Monitor (streamed live to the
             //   viewer via Logger::$Tap) and Daemon (persisted to the unified app

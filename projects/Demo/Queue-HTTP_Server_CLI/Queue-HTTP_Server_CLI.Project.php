@@ -37,6 +37,7 @@ return new Project(
       Queues::boot(['driver' => 'file']);
 
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: match (true) {
+         isset($options['f']) => Modes::Foreground,
          isset($options['i']) => Modes::Interactive,
          isset($options['m']) => Modes::Monitor,
          default => Modes::Daemon
@@ -51,12 +52,17 @@ return new Project(
 
       $HTTP_Server_CLI
          ->on(Events::RequestReceived, require __DIR__ . '/router/Queue.SAPI.php')
-         ->on(Events::ServerStarted, function ($HTTP_Server_CLI) {
+         // # Launch banner — fired on the process that owns the terminal. On Daemon
+         //   mode the master is already detached, so the launcher renders it here;
+         //   `ServerStarted` would write to a closed stream and print nothing.
+         ->on(Events::ServerAdvertised, function ($HTTP_Server_CLI) {
             $Output = CLI->Terminal->Output;
+
             $port = $HTTP_Server_CLI->port ?? 8083;
 
-            $Output->render('@.;@#green:✓ Queue demo server started@; on @#cyan:http://0.0.0.0:' . $port . '@;@.;');
-            $Output->render('  @#Black:Enqueue:@; curl http://127.0.0.1:' . $port . '/email/alice@example.com@.;');
+            $Output->render('@.;@#green:✓ Queue demo server started@;@.;');
+            $HTTP_Server_CLI->advertise();
+            $Output->render("  @#Black:Enqueue:@; curl http://127.0.0.1:{$port}/email/alice@example.com@.;");
             $Output->render('  @#Black:Process:@; bootgly queue run   (then tail storage/queue-demo.log)@..;');
          })
          ->on(Events::ServerStopped, function ($HTTP_Server_CLI) {

@@ -27,5 +27,6 @@ return new Suite(
       '2.7-fill',
       '3.1-index',
       '3.2-load',
+      '3.3-shipped-hooks',
    ]
 );
