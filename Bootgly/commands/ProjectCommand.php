@@ -40,6 +40,8 @@ use function count;
 use function escapeshellarg;
 use function file_get_contents;
 use function file_put_contents;
+use function fileowner;
+use function filesize;
 use function function_exists;
 use function getenv;
 use function glob;
@@ -52,7 +54,9 @@ use function is_file;
 use function is_int;
 use function is_link;
 use function is_numeric;
+use function is_readable;
 use function is_string;
+use function json_decode;
 use function json_encode;
 use function lstat;
 use function microtime;
@@ -2293,13 +2297,64 @@ class ProjectCommand extends Command
          return;
       }
 
-      // ? Only when candidate state files actually exist
+      // ! Only a state this account genuinely cannot reach earns the tip. Two
+      //   ordinary leftovers used to trigger it and sent the reader after a
+      //   privilege problem that was never there: the zero-byte tombstone
+      //   `State::clean()` writes on every successful stop (it truncates in
+      //   place, because a demoted runtime UID cannot unlink), and a readable
+      //   state whose master is simply gone — stale, not foreign.
       $encoded = Projects::encode($projectName);
       $states = array_merge(
          glob(BOOTGLY_STORAGE_DIR . "pids/{$encoded}.json") ?: [],
          glob(BOOTGLY_STORAGE_DIR . "pids/{$encoded}.*.json") ?: []
       );
-      if ($states === []) {
+
+      // @@
+      $foreign = false;
+      foreach ($states as $state) {
+         // ? The project's own clean-stop marker
+         $size = @filesize($state);
+         if ($size === false || $size === 0) {
+            continue;
+         }
+
+         // ? Written by another account — the boundary this tip describes
+         $owner = @fileowner($state);
+         if ($owner !== false && $owner !== posix_geteuid()) {
+            $foreign = true;
+            break;
+         }
+
+         // ? Unreadable here for any other reason is a boundary too
+         if (is_readable($state) === false) {
+            $foreign = true;
+            break;
+         }
+
+         // ? Ours and readable: a master that is gone left stale state, while
+         //   one that is alive and unsignalable runs under another account.
+         //   The document is runtime-writable, so the read is bounded — a
+         //   truncated prefix simply fails to decode and yields no master.
+         $data = json_decode(
+            (string) @file_get_contents($state, false, null, 0, 65536),
+            true
+         );
+         $master = is_array($data) ? ($data['master'] ?? null) : null;
+         if (
+            is_int($master)
+            // ? Never 0 or negative — those signal a whole process group
+            && $master > 0
+            && posix_kill($master, 0) === false
+            // ? EPERM — the process exists and belongs to someone else
+            && posix_get_last_error() === 1
+         ) {
+            $foreign = true;
+            break;
+         }
+      }
+
+      // ?
+      if ($foreign === false) {
          return;
       }
 
