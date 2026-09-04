@@ -193,6 +193,22 @@ class State
          return false;
       }
 
+      // ! `open()` applies its mask only when it CREATES the inode, so a lock
+      //   restored from a backup, pre-created by a deploy or left behind by
+      //   another UID arrives with whatever mode it had. `authenticate()`
+      //   demands exactly 0600, so serving on such an inode would publish an
+      //   instance no control command could ever verify — it would start,
+      //   bind and answer while `stop`/`show`/`reload` all report it absent.
+      //   Repair it here; fail closed when the repair is impossible.
+      if ($this->seal($this->lockHandle) === false) {
+         fclose($this->lockHandle);
+
+         $this->lockHandle = null;
+         $this->ownerPID = null;
+
+         return false;
+      }
+
       $locked = flock($this->lockHandle, $flag);
 
       // ? Lock held by another process (LOCK_NB): release the handle
@@ -993,6 +1009,43 @@ class State
       }
 
       return $Handle;
+   }
+
+   /**
+    * Force the instance lock inode to the exact 0600 mode `authenticate()`
+    * demands, on the descriptor `open()` already proved to be the regular
+    * file it validated.
+    *
+    * @param resource $Handle
+    */
+   private function seal (mixed $Handle): bool
+   {
+      $opened = @fstat($Handle);
+      if (is_array($opened) === false) {
+         return false;
+      }
+
+      // ? Already exact
+      if (((int) $opened['mode'] & 0777) === 0600) {
+         return true;
+      }
+
+      // ? Only the owner can repair it, and never through a symlink
+      if (
+         (int) $opened['uid'] !== posix_geteuid()
+         || is_link($this->pidLockFile)
+         || @chmod($this->pidLockFile, 0600) === false
+      ) {
+         return false;
+      }
+
+      // ! Re-read the DESCRIPTOR, not the pathname: if the path was swapped
+      //   between the checks, the mode this handle reports is unchanged and
+      //   the seal fails closed.
+      $sealed = @fstat($Handle);
+
+      // :
+      return is_array($sealed) && ((int) $sealed['mode'] & 0777) === 0600;
    }
 
    /** @param resource $Handle */

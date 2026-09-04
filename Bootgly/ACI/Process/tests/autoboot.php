@@ -29,5 +29,6 @@ return new Suite(
       '1.13-state-tapfile-sweep',
       '1.14-inits-detect',
       '1.15-service-render',
+      '1.16-state-lock-seal',
    ]
 );
