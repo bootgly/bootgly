@@ -2011,7 +2011,7 @@ class ProjectsCommand extends Command
          $Alert = new Alert(CLI->Terminal->Output);
          $Alert->Type::Failure->set();
          $Alert->message = 'Missing platform value. '
-            . 'Use console, web, console,web or none.';
+            . 'Use `console`, `web`, `console,web` or `none`.';
          $Alert->render();
 
          return false;
@@ -2027,7 +2027,7 @@ class ProjectsCommand extends Command
          $Alert = new Alert(CLI->Terminal->Output);
          $Alert->Type::Failure->set();
          $Alert->message = 'Invalid platform: @#cyan:none@; cannot be combined. '
-            . 'Use console, web, console,web or none.';
+            . 'Use `console`, `web`, `console,web` or `none`.';
          $Alert->render();
 
          return false;
@@ -2039,7 +2039,7 @@ class ProjectsCommand extends Command
             $Alert = new Alert(CLI->Terminal->Output);
             $Alert->Type::Failure->set();
             $Alert->message = "Invalid platform: @#cyan:" . $this->clean($platform) . "@;. "
-               . 'Use console, web, console,web or none.';
+               . 'Use `console`, `web`, `console,web` or `none`.';
             $Alert->render();
 
             return false;
