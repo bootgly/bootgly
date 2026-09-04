@@ -58,6 +58,7 @@ use function mb_strlen;
 use function mb_substr;
 use function posix_getuid;
 use function preg_match;
+use function preg_replace;
 use function proc_close;
 use function proc_open;
 use function rmdir;
@@ -106,6 +107,9 @@ class ProjectsCommand extends Command
    // * Config
    /** The wizard Validator and the non-interactive create enforce the same port rule: 1–65535, no leading zeros. */
    private const string PORT_PATTERN = '#^(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5])$#';
+   /** Scratch-route defaults — `weigh()` judges these values and `create()` consumes them. */
+   private const string INTERFACE = 'CLI';
+   private const string PORT = '8080';
    /** The `show` columns — key to header, in display order. */
    private const array COLUMNS = [
       'project'  => 'Project',
@@ -226,16 +230,17 @@ class ProjectsCommand extends Command
       $path = $arguments[0] ?? null;
       $from = isSet($options['from']) && is_string($options['from']) ? $options['from'] : null;
 
+      // ? `--platform` value — judged for BOTH routes, here, because the wizard
+      //   only adds its Platforms step (and with it `prepare()`'s own call)
+      //   when the working base is a kit. In a framework checkout an
+      //   interactive run would otherwise drop an unimplemented value.
+      if ($this->sift($options) === false) {
+         return false;
+      }
+
       // @ Wizard on interactive terminals (unless --yes) — kit setup is its first step
       if (BOOTGLY_TTY === true && isSet($options['yes']) === false) {
          return $this->wizard($path, $from, $options);
-      }
-
-      // @ Kit setup (platform submodules + resource dirs) when needed. The target
-      //   is reserved: an example stocked by this very run must never take the
-      //   name the user just asked for, and then refuse the command that stocked it
-      if ($this->prepare($options, $path) === false) {
-         return false;
       }
 
       // @ Non-interactive
@@ -258,9 +263,34 @@ class ProjectsCommand extends Command
          }
       }
 
+      // ? Every refusal this command can issue WITHOUT a kit is issued here,
+      //   ahead of the setup below: preparing a fresh kit lays down the
+      //   resource directories, the shipped example projects and the registry
+      //   that allow-lists them, and nothing rolls that back — a command that
+      //   was never going to proceed must not build a workspace on its way out
+      $result = $this->weigh($path, $from, $options);
+      if ($result !== true) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = $result;
+         $Alert->render();
+
+         return false;
+      }
+
+      // ---
+
+      // @ Kit setup (platform submodules + resource dirs) when needed. The target
+      //   is reserved: an example stocked by this very run must never take the
+      //   name the user just asked for, and then refuse the command that stocked it
+      if ($this->prepare($options, $path) === false) {
+         return false;
+      }
+
       // @ From scratch
       if ($from === 'scratch') {
-         // ? Project path validity
+         // ? Collisions — the half of assess() the reservation exists for:
+         //   only the prepared kit knows what is registered and on disk
          $result = $this->assess($path);
          if ($result !== true) {
             $Alert = new Alert($Output);
@@ -271,41 +301,9 @@ class ProjectsCommand extends Command
             return false;
          }
 
-         $interface = strtoupper((string) ($options['interfaces'] ?? 'CLI'));
-         // ?
-         if ($interface !== 'CLI' && $interface !== 'WPI') {
-            $Alert = new Alert($Output);
-            $Alert->Type::Failure->set();
-            $Alert->message = "Invalid interface: @#cyan:{$interface}@;. Use CLI or WPI.";
-            $Alert->render();
-
-            return false;
-         }
-
-         // ? Port validity — the same rule the wizard Validator enforces;
-         //   `(int) 'not-a-port'` would otherwise bind the server on port 0
-         $port = (string) ($options['port'] ?? '8080');
-         if (preg_match(self::PORT_PATTERN, $port) !== 1) {
-            $Alert = new Alert($Output);
-            $Alert->Type::Failure->set();
-            $Alert->message = "Invalid port: @#cyan:{$port}@;. Use a number between 1 and 65535.";
-            $Alert->render();
-
-            return false;
-         }
-
-         // ? Control characters — generate() refuses them too, but its refusal
-         //   is generic; here the caller learns which flag was rejected
-         foreach (['description', 'version', 'author'] as $field) {
-            if (preg_match('#[\x00-\x1F]#', (string) ($options[$field] ?? '')) === 1) {
-               $Alert = new Alert($Output);
-               $Alert->Type::Failure->set();
-               $Alert->message = "Invalid @#cyan:--{$field}@;: control characters are not allowed.";
-               $Alert->render();
-
-               return false;
-            }
-         }
+         // ! Shape already judged by weigh()
+         $interface = strtoupper((string) ($options['interfaces'] ?? self::INTERFACE));
+         $port = (string) ($options['port'] ?? self::PORT);
 
          $done = Projects::generate(
             [
@@ -331,26 +329,6 @@ class ProjectsCommand extends Command
       }
 
       // @ From a platform project
-      // ? Target path-safety
-      if (Projects::check($path) === false) {
-         $Alert = new Alert($Output);
-         $Alert->Type::Failure->set();
-         $Alert->message = "Invalid project path: @#cyan:{$path}@;.";
-         $Alert->render();
-
-         return false;
-      }
-      // ? Name — the naming half of assess(); a collision is what a refresh
-      //   replaces, so the other half does not apply here
-      $result = $this->screen($path);
-      if ($result !== true) {
-         $Alert = new Alert($Output);
-         $Alert->Type::Failure->set();
-         $Alert->message = $result;
-         $Alert->render();
-
-         return false;
-      }
       // ? The refresh replaces a project copy — never a group of projects or a
       //   tree the user made by hand, which carry no signature at their root
       $existing = Projects::CONSUMER_DIR . $path;
@@ -467,20 +445,61 @@ class ProjectsCommand extends Command
          }
       }
 
-      // @ Kit setup (platform submodules + resource dirs) when needed
+      // ! Target project path
+      $path = $arguments[1] ?? basename($url, '.git');
+
+      // ? SHAPE only — a malformed or reserved path needs no kit to be refused,
+      //   so it is judged before the bootstrap and before the clone. The
+      //   COLLISION half of assess() stays below `prepare()` on purpose: a name
+      //   is only taken once the kit has been stocked, and hoisting that half
+      //   here would turn a shipped example into a reservation this command
+      //   then abandons whenever the clone fails or the user answers `n`.
+      $result = $this->screen($path);
+      if ($result === true && Projects::check($path) === false) {
+         $result = "Invalid project path: @#cyan:" . $this->clean($path) . "@;.";
+      }
+      if ($result !== true) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "{$result} Pass the target path explicitly: "
+            . '@#cyan:bootgly projects import <url> <Name>@;';
+         $Alert->render();
+
+         return false;
+      }
+
+      // ! Interface — judged here, so a value this command does not implement
+      //   costs neither a kit bootstrap nor a clone
+      $interface = strtoupper((string) ($options['interfaces'] ?? 'WPI'));
+      // ?
+      if ($interface !== 'CLI' && $interface !== 'WPI') {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Invalid interface: @#cyan:{$interface}@;. Use CLI or WPI.";
+         $Alert->render();
+
+         return false;
+      }
+
+      // ---
+
+      // @ Kit setup (platform submodules + resource dirs) when needed. NO
+      //   reservation here, unlike create(): an import can still fail on the
+      //   clone or be declined at the confirm, and a reserved name is a shipped
+      //   example left off the shelf — permanently, because stock() is one-shot
+      //   on a fresh kit. A collision with an example is a refusal, not a claim
       if ($this->prepare($options) === false) {
          return false;
       }
 
-      // ! Target project path
-      $path = $arguments[1] ?? basename($url, '.git');
-      // ?
+      // ? Collision — judged once the kit is stocked, so the shelf the answer
+      //   depends on is the real one
       $result = $this->assess($path);
       if ($result !== true) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
          $Alert->message = "{$result} Pass the target path explicitly: "
-            . "@#cyan:bootgly projects import {$url} <Name>@;";
+            . '@#cyan:bootgly projects import <url> <Name>@;';
          $Alert->render();
 
          return false;
@@ -490,7 +509,13 @@ class ProjectsCommand extends Command
       $tmp = sys_get_temp_dir() . '/bootgly-import-' . getmypid();
       $this->erase($tmp);
 
-      $Output->render("@#green:Fetching@; @#cyan:{$url}@;@.;");
+      // ! Scrubbed ONCE, for every site that displays it: `@` opens Output
+      //   markup and a raw control byte reaches the terminal verbatim (OSC 52
+      //   writes the clipboard, and a URL travels in READMEs and issues). The
+      //   clone below uses `$url` itself, escaped for the shell.
+      $shown = $this->clean($url);
+
+      $Output->render("@#green:Fetching@; @#cyan:{$shown}@;@.;");
       $repository = escapeshellarg($url);
       $target = escapeshellarg($tmp);
 
@@ -499,7 +524,7 @@ class ProjectsCommand extends Command
       if ($status !== 0 || is_dir($tmp) === false) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = "Could not clone @#cyan:{$url}@;.";
+         $Alert->message = "Could not clone @#cyan:{$shown}@;.";
          $Alert->render();
 
          $this->erase($tmp);
@@ -520,23 +545,9 @@ class ProjectsCommand extends Command
          return false;
       }
 
-      // ! Interface
-      $interface = strtoupper((string) ($options['interfaces'] ?? 'WPI'));
-      // ?
-      if ($interface !== 'CLI' && $interface !== 'WPI') {
-         $Alert = new Alert($Output);
-         $Alert->Type::Failure->set();
-         $Alert->message = "Invalid interface: @#cyan:{$interface}@;. Use CLI or WPI.";
-         $Alert->render();
-
-         $this->erase($tmp);
-
-         return false;
-      }
-
       // ! Summary
       $content  = '@#Green:' . str_pad('Mode', 12) . ' @; Import external repository' . PHP_EOL;
-      $content .= '@#Green:' . str_pad('Source', 12) . ' @; ' . $url . PHP_EOL;
+      $content .= '@#Green:' . str_pad('Source', 12) . ' @; ' . $shown . PHP_EOL;
       $content .= '@#Green:' . str_pad('Path', 12) . ' @; ' . $path . PHP_EOL;
       $content .= '@#Green:' . str_pad('Interfaces', 12) . ' @; ' . $interface;
 
@@ -1053,7 +1064,7 @@ class ProjectsCommand extends Command
             if ($interface === 'WPI') {
                $Textbox = new Textbox($Wizard->Input, $Wizard->Output);
                $Textbox->prompt = 'Server port';
-               $Textbox->default = (string) ($options['port'] ?? '8080');
+               $Textbox->default = (string) ($options['port'] ?? self::PORT);
                $Textbox->Validator = static function (string $answer): true|string {
                   // ?:
                   if (preg_match(self::PORT_PATTERN, $answer) !== 1) {
@@ -1542,12 +1553,25 @@ class ProjectsCommand extends Command
     */
    private function prepare (array $options, null|string $reserve = null): bool
    {
-      // ? Framework repo: nothing to prepare
+      $Output = CLI->Terminal->Output;
+
+      // ! Requested platforms (comma-separated: --platform=console,web).
+      //   Read and judged before anything is prepared, on every layout: a kit
+      //   without `.gitmodules` — and the framework checkout, which has
+      //   nothing to prepare at all — used to accept an unimplemented value
+      //   and drop it. The refusal must never follow a write, and the
+      //   resource boot and the example stock are below.
+      $platforms = $this->sift($options);
+      if ($platforms === false) {
+         return false;
+      }
+
+      // ? Framework repo: nothing to prepare beyond judging the options above
       if (BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR) {
          return true;
       }
 
-      $Output = CLI->Terminal->Output;
+      // ---
 
       // # Platform submodules (kit)
       $initialized = [];
@@ -1556,30 +1580,6 @@ class ProjectsCommand extends Command
       $web = is_file(BOOTGLY_WORKING_DIR . 'Web/' . BOOTSTRAP_FILENAME);
 
       if ($gitmodules === true) {
-         // ! Requested platforms (comma-separated: --platform=console,web)
-         $platforms = null;
-         if (isSet($options['platform']) && is_string($options['platform'])) {
-            $platforms = array_filter(explode(',', strtolower($options['platform'])));
-
-            // ? `none` keeps the base platform only (no extra submodules)
-            if ($platforms === ['none']) {
-               $platforms = [];
-            }
-
-            // ?
-            foreach ($platforms as $platform) {
-               if ($platform !== 'console' && $platform !== 'web') {
-                  $Alert = new Alert($Output);
-                  $Alert->Type::Failure->set();
-                  $Alert->message = "Invalid platform: @#cyan:{$platform}@;. "
-                     . 'Use console, web, console,web or none.';
-                  $Alert->render();
-
-                  return false;
-               }
-            }
-         }
-
          // ? Fresh kit (no resources booted yet): EVERY platform is set up.
          //   The kit is a guide before it is a workspace — it carries the whole
          //   shelf so the user (or an AI agent reading it) can decide later what
@@ -1898,24 +1898,24 @@ class ProjectsCommand extends Command
       // ! One stream: git reports cloning and checkout notes on stderr, and
       //   both belong to the same visual flow. Piping also drops the progress
       //   bars by itself — git only paints them onto a terminal
-      $Pipes = [];
-      $Process = proc_open("{$command} 2>&1", [1 => ['pipe', 'w']], $Pipes);
+      $pipes = [];
+      $process = proc_open("{$command} 2>&1", [1 => ['pipe', 'w']], $pipes);
 
       // ?
-      if (is_resource($Process) === false) {
+      if (is_resource($process) === false) {
          return 1;
       }
 
       // @@ Line by line, as it arrives — carriage returns would drag the
       //   cursor out of the region column, so they never reach the Output
-      while (($line = fgets($Pipes[1])) !== false) {
+      while (($line = fgets($pipes[1])) !== false) {
          $Output->write(str_replace("\r", '', rtrim($line, "\n")) . PHP_EOL);
       }
 
-      fclose($Pipes[1]);
+      fclose($pipes[1]);
 
       // :
-      return proc_close($Process);
+      return proc_close($process);
    }
 
    /**
@@ -1933,14 +1933,14 @@ class ProjectsCommand extends Command
    {
       // ? Naming pattern (the alphabet lives once, in the API layer)
       if (Projects::vet($path) === false) {
-         return "Invalid project path: `{$path}`. Segments must start uppercase and use "
+         return "Invalid project path: @#cyan:" . $this->clean($path) . "@;. Segments must start uppercase and use "
             . 'only letters, numbers, `_` or `-` (e.g. `App` or `App/API`).';
       }
       // ? Reserved platform namespace root (would shadow the framework/platform namespaces)
       $root = strtolower(explode('/', $path)[0]);
       foreach (Projects::RESERVED as $reserved) {
          if ($root === strtolower($reserved)) {
-            return "Invalid project path: `{$path}`. `{$reserved}` is a reserved Bootgly "
+            return "Invalid project path: @#cyan:" . $this->clean($path) . "@;. @#cyan:{$reserved}@; is a reserved Bootgly "
                . 'namespace root (framework/platform) and cannot be used as a project name.';
          }
       }
@@ -1965,14 +1965,184 @@ class ProjectsCommand extends Command
       }
       // ? Registry collision
       if (array_key_exists($path, Projects::read()) === true) {
-         return "Project `{$path}` is already registered.";
+         return "Project @#cyan:" . $this->clean($path) . "@; is already registered.";
       }
       // ? Directory collision
       if (
          is_dir(Projects::CONSUMER_DIR . $path) === true
          || is_dir(Projects::AUTHOR_DIR . $path) === true
       ) {
-         return "Project directory `projects/{$path}` already exists.";
+         return "Project directory @#cyan:projects/" . $this->clean($path) . "@; already exists.";
+      }
+
+      // :
+      return true;
+   }
+
+   /**
+    * Sift the requested platforms out of the options, refusing an unimplemented
+    * value.
+    *
+    * ONE rule, read by `create()`'s entry gate and by `prepare()`: two copies
+    * had already drifted apart on `none,web`, where the entry accepted the list
+    * and `prepare()` then refused `none` as a platform name — the same sentence
+    * calling a value valid and invalid.
+    *
+    * Three answers, and the difference matters: `null` means the flag was not
+    * given at all — a fresh kit reads that as "set up every platform" — while
+    * `[]` is an explicit `none`, and `false` is a refusal.
+    *
+    * @param array<string, bool|int|string> $options
+    *
+    * @return false|null|array<int,string>
+    */
+   private function sift (array $options): false|null|array
+   {
+      // ? Not requested — NOT the same as `none`: the caller decides
+      if (isSet($options['platform']) === false || is_string($options['platform']) === false) {
+         return null;
+      }
+
+      $platforms = array_filter(explode(',', strtolower($options['platform'])));
+
+      // ? `none` keeps the base platform only, and is EXCLUSIVE: pairing it with
+      //   a platform asks for nothing and for something in the same breath
+      if (in_array('none', $platforms, true) === true) {
+         if ($platforms === ['none']) {
+            return [];
+         }
+
+         $Alert = new Alert(CLI->Terminal->Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = 'Invalid platform: @#cyan:none@; cannot be combined. '
+            . 'Use console, web, console,web or none.';
+         $Alert->render();
+
+         return false;
+      }
+
+      // @
+      foreach ($platforms as $platform) {
+         if ($platform !== 'console' && $platform !== 'web') {
+            $Alert = new Alert(CLI->Terminal->Output);
+            $Alert->Type::Failure->set();
+            $Alert->message = "Invalid platform: @#cyan:{$platform}@;. "
+               . 'Use console, web, console,web or none.';
+            $Alert->render();
+
+            return false;
+         }
+      }
+
+      // :
+      return $platforms;
+   }
+
+   /**
+    * Clean untrusted text for display in a rendered message.
+    *
+    * Anything a user supplies — a clone URL, a project path — reaches the
+    * terminal through `Output::render()`, which reads `@` directives, and
+    * through the terminal itself, which reads control bytes. A crafted URL in
+    * a README can therefore write the clipboard (OSC 52) or set the title from
+    * a REFUSAL message, and the refusal is the deterministic path: `vet()`
+    * rejects such a name every time.
+    *
+    * Only the `@` that would OPEN a directive is dropped — the trigger set of
+    * `ABI\Templates\Template\Escaped` — so `git@github.com:owner/repo.git`,
+    * the mainstream SSH clone URL, survives intact.
+    *
+    * @param string $text
+    *
+    * @return string
+    */
+   private function clean (string $text): string
+   {
+      // :
+      return (string) preg_replace(
+         '%[\x00-\x1F\x7F]|\xC2[\x80-\x9F]|@(?=[#!\\\\.:@*~_;-])|(?<=[*~_-])@%',
+         '',
+         $text
+      );
+   }
+
+   /**
+    * Weigh a create: every input the command can judge WITHOUT a kit.
+    *
+    * `create()` prepares the working directory before it acts — on a fresh
+    * kit that means the resource directories, the shipped example projects
+    * and the registry that allow-lists them — because the path the user asked
+    * for has to be reserved against the examples that same run stocks. That
+    * bootstrap is the kit's legitimate first-run work and nothing rolls it
+    * back, so a refusal that never needed a kit is decided here, ahead of it.
+    *
+    * The KIT-dependent collisions (the registry, and the kit's own directory)
+    * are deliberately NOT judged here: they are the half of `assess()` the
+    * reservation exists for, and only a prepared kit can answer them. The
+    * author-shipped collision IS judged here — it reads the framework's own
+    * `projects/`, needs no kit, and reserving such a name would cost a fresh
+    * kit the example it is about to refuse.
+    *
+    * @param string $path The target project path.
+    * @param string $from `scratch`, or the platform project to copy.
+    * @param array<string, bool|int|string> $options
+    *
+    * @return true|string True when the inputs are usable; an error message otherwise.
+    */
+   private function weigh (string $path, string $from, array $options): true|string
+   {
+      // ? Naming pattern and reserved roots. FIRST, because it names the rule
+      //   that was broken; `check()` below only reports that the path is
+      //   invalid, and every traversal this catches is caught by both
+      $result = $this->screen($path);
+      if ($result !== true) {
+         return $result;
+      }
+      // ? Path-safety — the platform-import route replaces a directory, so a
+      //   traversal must never reach the erase
+      if (Projects::check($path) === false) {
+         return "Invalid project path: @#cyan:" . $this->clean($path) . "@;.";
+      }
+
+      // ? A platform copy carries its own metadata — the rules below are the
+      //   scratch route's, which mints it from the options. The `--from` route
+      //   also legitimately targets an author-shipped path: importing a
+      //   platform project ONTO ITSELF is how `--refresh` works.
+      if ($from !== 'scratch') {
+         return true;
+      }
+
+      // ? The AUTHOR-shipped half of the collision, which needs no kit: it
+      //   reads the FRAMEWORK's own `projects/`, the very shelf the examples
+      //   are stocked from. `assess()` below would refuse this path anyway —
+      //   but only after `prepare()` reserved it, and a reserved name is an
+      //   example left off a fresh kit's shelf for good. The kit-dependent
+      //   half (the registry, and the kit's own directory) stays in
+      //   `assess()`, where the reservation legitimately wins the name.
+      if (is_dir(Projects::AUTHOR_DIR . $path) === true) {
+         return "Project directory @#cyan:projects/" . $this->clean($path) . "@; already exists.";
+      }
+
+
+      // ? Interface
+      $interface = strtoupper((string) ($options['interfaces'] ?? self::INTERFACE));
+      if ($interface !== 'CLI' && $interface !== 'WPI') {
+         return "Invalid interface: @#cyan:{$interface}@;. Use CLI or WPI.";
+      }
+
+      // ? Port validity — the same rule the wizard Validator enforces;
+      //   `(int) 'not-a-port'` would otherwise bind the server on port 0
+      $port = (string) ($options['port'] ?? self::PORT);
+      if (preg_match(self::PORT_PATTERN, $port) !== 1) {
+         return "Invalid port: @#cyan:{$port}@;. Use a number between 1 and 65535.";
+      }
+
+      // ? Control characters — generate() refuses them too, but its refusal
+      //   is generic; here the caller learns which flag was rejected
+      foreach (['description', 'version', 'author'] as $field) {
+         if (preg_match('#[\x00-\x1F]#', (string) ($options[$field] ?? '')) === 1) {
+            return "Invalid @#cyan:--{$field}@;: control characters are not allowed.";
+         }
       }
 
       // :

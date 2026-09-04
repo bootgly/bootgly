@@ -55,5 +55,8 @@ return new Suite(
       '8.7-kit-partial',
       '8.8-kit-boot',
       '8.9-kit-container',
+      // # a refused create never bootstraps the kit (appended last — earlier
+      //   indexes stay stable)
+      '1.12-project-refusal-purity',
    ]
 );

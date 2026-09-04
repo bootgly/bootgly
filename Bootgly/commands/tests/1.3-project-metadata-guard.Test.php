@@ -9,10 +9,12 @@ use function array_key_exists;
 use function assert;
 use function file_get_contents;
 use function file_put_contents;
+use function is_array;
 use function is_dir;
 use function is_file;
 use function json_encode;
 use function mkdir;
+use function rename;
 use function rmdir;
 use function scandir;
 use function token_get_all;
@@ -158,6 +160,53 @@ return new Test(
          }
          if ($snapshot !== null && $snapshot !== false) {
             file_put_contents($registry, $snapshot);
+         }
+         // ? A FRESH kit has no registry to snapshot, and the success section
+         //   above is what emits it — so restoring "nothing" would leave this
+         //   case's own probe in the allow-list forever, and the next run of
+         //   this suite red. Re-emit what the run legitimately stocked, minus
+         //   the probes. (`register()` writes; nothing in the tree deletes.)
+         else if (is_file($registry) === true) {
+            $loaded = include $registry;
+            /** @var array<string,array{interfaces?:array<string>}> $entries */
+            $entries = is_array($loaded) ? $loaded : [];
+            foreach (['PortProbe', 'CtrlProbe', "Bad'Path", "Bad'Two", 'AuthorProbe'] as $probe) {
+               unset($entries[$probe]);
+            }
+
+            // ! Build the replacement BESIDE the registry and move it into
+            //   place: unlinking first would leave the kit with no allow-list
+            //   at all if any `register()` refused an entry or threw.
+            $restore = "{$registry}.restore";
+            if (is_file($restore) === true) {
+               unlink($restore);
+            }
+
+            $kept = true;
+            foreach ($entries as $probe => $meta) {
+               if (Projects::register($probe, $meta, $restore) === false) {
+                  $kept = false;
+
+                  break;
+               }
+            }
+
+            // ? The probes must go whatever happens: leaving the original in
+            //   place would keep exactly the phantom entry this exists to drop.
+            //   An empty survivor set is a legitimate outcome — the registry
+            //   then holds nothing but probes — so an absent replacement means
+            //   "remove it", never "keep what is there".
+            if ($kept === true) {
+               if (is_file($restore) === true) {
+                  rename($restore, $registry) === true || unlink($restore);
+               }
+               else {
+                  unlink($registry);
+               }
+            }
+            else if (is_file($restore) === true) {
+               unlink($restore);
+            }
          }
          $Memo->setValue(null, null);
       }
