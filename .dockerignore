@@ -1,0 +1,89 @@
+# ----------------------------------------------------------------------------
+# Bootgly Docker — build context ignore
+#
+# Build context is THIS repository (the `full` target that needed the sibling
+# bootgly_benchmarks/ moved to that repo). Patterns are relative to the repo
+# root: ignore what must never enter a public image, ship the rest.
+# ----------------------------------------------------------------------------
+
+# @ Security boundary — Git ignore rules do not apply to Docker contexts.
+#   Never admit repository/agent metadata, environment secrets or the private
+#   scripts that the source checkout deliberately keeps outside version control.
+**/.git
+**/.codex
+**/.agent
+**/.claude
+**/.env
+**/.env.*
+scripts/_*.php
+
+# @ Public, versioned fixtures required by the full test/benchmark image.
+#   Keep these exceptions exact: a wildcard fixture allowlist would let an
+#   ignored secret placed beside one of them cross the boundary again.
+!Bootgly/API/Environment/Configs/tests/fixtures/configs/database/.env
+!Bootgly/API/Environment/Configs/tests/fixtures/configs/database/.env.development
+!Bootgly/API/Environment/Configs/tests/fixtures/configs/policy_bad_name/.env
+!Bootgly/API/Environment/Configs/tests/fixtures/configs/policy_environment/.env
+!Bootgly/API/Environment/Configs/tests/fixtures/configs/policy_environment/.env.development
+!Bootgly/API/Environment/Configs/tests/fixtures/configs/policy_environment/.env.production
+!Bootgly/API/Environment/Configs/tests/fixtures/configs/policy_extra/.env
+!Bootgly/API/Environment/Configs/tests/fixtures/configs/policy_good/.env
+!Bootgly/API/Environment/Configs/tests/fixtures/configs/policy_locked/.env
+!Bootgly/API/Environment/Configs/tests/fixtures/configs/server/.env
+!Bootgly/API/Environment/Configs/tests/fixtures/project/configs/database/.env
+!Bootgly/WPI/Nodes/HTTP_Server_CLI/Response/Resources/tests/fixtures/secure/kv/.env
+
+# @ Security boundary, second half — shapes the checkout keeps OUT of version
+#   control and that no published image has any use for. `.gitignore` drops
+#   `*.md`, every `docs/` and every `&/` (unreleased entities) wholesale, so
+#   whatever sits there is somebody's local working material: internal audit
+#   reports, drafts, unreleased code. `COPY .` does not consult `.gitignore`,
+#   so each shape is named here instead.
+#   Verified: the repository tracks ZERO files under `docs/` or `&/`. The
+#   Markdown re-admitted below is every tracked `.md` outside `.github/`, which
+#   is excluded wholesale further down. Each `!` line is asserted by the H5 case
+#   (suite 102), so deleting one turns that case red instead of silently
+#   dropping the file from the image.
+**/docs
+**/&
+**/*.md
+!Bootgly/ABI/Code/__Array/tests/benchmarks/README.md
+!Bootgly/ABI/Code/__Array/tests/benchmarks/results/RESULTS.md
+!Bootgly/ACI/Tests/ARCHITECTURE.md
+!README.md
+!projects/Demo/Queue-HTTP_Server_CLI/README.md
+
+# @ Local scratch work, mirroring `.gitignore` rule for rule: underscore-prefixed
+#   tests/benchmarks/examples, shell scripts, disk images and binaries. Only the
+#   image's own entrypoint is re-admitted; the other tracked `.sh` is an H5
+#   canary, which must NOT cross.
+**/_*.Test.php
+**/_*.benchmark.php
+**/_*.example.php
+**/vs
+**/*.sh
+!@/__docker__/entrypoint.sh
+**/*.iso
+**/*.bin
+
+# @ A local interpreter config — paths, extension dirs, whatever the developer
+#   tuned. The image ships its own tuning in `@/__php__/zz-bootgly.ini`.
+@/php.ini
+# @ Untracked by design; this image resolves no dependencies.
+composer.lock
+
+# @ Trim — storage/ is runtime working data (temp, cache, sessions, pids, bench
+#   marks) and reaches several GB; the framework re-creates whatever subdirs it
+#   needs on demand. vendor/ is rebuilt by whoever needs it.
+.github
+storage
+tmp
+vendor
+public
+
+# @ Generic noise anywhere
+**/.DS_Store
+**/node_modules
+**/*.log
+**/.idea
+**/.vscode

@@ -9,3 +9,11 @@
 *.template.php linguist-language=html
 
 /.github export-ignore
+
+# The H5 boundary canaries are tracked on purpose (they must be REAL files the
+# Docker context has to exclude), but they are test scaffolding: keep them out
+# of the Packagist archive rather than shipping a directory literally named `&`
+# to every `composer require`. `git clone` — which the kit image uses — is
+# unaffected, and so is the Docker build context.
+/projects/H5_Docker_Context export-ignore
+/scripts/_h5-docker-context-secret.php export-ignore

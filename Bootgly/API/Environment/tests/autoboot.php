@@ -16,7 +16,10 @@ return new Suite(
    tests: [
       '1.1-build-detect',
       '1.2-build-inspect',
-      // # Docker build-context secret boundary (security audit H5)
-      '1.3-docker-context-secrets',
+      // # Docker build-context boundary (security audit H5) — the checkout
+      //   case runs in any container; the secrets case needs a stamped build
+      //   and SKIPS visibly without one
+      '1.3-docker-context-checkout',
+      '1.4-docker-context-secrets',
    ]
 );

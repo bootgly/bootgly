@@ -1,0 +1,1 @@
+H5_CANARY: internal report — must never cross the Docker COPY boundary.

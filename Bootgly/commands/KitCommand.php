@@ -13,6 +13,7 @@ namespace Bootgly\commands;
 
 use const BOOTGLY_ROOT_BASE;
 use const BOOTGLY_ROOT_DIR;
+use const BOOTGLY_VERSION;
 use const BOOTGLY_WORKING_DIR;
 use const JSON_INVALID_UTF8_SUBSTITUTE;
 use const JSON_UNESCAPED_SLASHES;
@@ -26,6 +27,7 @@ use function clearstatcache;
 use function copy;
 use function explode;
 use function file_exists;
+use function getenv;
 use function getmypid;
 use function implode;
 use function in_array;
@@ -149,6 +151,8 @@ class KitCommand extends Command
    protected string $repository = self::REPOSITORY;
    /** Where `boot` takes the resource templates from — the framework checkout. */
    protected string $templates = BOOTGLY_ROOT_DIR;
+   /** @var array<int,string> Files a container runtime leaves behind — Docker, then Podman. */
+   protected array $markers = ['/.dockerenv', '/run/.containerenv'];
 
    // * Metadata
    /** @var array<string,mixed> The document `--json` emits, built as the run goes. */
@@ -785,6 +789,34 @@ class KitCommand extends Command
       }
       $VCS = new VCS($this->kit);
       if ($VCS->Git->check() === false || in_array(self::FRAMEWORK, $VCS->Submodules->list(), true) === false) {
+         // ? A tree with no checkout, inside an image, gets the move that
+         //   exists there — never `curl | bash`, which would install a kit the
+         //   next `docker run` throws away. A kit MOUNTED into a container has
+         //   a checkout and moves normally.
+         $place = file_exists("{$this->kit}/.git") === false
+            ? $this->stand()
+            : 'host';
+
+         if ($place === 'kit') {
+            $this->fail(
+               'The image ships the kit, not a git checkout.',
+               'Releases are image tags here: @#cyan:docker pull bootgly/bootgly.kit:<version>@;. '
+               . 'This image carries framework @#cyan:' . BOOTGLY_VERSION . '@; — a build from a '
+               . 'branch reports its development version, which is not a tag you can pull.'
+            );
+
+            return null;
+         }
+         if ($place === 'framework') {
+            $this->fail(
+               'This image carries the framework, not a kit.',
+               'The kit is its own image: @#cyan:docker run -it bootgly/bootgly.kit:<version>@;. '
+               . 'Name a tag — @#cyan:latest@; exists only from the first stable release.'
+            );
+
+            return null;
+         }
+
          $this->fail(
             'This is not a Bootgly kit.',
             '@#cyan:' . $this->clean($this->kit) . '@; — run the command from a kit installed by '
@@ -891,6 +923,50 @@ class KitCommand extends Command
          'VCS' => $VCS, 'releases' => $releases, 'current' => $current, 'head' => $head,
          'remote' => $remote, 'verified' => $advertised !== null,
       ];
+   }
+
+   /**
+    * Whether this process runs inside a container.
+    *
+    * The image sets `BOOTGLY_DOCKER`; the markers cover an image built
+    * elsewhere. None of it is trusted for anything but the WORDING of a
+    * refusal, and only when the kit has no checkout at all.
+    */
+   protected function check (): bool
+   {
+      if ((string) getenv('BOOTGLY_DOCKER') !== '') {
+         return true;
+      }
+
+      foreach ($this->markers as $marker) {
+         if (file_exists($marker) === true) {
+            return true;
+         }
+      }
+
+      // :
+      return false;
+   }
+   /**
+    * Where this run stands: `host`, or which image it is inside.
+    *
+    * The image distinction is STRUCTURAL — a kit nests the framework under
+    * `Bootgly/`, so the framework root and the kit root differ there and
+    * coincide in the framework image (`TestCommand` reads the same signal). An
+    * environment variable would be one `docker run -e` away from wording a
+    * refusal wrong. The two roots are read from the properties that hold them,
+    * so a layout no checkout can reproduce is still reachable in a test.
+    */
+   protected function stand (): string
+   {
+      if ($this->check() === false) {
+         return 'host';
+      }
+
+      // :
+      return rtrim($this->templates, '/') !== rtrim($this->kit, '/')
+         ? 'kit'
+         : 'framework';
    }
 
    /**

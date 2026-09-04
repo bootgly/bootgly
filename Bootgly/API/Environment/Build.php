@@ -17,6 +17,7 @@ use const BOOTGLY_VERSION;
 use const DIRECTORY_SEPARATOR;
 use function dirname;
 use function file_get_contents;
+use function getenv;
 use function is_array;
 use function is_file;
 use function is_string;
@@ -38,7 +39,12 @@ use function trim;
  *
  * The commit is read from the installation itself — the git metadata of a
  * clone, submodule or worktree, or the resolved reference Composer records.
- * Unknown sources (release archives) degrade to the version alone.
+ * A published image has neither git metadata nor a Composer manifest, so it
+ * falls back to the commit the BUILD stamped in `BOOTGLY_FRAMEWORK_SHA`
+ * (source `build`). That env is trusted only after git and Composer both fail,
+ * so a value leaked from a parent shell can only ever name the commit of a tree
+ * that identifies itself no other way. Unknown sources (release archives)
+ * degrade to the version alone.
  */
 class Build
 {
@@ -50,7 +56,7 @@ class Build
    public readonly string $version;
    /** The installed commit (full hash) — null when the source is unknown */
    public readonly null|string $commit;
-   /** Where the commit came from (`git`, `composer`) — null when unknown */
+   /** Where the commit came from (`git`, `composer`, `build`) — null when unknown */
    public readonly null|string $source;
 
    // * Metadata
@@ -114,6 +120,15 @@ class Build
                return new self(BOOTGLY_VERSION, $reference, 'composer');
             }
          }
+      }
+
+      // @ Build — a published image strips `.git` by design and installs no
+      //   composer manifest, but the build stamped the commit it copied. It is
+      //   the only answer to "which code am I running" a container can give.
+      $stamped = (string) getenv('BOOTGLY_FRAMEWORK_SHA');
+      if (self::check($stamped) === true) {
+         // :
+         return new self(BOOTGLY_VERSION, $stamped, 'build');
       }
 
       // : An unidentifiable source (release archive, vendored copy, ...)

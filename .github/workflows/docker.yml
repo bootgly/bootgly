@@ -1,14 +1,14 @@
 name: Docker (build + push)
 
-# Publishes bootgly/bootgly (slim + full) to Docker Hub on every published
-# release. The Dockerfile lives at the repo root but builds with the WORKSPACE
-# as context (the `full` target COPYs the sibling bootgly_benchmarks/), so this
-# job checks out both repos side by side and builds from their parent.
+# Publishes bootgly/bootgly (the FRAMEWORK image) to Docker Hub on every published
+# release. The image is the INGREDIENT — the framework alone. A user installs
+# the kit (bootgly/bootgly.kit, built by the bootgly.kit repository); this image
+# is what the benchmark harness and anyone embedding Bootgly build on.
 #
 # Tags follow "version is the axis, variant is the suffix" — see the tag scheme
 # documented in the "Resolve version and tags" step. Pre-releases (-beta.N,
 # -rc.N) publish their exact version plus a moving channel alias only; they
-# never move `latest`.
+# never move a moving alias.
 
 on:
   release:
@@ -19,6 +19,10 @@ on:
         description: 'Version to tag (e.g. 0.17.2-beta). Required on manual dispatch.'
         required: false
         default: ''
+      overwrite:
+        description: 'Republish an ALREADY PUBLISHED exact version tag (destructive: it changes what that tag means for everyone who pinned it).'
+        required: false
+        default: 'false'
 
 jobs:
   build:
@@ -27,18 +31,24 @@ jobs:
       contents: read
 
     steps:
+      # ! On a dispatch the default branch is one commit PAST the tag (it
+      #   carries the `-dev` marker), so building it would stamp a revision the
+      #   image does not contain. Always check out the version being published.
       - name: Checkout bootgly (framework)
         uses: actions/checkout@v5
         with:
           path: bootgly
-          submodules: recursive
+          ref: ${{ github.event.release.tag_name || format('v{0}', inputs.version) }}
 
-      - name: Checkout bootgly_benchmarks (full target needs the sibling)
+      # ! `provenance.php` takes a framework root AND a benchmarks root; the
+      #   image carries no benchmark content, so this checkout exists only to
+      #   satisfy that contract and keep the framework tuple honest.
+      #   TODO: teach provenance.php a framework-only invocation and drop it.
+      - name: Checkout bootgly_benchmarks (provenance contract only)
         uses: actions/checkout@v5
         with:
           repository: bootgly/bootgly_benchmarks
           path: bootgly_benchmarks
-          submodules: recursive
 
       - name: Set up PHP for canonical source provenance
         uses: shivammathur/setup-php@v2
@@ -55,11 +65,20 @@ jobs:
             echo "$ENTRY" >> "$GITHUB_OUTPUT"
           done <<< "$PROVENANCE"
 
+      # ! Every untrusted value reaches the shell through `env:`, never through
+      #   `${{ }}` inside `run:` — GitHub substitutes those TEXTUALLY before bash
+      #   parses the script, and git accepts shell metacharacters in a ref name
+      #   (`git check-ref-format 'refs/tags/v1.0.0";id;#'` is legal). This job
+      #   holds the Docker Hub credentials for the whole `bootgly/*` namespace.
       - name: Resolve version and tags
         id: version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
           set -euo pipefail
-          V="${{ github.event.release.tag_name || inputs.version }}"
+          V="${RELEASE_TAG:-${INPUT_VERSION:-}}"
           V="${V#v}"
           if [ -z "$V" ]; then
             echo "::error::No version resolved (provide the 'version' input on manual dispatch)."
@@ -67,57 +86,92 @@ jobs:
           fi
           echo "value=$V" >> "$GITHUB_OUTPUT"
 
-          # ! Tag scheme: the VERSION is the primary axis, the VARIANT is a
-          #   suffix. `slim` is the default variant, so it carries the bare
-          #   version tag; `full` is always suffixed. This keeps the two axes
-          #   from being confused the way a bare `latest` + `slim` + `full`
-          #   trio does, and it makes a Bootgly version pinnable at all.
+          # ! Tag scheme — the version IS the tag; this image has one variant:
           #
-          #     stable 1.2.3 → 1.2.3  1.2  1  slim
-          #                    1.2.3-full  1.2-full  1-full  full
-          #     pre-release  → 1.0.0-beta.1  beta
-          #                    1.0.0-beta.1-full  beta-full
+          #     stable 1.2.3 → 1.2.3  1.2  1
+          #     pre-release  → 1.0.0-rc.1  rc
           #
-          # ! `latest` is RETIRED and never published again. It duplicated
-          #   `slim` digest-for-digest, and a redundant alias is exactly what
-          #   the one-way policy forbids — plus "latest" reads as "newest",
-          #   which is never what a Docker tag actually promises. The default
-          #   stable variant is `slim`; say so explicitly.
+          # ! NO `latest` here. This image is the INGREDIENT: `docker run -it
+          #   bootgly/bootgly` (an implicit `latest`) must not hand a user the
+          #   framework-only image — that is the very bug this restructure
+          #   exists to fix. `latest` belongs to bootgly/bootgly.kit.
           #
-          # ? A pre-release must NEVER move `slim`, `full` or the major/minor
-          #   aliases: `docker pull bootgly/bootgly:slim` would hand unreleased
-          #   code to every user. Pre-releases publish their exact version plus
-          #   a moving channel alias (`beta`, `rc`) that people opt into
-          #   deliberately.
-          PRERELEASE="${{ github.event.release.prerelease }}"
+          # ? A pre-release must NEVER move the major/minor aliases either.
+          PRERELEASE="${RELEASE_PRERELEASE:-false}"
           case "$V" in *-*) PRERELEASE=true ;; esac
 
           REPO=bootgly/bootgly
           if [ "$PRERELEASE" = "true" ]; then
             CHANNEL="${V#*-}"      # 1.0.0-beta.1 → beta.1
             CHANNEL="${CHANNEL%%.*}" # beta.1      → beta
-            SLIM_TAGS="$REPO:$V"$'\n'"$REPO:$CHANNEL"
-            FULL_TAGS="$REPO:$V-full"$'\n'"$REPO:$CHANNEL-full"
+            TAGS="$REPO:$V"$'\n'"$REPO:$CHANNEL"
           else
             MAJOR="${V%%.*}"
             MINOR="${V%.*}"
-            SLIM_TAGS="$REPO:$V"$'\n'"$REPO:$MINOR"$'\n'"$REPO:$MAJOR"$'\n'"$REPO:slim"
-            FULL_TAGS="$REPO:$V-full"$'\n'"$REPO:$MINOR-full"$'\n'"$REPO:$MAJOR-full"$'\n'"$REPO:full"
+            TAGS="$REPO:$V"$'\n'"$REPO:$MINOR"$'\n'"$REPO:$MAJOR"
           fi
 
           {
             echo "prerelease=$PRERELEASE"
-            echo "slim_tags<<TAGS_EOF"
-            echo "$SLIM_TAGS"
-            echo "TAGS_EOF"
-            echo "full_tags<<TAGS_EOF"
-            echo "$FULL_TAGS"
+            echo "tags<<TAGS_EOF"
+            echo "$TAGS"
             echo "TAGS_EOF"
           } >> "$GITHUB_OUTPUT"
 
           echo "Resolved version: $V (prerelease: $PRERELEASE)"
-          echo "slim tags:"; echo "$SLIM_TAGS"
-          echo "full tags:"; echo "$FULL_TAGS"
+          echo "tags:"; echo "$TAGS"
+
+      # ? An exact version tag is IMMUTABLE — it names the code of one published
+      #   release, and people pin it. This repository's image changed MEANING at
+      #   the restructure (it used to be presented as the product; it is now the
+      #   framework alone), so re-pushing a version that is already on Hub would
+      #   hand a different image to everyone already pinned to it. The release
+      #   trigger never does this; a `workflow_dispatch` naming a published
+      #   version would, and stops here instead.
+      #
+      # ! The guard fails CLOSED. `bootgly/bootgly` is public and exists, so the
+      #   only answer that proves a tag free is `404`: a `401` means the token
+      #   did not authenticate, and a `429` means Hub rate-limited the anonymous
+      #   pull token this step mints (100 per 6h per IP — a shared GitHub runner
+      #   hits it). `curl -s` reports success on both, so an unrecognised code
+      #   must stop the run rather than be read as "free".
+      - name: Refuse to overwrite a published version tag
+        if: inputs.overwrite != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          set -euo pipefail
+          TOKEN="$(curl -fsSL \
+            'https://auth.docker.io/token?service=registry.docker.io&scope=repository:bootgly/bootgly:pull' \
+            | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')"
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Could not obtain a registry pull token — cannot prove bootgly/bootgly:$VERSION is free."
+            exit 1
+          fi
+          CODE="$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $TOKEN" \
+            -H 'Accept: application/vnd.oci.image.index.v1+json' \
+            -H 'Accept: application/vnd.docker.distribution.manifest.list.v2+json' \
+            -H 'Accept: application/vnd.docker.distribution.manifest.v2+json' \
+            "https://registry-1.docker.io/v2/bootgly/bootgly/manifests/$VERSION")"
+          case "$CODE" in
+            404)
+              echo "bootgly/bootgly:$VERSION is free."
+              ;;
+            200)
+              echo "::error::bootgly/bootgly:$VERSION is already published. An exact version tag is immutable — cut a new version, or dispatch again with overwrite=true if you really mean to replace what that tag hands every user."
+              exit 1
+              ;;
+            *)
+              echo "::error::The registry answered $CODE for bootgly/bootgly:$VERSION — that proves neither free nor taken, so this run stops instead of guessing."
+              exit 1
+              ;;
+          esac
+
+      # ! QEMU first: buildx bootstraps its builder and snapshots the platform
+      #   list, so binfmt has to be registered before it runs.
+      - name: Set up QEMU (cross-platform build)
+        uses: docker/setup-qemu-action@v3
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -128,43 +182,27 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push slim
+      - name: Build and push the framework image
         uses: docker/build-push-action@v7
         with:
-          context: .
+          context: bootgly
           file: bootgly/Dockerfile
-          target: slim
-          platforms: linux/amd64
+          target: framework
+          platforms: linux/amd64,linux/arm64
           push: true
+          provenance: true
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
             BOOTGLY_VERSION=${{ steps.version.outputs.value }}
             BOOTGLY_FRAMEWORK_SHA=${{ steps.source.outputs.framework_sha }}
             BOOTGLY_FRAMEWORK_DIRTY=${{ steps.source.outputs.framework_dirty }}
             BOOTGLY_FRAMEWORK_TRACKED_DIFF_SHA256=${{ steps.source.outputs.framework_tracked_diff_sha256 }}
             BOOTGLY_FRAMEWORK_UNTRACKED_MANIFEST_SHA256=${{ steps.source.outputs.framework_untracked_manifest_sha256 }}
-          tags: ${{ steps.version.outputs.slim_tags }}
+          tags: ${{ steps.version.outputs.tags }}
 
-      - name: Build and push full
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: bootgly/Dockerfile
-          target: full
-          platforms: linux/amd64
-          push: true
-          build-args: |
-            BOOTGLY_VERSION=${{ steps.version.outputs.value }}
-            BOOTGLY_FRAMEWORK_SHA=${{ steps.source.outputs.framework_sha }}
-            BOOTGLY_FRAMEWORK_DIRTY=${{ steps.source.outputs.framework_dirty }}
-            BOOTGLY_FRAMEWORK_TRACKED_DIFF_SHA256=${{ steps.source.outputs.framework_tracked_diff_sha256 }}
-            BOOTGLY_FRAMEWORK_UNTRACKED_MANIFEST_SHA256=${{ steps.source.outputs.framework_untracked_manifest_sha256 }}
-            BOOTGLY_BENCHMARKS_SHA=${{ steps.source.outputs.benchmarks_sha }}
-            BOOTGLY_BENCHMARKS_DIRTY=${{ steps.source.outputs.benchmarks_dirty }}
-            BOOTGLY_BENCHMARKS_TRACKED_DIFF_SHA256=${{ steps.source.outputs.benchmarks_tracked_diff_sha256 }}
-            BOOTGLY_BENCHMARKS_UNTRACKED_MANIFEST_SHA256=${{ steps.source.outputs.benchmarks_untracked_manifest_sha256 }}
-          tags: ${{ steps.version.outputs.full_tags }}
-
-      # The bootgly_benchmarks images bake FROM the framework full image — now
+      # The bootgly_benchmarks images bake FROM this framework image — now
       # that it is on Hub, tell that repo to rebuild every opponent against it.
       # No token configured yet → warn and stay green. To enable auto-rebuild,
       # set BENCHMARKS_DISPATCH_TOKEN on THIS repo to a fine-grained PAT whose
@@ -176,11 +214,9 @@ jobs:
       #   Actions:write authenticates and then 403s on the dispatch.
       #   https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens
       #
-      # ! The base is the EXACT version tag, never the `full` alias. `full` only
-      #   moves on a stable release, so dispatching `bootgly/bootgly:full` from a
-      #   pre-release would silently build every opponent against the PREVIOUS
-      #   stable framework while reporting success. `$V-full` always exists and
-      #   always names the image this very run just pushed.
+      # ! The base is the EXACT version tag. This repo publishes no moving
+      #   alias at all, so there is nothing else to name — and `$V` always
+      #   exists and always names the image this very run just pushed.
       - name: Trigger bootgly_benchmarks rebuild
         env:
           GH_TOKEN: ${{ secrets.BENCHMARKS_DISPATCH_TOKEN }}
@@ -190,5 +226,5 @@ jobs:
             echo "::warning::BENCHMARKS_DISPATCH_TOKEN not set — skipping bootgly_benchmarks dispatch."
             exit 0
           fi
-          printf '{"event_type":"framework-release","client_payload":{"version":"%s","base":"bootgly/bootgly:%s-full"}}' "$VERSION" "$VERSION" > payload.json
+          printf '{"event_type":"framework-release","client_payload":{"version":"%s","base":"bootgly/bootgly:%s"}}' "$VERSION" "$VERSION" > payload.json
           gh api repos/bootgly/bootgly_benchmarks/dispatches --method POST --input payload.json

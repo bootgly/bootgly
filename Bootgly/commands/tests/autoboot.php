@@ -54,5 +54,6 @@ return new Suite(
       '8.6-kit-swap-purity',
       '8.7-kit-partial',
       '8.8-kit-boot',
+      '8.9-kit-container',
    ]
 );

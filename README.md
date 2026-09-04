@@ -70,7 +70,7 @@ curl -fsSL https://bootgly.com/install | bash
 - PHP 8.4+ ⚠️
 - Opcache + JIT enabled (+50% performance) 👍
 
-> 🐳 **Docker:** build a `slim` or `full` Bootgly image to run servers, test, benchmark and ship your own projects — see the [`Dockerfile`](Dockerfile) and the [Docker guide][DOCKER_GUIDE].
+> 🐳 **Docker:** `docker run -it bootgly/bootgly.kit:<version>` gives you the whole kit — framework, Console and Web — ready to create and run projects. Name a tag: `latest` arrives with the first stable release. This repository publishes `bootgly/bootgly`, the framework image you build your own on; see the [`Dockerfile`](Dockerfile) and the [Docker guide][DOCKER_GUIDE].
 
 ### PHP Packages
 

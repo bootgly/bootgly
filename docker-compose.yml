@@ -1,21 +1,33 @@
 # ============================================================================
 # Bootgly — Docker Compose convenience stack
 #
-# One build (the `full` image), three use-cases selected by profile:
+# Two use-cases from ONE build of this repository's framework image:
 #   docker compose --profile serve up        # run the demo HTTP server
-#   docker compose --profile test  up         # run the test suite
-#   docker compose --profile bench up         # run the internal benchmark
+#   docker compose --profile test  up        # run the test suite
 #
-# All services share the same image/build via the `x-bootgly` anchor, so the
-# image is built once and reused. storage (PIDs/state) persists in a volume.
+# The benchmark lives in the bootgly_benchmarks repository and runs from its own
+# published image — it is not built here:
+#   docker run --rm bootgly/bootgly_benchmarks:bootgly \
+#     test benchmark HTTP_Server_CLI --loads=benchmark:1 --opponents=bootgly --runner=tcp_client
+#
+# Both services share the image/build via the `x-bootgly` anchor, so it is built
+# once and reused. storage (PIDs/state) persists in a volume.
 # ============================================================================
 
 x-bootgly: &bootgly
   build:
-    context: ..
-    dockerfile: bootgly/Dockerfile
-    target: full
-  image: bootgly:full
+    context: .
+    dockerfile: Dockerfile
+    target: framework
+    # ! Provenance, when the environment carries it. Empty is fine and normal —
+    #   the image just cannot prove its COPY boundary, and the case that needs
+    #   the stamp SKIPS instead of passing over assertions it never ran.
+    args:
+      BOOTGLY_FRAMEWORK_SHA: ${BOOTGLY_FRAMEWORK_SHA:-}
+      BOOTGLY_FRAMEWORK_DIRTY: ${BOOTGLY_FRAMEWORK_DIRTY:-}
+      BOOTGLY_FRAMEWORK_TRACKED_DIFF_SHA256: ${BOOTGLY_FRAMEWORK_TRACKED_DIFF_SHA256:-}
+      BOOTGLY_FRAMEWORK_UNTRACKED_MANIFEST_SHA256: ${BOOTGLY_FRAMEWORK_UNTRACKED_MANIFEST_SHA256:-}
+  image: bootgly:framework
   volumes:
     - storage:/bootgly/storage
 
@@ -33,17 +45,31 @@ services:
     ports:
       - "8082:8082"
 
-  # # Run the full test suite
+  # # Run one test suite by index
+  #   (`SUITE=16 docker compose --profile test up --build`).
+  #
+  # ! Pass `--build`. Compose reuses whatever `bootgly:framework` already exists,
+  #   so without it the run can report on an image older than the working tree —
+  #   silently, and in the suite whose whole job is to audit that image.
+  #   A full run is deliberately NOT the default here: a spawned server keeps the
+  #   runner's output pipe open and deadlocks the container — it never exits, so
+  #   `--rm` never fires either. The whole set belongs to CI on a host.
+  #
+  # ! The default index 102 is `Bootgly\API\Environment` — the suite carrying the
+  #   image-boundary canary, which is the one worth running in a container.
+  #   Indices come from `tests/autoboot.php` ORDER: inserting a suite before it
+  #   silently moves this default onto a different suite that still prints
+  #   `passed`. Re-check the index when suites are registered.
+  #
+  # ! The secrets case of that suite needs a provenance-stamped build and SKIPS
+  #   without one (visibly, in the run summary). Export the stamp to run it:
+  #     eval "$(php Bootgly/ACI/Tests/Benchmark/provenance.php . ../bootgly_benchmarks \
+  #       --docker-build-args | sed 's/--build-arg /export /g')" \
+  #       && docker compose --profile test up --build
   test:
     <<: *bootgly
     profiles: ["test"]
-    command: ["test"]
-
-  # # Run the internal (Bootgly-vs-Bootgly) HTTP benchmark
-  bench:
-    <<: *bootgly
-    profiles: ["bench"]
-    command: ["test", "benchmark", "HTTP_Server_CLI", "--loads=benchmark:1", "--opponents=bootgly", "--runner=tcp_client"]
+    command: ["test", "${SUITE:-102}"]
 
 volumes:
   storage:
