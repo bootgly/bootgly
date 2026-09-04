@@ -219,6 +219,10 @@ return new Test(
                'projects', 'create', 'MixProbe',
                '--yes', '--platform=none,web', '--interfaces=CLI',
             ], 'says' => 'cannot be combined'],
+            'an empty --platform value' => ['arguments' => [
+               'projects', 'create', 'EmptyPlat',
+               '--yes', '--platform=', '--interfaces=CLI',
+            ], 'says' => 'Missing platform value'],
             'a missing project path' => ['arguments' => [
                'projects', 'create',
                '--yes', '--platform=none', '--interfaces=CLI',

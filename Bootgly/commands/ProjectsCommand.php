@@ -2004,6 +2004,19 @@ class ProjectsCommand extends Command
 
       $platforms = array_filter(explode(',', strtolower($options['platform'])));
 
+      // ? `--platform=` with nothing after it is not `none`: the documented
+      //   values are console, web, console,web and none, and silently reading
+      //   an empty list as one of them hides a typo
+      if ($platforms === []) {
+         $Alert = new Alert(CLI->Terminal->Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = 'Missing platform value. '
+            . 'Use console, web, console,web or none.';
+         $Alert->render();
+
+         return false;
+      }
+
       // ? `none` keeps the base platform only, and is EXCLUSIVE: pairing it with
       //   a platform asks for nothing and for something in the same breath
       if (in_array('none', $platforms, true) === true) {

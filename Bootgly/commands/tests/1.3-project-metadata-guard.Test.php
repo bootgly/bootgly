@@ -196,16 +196,21 @@ return new Test(
             //   An empty survivor set is a legitimate outcome — the registry
             //   then holds nothing but probes — so an absent replacement means
             //   "remove it", never "keep what is there".
-            if ($kept === true) {
+            $moved = $kept === true
+                  && is_file($restore) === true
+                  && rename($restore, $registry) === true;
+
+            // ? Anything short of a completed move drops the registry: keeping
+            //   one this case's own probes are in is the permanently-red state
+            //   the re-emission exists to prevent, and a fresh kit rebuilds it
+            //   on the next create.
+            if ($moved === false) {
                if (is_file($restore) === true) {
-                  rename($restore, $registry) === true || unlink($restore);
+                  unlink($restore);
                }
-               else {
+               if (is_file($registry) === true) {
                   unlink($registry);
                }
-            }
-            else if (is_file($restore) === true) {
-               unlink($restore);
             }
          }
          $Memo->setValue(null, null);
