@@ -1,7 +1,16 @@
 <?php
+/*
+ * --------------------------------------------------------------------------
+ * Bootgly PHP Framework
+ * Developed by Rodrigo Vieira (@rodrigoslayertech)
+ * Copyright (c) 2023-present Bootgly and contributors
+ * Licensed under MIT
+ * --------------------------------------------------------------------------
+ */
 
 
 use Bootgly\ACI\Events\Timer;
+use Bootgly\ACI\Events\Timer\Reset as TimerReset;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertion\Auxiliaries\Op;
@@ -11,6 +20,7 @@ use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections\Connection;
+use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections\Connection\Lease;
 
 
 return new Test(
@@ -18,6 +28,8 @@ return new Test(
    test: new Assertions(Case: function (): Generator {
       $Socket = null;
       $segments = Display::$segments;
+      $PreviousAlarm = pcntl_signal_get_handler(SIGALRM);
+      Timer::init(static function (): void {});
       Display::show(Display::NONE);
 
       try {
@@ -48,10 +60,10 @@ return new Test(
          $SocketProperty = new ReflectionProperty($Server, 'Socket');
          $SocketProperty->setValue($Server, $Socket);
 
-         // ! Fresh registry/blacklist/stats — the Connections constructor
-         //   resets every shared static ($stats defaults to true, so an
-         //   admitted peer arms its persistent expire() timer)
-         $Connections = new Connections($Server);
+         // ! Use the sole manager configured through the Server value object;
+         //   an independently constructed manager intentionally has no policy
+         //   authority until its owner commits Configs.
+         $Connections = $Server->Connections;
 
          $tasksProperty = new ReflectionProperty(Timer::class, 'tasks');
 
@@ -74,7 +86,7 @@ return new Test(
 
          yield new Assertion(
             description: 'a new peer is admitted: no escalated notice, a'
-               . ' registered Connection and its expire() timer armed',
+               . ' registered Connection and the central supervisor armed',
             fallback: 'accept() blew up or admitted nothing: '
                . json_encode($observed)
          )
@@ -137,13 +149,39 @@ return new Test(
          }
          Connections::$Connections = [];
          Connections::$blacklist = [];
+         unset($Connection);
+         gc_collect_cycles();
+         Lease::drain();
          Timer::del();
+         gc_collect_cycles();
+         Lease::drain();
+         $remainingAlarm = pcntl_alarm(0);
+
+         $Peers = new ReflectionProperty(Connections::class, 'Peers');
+         $IPs = new ReflectionProperty(Connections::class, 'IPConnections');
+         $Pending = new ReflectionProperty(Lease::class, 'Pending');
+         $Tasks = new ReflectionProperty(Timer::class, 'tasks');
+         $ManagerReset = new ReflectionProperty(Connections::class, 'resetObserver');
+         $DirectReset = new ReflectionProperty(Connection::class, 'resetObserver');
+         $ResetObservers = new ReflectionProperty(TimerReset::class, 'Observers');
+         $clean = $Peers->getValue() === []
+            && $IPs->getValue() === []
+            && $Pending->getValue() === []
+            && $Tasks->getValue() === []
+            && $ManagerReset->getValue() === 0
+            && $DirectReset->getValue() === 0
+            && $ResetObservers->getValue() === []
+            && $remainingAlarm === 0;
 
          if ($Socket !== null && $Socket !== false) {
             @fclose($Socket);
          }
 
+         pcntl_signal(SIGALRM, $PreviousAlarm === false ? SIG_DFL : $PreviousAlarm);
          Display::show($segments);
+         if ($clean === false) {
+            throw new RuntimeException('UDP admission test teardown left process state.');
+         }
       }
    })
 );

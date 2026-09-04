@@ -17,7 +17,9 @@ use const LOCK_EX;
 use const LOCK_NB;
 use const PHP_BINARY;
 use const PHP_SAPI;
+use const SIG_BLOCK;
 use const SIG_IGN;
+use const SIG_SETMASK;
 use const SIGALRM;
 use const SIGCHLD;
 use const SIGCONT;
@@ -28,6 +30,7 @@ use const SIGIOT;
 use const SIGKILL;
 use const SIGPIPE;
 use const SIGQUIT;
+use const SIGSTOP;
 use const SIGTERM;
 use const SIGTSTP;
 use const SIGUSR1;
@@ -41,9 +44,12 @@ use const STREAM_SERVER_BIND;
 use const STREAM_SOCK_STREAM;
 use const WNOHANG;
 use const WUNTRACED;
+use function array_diff;
 use function array_merge;
 use function array_slice;
+use function array_values;
 use function chdir;
+use function constant;
 use function count;
 use function defined;
 use function explode;
@@ -56,6 +62,7 @@ use function fwrite;
 use function get_included_files;
 use function getcwd;
 use function getenv;
+use function in_array;
 use function is_file;
 use function is_resource;
 use function method_exists;
@@ -64,6 +71,7 @@ use function pcntl_exec;
 use function pcntl_fork;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
+use function pcntl_sigprocmask;
 use function pcntl_wait;
 use function pcntl_waitpid;
 use function posix_getgrnam;
@@ -75,6 +83,7 @@ use function posix_kill;
 use function posix_setgid;
 use function posix_setsid;
 use function posix_setuid;
+use function range;
 use function register_shutdown_function;
 use function rtrim;
 use function str_contains;
@@ -90,6 +99,9 @@ use ArgumentCountError;
 use BackedEnum;
 use Closure;
 use InvalidArgumentException;
+use ReflectionProperty;
+use RuntimeException;
+use stdClass;
 use Throwable;
 
 use const Bootgly\CLI;
@@ -121,6 +133,8 @@ use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI\Commands;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI\Configs;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections;
+use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections\Connection\Lease;
+use Bootgly\WPI\Interfaces\UDP_Server_CLI\Router;
 
 
 class UDP_Server_CLI implements Servers
@@ -151,13 +165,13 @@ class UDP_Server_CLI implements Servers
    public static Events & Loops & Scheduler $Event;
 
    protected Commands $Commands;
-   protected Process $Process;
+   protected final Process $Process;
 
    // * Config
    protected null|string $domain;
    protected null|string $host;
    protected null|int $port;
-   protected int $workers;
+   protected int $workers = 0;
    protected null|string $user = null;
    protected null|string $group = null;
    // # Mode
@@ -192,20 +206,21 @@ class UDP_Server_CLI implements Servers
    /** @var array<array<bool|int|string>|string> */
    public static array $context;
    // # Status
-   protected Status $Status = Status::Booting;
+   protected final Status $Status = Status::Booting;
+   /** Re-entrant Configs application guard. */
+   private bool $configuring = false;
 
    // /
-   protected Connections $Connections;
+   protected final Connections $Connections;
 
 
+   /** @param Modes $Mode Runtime mode. */
    public function __construct (Modes $Mode = Modes::Monitor)
    {
       if (PHP_SAPI !== 'cli') {
          return;
       }
 
-
-      // * Config
       // $domain
       $this->socket = 'udp://';
       $this->host = null;
@@ -338,6 +353,41 @@ class UDP_Server_CLI implements Servers
 
       return null;
    }
+
+   /**
+    * Block every catchable process signal across one lifecycle transaction.
+    *
+    * @return array<int> Previous process signal mask.
+    */
+   private static function mask (): array
+   {
+      $Signals = array_values(array_diff(range(1, 31), [SIGKILL, SIGSTOP]));
+      if (defined('SIGRTMIN') && defined('SIGRTMAX')) {
+         /** @var int $RTMin */
+         $RTMin = constant('SIGRTMIN');
+         /** @var int $RTMax */
+         $RTMax = constant('SIGRTMAX');
+         $Signals = array_merge($Signals, range($RTMin, $RTMax));
+      }
+      $PreviousSignals = [];
+      if (pcntl_sigprocmask(SIG_BLOCK, $Signals, $PreviousSignals) === false) {
+         throw new RuntimeException('Could not block signals for UDP lifecycle transaction.');
+      }
+
+      return $PreviousSignals;
+   }
+
+   /**
+    * Restore the exact signal mask captured by mask().
+    *
+    * @param array<int> $Signals Previous process signal mask.
+    */
+   private static function unmask (array $Signals): void
+   {
+      if (pcntl_sigprocmask(SIG_SETMASK, $Signals) === false) {
+         throw new RuntimeException('Could not restore signals after UDP lifecycle transaction.');
+      }
+   }
    /**
     * Configure the UDP Server.
     *
@@ -353,13 +403,212 @@ class UDP_Server_CLI implements Servers
     */
    public function configure (Configuring ...$Configs): self
    {
-      $this->Status = Status::Configuring;
+      if ($this->configuring) {
+         throw new RuntimeException('UDP server configuration is already active.');
+      }
+      $PreviousSignals = self::mask();
+      $this->configuring = true;
+      $Configuration = new stdClass;
+      $ManagerSnapshot = null;
+      $Connections = null;
+      try {
+         $StatusProperty = new ReflectionProperty(self::class, 'Status');
+         $TransportedProperty = new ReflectionProperty(self::class, 'transported');
+         if (
+            $StatusProperty->isInitialized($this) === false
+            || $TransportedProperty->isInitialized($this) === false
+         ) {
+            throw new RuntimeException('UDP server configuration state is unavailable.');
+         }
+         $Status = $StatusProperty->getRawValue($this);
+         if (in_array($Status, [Status::Booting, Status::Configuring], true) === false) {
+            $this->Logger->log(
+               error: '@\\;configure() rejected: the server already crossed its pre-start boundary — use reload() to reconfigure.@\\;'
+            );
 
-      // @ One Configs per concern — the whole set is validated, then applied
-      $this->apply($Configs);
+            return $this;
+         }
 
-      // :
-      return $this;
+         $ConnectionsProperty = new ReflectionProperty(self::class, 'Connections');
+         $ProcessProperty = new ReflectionProperty(self::class, 'Process');
+         if ($ConnectionsProperty->isInitialized($this) === false) {
+            throw new RuntimeException('UDP server admission manager is unavailable.');
+         }
+         if ($ProcessProperty->isInitialized($this) === false) {
+            throw new RuntimeException('UDP server process state is unavailable.');
+         }
+         $Connections = $ConnectionsProperty->getRawValue($this);
+         $Process = $ProcessProperty->getRawValue($this);
+         $StoppingProperty = new ReflectionProperty(Process::class, 'stopping');
+         $ReloadingProperty = new ReflectionProperty(Process::class, 'reloading');
+         if ($Connections instanceof Connections === false) {
+            throw new RuntimeException('UDP server admission manager is unavailable.');
+         }
+         if (
+            $Process instanceof Process === false
+            || $StoppingProperty->getRawValue($Process)
+            || $ReloadingProperty->getRawValue($Process)
+         ) {
+            throw new RuntimeException('UDP server process already crossed its configuration boundary.');
+         }
+
+         $Properties = [];
+         $previous = [];
+         foreach (['host', 'port', 'workers', 'user', 'group'] as $name) {
+            $Property = new ReflectionProperty(self::class, $name);
+            if ($Property->isInitialized($this) === false) {
+               throw new RuntimeException('UDP server transport state is unavailable.');
+            }
+            $Properties[$name] = $Property;
+            $previous[$name] = $Property->getRawValue($this);
+         }
+         $transported = $TransportedProperty->getRawValue($this);
+
+         $Begin = Closure::bind(
+            static function (
+               Connections $Connections,
+               UDP_Server_CLI $Node,
+               object $Configuration,
+            ): array {
+               if (
+                  Connections::$Configuration !== null
+                  || Connections::$Starting !== null
+                  || Connections::$committing
+                  || Connections::$Construction !== null
+                  || Connections::$admissionDepth > 0
+                  || Connections::$withdrawalDepth > 0
+                  || Connections::$Peers !== []
+                  || Lease::guard()
+               ) {
+                  throw new RuntimeException(
+                     'UDP peer admission policy cannot change during active lifecycle work.'
+                  );
+               }
+               if ($Connections->authorize() === false) {
+                  throw new RuntimeException('UDP admission manager is no longer current.');
+               }
+               $ServerProperty = new ReflectionProperty(Connections::class, 'Server');
+               $RouterProperty = new ReflectionProperty(Connections::class, 'Router');
+               if (
+                  $ServerProperty->isInitialized($Connections) === false
+                  || $RouterProperty->isInitialized($Connections) === false
+                  || $ServerProperty->getRawValue($Connections) !== $Node
+               ) {
+                  throw new RuntimeException('UDP admission manager graph is incomplete.');
+               }
+
+               $Snapshot = [
+                  'peerCeiling' => $Connections->peerCeiling,
+                  'IPCeiling' => $Connections->IPCeiling,
+                  'idleTimeout' => $Connections->idleTimeout,
+                  'datagramBatch' => $Connections->datagramBatch,
+                  'Router' => $RouterProperty->getRawValue($Connections),
+                  'configured' => $Connections->configured,
+               ];
+               Connections::$Configuration = $Configuration;
+               $Connections->configured = false;
+
+               return $Snapshot;
+            },
+            null,
+            Connections::class,
+         );
+         $ManagerSnapshot = $Begin($Connections, $this, $Configuration);
+
+         // @ One Configs per concern — the whole set is validated, then applied.
+         try {
+            $this->apply($Configs);
+            if (
+               $StatusProperty->getRawValue($this) !== $Status
+               || $StoppingProperty->getRawValue($Process) // @phpstan-ignore booleanOr.rightAlwaysFalse
+               || $ReloadingProperty->getRawValue($Process) // @phpstan-ignore booleanOr.rightAlwaysFalse
+            ) {
+               throw new RuntimeException('UDP server configuration was cancelled by lifecycle work.');
+            }
+            $StatusProperty->setRawValue($this, Status::Configuring);
+            $Commit = Closure::bind(
+               static function (
+                  Connections $Connections,
+                  object $Configuration,
+               ): void {
+                  if (
+                     Connections::$Configuration !== $Configuration
+                     || $Connections->authorize() === false
+                  ) {
+                     throw new RuntimeException(
+                        'UDP admission manager changed before configuration commit.'
+                     );
+                  }
+                  $Connections->configured = true;
+               },
+               null,
+               Connections::class,
+            );
+            $Commit($Connections, $Configuration);
+         }
+         catch (Throwable $Throwable) {
+            foreach ($Properties as $name => $Property) {
+               $Property->setRawValue($this, $previous[$name]);
+            }
+            $TransportedProperty->setRawValue($this, $transported);
+            if (
+               $StoppingProperty->getRawValue($Process) === false
+               && $ReloadingProperty->getRawValue($Process) === false
+            ) {
+               $StatusProperty->setRawValue($this, $Status);
+            }
+            $Rollback = Closure::bind(
+               static function (
+                  Connections $Connections,
+                  object $Configuration,
+                  array $Snapshot,
+               ): void {
+                  if (
+                     Connections::$Configuration !== $Configuration
+                     || $Connections->authorize() === false
+                  ) {
+                     $Connections->configured = false;
+                     return;
+                  }
+                  $RouterProperty = new ReflectionProperty(Connections::class, 'Router');
+                  $Connections->peerCeiling = $Snapshot['peerCeiling'];
+                  $Connections->IPCeiling = $Snapshot['IPCeiling'];
+                  $Connections->idleTimeout = $Snapshot['idleTimeout'];
+                  $Connections->datagramBatch = $Snapshot['datagramBatch'];
+                  $RouterProperty->setRawValue($Connections, $Snapshot['Router']);
+                  // ! Publish readiness last: an interrupted rollback remains
+                  //   fail-closed even when some raw values were restored.
+                  $Connections->configured = $Snapshot['configured'];
+               },
+               null,
+               Connections::class,
+            );
+            $Rollback($Connections, $Configuration, $ManagerSnapshot);
+
+            throw $Throwable;
+         }
+
+         // :
+         return $this;
+      }
+      finally {
+         try {
+            $this->configuring = false;
+            $End = Closure::bind(
+               static function (object $Configuration): void {
+                  if (Connections::$Configuration === $Configuration) {
+                     Connections::$Configuration = null;
+                  }
+               },
+               null,
+               Connections::class,
+            );
+            $End($Configuration);
+         }
+         finally {
+            self::unmask($PreviousSignals);
+         }
+      }
    }
    /**
     * Apply one Configs to this server.
@@ -390,12 +639,104 @@ class UDP_Server_CLI implements Servers
 
          #$this->domain = $Config->domain;
 
-         $this->host = $Config->host;
-         $this->port = $Config->port;
-         $this->workers = $Config->workers;
+         $Configure = Closure::bind(
+            static function (
+               UDP_Server_CLI $Node,
+               Connections $Connections,
+               Configs $Config,
+            ): void {
+               if (
+                  Connections::$Configuration === null
+                  || Connections::$committing
+               ) {
+                  throw new RuntimeException(
+                     'UDP peer admission policy configuration is not active.'
+                  );
+               }
+               if (
+                  $Connections->authorize() === false
+                  || Connections::$Construction !== null
+                  || Connections::$admissionDepth > 0
+                  || Connections::$withdrawalDepth > 0
+                  || Connections::$Peers !== []
+                  || Lease::guard()
+               ) {
+                  throw new RuntimeException(
+                     'UDP peer admission policy cannot change during active lifecycle work.'
+                  );
+               }
 
-         $this->user = $Config->user;
-         $this->group = $Config->group;
+               $ServerProperty = new ReflectionProperty(Connections::class, 'Server');
+               $RouterProperty = new ReflectionProperty(Connections::class, 'Router');
+               if (
+                  $ServerProperty->isInitialized($Connections) === false
+                  || $RouterProperty->isInitialized($Connections) === false
+               ) {
+                  throw new RuntimeException('UDP admission manager graph is incomplete.');
+               }
+               $Server = $ServerProperty->getRawValue($Connections);
+               if ($Server !== $Node) {
+                  throw new RuntimeException('UDP admission manager belongs to another server.');
+               }
+               $Read = Closure::bind(
+                  static function (Configs $Config): array {
+                     self::validate(
+                        $Config->maxConnections,
+                        $Config->maxConnectionsPerIP,
+                        $Config->connectionIdleTimeout,
+                        $Config->maxDatagramsPerTick,
+                     );
+
+                     return [
+                        'host' => $Config->host,
+                        'port' => $Config->port,
+                        'workers' => $Config->workers,
+                        'user' => $Config->user,
+                        'group' => $Config->group,
+                        'maxConnections' => $Config->maxConnections,
+                        'maxConnectionsPerIP' => $Config->maxConnectionsPerIP,
+                        'connectionIdleTimeout' => $Config->connectionIdleTimeout,
+                        'maxDatagramsPerTick' => $Config->maxDatagramsPerTick,
+                     ];
+                  },
+                  null,
+                  Configs::class,
+               );
+               $values = $Read($Config);
+               $Router = new Router(
+                  $Server,
+                  $Connections,
+                  $values['maxDatagramsPerTick'],
+               );
+               $Properties = [];
+               foreach (['host', 'port', 'workers', 'user', 'group'] as $name) {
+                  $Properties[$name] = new ReflectionProperty(
+                     UDP_Server_CLI::class,
+                     $name,
+                  );
+               }
+
+               foreach ($Properties as $name => $Property) {
+                  $Property->setRawValue($Node, $values[$name]);
+               }
+               $Connections->peerCeiling = $values['maxConnections'];
+               $Connections->IPCeiling = $values['maxConnectionsPerIP'];
+               $Connections->idleTimeout = $values['connectionIdleTimeout'];
+               $Connections->datagramBatch = $values['maxDatagramsPerTick'];
+               $RouterProperty->setRawValue($Connections, $Router);
+            },
+            null,
+            Connections::class,
+         );
+         $ConnectionsProperty = new ReflectionProperty(self::class, 'Connections');
+         if ($ConnectionsProperty->isInitialized($this) === false) {
+            throw new RuntimeException('UDP server admission manager is unavailable.');
+         }
+         $Connections = $ConnectionsProperty->getRawValue($this);
+         if ($Connections instanceof Connections === false) {
+            throw new RuntimeException('UDP server admission manager is unavailable.');
+         }
+         $Configure($this, $Connections, $Config);
 
          return;
       }
@@ -554,27 +895,197 @@ class UDP_Server_CLI implements Servers
             break;
       }
    }
+
+   /** Check that this server still owns one coherent admission/event graph. */
+   private function check (null|object $Starting = null): bool
+   {
+      try {
+         $StatusProperty = new ReflectionProperty(self::class, 'Status');
+         $TransportedProperty = new ReflectionProperty(self::class, 'transported');
+         $ConfiguringProperty = new ReflectionProperty(self::class, 'configuring');
+         $ConnectionsProperty = new ReflectionProperty(self::class, 'Connections');
+         $ProcessProperty = new ReflectionProperty(self::class, 'Process');
+         if (
+            $StatusProperty->isInitialized($this) === false
+            || $TransportedProperty->isInitialized($this) === false
+            || $ConfiguringProperty->isInitialized($this) === false
+            || $ConnectionsProperty->isInitialized($this) === false
+            || $ProcessProperty->isInitialized($this) === false
+            || $StatusProperty->getRawValue($this) !== (
+               $Starting === null ? Status::Configuring : Status::Starting
+            )
+            || $TransportedProperty->getRawValue($this) !== true
+            || $ConfiguringProperty->getRawValue($this) !== false
+            || isSet(static::$Event) === false
+            || static::$Event instanceof Select === false
+         ) {
+            return false;
+         }
+         $Connections = $ConnectionsProperty->getRawValue($this);
+         $Process = $ProcessProperty->getRawValue($this);
+         if (
+            $Connections instanceof Connections === false
+            || $Process instanceof Process === false
+            || $Process->stopping
+            || $Process->reloading
+         ) {
+            return false;
+         }
+         $Check = Closure::bind(
+            static function (
+               UDP_Server_CLI $Server,
+               Connections $Connections,
+               Select $Event,
+               null|object $Starting,
+            ): bool {
+               if (
+                  Connections::$Configuration !== null
+                  || Connections::$committing
+                  || (
+                     $Starting !== null
+                     && Connections::$Starting !== $Starting
+                  )
+                  || $Connections->configured === false
+                  || $Connections->authorize() === false
+               ) {
+                  return false;
+               }
+
+               $ServerProperty = new ReflectionProperty(Connections::class, 'Server');
+               $RouterProperty = new ReflectionProperty(Connections::class, 'Router');
+               if (
+                  $ServerProperty->isInitialized($Connections) === false
+                  || $RouterProperty->isInitialized($Connections) === false
+               ) {
+                  return false;
+               }
+               $Router = $RouterProperty->getRawValue($Connections);
+               if (
+                  $ServerProperty->getRawValue($Connections) !== $Server
+                  || $Router instanceof Router === false
+               ) {
+                  return false;
+               }
+               $RouterServer = new ReflectionProperty(Router::class, 'Server');
+               $RouterConnections = new ReflectionProperty(Router::class, 'Connections');
+               $EventConnections = new ReflectionProperty(Select::class, 'Connections');
+               if (
+                  $RouterServer->isInitialized($Router) === false
+                  || $RouterConnections->isInitialized($Router) === false
+                  || $EventConnections->isInitialized($Event) === false
+               ) {
+                  return false;
+               }
+
+               return $RouterServer->getRawValue($Router) === $Server
+                  && $RouterConnections->getRawValue($Router) === $Connections
+                  && $EventConnections->getRawValue($Event) === $Connections;
+            },
+            null,
+            Connections::class,
+         );
+
+         return $Check($this, $Connections, static::$Event, $Starting);
+      }
+      catch (Throwable) {
+         return false;
+      }
+   }
+
+   /** Revalidate the claimed graph and cancellable process state before launch work. */
+   private function launch (object $Starting): bool
+   {
+      if ($this->check($Starting) === false) {
+         return false;
+      }
+
+      try {
+         $ProcessProperty = new ReflectionProperty(self::class, 'Process');
+         if ($ProcessProperty->isInitialized($this) === false) {
+            return false;
+         }
+         $Process = $ProcessProperty->getRawValue($this);
+
+         return $Process instanceof Process
+            && $Process->stopping === false
+            && $Process->reloading === false
+            && $Process->Children->PIDs === [];
+      }
+      catch (Throwable) {
+         return false;
+      }
+   }
+
    public function start (): bool
    {
-      $this->Status = Status::Starting;
-
-      // ! Capture the launch command NOW — before any daemon chdir — so reload()
-      //   can re-exec a faithful copy of this master later (fresh PHP image =
-      //   reloaded code, same PID). get_included_files()[0] is the absolute entry.
-      $Included = get_included_files();
-      self::$binary = PHP_BINARY;
-      /** @var array<int,string> $argv */
-      $argv = $_SERVER['argv'] ?? [];
-      self::$argv = array_merge(
-         [$Included[0] ?? ($argv[0] ?? '')],
-         array_slice($argv, 1)
+      $PreviousSignals = self::mask();
+      $Starting = new stdClass;
+      $Claimed = false;
+      $Transitioned = false;
+      $Launched = false;
+      $Masked = true;
+      $Release = Closure::bind(
+         static function (object $Starting): void {
+            if (Connections::$Starting === $Starting) {
+               Connections::$Starting = null;
+            }
+         },
+         null,
+         Connections::class,
       );
-      self::$directory = getcwd() ?: '';
+      try {
+         $ConnectionsProperty = new ReflectionProperty(self::class, 'Connections');
+         if ($ConnectionsProperty->isInitialized($this) === false) {
+            return false;
+         }
+         $Connections = $ConnectionsProperty->getRawValue($this);
+         if ($Connections instanceof Connections === false) {
+            return false;
+         }
+         $Claim = Closure::bind(
+            static function (
+               Connections $Connections,
+               object $Starting,
+            ): bool {
+               if (
+                  Connections::$Starting !== null
+                  || Connections::$Configuration !== null
+                  || Connections::$committing
+                  || Connections::$Construction !== null
+                  || Connections::$admissionDepth > 0
+                  || Connections::$withdrawalDepth > 0
+                  || Lease::guard()
+                  || $Connections->authorize() === false
+               ) {
+                  return false;
+               }
+               Connections::$Starting = $Starting;
 
-      // @ Stamp the instance on every record from here on — the qualifier the
-      //   registry keys this server by (the port is final since configure());
-      //   the daemon master and every worker fork below inherit it
-      Record::$qualifier = (string) ($this->port ?? 0);
+               return true;
+            },
+            null,
+            Connections::class,
+         );
+         if ($Claim($Connections, $Starting) === false) {
+            return false;
+         }
+         $Claimed = true;
+         if ($this->check() === false) {
+            $this->Logger->log(
+               error: '@\\;start() rejected: this server no longer owns the current UDP admission manager and event graph.@\\;'
+            );
+
+            return false;
+         }
+         $StatusProperty = new ReflectionProperty(self::class, 'Status');
+         $StatusProperty->setRawValue($this, Status::Starting);
+         $Transitioned = true;
+         if ($this->launch($Starting) === false) {
+            $StatusProperty->setRawValue($this, Status::Configuring);
+            $Transitioned = false;
+
+            return false;
+         }
 
       // ? Drop to the compact message line unless output is fully muted
       if (Display::$segments !== Display::NONE) {
@@ -582,6 +1093,9 @@ class UDP_Server_CLI implements Servers
       }
 
       $this->Logger->log(notice: '@\;Starting Server...');
+      if ($this->launch($Starting) === false) { // @phpstan-ignore identical.alwaysFalse
+         return false;
+      }
 
       // @ Boot Server API
       if (self::$Application) {
@@ -591,6 +1105,23 @@ class UDP_Server_CLI implements Servers
          $this->Logger->log(error: '@\;No handler defined. Call on(Events::DatagramReceive, ...) before start().@\;');
          exit(1);
       }
+      if ($this->launch($Starting) === false) { // @phpstan-ignore identical.alwaysFalse
+         return false;
+      }
+
+      // ! Capture the launch command only after every pre-state application
+      //   callback accepted the claimed start. A cancelled launch leaves the
+      //   previous reload identity and log qualifier untouched.
+      $Included = get_included_files();
+      self::$binary = PHP_BINARY;
+      /** @var array<int,string> $argv */
+      $argv = $_SERVER['argv'] ?? [];
+      self::$argv = array_merge(
+         [$Included[0] ?? ($argv[0] ?? '')],
+         array_slice($argv, 1)
+      );
+      self::$directory = getcwd() ?: '';
+      Record::$qualifier = (string) ($this->port ?? 0);
 
       // ! Process
       // ? Qualify the state files with the bound port before the final master
@@ -627,6 +1158,9 @@ class UDP_Server_CLI implements Servers
       // ! Daemon runs detached: install the default sink BEFORE the daemon and worker
       //   forks so every process inherits the static (post-fork writes never propagate).
       $this->store();
+      if ($this->launch($Starting) === false) {
+         return false;
+      }
 
       // ! Select the final daemon master before it acquires the lock or forks
       //   workers. The flock owner PID is then a stable kernel identity and
@@ -659,9 +1193,22 @@ class UDP_Server_CLI implements Servers
          SIGIO,    // connection stats
       ]);
       pcntl_signal(SIGPIPE, SIG_IGN, false);
+      if ($this->launch($Starting) === false) {
+         return false;
+      }
 
       // @ Fork process workers...
-      $this->Process->fork($this->workers, instance: function (Process $Process, int $index): void {
+      $this->Process->fork($this->workers, instance: function (
+         Process $Process,
+         int $index,
+      ) use (
+         &$Claimed,
+         &$Launched,
+         &$Masked,
+         $PreviousSignals,
+         $Release,
+         $Starting,
+      ): void {
          $this->watch();
 
          $Process->title = 'Bootgly_UDP_Server_CLI: child process (Worker #' . Process::$index . ')';
@@ -677,6 +1224,11 @@ class UDP_Server_CLI implements Servers
             Select::EVENT_READ,
             $this->Connections->Router
          );
+         $Launched = true;
+         $Release($Starting);
+         $Claimed = false;
+         self::unmask($PreviousSignals);
+         $Masked = false;
          self::$Event->loop();
 
          // @ Close stream socket server
@@ -692,6 +1244,14 @@ class UDP_Server_CLI implements Servers
       // @ Report daemon success only after the final master owns the lock,
       //   workers exist, and their topology has been published.
       $this->announce();
+
+      // ! The serving graph is now published in this process. Release the
+      //   start claim before entering a mode loop that must receive signals.
+      $Launched = true;
+      $Release($Starting);
+      $Claimed = false;
+      self::unmask($PreviousSignals);
+      $Masked = false;
 
       // ... Continue to master process:
       switch ($this->Mode) {
@@ -710,6 +1270,28 @@ class UDP_Server_CLI implements Servers
       }
 
       return true;
+      }
+      finally {
+         try {
+            if ($Transitioned && $Launched === false) {
+               $StatusProperty = new ReflectionProperty(self::class, 'Status');
+               if (
+                  $StatusProperty->isInitialized($this)
+                  && $StatusProperty->getRawValue($this) === Status::Starting
+               ) {
+                  $StatusProperty->setRawValue($this, Status::Configuring);
+               }
+            }
+            if ($Claimed) {
+               $Release($Starting);
+            }
+         }
+         finally {
+            if ($Masked) {
+               self::unmask($PreviousSignals);
+            }
+         }
+      }
    }
 
    /**
@@ -756,6 +1338,16 @@ class UDP_Server_CLI implements Servers
          exit(1);
       }
       /** @var resource $Socket */
+
+      // ! Router::reading() drains a finite batch. The listener itself must
+      //   still be nonblocking so an empty queue returns immediately instead
+      //   of parking the worker outside signal/timer dispatch.
+      if (stream_set_blocking($Socket, false) === false) {
+         fclose($Socket);
+         $this->Logger->log(error: '@\;Could not make the UDP socket nonblocking.');
+         exit(1);
+      }
+
       $this->Socket = $Socket;
 
       // @ Drop privileges if configured

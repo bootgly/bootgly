@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Interfaces\UDP_Server_CLI;
 
 
+use function max;
 use function stream_socket_recvfrom;
 use function strlen;
 use Throwable;
@@ -19,6 +20,8 @@ use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI as Server;
+use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections\Connection\Authority as ConnectionAuthority;
+use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections\Connection\Lease;
 
 
 /**
@@ -26,9 +29,9 @@ use Bootgly\WPI\Interfaces\UDP_Server_CLI as Server;
  *
  * Only one instance per worker: registered with the event loop as the
  * EVENT_READ payload of `Server->Socket`. When `stream_select()` marks the
- * socket readable, the loop calls `reading()` here; we drain every pending
- * datagram, resolve each one to its per-peer Connection, feed `$input`,
- * and hand off to the Decoder (or the SAPI handler directly).
+ * socket readable, the loop calls `reading()` here; one bounded turn drains
+ * at most its configured batch, resolving each datagram to its per-peer
+ * Connection and handing it to the Decoder (or SAPI handler directly).
  */
 class Router implements WPI\Connections\Packages
 {
@@ -37,18 +40,27 @@ class Router implements WPI\Connections\Packages
 
    public Server $Server;
    public Connections $Connections;
+   private int $batch;
 
 
-   public function __construct (Server &$Server, Connections &$Connections)
+   /**
+    * @param Server $Server Owning UDP server.
+    * @param Connections $Connections Peer registry and admission controller.
+    * @param int $batch Maximum datagrams per readiness turn.
+    */
+   public function __construct (
+      Server &$Server, Connections &$Connections, int $batch = 64
+   )
    {
       $this->Logger = new Logger(channel: __CLASS__, global: true);
       $this->Server = $Server;
       $this->Connections = $Connections;
+      $this->batch = $batch;
    }
 
    /**
-    * Drain every pending datagram from the shared socket and route each
-    * one to its per-peer Connection.
+    * Drain one bounded batch from the shared socket and route each datagram
+    * to its per-peer Connection.
     *
     * @param resource $Socket
     * @param null|int $length
@@ -60,10 +72,12 @@ class Router implements WPI\Connections\Packages
       &$Socket, null|int $length = null, null|int $timeout = null
    ): bool
    {
-      $Server = $this->Server;
       $Connections = $this->Connections;
 
-      while (true) {
+      // @@ A finite batch returns control to signal dispatch, timers and other
+      //    ready descriptors even while datagrams arrive continuously.
+      $limit = max(1, $this->batch);
+      for ($datagrams = 0; $datagrams < $limit; $datagrams++) {
          $peer = '';
 
          try {
@@ -99,13 +113,30 @@ class Router implements WPI\Connections\Packages
          }
 
          // @ Decode + respond
-         if (Server::$Decoder) {
+         $DefaultDecoder = Server::$Decoder;
+         if ($DefaultDecoder) {
             $Connection->consumed = 0;
             $Connection->rejected = false;
-            $state = ($Connection->Decoder ?? Server::$Decoder)
-               ->decode($Connection, $buffer, $received);
+            try {
+               $Decoder = $Connection->Decoder ?? $DefaultDecoder;
+            }
+            catch (Throwable) {
+               $Connection->close();
+               unset($Connection);
+               Lease::drain();
+               continue;
+            }
+            if (ConnectionAuthority::check($Connection) === false) {
+               unset($Connection);
+               Lease::drain();
+               continue;
+            }
+            $state = $Decoder->decode($Connection, $buffer, $received);
 
-            if ($state === States::Complete) {
+            if (
+               $state === States::Complete
+               && ConnectionAuthority::check($Connection) // @phpstan-ignore booleanAnd.rightAlwaysTrue
+            ) {
                $Connection->write($Socket);
             }
          }
@@ -113,6 +144,8 @@ class Router implements WPI\Connections\Packages
             // No decoder: run the SAPI handler directly on the raw input.
             $Connection->write($Socket);
          }
+         unset($Connection);
+         Lease::drain();
       }
 
       return true;

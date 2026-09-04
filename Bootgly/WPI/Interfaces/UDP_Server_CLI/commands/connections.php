@@ -15,6 +15,7 @@ use const PHP_EOL;
 use function count;
 use function date;
 use function is_array;
+use function is_object;
 use Closure;
 
 use Bootgly\ACI\Logs\Data\Display;
@@ -57,6 +58,12 @@ return new class extends Command
 
             $Connection = (array) $Connection;
             foreach ($Connection as $key => $value) {
+               // ? Internal ownership callbacks/protocol objects are not
+               //   printable diagnostics and may not be string-convertible.
+               if (is_object($value)) {
+                  continue;
+               }
+
                // @ Exclude
                switch ($key) {
                   case 'Connection':

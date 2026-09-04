@@ -1,4 +1,12 @@
 <?php
+/*
+ * --------------------------------------------------------------------------
+ * Bootgly PHP Framework
+ * Developed by Rodrigo Vieira (@rodrigoslayertech)
+ * Copyright (c) 2023-present Bootgly and contributors
+ * Licensed under MIT
+ * --------------------------------------------------------------------------
+ */
 
 
 use Bootgly\ACI\Events\Timer;
@@ -16,9 +24,9 @@ return new Test(
       $Socket = null;
 
       try {
-         // ! Hermetic shared state — boot the statics directly (1.1 pattern)
-         //   with stats OFF so constructors arm no timers: expire()/limit()
-         //   themselves have no stats gate
+         // ! Hermetic shared state — direct Connection objects are outside
+         //   the admitted registry/central supervisor; expire()/limit() can
+         //   therefore be exercised deterministically with stats disabled.
          Timer::del();
          Connections::$Connections = [];
          Connections::$blacklist = [];

@@ -24,10 +24,18 @@ use Bootgly\WPI\Endpoints\Servers\Packages as Server_Packages;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections\Connection;
+use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections\Connection\Authority as ConnectionAuthority;
 
 
 abstract class Packages extends Server_Packages implements WPI\Connections\Packages
 {
+   // * Config
+   /**
+    * Public per-peer Connection view.
+    */
+   public Connection $Connection;
+
+   // * Data
    // ? Lazy: constructed on first read only. The transport hot path logs
    //   nothing, so an eager per-peer Logger graph is pure allocation churn
    //   under peer churn (mirrors TCP_Server_CLI\Packages).
@@ -41,16 +49,13 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       }
    }
 
-   public Connection $Connection;
-
-
+   /** @param Connection $Connection Per-peer connection exposed by this Package. */
    public function __construct (Connection &$Connection)
    {
       $this->Connection = $Connection;
 
       parent::__construct();
    }
-
    /**
     * Fail to read/write data.
     *
@@ -65,13 +70,81 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
     */
    public function fail ($Socket, string $operation): bool
    {
-      if (is_resource($Socket) === false || get_resource_type($Socket) !== 'stream') {
-         Connections::$errors[$operation]++;
-         $this->Connection->close();
+      $invalid = is_resource($Socket) === false || get_resource_type($Socket) !== 'stream';
+      if (
+         $this instanceof Connection
+         && ConnectionAuthority::check($this) === false
+      ) {
          return true;
+      }
+      if ($this instanceof Connection) {
+         $owned = false;
+         $Connection = $this;
+      }
+      else {
+         try {
+            $owned = isSet($this->Connection); // @phpstan-ignore isset.initializedProperty
+            if ($owned) {
+               $Connection = $this->Connection;
+            }
+         }
+         catch (Throwable) {
+            return true;
+         }
+         if ($owned === false) {
+            if ($invalid) {
+               return true;
+            }
+
+            Connections::$errors[$operation]++;
+            return false;
+         }
+      }
+      if (
+         $this instanceof Connection
+         && ConnectionAuthority::check($this) === false
+      ) {
+         return true;
+      }
+      if (ConnectionAuthority::check($Connection) === false) {
+         if ($invalid) {
+            $Connection->close();
+         }
+         return true;
+      }
+      if ($owned) {
+         try {
+            $CurrentConnection = $this->Connection;
+         }
+         catch (Throwable) {
+            if ($invalid) {
+               $Connection->close();
+            }
+            return true;
+         }
+         if (
+            $this instanceof Connection
+            && ConnectionAuthority::check($this) === false
+         ) {
+            return true;
+         }
+         if ($CurrentConnection !== $Connection) {
+            return true;
+         }
+         if (ConnectionAuthority::check($Connection) === false) { // @phpstan-ignore identical.alwaysFalse
+            if ($invalid) {
+               $Connection->close();
+            }
+            return true;
+         }
       }
 
       Connections::$errors[$operation]++;
+      if ($invalid) {
+         $Connection->close();
+         return true;
+      }
+
       return false;
    }
 
@@ -105,13 +178,87 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
    public function write (&$Socket, null|int $length = null): bool
    {
       // !
-      $Encoder = $this->Encoder ?? Server::$Encoder;
+      if (
+         $this instanceof Connection
+         && ConnectionAuthority::check($this) === false
+      ) {
+         return false;
+      }
+      if ($this instanceof Connection) {
+         $owned = false;
+         $Connection = $this;
+      }
+      else {
+         try {
+            $Connection = $this->Connection;
+            $owned = true;
+         }
+         catch (Throwable) {
+            return false;
+         }
+      }
+      if (
+         $this instanceof Connection
+         && ConnectionAuthority::check($this) === false
+      ) {
+         return false;
+      }
+      if (ConnectionAuthority::check($Connection) === false) {
+         return false;
+      }
+      try {
+         $Encoder = $this->Encoder ?? Server::$Encoder;
+      }
+      catch (Throwable) {
+         return false;
+      }
+      if (
+         $this instanceof Connection
+         && ConnectionAuthority::check($this) === false
+      ) {
+         return false;
+      }
+      if ($owned) {
+         try {
+            $CurrentConnection = $this->Connection;
+         }
+         catch (Throwable) {
+            return false;
+         }
+         if ($CurrentConnection !== $Connection) {
+            return false;
+         }
+      }
+      if (ConnectionAuthority::check($Connection) === false) { // @phpstan-ignore identical.alwaysFalse
+         return false;
+      }
       if ($Encoder) { // @ Encode Application Data if exists
          $buffer = $Encoder::encode($this, $length);
       }
       else {
          /** @var string $buffer */
          $buffer = (SAPI::$Handler)(...$this->callbacks);
+      }
+
+      // ? A decoder/encoder/application callback may close its peer. The
+      //   logical terminal transition wins; never enter writing() through an
+      //   ownership property that close() has already released.
+      if (ConnectionAuthority::check($Connection) === false) { // @phpstan-ignore identical.alwaysFalse
+         return false;
+      }
+      if ($owned) {
+         try {
+            $CurrentConnection = $this->Connection;
+         }
+         catch (Throwable) {
+            return false;
+         }
+         if ($CurrentConnection !== $Connection) {
+            return false;
+         }
+         if (ConnectionAuthority::check($Connection) === false) { // @phpstan-ignore identical.alwaysFalse
+            return false;
+         }
       }
 
       // :
@@ -136,10 +283,66 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          return true;
       }
 
+      if (
+         $this instanceof Connection
+         && ConnectionAuthority::check($this) === false
+      ) {
+         return false;
+      }
+
+      if ($this instanceof Connection) {
+         $owned = false;
+         $Connection = $this;
+      }
+      else {
+         try {
+            $Connection = $this->Connection;
+            $owned = true;
+         }
+         catch (Throwable) {
+            return false;
+         }
+      }
+      if (
+         $this instanceof Connection
+         && ConnectionAuthority::check($this) === false
+      ) {
+         return false;
+      }
+      if (ConnectionAuthority::check($Connection) === false) {
+         return false;
+      }
+
       $length ??= strlen($buffer);
+      try {
+         // ! Network authority is bound to the immutable admission key. The
+         //   public compatibility field may be mutated or hooked, but it can
+         //   never retarget a privately authorized datagram.
+         $peer = $Connection->id;
+      }
+      catch (Throwable) {
+         return false;
+      }
+      if (ConnectionAuthority::check($Connection) === false) { // @phpstan-ignore identical.alwaysFalse
+         return false;
+      }
+      if ($owned) {
+         try {
+            $CurrentConnection = $this->Connection;
+         }
+         catch (Throwable) {
+            return false;
+         }
+         if ($CurrentConnection !== $Connection) {
+            return false;
+         }
+         if (ConnectionAuthority::check($Connection) === false) { // @phpstan-ignore identical.alwaysFalse
+            return false;
+         }
+      }
 
       try {
-         $sent = @stream_socket_sendto($Socket, $buffer, 0, $this->Connection->peer);
+         $sent = @stream_socket_sendto($Socket, $buffer, 0, $peer);
       }
       catch (Throwable) {
          $sent = -1;
@@ -156,8 +359,8 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          Connections::$writes++;
          Connections::$written += $sent;
          // Per peer
-         if ( isSet(Connections::$Connections[$this->Connection->peer]) ) {
-            Connections::$Connections[$this->Connection->peer]->writes++;
+         if ((Connections::$Connections[$peer] ?? null) === $Connection) {
+            $Connection->writes++;
          }
       }
 
@@ -168,15 +371,105 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       // N/A
    }
 
+   /**
+    * Send a terminal rejection datagram to the exact current peer.
+    *
+    * @param string $raw Datagram payload.
+    *
+    * @return void
+    */
    public function reject (string $raw): void
    {
+      if (
+         $this instanceof Connection
+         && ConnectionAuthority::check($this) === false
+      ) {
+         $this->close();
+         return;
+      }
+      if ($this instanceof Connection) {
+         $owned = false;
+         $Connection = $this;
+      }
+      else {
+         try {
+            $Connection = $this->Connection;
+            $owned = true;
+         }
+         catch (Throwable) {
+            return;
+         }
+      }
+      if (
+         $this instanceof Connection
+         && ConnectionAuthority::check($this) === false
+      ) {
+         $this->close();
+         return;
+      }
+      if (ConnectionAuthority::check($Connection) === false) {
+         $Connection->close();
+         return;
+      }
       try {
-         @stream_socket_sendto($this->Connection->Socket, $raw, 0, $this->Connection->peer);
+         $TargetSocket = $Connection->Socket;
       }
       catch (Throwable) {
-         // ...
+         $Connection->close();
+         return;
+      }
+      if (
+         $this instanceof Connection
+         && ConnectionAuthority::check($this) === false
+      ) {
+         $this->close();
+         return;
+      }
+      if (ConnectionAuthority::check($Connection) === false) { // @phpstan-ignore identical.alwaysFalse
+         $Connection->close();
+         return;
+      }
+      try {
+         $peer = $Connection->id;
+      }
+      catch (Throwable) {
+         $Connection->close();
+         return;
+      }
+      if (
+         $this instanceof Connection
+         && ConnectionAuthority::check($this) === false
+      ) {
+         $this->close();
+         return;
+      }
+      if (ConnectionAuthority::check($Connection) === false) { // @phpstan-ignore identical.alwaysFalse
+         $Connection->close();
+         return;
+      }
+      if ($owned) {
+         try {
+            $CurrentConnection = $this->Connection;
+         }
+         catch (Throwable) {
+            $Connection->close();
+            return;
+         }
+         if ($CurrentConnection !== $Connection) {
+            return;
+         }
+         if (ConnectionAuthority::check($Connection) === false) { // @phpstan-ignore identical.alwaysFalse
+            $Connection->close();
+            return;
+         }
+      }
+      try {
+         @stream_socket_sendto($TargetSocket, $raw, 0, $peer);
+      }
+      catch (Throwable) {
+         // Terminal ownership still closes below after a transport failure.
       }
 
-      $this->Connection->close();
+      $Connection->close();
    }
 }

@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Interfaces\UDP_Server_CLI;
 
 
 use ArgumentCountError;
+use InvalidArgumentException;
 
 use Bootgly\ABI\Argument;
 use Bootgly\ABI\Configs as Configuring;
@@ -41,12 +42,21 @@ class Configs implements Configuring
    public private(set) null|string $user;
    /** Group to drop privileges to after socket binding. */
    public private(set) null|string $group;
+   /** Maximum retained peers per worker; zero disables the ceiling. */
+   public private(set) int $maxConnections;
+   /** Maximum retained peers per source IP and worker; zero disables the ceiling. */
+   public private(set) int $maxConnectionsPerIP;
+   /** Idle peer lifetime in seconds; zero disables idle expiration. */
+   public private(set) int $connectionIdleTimeout;
+   /** Maximum datagrams handled in one read-ready turn. */
+   public private(set) int $maxDatagramsPerTick;
 
 
    /**
     * @param Argument $Named Guard slot — never pass it; it only rejects positional calls.
     *
     * @throws ArgumentCountError When `host`, `port` or `workers` is missing.
+    * @throws InvalidArgumentException When a ceiling/timeout is negative or the batch is below one.
     */
    public function __construct (
       Argument $Named = Argument::Undefined,
@@ -54,7 +64,11 @@ class Configs implements Configuring
       null|int $port = null,
       null|int $workers = null,
       null|string $user = null,
-      null|string $group = null
+      null|string $group = null,
+      int $maxConnections = 1024,
+      int $maxConnectionsPerIP = 256,
+      int $connectionIdleTimeout = 30,
+      int $maxDatagramsPerTick = 64,
    )
    {
       // ? Required — the guard slot forces every parameter to be optional, so
@@ -66,6 +80,12 @@ class Configs implements Configuring
             "{$Configs} requires the named arguments: host, port, workers."
          );
       }
+      self::validate(
+         $maxConnections,
+         $maxConnectionsPerIP,
+         $connectionIdleTimeout,
+         $maxDatagramsPerTick,
+      );
 
       // * Config
       $this->host = $host;
@@ -74,5 +94,29 @@ class Configs implements Configuring
 
       $this->user = $user;
       $this->group = $group;
+      $this->maxConnections = $maxConnections;
+      $this->maxConnectionsPerIP = $maxConnectionsPerIP;
+      $this->connectionIdleTimeout = $connectionIdleTimeout;
+      $this->maxDatagramsPerTick = $maxDatagramsPerTick;
+   }
+
+   /** Validate the security boundaries carried by any exact Configs instance. */
+   private static function validate (
+      int $maxConnections,
+      int $maxConnectionsPerIP,
+      int $connectionIdleTimeout,
+      int $maxDatagramsPerTick,
+   ): void
+   {
+      if (
+         $maxConnections < 0
+         || $maxConnectionsPerIP < 0
+         || $connectionIdleTimeout < 0
+         || $maxDatagramsPerTick < 1
+      ) {
+         throw new InvalidArgumentException(
+            'UDP peer ceilings and idle timeout must be non-negative; maxDatagramsPerTick must be positive.'
+         );
+      }
    }
 }
