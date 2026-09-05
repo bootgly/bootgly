@@ -58,5 +58,7 @@ return new Suite(
       // # a refused create never bootstraps the kit (appended last — earlier
       //   indexes stay stable)
       '1.12-project-refusal-purity',
+      // # project stop/restart reporting over tombstones and unverifiable state
+      '9.1-project-stop-report',
    ]
 );

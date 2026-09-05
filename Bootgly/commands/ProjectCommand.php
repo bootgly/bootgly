@@ -38,10 +38,12 @@ use function basename;
 use function chmod;
 use function count;
 use function escapeshellarg;
+use function fclose;
 use function file_get_contents;
 use function file_put_contents;
-use function fileowner;
 use function filesize;
+use function flock;
+use function fopen;
 use function function_exists;
 use function getenv;
 use function glob;
@@ -68,6 +70,8 @@ use function posix_getpid;
 use function posix_getuid;
 use function posix_kill;
 use function posix_strerror;
+use function preg_match;
+use function preg_replace;
 use function putenv;
 use function realpath;
 use function register_shutdown_function;
@@ -78,6 +82,7 @@ use function str_pad;
 use function str_replace;
 use function str_starts_with;
 use function strlen;
+use function substr;
 use function time;
 use function trim;
 use function usleep;
@@ -512,21 +517,47 @@ class ProjectCommand extends Command
          );
       }
 
+      // ! State this account cannot verify is not "not running" — it is an
+      //   instance the command cannot act on, and success must not cover it
+      $unreachable = $this->audit($projectName);
+      if ($port !== null && $port !== '') {
+         $unreachable = array_values(array_filter(
+            $unreachable,
+            fn (string $instance): bool => $instance === $port
+         ));
+      }
+
       if (count($instances) === 0) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = $port !== null && $port !== ''
-            ? "Project @#cyan:{$projectName}@; is not running on port @#cyan:{$port}@;.@.;"
-            : "Project @#cyan:{$projectName}@; is not running.@.;";
+         if ($unreachable !== []) {
+            $list = implode(', ', $this->label($unreachable));
+            $Alert->message = "Unverifiable instance(s) @#cyan:{$list}@; — nothing stopped.@.;";
+         }
+         else {
+            $Alert->message = $port !== null && $port !== ''
+               ? "Project @#cyan:{$projectName}@; is not running on port @#cyan:{$port}@;.@.;"
+               : "Project @#cyan:{$projectName}@; is not running.@.;";
+         }
          $Alert->render();
-         $this->hint($projectName, 'stop');
+         $this->hint($projectName, 'stop', $port);
          return false;
       }
 
       $stopped = 0;
+      $skipped = [];
+      $lingering = [];
       foreach ($instances as $instance => $PIDs) {
          $masterPID = $PIDs['master'];
+         // ? Gone or changed hands between the scan and now — a master that
+         //   exited by itself IS stopped; only one still alive slipped away
          if ($this->authenticate($projectName, $instance, $masterPID) === false) {
+            if (posix_kill($masterPID, 0) === false && posix_get_last_error() !== 1) {
+               $stopped++;
+            }
+            else {
+               $skipped[] = (string) $instance;
+            }
             continue;
          }
 
@@ -560,6 +591,7 @@ class ProjectCommand extends Command
          //   worker signal and the final master kill.
          if ($this->authenticate($projectName, $instance, $masterPID)) {
             if (posix_kill($masterPID, SIGSTOP) === false) {
+               $skipped[] = (string) $instance;
                continue;
             }
 
@@ -589,6 +621,7 @@ class ProjectCommand extends Command
                // ? Do not strand a verified service in SIGSTOP if SIGKILL was
                //   denied or failed for an external reason.
                posix_kill($masterPID, SIGCONT);
+               $skipped[] = (string) $instance;
                continue;
             }
          }
@@ -652,28 +685,58 @@ class ProjectCommand extends Command
             usleep(100000);
             $elapsed += 0.1;
          }
-         if ($cleaned === false) {
-            continue;
-         }
-
+         // ! The lineage is verified gone: this instance IS stopped. A state
+         //   that could not be reclaimed in time is reported as such — never
+         //   as "not running", which would deny the stop that just happened.
          $stopped++;
+         if ($cleaned === false) {
+            $lingering[] = (string) $instance;
+         }
       }
 
-      if ($stopped === 0) {
+      // ! Success must cover the whole request. Anything the command could
+      //   not act on — state it cannot verify, an instance that slipped away
+      //   between the scan and the signal, state it could not reclaim — is
+      //   named, and the exit status says the project is not fully stopped.
+      if ($stopped === 0 && $unreachable === [] && $skipped === []) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = "Project @#cyan:{$projectName}@; is not running.@.;";
+         $Alert->message = $port !== null && $port !== ''
+            ? "Project @#cyan:{$projectName}@; is not running on port @#cyan:{$port}@;.@.;"
+            : "Project @#cyan:{$projectName}@; is not running.@.;";
          $Alert->render();
-         $this->hint($projectName, 'stop');
+         $this->hint($projectName, 'stop', $port);
          return false;
       }
 
-      $Alert = new Alert($Output);
-      $Alert->Type::Success->set();
-      $Alert->message = "Project @#cyan:{$projectName}@; stopped.@.;";
-      $Alert->render();
+      $remarks = [];
+      if ($unreachable !== []) {
+         $remarks[] = 'unverified ' . implode(', ', $this->label($unreachable));
+      }
+      if ($skipped !== []) {
+         $remarks[] = 'slipped ' . implode(', ', $this->label($skipped));
+      }
+      if ($lingering !== []) {
+         $remarks[] = 'unreclaimed ' . implode(', ', $this->label($lingering));
+      }
 
-      return true;
+      $Alert = new Alert($Output);
+      if ($remarks === []) {
+         $Alert->Type::Success->set();
+         $Alert->message = "Project @#cyan:{$projectName}@; stopped.@.;";
+         $Alert->render();
+
+         return true;
+      }
+
+      $Alert->Type::Failure->set();
+      $Alert->message = "Stopped {$stopped}; " . implode('; ', $remarks) . ".@.;";
+      $Alert->render();
+      if ($unreachable !== []) {
+         $this->hint($projectName, 'stop', $port);
+      }
+
+      return false;
    }
 
    /**
@@ -877,6 +940,26 @@ class ProjectCommand extends Command
          if ($this->authenticate($projectName, $instance, $PIDs['master'])) {
             $live[$instance] = $PIDs;
          }
+      }
+
+      // ? An instance this account cannot verify cannot be stopped, so a
+      //   restart would leave it running and start a second master beside it
+      $unreachable = $this->audit($projectName);
+      if ($port !== null) {
+         $unreachable = array_values(array_filter(
+            $unreachable,
+            fn (string $instance): bool => $instance === $port
+         ));
+      }
+      if ($unreachable !== []) {
+         $list = implode(', ', $this->label($unreachable));
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Unverifiable instance(s) @#cyan:{$list}@; — restart refused.@.;";
+         $Alert->render();
+         $this->hint($projectName, 'restart', $port);
+
+         return false;
       }
 
       // ? Ambiguous target: multiple instances and no port
@@ -2287,22 +2370,19 @@ class ProjectCommand extends Command
    }
 
    /**
-    * Explain the privilege boundary when root-owned project state cannot be
-    * verified by the current runtime user.
+    * Instances of a project that exist but that this account cannot act on:
+    * their state names a master that is ALIVE, yet `States::locate()` refuses
+    * to verify it — the lock is not this process's to read, its mode is not
+    * the one identity demands, or the master runs under another account.
+    * Two ordinary leftovers are not that and used to be mistaken for it: the
+    * zero-byte tombstone `State::clean()` writes on every successful stop
+    * (it truncates in place, because a demoted runtime UID cannot unlink),
+    * and a readable state whose master is simply gone — stale, not foreign.
+    *
+    * @return array<int, string> Instance qualifiers ('' for the unqualified file).
     */
-   private function hint (string $projectName, string $action): void
+   private function audit (string $projectName): array
    {
-      // ? Running as root already sees everything
-      if (posix_getuid() === 0) {
-         return;
-      }
-
-      // ! Only a state this account genuinely cannot reach earns the tip. Two
-      //   ordinary leftovers used to trigger it and sent the reader after a
-      //   privilege problem that was never there: the zero-byte tombstone
-      //   `State::clean()` writes on every successful stop (it truncates in
-      //   place, because a demoted runtime UID cannot unlink), and a readable
-      //   state whose master is simply gone — stale, not foreign.
       $encoded = Projects::encode($projectName);
       $states = array_merge(
          glob(BOOTGLY_STORAGE_DIR . "pids/{$encoded}.json") ?: [],
@@ -2310,7 +2390,7 @@ class ProjectCommand extends Command
       );
 
       // @@
-      $foreign = false;
+      $unreachable = [];
       foreach ($states as $state) {
          // ? The project's own clean-stop marker
          $size = @filesize($state);
@@ -2318,43 +2398,124 @@ class ProjectCommand extends Command
             continue;
          }
 
-         // ? Written by another account — the boundary this tip describes
-         $owner = @fileowner($state);
-         if ($owner !== false && $owner !== posix_geteuid()) {
-            $foreign = true;
-            break;
+         $basename = basename($state, '.json');
+         $instance = strlen($basename) > strlen($encoded)
+            ? substr($basename, strlen($encoded) + 1)
+            : '';
+
+         // ? Verified — the command can act on it
+         if (States::locate($encoded, $instance === '' ? null : $instance) !== null) {
+            continue;
          }
 
-         // ? Unreadable here for any other reason is a boundary too
+         // ! Liveness is the instance LOCK, never the document: a free (or
+         //   absent) lock means nobody runs that instance, whatever the JSON
+         //   claims — a crash, a zombie or a reused PID all leave it free.
+         //   The probe never seals or keeps the lock; it only asks.
+         $lock = BOOTGLY_STORAGE_DIR . "pids/{$encoded}" . ($instance === '' ? '' : ".{$instance}") . '.lock';
+         if (is_link($lock) === false) {
+            $Probe = @fopen($lock, 'r+b');
+            if ($Probe === false) {
+               if (is_file($lock) === false) {
+                  continue;
+               }
+            }
+            else {
+               $free = flock($Probe, LOCK_EX | LOCK_NB);
+               $free && flock($Probe, LOCK_UN);
+               fclose($Probe);
+               if ($free) {
+                  continue;
+               }
+            }
+         }
+
+         // ? No state document the framework writes is this large — a padded
+         //   one beside a HELD lock is something this account must not trust
+         if ($size > 65536) {
+            $unreachable[] = $instance;
+            continue;
+         }
+
+         // ? Unreadable here is a boundary in itself
          if (is_readable($state) === false) {
-            $foreign = true;
-            break;
+            $unreachable[] = $instance;
+            continue;
          }
 
-         // ? Ours and readable: a master that is gone left stale state, while
-         //   one that is alive and unsignalable runs under another account.
-         //   The document is runtime-writable, so the read is bounded — a
-         //   truncated prefix simply fails to decode and yields no master.
+         // ! The document is runtime-writable, so the read is bounded — a
+         //   truncated prefix simply fails to decode and yields no master
          $data = json_decode(
             (string) @file_get_contents($state, false, null, 0, 65536),
             true
          );
          $master = is_array($data) ? ($data['master'] ?? null) : null;
-         if (
-            is_int($master)
-            // ? Never 0 or negative — those signal a whole process group
-            && $master > 0
-            && posix_kill($master, 0) === false
-            // ? EPERM — the process exists and belongs to someone else
-            && posix_get_last_error() === 1
-         ) {
-            $foreign = true;
-            break;
+
+         // ? No usable master — stale, not an instance
+         //   (never probe 0 or a negative: those signal a whole process group)
+         if (is_int($master) === false || $master <= 0) {
+            continue;
+         }
+
+         // ? A zombie answers a signal-0 probe but runs nothing — gone
+         $stat = @file_get_contents("/proc/{$master}/stat", false, null, 0, 256);
+         if (is_string($stat) && preg_match('/\) (\S)/', $stat, $state) === 1 && $state[1] === 'Z') {
+            continue;
+         }
+
+         // ? Alive — ours yet refused by identity, or another account's
+         //   (EPERM). A signal-0 probe delivers nothing; ESRCH means gone.
+         if (posix_kill($master, 0) || posix_get_last_error() === 1) {
+            $unreachable[] = $instance;
          }
       }
 
-      // ?
-      if ($foreign === false) {
+      // :
+      return $unreachable;
+   }
+
+   /**
+    * Instance qualifiers as the operator reads them — the unqualified file
+    * is the project's default instance, not a blank.
+    *
+    * @param array<int, string> $instances
+    *
+    * @return array<int, string>
+    */
+   private function label (array $instances): array
+   {
+      // ! A qualifier comes from a filename in a runtime-writable directory:
+      //   it must never carry template markup into the alert
+      // :
+      return array_map(
+         static fn (string $instance): string => $instance === ''
+            ? 'default'
+            : (string) preg_replace('/[^A-Za-z0-9._-]/', '?', $instance),
+         $instances
+      );
+   }
+
+   /**
+    * Explain the privilege boundary when root-owned project state cannot be
+    * verified by the current runtime user.
+    */
+   private function hint (string $projectName, string $action, null|string $instance = null): void
+   {
+      // ? Running as root already sees everything
+      if (posix_getuid() === 0) {
+         return;
+      }
+
+      // ? Only a state this account genuinely cannot reach earns the tip —
+      //   and only for the instance the caller asked about, when it named one
+      $unreachable = $this->audit($projectName);
+      if ($instance !== null && $instance !== '') {
+         $unreachable = array_values(array_filter(
+            $unreachable,
+            fn (string $candidate): bool => $candidate === $instance
+         ));
+      }
+      if ($unreachable === []) {
          return;
       }
 
