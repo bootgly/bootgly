@@ -12,14 +12,15 @@ namespace Bootgly\CLI\UI\Components;
 
 
 use const PHP_EOL;
+use const PREG_SPLIT_DELIM_CAPTURE;
+use const PREG_SPLIT_NO_EMPTY;
 use const STR_PAD_RIGHT;
-use function mb_strlen;
+use function mb_strimwidth;
 use function mb_strwidth;
-use function mb_substr;
 use function preg_match;
 use function preg_replace;
+use function preg_split;
 use function rewind;
-use function str_ends_with;
 use function str_pad;
 use function stream_get_contents;
 
@@ -34,6 +35,9 @@ class Alert extends Component
 {
    // ! ANSI escape sequence matcher (escape-aware measuring)
    private const string ANSI = '/\e\[[0-9;]*m/';
+   // ! Template markup tokens — one alternative per renderer directive, in
+   //   the renderer's own order; zero columns once rendered, never cut in two
+   private const string TOKEN = '/(@[#!][A-Za-z]+:\s?|@\\\\+;|@\.+;|@:[a-z]+:|@[@*~_-]:\s?|\s?@;|[*~_-]@)/';
 
    private Output $Output;
 
@@ -79,8 +83,10 @@ class Alert extends Component
    }
 
    /**
-    * Crop a template message to a visible width, cutting only outside a markup
-    * token so no `@#color:` fragment ever reaches the terminal as text.
+    * Crop a template message to a visible width in ONE pass: the message is
+    * split into markup tokens (zero columns) and text, walked forward until
+    * the budget beside the ellipsis is spent, and cut only between pieces —
+    * so no `@#color:` fragment ever reaches the terminal as text.
     */
    private function crop (string $message, int $columns): string
    {
@@ -89,21 +95,34 @@ class Alert extends Component
          return $message;
       }
 
-      // @@ Widest prefix that fits beside the ellipsis, never inside a token
-      for ($length = mb_strlen($message) - 1; $length > 0; $length--) {
-         $prefix = mb_substr($message, 0, $length);
+      $pieces = preg_split(self::TOKEN, $message, -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY);
+      if ($pieces === false) {
+         return '…';
+      }
 
-         if (str_ends_with($prefix, '@') || preg_match('/@#[^:]*$/', $prefix) === 1) {
+      // @@ Spend the budget on text only; a token costs nothing and is kept whole
+      $budget = $columns - 1;
+      $kept = '';
+      foreach ($pieces as $piece) {
+         if (preg_match(self::TOKEN, $piece) === 1) {
+            $kept .= $piece;
             continue;
          }
-         if ($this->measure($prefix) <= $columns - 1) {
-            // :
-            return "{$prefix}…";
+
+         $width = mb_strwidth($piece);
+         if ($width <= $budget) {
+            $kept .= $piece;
+            $budget -= $width;
+            continue;
          }
+
+         // ? The cut lands inside this text: keep what still fits
+         $kept .= mb_strimwidth($piece, 0, $budget, '');
+         break;
       }
 
       // :
-      return '…';
+      return "{$kept}…";
    }
 
    public function render (int $mode = self::WRITE_OUTPUT): mixed
