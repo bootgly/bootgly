@@ -72,6 +72,13 @@ scripts/_*.php
 # @ Untracked by design; this image resolves no dependencies.
 composer.lock
 
+# @ Certificates — the self-signed localhost test pair crosses (the TLS suites
+#   run in the image); nothing else in that directory may. A production key
+#   once lived here and reached every published image through `COPY .`.
+@/certificates/*
+!@/certificates/localhost.cert.pem
+!@/certificates/localhost.key.pem
+
 # @ Trim — storage/ is runtime working data (temp, cache, sessions, pids, bench
 #   marks) and reaches several GB; the framework re-creates whatever subdirs it
 #   needs on demand. vendor/ is rebuilt by whoever needs it.

@@ -30,6 +30,14 @@ skills-lock.json
 !@/__docker__/
 !@/certificates/
 !@/phpstan/
+# Certificates: ONLY the self-signed localhost test pair is ever tracked. The
+# directory used to hold a production Cloudflare Origin CA certificate WITH its
+# private key for 20 tags — a `!@/certificates/` alone re-admits anything
+# dropped there. Suite 102 asserts every tracked certificate is self-signed
+# `CN=localhost`, so a new file here must be named below AND pass that.
+@/certificates/*
+!@/certificates/localhost.cert.pem
+!@/certificates/localhost.key.pem
 # Adittional files
 !@/__docker__/entrypoint.sh
 !@/phpstan.neon

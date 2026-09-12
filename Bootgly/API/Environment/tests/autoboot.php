@@ -21,5 +21,7 @@ return new Suite(
       //   and SKIPS visibly without one
       '1.3-docker-context-checkout',
       '1.4-docker-context-secrets',
+      // # No certificate or private key but the localhost fixtures (INFRA-1)
+      '1.5-tracked-certificates',
    ]
 );
