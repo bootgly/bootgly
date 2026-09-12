@@ -3176,8 +3176,11 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             $testFiles = SAPI::$tests[self::class] ?? [];
             $specIndex = 0;
             foreach ($testFiles as $index => $value) {
-               // @ Reset connection state from previous test
+               // @ Reset connection state from previous test — both signals a
+               //   dead peer leaves behind: `expired` (the unsized fast lane read
+               //   '') and `peerEOF` (the sized read hit EOF and `fail()` closed)
                $Connection->expired = false;
+               $Connection->Connection->peerEOF = false;
                $Connection->input = '';
 
                // @ Detect dead/stale connection from previous test's reject/close
@@ -3251,10 +3254,18 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                      if ( $Connection->reading($Socket, $responseLength, $timeout) ) {
                         $input = $Connection->input;
                      }
-                     // @ Reconnect and retry if response is empty (half-closed connection)
-                     if ($input === '' && $Connection->expired) { // @phpstan-ignore identical.alwaysTrue, booleanAnd.rightAlwaysFalse
+                     // @ Reconnect and retry if response is empty (half-closed
+                     //   connection). A sized read never sets `expired`: on a
+                     //   peer RST it lands in `fail()`, which flags `peerEOF`
+                     //   and returns TRUE — so without that signal here the
+                     //   retry was unreachable and a close landing after the
+                     //   stale-socket window failed the next case (~1 in 26).
+                     //   PHPStan keeps the per-case reset values across the
+                     //   `reading()` call, hence the ignores — not dead code.
+                     if ($input === '' && ($Connection->expired || $Connection->Connection->peerEOF)) { // @phpstan-ignore identical.alwaysTrue, booleanOr.leftAlwaysFalse, booleanOr.rightAlwaysFalse, booleanAnd.alwaysFalse
                         $reconnect();
                         $Connection->expired = false;
+                        $Connection->Connection->peerEOF = false;
                         $Connection->output = $requestData;
                         if ($Connection->writing($Socket, $requestLength)) {
                            if ($Connection->reading($Socket, $responseLength, $timeout)) {
@@ -3393,10 +3404,14 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                if ( $Connection->reading($Socket, $responseLength, $timeout) ) {
                   $input = $completeBody($Connection->input, $requestData);
                }
-               // @ Reconnect and retry if response is empty (half-closed connection)
-               if ($input === '' && $Connection->expired) { // @phpstan-ignore identical.alwaysTrue, booleanAnd.rightAlwaysFalse
+               // @ Reconnect and retry if response is empty (half-closed
+               //   connection) — `peerEOF` is the signal a sized read leaves
+               //   behind on a peer RST; `expired` alone was unreachable here
+               //   (PHPStan keeps the reset values across `reading()`)
+               if ($input === '' && ($Connection->expired || $Connection->Connection->peerEOF)) { // @phpstan-ignore booleanOr.leftAlwaysFalse, booleanOr.rightAlwaysFalse, booleanAnd.alwaysFalse
                   $reconnect();
                   $Connection->expired = false;
+                  $Connection->Connection->peerEOF = false;
                   $Connection->output = $requestData;
                   if ($Connection->writing($Socket, $requestLength)) {
                      if ($Connection->reading($Socket, $responseLength, $timeout)) {

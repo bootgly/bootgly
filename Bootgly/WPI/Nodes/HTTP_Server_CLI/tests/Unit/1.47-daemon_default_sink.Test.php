@@ -37,6 +37,13 @@ return new Test(
       $noticeFile = BOOTGLY_STORAGE_DIR . 'logs/TCP.Server.CLI.log';
       $noticeExisted = is_file($noticeFile);
       $noticeOffset = $noticeExisted ? filesize($noticeFile) : 0;
+      // ! The INODE too: the sink rotates by day, so on the first run of a new
+      //   day store() moves this file to `.1` and the notice lands at offset 0
+      //   of a fresh one. A byte offset alone reads '' there — and truncating
+      //   the fresh file to that stale offset afterwards pads it with NULs.
+      $noticeInode = $noticeExisted ? (int) (stat($noticeFile)['ino'] ?? 0) : 0;
+      $same = static fn (): bool => is_file($noticeFile)
+         && (int) (stat($noticeFile)['ino'] ?? -1) === $noticeInode;
 
       try {
          // ? Silence local (terminal) handlers — only the sink route is under test
@@ -74,9 +81,10 @@ return new Test(
             description: 'store() installs one File sink at storage/logs/{channel}.log'
          );
 
-         // @@ C) The NOTICE reached the sink itself (the sink is installed first)
+         // @@ C) The NOTICE reached the sink itself (the sink is installed first).
+         //       Same inode → what follows the snapshot; rotated → the whole new file
          $appended = is_file($noticeFile)
-            ? (string) file_get_contents($noticeFile, offset: $noticeOffset)
+            ? (string) file_get_contents($noticeFile, offset: $same() ? $noticeOffset : 0)
             : '';
          $lines = array_values(array_filter(explode("\n", trim($appended))));
          $decoded = json_decode((string) end($lines), true);
@@ -111,11 +119,14 @@ return new Test(
          Logger::$Sinks = $OldSinks;
          Display::show($oldSegments);
 
-         // @ File hygiene: drop only what this test created/appended
-         if ($noticeExisted === false) {
+         // @ File hygiene: drop only what this test created/appended. A file
+         //   that did not exist, or one born by a rotation during the run,
+         //   holds nothing but this test's records — remove it (a rotation
+         //   that was due stays done). Only the SAME inode is truncated back.
+         if ($noticeExisted === false || $same() === false) {
             @unlink($noticeFile);
          }
-         else if (is_file($noticeFile) && $noticeOffset > 0) {
+         else if ($noticeOffset > 0) {
             $Handle = fopen($noticeFile, 'r+b');
             if ($Handle !== false) {
                ftruncate($Handle, $noticeOffset);
