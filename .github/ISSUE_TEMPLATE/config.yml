@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔐 Report a security vulnerability
+    url: https://github.com/bootgly/bootgly/security/advisories/new
+    about: Never open a public issue for anything exploitable — use private vulnerability reporting or cybersec@bootgly.com.
+  - name: 📖 Documentation
+    url: https://docs.bootgly.com/
+    about: Guides and the manual for every layer. Check here before asking a usage question.
+  - name: 💬 Ask a question
+    url: https://discord.com/invite/SKRHsYmtyJ/
+    about: Usage questions and discussion happen on Discord and Telegram, not in the issue tracker.

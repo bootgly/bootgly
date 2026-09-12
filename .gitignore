@@ -93,6 +93,9 @@ projects/**/configs/**/.env.*
 /storage/tests/*
 /storage/tests/snapshots/*
 /storage/sessions/*
+# Keep the community health files (`*.md` above ignores them)
+!.github/CONTRIBUTING.md
+!.github/PULL_REQUEST_TEMPLATE.md
 # Ignore IA folders/files
 .agent/*
 .codex

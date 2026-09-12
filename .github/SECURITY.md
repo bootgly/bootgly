@@ -9,18 +9,32 @@ and the audit history behind the current hardening.
 
 ## Supported Versions
 
-Bootgly is pre-1.0 (`-beta` versioning). Only the **latest published `-beta` tag** receives
-security fixes — there is no backport policy across minor versions before 1.0.
+Security fixes land on the **latest published `1.x` minor** as patch releases. There is no
+backport to older minors: upgrading between `1.x` minors is a version bump, not a migration
+(see the [versioning guide](https://docs.bootgly.com/guide/versioning/)), so the fix is one
+`composer update` away. `1.0` is not a long-term-support line; an LTS line may be declared
+for a later minor and would be listed here.
 
 | Version | Supported |
 | --- | --- |
-| Latest `-beta` release | ✅ |
-| Older `-beta` releases | ❌ |
+| Latest `1.x` minor (latest patch) | ✅ |
+| Older `1.x` minors | ❌ — upgrade to the latest minor |
+| `-beta` / `-rc` pre-releases | ✅ only until the release they precede ships |
+| `0.x` | ❌ |
+
+The same policy covers the platform repositories that ship with the framework
+(`bootgly-console`, `bootgly-web`, `bootgly.kit`): they are versioned in lockstep with it.
 
 ## Reporting a Vulnerability
 
-Report suspected vulnerabilities privately to **cybersec@bootgly.com** — do not open a
-public GitHub issue for anything exploitable. Include:
+Report suspected vulnerabilities privately — never in a public issue — through either channel:
+
+- **GitHub private vulnerability reporting:**
+  [github.com/bootgly/bootgly/security/advisories/new](https://github.com/bootgly/bootgly/security/advisories/new)
+  (the same form exists on each `bootgly/*` repository; use the one the issue belongs to).
+- **E-mail:** **cybersec@bootgly.com**.
+
+Include:
 
 - Affected component (layer + class, e.g. `WPI/Nodes/HTTP_Server_CLI/Decoders/Decoder_Chunked`)
 - Reproduction steps or a PoC
@@ -215,8 +229,8 @@ raise it.
   safe defaults, not infinite capacity.
 - Keep session cookies on their framework-owned `Secure`/`HttpOnly` defaults; don't relax
   them via `php.ini`.
-- Track the `-beta` release notes — pre-1.0 security fixes land as part of normal releases,
-  not backports.
+- Track the release notes and stay on the latest `1.x` minor — security fixes ship as patch
+  releases of that minor, never as backports.
 
 ## Bug Bounty
 

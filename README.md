@@ -43,12 +43,12 @@ curl -fsSL https://bootgly.com/install | bash
 
 ## Table of Contents
 
-- [🤔 About](#-about)
-  - [💬 Commit Convention](#-commit-convention)
-  - [📑 Versioning System](#-versioning-system)
 - [🟢 Boot Requirements](#-boot-requirements)
   - [🤝 Compatibility](#-compatibility)
   - [⚙️ Dependencies](#️-dependencies)
+- [📑 Versioning](#-versioning)
+  - [🛟 Support policy](#-support-policy)
+  - [🔐 Security policy](#-security-policy)
 - [🌱 Community](#-community)
   - [💻 Contributing](#-contributing)
   - [🛂 Code of Conduct](#-code-of-conduct)
@@ -65,14 +65,28 @@ curl -fsSL https://bootgly.com/install | bash
 
 </div>
 
-## ⚙️ Dependencies
+## 🟢 Boot Requirements
+
+### 🤝 Compatibility
+
+| Operating system | Servers (WPI) | CLI tooling |
+| --- | --- | --- |
+| ✅ Linux | ✅ | ✅ |
+| ✅ WSL2 | ✅ | ✅ |
+| ❔ macOS | ❌ | ✅ |
+| ❔ Windows | ❌ | ✅ |
+
+Linux is first-class: the servers rely on `pcntl`/`posix`, so on macOS and Windows only the
+CLI tooling runs natively — use Docker for everything else.
+
+### ⚙️ Dependencies
 
 - PHP 8.4+ ⚠️
 - Opcache + JIT enabled (+50% performance) 👍
 
 > 🐳 **Docker:** `docker run -it bootgly/bootgly.kit:<version>` gives you the whole kit — framework, Console and Web — ready to create and run projects. Name a tag: `latest` arrives with the first stable release. This repository publishes `bootgly/bootgly`, the framework image you build your own on; see the [`Dockerfile`](Dockerfile) and the [Docker guide][DOCKER_GUIDE].
 
-### PHP Packages
+#### PHP Packages
 
 - `php-cli` ⚠️
 - `php-openssl` ⚠️
@@ -93,6 +107,50 @@ curl -fsSL https://bootgly.com/install | bash
 
 </div>
 
+## 📑 Versioning
+
+Bootgly follows [Semantic Versioning 2.0.0][SEMANTIC_VERSIONING] and commits follow
+[Conventional Commits 1.0.0][CONVENTIONAL_COMMITS]. From `1.0.0` on:
+
+- **Minor** releases (`1.x.0`) add capabilities and keep everything documented working as
+  before. **Patch** releases (`1.x.y`) repair existing behavior.
+- **Removing or renaming a public API, changing its established semantics, or adding a required
+  method to an interface applications implement is a `2.0.0` change.** A deprecation in a minor
+  never authorizes a removal in the next minor — the deprecated way keeps working until `2.0.0`.
+- Internal migrations preserve public entry points and wire/storage compatibility. Runtime
+  behavior that is not documented, or is marked `@internal`, is not covered.
+- Each minor tracks the two newest PHP minors (`8.4+` today).
+
+The full rules, the deprecation policy and what counts as public API live in the
+[Versioning guide][VERSIONING_GUIDE].
+
+### 🛟 Support policy
+
+| Version | Bug fixes | Security fixes |
+| --- | --- | --- |
+| Latest `1.x` minor | ✅ | ✅ |
+| Older `1.x` minors | ❌ | ❌ — upgrade to the latest minor |
+| `-beta` / `-rc` pre-releases | until the release they precede ships | until the release they precede ships |
+| `0.x` | ❌ | ❌ |
+
+`1.0` is **not** a long-term-support line: fixes land on the latest `1.x` minor only, and
+upgrading between `1.x` minors is meant to be a version bump, not a migration. An LTS line
+may be declared for a later minor; it is not promised.
+
+### 🔐 Security policy
+
+Report vulnerabilities privately — never in a public issue — through
+[GitHub private vulnerability reporting][SECURITY_ADVISORY] or **cybersec@bootgly.com**.
+The full policy, scope and audit history are in [SECURITY.md][SECURITY_POLICY].
+
+---
+
+<div align="right">
+
+[![Back to top][BACK_TO_TOP]](#readme-top)
+
+</div>
+
 ## 🌱 Community
 
 Join us and help the community.
@@ -101,7 +159,10 @@ Join us and help the community.
 
 ### 💻 Contributing
 
-Wait for the "contributing guidelines" to start your contribution.
+Read the [contributing guidelines][CONTRIBUTING] first: they cover the layer rules, the naming
+and commenting conventions, the native test runner and PHPStan gates a change must pass, and the
+[Conventional Commits][CONVENTIONAL_COMMITS] format every commit uses. Bug reports and feature
+requests have [issue templates][ISSUES]; security issues go through the [security policy](#-security-policy).
 
 #### 🛂 Code of Conduct
 
@@ -244,6 +305,11 @@ The Bootgly is open-sourced software licensed under the [MIT license][MIT_LICENS
 [LINKEDIN]: https://www.linkedin.com/company/bootgly/
 
 [CODE_OF_CONDUCT]: https://github.com/bootgly/bootgly/blob/main/.github/CODE_OF_CONDUCT.md
+[CONTRIBUTING]: https://github.com/bootgly/bootgly/blob/main/.github/CONTRIBUTING.md
+[ISSUES]: https://github.com/bootgly/bootgly/issues/new/choose
+[SECURITY_POLICY]: https://github.com/bootgly/bootgly/blob/main/.github/SECURITY.md
+[SECURITY_ADVISORY]: https://github.com/bootgly/bootgly/security/advisories/new
+[VERSIONING_GUIDE]: https://docs.bootgly.com/guide/versioning/
 [SEMANTIC_VERSIONING]: https://semver.org/
 [CONVENTIONAL_COMMITS]: https://www.conventionalcommits.org/en/v1.0.0/
 

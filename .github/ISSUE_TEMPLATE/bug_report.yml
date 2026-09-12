@@ -1,0 +1,72 @@
+name: 🐛 Bug report
+description: Something documented does not behave as documented.
+title: "bug(<scope>): <short description>"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. **Security issues must not be reported here** — use
+        [private vulnerability reporting](https://github.com/bootgly/bootgly/security/advisories/new)
+        or cybersec@bootgly.com.
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Layer / component
+      description: Where the bug lives (the class or path helps in the description).
+      options:
+        - ABI
+        - ACI
+        - ADI
+        - API
+        - CLI
+        - WPI — HTTP Server
+        - WPI — HTTP Client
+        - WPI — TCP / UDP / WebSocket
+        - Console platform
+        - Web platform
+        - bootgly.kit / installer
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Bootgly version
+      description: The tag or commit (`bootgly --version`).
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: PHP version and OS
+      placeholder: "PHP 8.4.12 (Opcache + JIT on), Fedora 44 / Docker bootgly/bootgly:1.0.0-full"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happens
+      description: What you did, what you expected, what actually happened. Paste error output as text.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: |
+        The fastest path to a fix is a test for the native runner (`return new Test(...)` with `yield assert(...)`) that fails today.
+        A minimal script or the exact commands also work.
+      render: php
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched the existing issues and the documentation.
+          required: true
+        - label: I am on the latest 1.x minor (older minors do not receive fixes).
+          required: false

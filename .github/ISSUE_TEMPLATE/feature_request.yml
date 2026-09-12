@@ -1,0 +1,54 @@
+name: ✨ Feature request
+description: Propose a capability the framework does not have.
+title: "feat(<scope>): <short description>"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Bootgly keeps **one canonical way to do each thing** and **no third-party dependencies in the core**.
+        A proposal that duplicates an existing capability, or wraps an external package, will be declined —
+        check the [documentation](https://docs.bootgly.com/) for what already exists.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do and why the current framework cannot do it.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: The proposal
+      description: The capability you want, with the API you imagine (signatures, config, example usage).
+      render: php
+    validations:
+      required: true
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Layer
+      options:
+        - ABI
+        - ACI
+        - ADI
+        - API
+        - CLI
+        - WPI
+        - Console platform
+        - Web platform
+        - bootgly.kit / installer
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: How you solve it today, and why that is not enough.
+  - type: checkboxes
+    id: implementation
+    attributes:
+      label: Implementation
+      options:
+        - label: I am willing to implement it following the contributing guidelines.
