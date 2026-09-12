@@ -16,6 +16,7 @@ parameters:
 
    paths:
       - ../Bootgly/
+      - ../scripts/
    ignoreErrors:
       - identifier: property.uninitializedReadonly
       - identifier: property.private

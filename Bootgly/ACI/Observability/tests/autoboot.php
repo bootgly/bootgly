@@ -37,6 +37,7 @@ return new Suite(
       // # Consumers — Prometheus (pull) + OTLP (push) encoders
       '8.1-exporter-prometheus',
       '8.2-exporter-otlp',
+      '8.3-ship-script',
       // # Hardening — immutability, real process uptime, export-failure safety
       '9.1-immutability',
       '9.2-process-uptime',

@@ -27,8 +27,11 @@
  */
 
 // ! Bootstrap the framework (registered as a built-in script in scripts/autoboot.php)
-define('BOOTGLY_WORKING_BASE', dirname(__DIR__));
-define('BOOTGLY_WORKING_DIR', BOOTGLY_WORKING_BASE . DIRECTORY_SEPARATOR);
+// ? Already booted when loaded through the CLI — the constants are then defined
+if (defined('BOOTGLY_WORKING_BASE') === false) {
+   define('BOOTGLY_WORKING_BASE', dirname(__DIR__));
+   define('BOOTGLY_WORKING_DIR', BOOTGLY_WORKING_BASE . DIRECTORY_SEPARATOR);
+}
 (include dirname(__DIR__) . '/autoboot.php') || exit(1);
 
 
@@ -59,7 +62,11 @@ $path   = $parts['path'] ?? '/v1/metrics';
 
 // ! POST via the canonical HTTP client (sync mode — runs its own event loop, then returns)
 $Client = new Bootgly\WPI\Nodes\HTTP_Client_CLI;
-$Client->configure(host: $host, port: $port, secure: $scheme === 'https' ? [] : null);
+$Client->configure(new Bootgly\WPI\Nodes\HTTP_Client_CLI\Configs(
+   host: $host,
+   port: $port,
+   secure: $scheme === 'https' ? [] : null,
+));
 $Response = $Client->request(
    method: 'POST',
    URI: $path,
@@ -67,7 +74,10 @@ $Response = $Client->request(
    body: $body,
 );
 
-$code = $Response->code ?? 0;
+// ? Sync mode returns the Response; the client itself comes back only when event-driven
+$code = $Response instanceof Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response
+   ? $Response->code
+   : 0;
 fwrite(STDOUT, "observability-ship: POST $scheme://$host:$port$path → HTTP $code\n");
 
 // : Exit non-zero on a non-2xx response (lets cron/monitoring detect failures)

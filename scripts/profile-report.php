@@ -53,7 +53,7 @@ if (
 }
 
 $top = isset($options['top']) ? (int) $options['top'] : 50;
-$include = isset($options['include']) ? (string) $options['include'] : '';
+$include = isset($options['include']) && is_string($options['include']) ? $options['include'] : '';
 $full = isset($options['full']);
 
 $Normalize = static function (mixed $value, string $prefix): null|string {
@@ -86,6 +86,7 @@ $Iterator = new RecursiveIteratorIterator(
    $Children,
    RecursiveIteratorIterator::LEAVES_ONLY,
 );
+/** @var SplFileInfo $File */
 foreach ($Iterator as $File) {
    $relative = substr($File->getPathname(), strlen($profileDirectory) + 1);
    $segments = explode(DIRECTORY_SEPARATOR, $relative);
