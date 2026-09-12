@@ -11,8 +11,9 @@
 namespace Bootgly\ADI\Databases\SQL;
 
 
-use function array_pop;
 use function array_search;
+use function array_slice;
+use function count;
 use BackedEnum;
 use Stringable;
 

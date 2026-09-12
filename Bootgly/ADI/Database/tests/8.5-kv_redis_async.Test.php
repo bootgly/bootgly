@@ -19,7 +19,9 @@ return new Test(
    description: 'KV(Redis async): SET/GET/INCRBY over the non-blocking DBAL pool (requires a reachable Redis)',
    skip: $reachable === false,
    test: function () use ($host, $port) {
-      $KV = new KV(['driver' => 'redis', 'host' => $host, 'port' => $port, 'timeout' => 2.0]);
+      // ! A plaintext Redis is a declared deployment fact: `prefer` would
+      //   attempt TLS first and fail at the handshake budget, never downgrade
+      $KV = new KV(['driver' => 'redis', 'host' => $host, 'port' => $port, 'timeout' => 2.0, 'secure' => ['mode' => 'disable']]);
 
       $key = 'bootgly:kv:async:' . uniqid();
       $counter = 'bootgly:kv:async:c:' . uniqid();
@@ -54,7 +56,7 @@ return new Test(
       // # Per-connection pipelining (pool max=1 → every command shares one socket)
       $Pipelined = new KV([
          'driver' => 'redis', 'host' => $host, 'port' => $port,
-         'timeout' => 2.0, 'pool' => ['max' => 1],
+         'timeout' => 2.0, 'pool' => ['max' => 1], 'secure' => ['mode' => 'disable'],
       ]);
 
       $prefix = 'bootgly:kv:pipe:' . uniqid();

@@ -24,9 +24,12 @@ use function is_int;
 use function is_resource;
 use function is_scalar;
 use function is_string;
+use function microtime;
+use function min;
 use function socket_import_stream;
 use function socket_set_option;
 use function stream_get_meta_data;
+use function stream_socket_get_name;
 use function strtolower;
 use function substr;
 use RuntimeException;
@@ -62,7 +65,23 @@ use Bootgly\ADI\Databases\KV\Operation;
  * are sent once as a preamble when a connection is first opened. Strict TLS
  * modes complete the non-blocking handshake before that preamble exists.
  * `prefer` attempts the same handshake first and reconnects in plaintext only
- * after it fails, so credentials never share the failed TLS generation.
+ * after the PEER refuses it — it reset or closed the connection during the
+ * handshake, or answered it with non-TLS bytes — so credentials never share
+ * the failed TLS generation; the refusal it downgraded on is kept in
+ * `$downgrade`, and nowhere else: this layer has no logger. Silence
+ * is not a refusal: under `prefer` a peer that has not answered within
+ * `HANDSHAKE_BUDGET` fails the operation, because a TLS peer whose
+ * ServerHello is late looks exactly like a plaintext Redis parking the
+ * ClientHello in its query buffer, and a plaintext Redis is declared with
+ * `disable`, never inferred; the strict modes, where silence can never
+ * downgrade, wait for the ServerHello until the operation's own deadline.
+ * It never downgrades on a local error — a CA store that cannot be
+ * read or loaded, whose diagnostic the Connection keeps whatever
+ * `error_reporting()` masks — an untrusted certificate, a peer name mismatch
+ * or a TLS alert: those abort.
+ * Every mode but `disable` verifies the certificate chain and the peer name
+ * unless the config says `verify => false` / `name => false`; `verify-ca`
+ * verifies the chain only and `verify-full` always verifies both.
  */
 class Redis extends Driver
 {
@@ -77,12 +96,31 @@ class Redis extends Driver
       'sunsubscribe' => true,
       'unsubscribe' => true,
    ];
+   /**
+    * Seconds a peer gets to answer the ClientHello under `prefer`, capped at
+    * half the operation timeout. A TLS peer answers within one round trip; a
+    * plaintext Redis never answers at all, and without this bound every
+    * operation against one burned the whole timeout before failing. Past it
+    * the operation fails — silence is not a refusal `prefer` may downgrade on
+    * — naming `disable` as the way to declare a plaintext Redis. The strict
+    * modes never consult it: silence cannot downgrade there, so a budget
+    * shorter than the timeout only failed a genuine TLS peer that answered
+    * late, and they wait for the ServerHello until the operation's deadline.
+    */
+   public const float HANDSHAKE_BUDGET = 1.0;
 
    // * Config
    public Encoder $Encoder;
    public Decoder $Decoder;
 
    // * Metadata
+   /**
+    * The TLS refusal this connection downgraded to plaintext on under
+    * `prefer` — what the peer did to the TLS handshake. Empty while the
+    * transport is TLS, `disable`, or not yet open. The only record of the
+    * downgrade: nothing is logged.
+    */
+   public private(set) string $downgrade = '';
    // @ Number of preamble replies (AUTH/SELECT) still to discard before the command reply.
    private int $skip = 0;
    /** @var array<int,Operation> In-flight commands awaiting replies (FIFO — Redis answers in order). */
@@ -108,7 +146,9 @@ class Redis extends Driver
    /** @var resource|null Socket generation that owns the current Redis wire state. */
    private mixed $WireSocket = null;
    /** Whether the next connection is the plaintext retry of `prefer`. */
-   private bool $downgrade = false;
+   private bool $plaintext = false;
+   /** When this socket generation's ClientHello went out (`0.0`: no handshake pending). */
+   private float $handshake = 0.0;
 
 
    public function __construct (Config $Config, Connection $Connection)
@@ -219,19 +259,35 @@ class Redis extends Driver
             return $this->abort($Operation, 'Redis socket is not available.');
          }
 
+         // ? The dial this write-readiness woke on may have FAILED — a closed
+         //   port, an unreachable host or network — and the socket then has
+         //   no peer, which getpeername() reports whatever the locale says.
+         //   Read at the handshake instead, the same failure was `SSL:
+         //   Connection refused`, the transport shape of a peer resetting the
+         //   ClientHello: `prefer` recorded a refusal that never happened and
+         //   spent a plaintext retry on a port nobody listens on.
+         if (stream_socket_get_name($this->Connection->socket, true) === false) {
+            return $this->abort(
+               $Operation,
+               "Redis connection failed: the connection to {$this->Config->host}:{$this->Config->port} was refused, or was reset before the handshake.",
+            );
+         }
+
          // @ Socket tuning belongs to the raw TCP generation. After TLS,
          //   socket_import_stream() cannot represent tcp_socket/ssl.
          $this->tune();
 
          $this->SecureSocket = null;
          $mode = $this->Config->secure['mode'];
-         if ($mode !== Config::SECURE_DISABLE && $this->downgrade === false) {
+         if ($mode !== Config::SECURE_DISABLE && $this->plaintext === false) {
             // ! Redis TLS is implicit: unlike PostgreSQL there is no protocol
             //   SSLRequest. The first transport byte must be a ClientHello.
             $Operation->state = OperationStates::SSLHandshake;
+            $this->handshake = microtime(true);
+            $this->downgrade = '';
          }
          else {
-            $this->downgrade = false;
+            $this->plaintext = false;
             $this->boot($Operation);
          }
       }
@@ -241,10 +297,11 @@ class Redis extends Driver
             $encrypted = $this->Connection->encrypt();
          }
          catch (Throwable $Throwable) {
-            if ($this->Config->secure['mode'] === Config::SECURE_PREFER) {
-               return $this->fallback($Operation, $Throwable->getMessage());
-            }
-
+            // ? An EXCEPTION here is local — a context this process built
+            //   wrong — never the peer refusing TLS. `prefer` downgrades only
+            //   on a refused handshake (`false` below); reading a local error
+            //   as a refusal is how the default config used to send AUTH in
+            //   plaintext to a server that spoke TLS all along.
             return $this->abort(
                $Operation,
                "Redis TLS handshake failed: {$Throwable->getMessage()}",
@@ -253,21 +310,72 @@ class Redis extends Driver
 
          if ($encrypted === true) {
             $this->SecureSocket = $this->Connection->socket;
-            $this->downgrade = false;
+            $this->plaintext = false;
             $this->boot($Operation);
          }
          else if ($encrypted === null) {
-            // @ ClientHello is already queued; further progress needs the
+            // @ The ClientHello is already queued; further progress needs the
             //   peer's ServerHello. WRITE stays perpetually ready here and
-            //   would spin Pool::wait() against a silent endpoint.
-            return $this->await($Operation, Scheduler::SCHEDULE_READ);
-         }
-         else {
-            if ($this->Config->secure['mode'] === Config::SECURE_PREFER) {
-               return $this->fallback($Operation, 'native TLS negotiation failed');
+            //   would spin Pool::wait() against a silent endpoint, so READ is
+            //   what every mode parks on. The handshake never wants WRITE
+            //   from here: with no `local_cert` the client's flights are the
+            //   ClientHello and, once the server's flight is in, a Finished
+            //   with no certificate — each one segment written into an empty
+            //   send buffer — so a READ park strands no pending write, and it
+            //   is bounded by the operation's deadline in every mode.
+            if ($this->Config->secure['mode'] !== Config::SECURE_PREFER) {
+               // ?: A strict mode waits the whole operation timeout: silence
+               //    can never downgrade there, so a budget shorter than the
+               //    timeout bought nothing — it failed a genuine TLS peer
+               //    whose ServerHello came 1.2s late under `timeout => 5`.
+               //    Past the deadline the operation times out like any other.
+               return $this->await($Operation, Scheduler::SCHEDULE_READ);
             }
 
-            return $this->abort($Operation, 'Redis TLS handshake failed.');
+            // ! Half the timeout at most: a budget that outlives the operation
+            //   decides nothing. A timeout of zero is no deadline, not a zero
+            //   budget — that would downgrade before the ServerHello could land.
+            $timeout = $this->Config->timeout;
+            $budget = $timeout > 0.0
+               ? min(self::HANDSHAKE_BUDGET, $timeout / 2)
+               : self::HANDSHAKE_BUDGET;
+
+            if (microtime(true) - $this->handshake < $budget) {
+               // @ READ wakes at the budget even if no byte ever arrives:
+               //   Pool::wait() re-enters every second regardless, and the
+               //   event loop resumes the Fiber at the Readiness deadline.
+               return $this->await($Operation, Scheduler::SCHEDULE_READ, $this->handshake + $budget);
+            }
+
+            // ? Silent past the budget. Silence is not a refusal: a TLS peer
+            //   whose ServerHello is late — one retransmission, a loaded
+            //   terminator, an on-path delay — is indistinguishable from a
+            //   plaintext Redis parking the ClientHello in its query buffer,
+            //   and downgrading here sent AUTH in plaintext to a server that
+            //   spoke TLS all along, then pooled that connection. `prefer`
+            //   fails naming the budget — not the operation's timeout: the
+            //   handshake is what never happened — and the way out, since a
+            //   plaintext Redis is a declared deployment fact.
+            return $this->abort(
+               $Operation,
+               "Redis TLS handshake timed out: the peer did not answer the TLS handshake within {$budget}s — set secure.mode => 'disable' for a plaintext Redis.",
+            );
+         }
+         else {
+            // ? `false` is the peer refusing TLS — it reset or closed the
+            //   connection during the handshake, or answered it with non-TLS
+            //   bytes; the Connection throws for every other handshake
+            //   failure, and that is caught above. The only refusal `prefer`
+            //   downgrades on.
+            $refusal = $this->Connection->refusal !== ''
+               ? $this->Connection->refusal
+               : 'the peer refused the TLS handshake';
+
+            if ($this->Config->secure['mode'] === Config::SECURE_PREFER) {
+               return $this->fallback($Operation, $refusal);
+            }
+
+            return $this->abort($Operation, "Redis TLS handshake failed: {$refusal}.");
          }
       }
 
@@ -314,6 +422,7 @@ class Redis extends Driver
    {
       $this->Connection->transition(ConnectionStates::Ready);
       $this->WireSocket = $this->Connection->socket;
+      $this->handshake = 0.0;
 
       // ! Fresh wire state — a new socket must not inherit a stale partial frame
       $this->Decoder->reset();
@@ -384,13 +493,21 @@ class Redis extends Driver
       }
    }
 
-   /** Reconnect once in plaintext after an explicitly preferred TLS failure. */
+   /**
+    * Reconnect once in plaintext after the peer refused the preferred TLS.
+    *
+    * `$cause` is what the peer did to the TLS handshake; it stays readable in
+    * `$downgrade` for the life of the plaintext generation, so an operator
+    * can see that — and why — this connection is not encrypted.
+    */
    private function fallback (Operation $Operation, string $cause): Operation
    {
       $this->Connection->disconnect();
       $this->SecureSocket = null;
       $this->WireSocket = null;
-      $this->downgrade = true;
+      $this->handshake = 0.0;
+      $this->plaintext = true;
+      $this->downgrade = $cause;
       $Operation->state = OperationStates::Connecting;
 
       try {
@@ -402,11 +519,11 @@ class Redis extends Driver
          return $Operation;
       }
       catch (Throwable $Throwable) {
-         $this->downgrade = false;
+         $this->plaintext = false;
 
          return $this->abort(
             $Operation,
-            "Redis plaintext fallback failed after TLS error `{$cause}`: {$Throwable->getMessage()}",
+            "Redis plaintext fallback failed after the TLS refusal `{$cause}`: {$Throwable->getMessage()}",
          );
       }
    }
@@ -753,8 +870,11 @@ class Redis extends Driver
 
    /**
     * Attach event-loop readiness for the next I/O step.
+    *
+    * `$wake` asks to be re-entered at that wall-clock time even if no byte
+    * arrived, when it comes before the operation's own deadline.
     */
-   private function await (Operation $Operation, int $flag): Operation
+   private function await (Operation $Operation, int $flag, float $wake = 0.0): Operation
    {
       $socket = $this->Connection->socket;
 
@@ -778,7 +898,12 @@ class Redis extends Driver
             ?? ($this->ReadReadiness = Readiness::read($socket, $Operation->deadline));
       }
 
-      $Readiness->renew($Operation->deadline);
+      $deadline = $Operation->deadline;
+      if ($wake > 0.0 && ($deadline <= 0.0 || $wake < $deadline)) {
+         $deadline = $wake;
+      }
+
+      $Readiness->renew($deadline);
       $Operation->await($Readiness);
 
       return $Operation;
@@ -811,7 +936,9 @@ class Redis extends Driver
       $this->skip = 0;
       $this->SecureSocket = null;
       $this->WireSocket = null;
-      $this->downgrade = false;
+      $this->handshake = 0.0;
+      $this->plaintext = false;
+      $this->downgrade = '';
       $this->abandoned = new WeakMap();
 
       // ! So does the half-written command. A command joins the FIFO only once

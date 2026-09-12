@@ -381,7 +381,16 @@ class PostgreSQL extends Driver
       }
 
       if ($Operation->state === OperationStates::SSLHandshake) {
-         $encrypted = $this->Connection->encrypt();
+         try {
+            $encrypted = $this->Connection->encrypt();
+         }
+         catch (Throwable $Throwable) {
+            // ? A local error building the TLS context must land on the
+            //   operation like any other failure, not escape `await()`
+            $Operation->quarantine = true;
+
+            return $Operation->fail("PostgreSQL TLS handshake failed: {$Throwable->getMessage()}");
+         }
 
          if ($encrypted === true) {
             $this->encrypted = true;
@@ -394,7 +403,11 @@ class PostgreSQL extends Driver
          }
 
          if ($encrypted === null) {
-            return $this->await($Operation, Scheduler::SCHEDULE_WRITE);
+            // @ The ClientHello is already queued; progress needs the peer's
+            //   ServerHello. WRITE stays perpetually ready on a connected
+            //   socket and spun Pool::wait() at a core for as long as the
+            //   peer took to answer — READ wakes when its bytes land.
+            return $this->await($Operation, Scheduler::SCHEDULE_READ);
          }
 
          $Operation->quarantine = true;
@@ -1272,6 +1285,10 @@ class PostgreSQL extends Driver
       }
 
       if ($response === 'S') {
+         // @ Armed ONCE on WRITE, which is ready at once: the next advance()
+         //   sends the ClientHello and parks on READ for the ServerHello. A
+         //   READ wait here would park the client until the peer spoke first
+         //   — it never does, it is waiting for that very ClientHello.
          $Operation->state = OperationStates::SSLHandshake;
 
          return $this->await($Operation, Scheduler::SCHEDULE_WRITE);

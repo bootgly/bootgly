@@ -308,7 +308,11 @@ class MySQL extends Driver
          }
 
          if ($encrypted === null) {
-            return $this->await($Operation, Scheduler::SCHEDULE_WRITE);
+            // @ The ClientHello is already queued; progress needs the peer's
+            //   ServerHello. WRITE stays perpetually ready on a connected
+            //   socket and spun Pool::wait() at a core for as long as the
+            //   peer took to answer — READ wakes when its bytes land.
+            return $this->await($Operation, Scheduler::SCHEDULE_READ);
          }
 
          $Operation->quarantine = true;

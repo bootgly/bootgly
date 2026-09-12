@@ -142,5 +142,10 @@ return new Suite(
       // ! Row layout cache appended last so every prior case index stays stable.
       '7.39-postgresql_layout_cache',
       '7.40-postgresql_layout_eviction',
+      // # The shipped defaults must ATTEMPT TLS before `prefer` may downgrade,
+      //   and a silent plaintext peer must not cost the whole timeout.
+      '8.17-kv_redis_tls_prefer_attempt',
+      // # A pending TLS handshake parks on READ: WRITE spun the sync wait.
+      '6.4-sql_tls_handshake_readiness',
    ]
 );

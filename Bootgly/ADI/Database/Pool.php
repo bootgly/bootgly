@@ -307,9 +307,29 @@ class Pool
                $handling = true;
             }
 
+            // ! Bounded by the readiness deadline, never by a fixed second: a
+            //   driver that armed a wake-up before the operation's own
+            //   deadline — the Redis handshake budget — is re-entered when it
+            //   asked to be. A one-second floor re-entered advance() no earlier
+            //   than that, so every `timeout <= 1.0` against a silent peer
+            //   expired before the budget branch could run. Capped at one
+            //   second so a signal or a stalled peer never parks the worker
+            //   longer, and clamped at zero once the deadline has passed.
+            $seconds = 1;
+            $microseconds = 0;
+            $deadline = $Readiness->deadline;
+            if ($deadline > 0.0) {
+               $remaining = $deadline - microtime(true);
+
+               if ($remaining < 1.0) {
+                  $seconds = 0;
+                  $microseconds = $remaining > 0.0 ? (int) ($remaining * 1_000_000) : 0;
+               }
+            }
+
             $interrupted = false;
             $selecting = true;
-            $selected = stream_select($read, $write, $except, 1, 0);
+            $selected = stream_select($read, $write, $except, $seconds, $microseconds);
             $selecting = false;
 
             if ($selected === false) {
