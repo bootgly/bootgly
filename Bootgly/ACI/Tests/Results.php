@@ -80,11 +80,11 @@ class Results
    }
 
    /**
-    * Build the structured result array.
+    * Compile the collected records into the structured result array.
     *
     * @return array<string,mixed>
     */
-   public static function toArray (): array
+   public static function compile (): array
    {
       // @ Count cases
       $casesFailed = 0;
@@ -151,14 +151,14 @@ class Results
    }
 
    /**
-    * Return the JSON representation of the results.
+    * Encode the compiled results as a single-line JSON document.
     *
     * @return string
     */
-   public static function toJSON (): string
+   public static function encode (): string
    {
       return json_encode(
-         self::toArray(),
+         self::compile(),
          JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
       ) . PHP_EOL;
    }

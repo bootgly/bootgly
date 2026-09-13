@@ -3,6 +3,7 @@ namespace Bootgly\CLI;
 
 
 use const BOOTGLY_ROOT_DIR;
+use const PHP_BINARY;
 use function assert;
 use function fclose;
 use function file_put_contents;
@@ -12,8 +13,8 @@ use function getenv;
 use function implode;
 use function is_resource;
 use function mkdir;
-use function proc_close;
 use function preg_replace;
+use function proc_close;
 use function proc_open;
 use function rmdir;
 use function str_contains;

@@ -50,12 +50,22 @@ return new Test(
 
    middlewares: [
       new class($knownToken, $headerName, $tokenBytes) implements Middleware {
+         // * Data
+         private string $knownToken;
+         private string $headerName;
+         private int $tokenBytes;
+
+
          public function __construct (
-            private string $knownToken,
-            private string $headerName,
-            private int $tokenBytes
+            string $knownToken,
+            string $headerName,
+            int $tokenBytes
          )
          {
+            // * Data
+            $this->knownToken = $knownToken;
+            $this->headerName = $headerName;
+            $this->tokenBytes = $tokenBytes;
          }
 
          public function process (object $Request, object $Response, Closure $next): object

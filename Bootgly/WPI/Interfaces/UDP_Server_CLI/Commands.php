@@ -145,13 +145,13 @@ class Commands extends CLI\Terminal
          'test' => $this->Server->Mode !== Modes::Test
             ? true
             : (
-            $this->saveCommand('test init')
+            $this->save('test init')
             && $this->Server->Process->Signals->send(SIGUSR1, master: false, children: true)
 
-            && $this->saveCommand('test')
+            && $this->save('test')
             && $this->Server->Process->Signals->send(SIGUSR1, master: true, children: false)
 
-            && $this->saveCommand('test end')
+            && $this->save('test end')
             && $this->Server->Process->Signals->send(SIGUSR1, master: false, children: true) && true // @phpstan-ignore-line
             ),
 
@@ -159,7 +159,7 @@ class Commands extends CLI\Terminal
          'stats' =>
             $this->Server->Process->Signals->send(SIGIO, master: false) && false,
          'stats reset' =>
-            $this->saveCommand($command, 'Connections')
+            $this->save($command, 'Connections')
             && $this->Server->Process->Signals->send(SIGUSR1, master: false) && true,
 
          'connections' =>
@@ -182,7 +182,16 @@ class Commands extends CLI\Terminal
       //   the suite runner instead of exiting — end the interaction.
       return false;
    }
-   public function saveCommand (string $command, string $context = ''): bool
+   /**
+    * Append a command line (`<command>:<context>`) to the process command file,
+    * where a signaled worker or master reads what to execute.
+    *
+    * @param string $command The command to record.
+    * @param string $context The command context (e.g. `Connections`).
+    *
+    * @return bool `false` when the command file could not be written.
+    */
+   public function save (string $command, string $context = ''): bool
    {
       $file = $this->Server->Process->State->commandFile;
 

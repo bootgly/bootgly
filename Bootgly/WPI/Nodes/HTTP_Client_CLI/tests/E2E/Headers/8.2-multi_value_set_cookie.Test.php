@@ -5,7 +5,7 @@ use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Tests\Suite\Test;
 
 return new Test(
-   description: 'It should handle multi-value Set-Cookie headers via getAll()',
+   description: 'It should handle multi-value Set-Cookie headers via collect()',
 
    // HTTP response with multiple Set-Cookie headers
    response: function () {
@@ -29,11 +29,11 @@ return new Test(
          description: "get() contains session cookie"
       );
 
-      // @ getAll() returns array of individual cookies (new behavior)
-      $cookies = $Response->Header->getAll('Set-Cookie');
+      // @ collect() returns array of individual cookies (new behavior)
+      $cookies = $Response->Header->collect('Set-Cookie');
       yield assert(
          assertion: count($cookies) === 3,
-         description: "getAll() returns 3 cookies: " . count($cookies)
+         description: "collect() returns 3 cookies: " . count($cookies)
       );
 
       yield assert(

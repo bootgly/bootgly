@@ -566,7 +566,7 @@ class Toasts extends Component
 
          // @@
          for ($offset = 0; $offset < $height; $offset++) {
-            $this->Output->Cursor->moveTo(line: $row + $offset, column: $column);
+            $this->Output->Cursor->place(line: $row + $offset, column: $column);
             $this->Output->write($spaces);
          }
       }

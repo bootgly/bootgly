@@ -1,7 +1,11 @@
 <?php
 namespace Bootgly\CLI;
 
+
+use function sleep;
+
 use const Bootgly\CLI;
+
 
 $Output = CLI->Terminal->Output;
 $Output->reset();
@@ -23,10 +27,10 @@ sleep(2);
 $Output->Text->trim(right: true);
 
 
-$Output->Cursor->down(1)->Cursor->moveTo(column: 1);
+$Output->Cursor->down(1)->Cursor->place(column: 1);
 
 $Output->writing("!@#$%^&<- Trim all text to the left of cursor...");
-$Output->Cursor->moveTo(column: 7);
+$Output->Cursor->place(column: 7);
 
 sleep(2);
 
@@ -34,10 +38,10 @@ $Output->Text->trim(left: true, right: false);
 $Output->write("\n");
 
 
-$Output->Cursor->down(1)->Cursor->moveTo(column: 1);
+$Output->Cursor->down(1)->Cursor->place(column: 1);
 
 $Output->writing("Trim all text to the left of cursor... -><- and to the right of cursor...");
-$Output->Cursor->moveTo(column: 42);
+$Output->Cursor->place(column: 42);
 
 sleep(2);
 

@@ -28,7 +28,7 @@ if (
 // fwrite(STDOUT) performed by CLI destructors or by child processes spawned
 // by E2E tests, so we reopen fd 1 onto a pipe at the process level before
 // the PHP app boots. The parent process drains the pipe and emits only the
-// last valid JSON document (the one produced by Results::toJSON()).
+// last valid JSON document (the one produced by Results::encode()).
 // This file is included from inside Bootgly::autoboot(), where $argv is not
 // in scope — CLI arguments come from the $_SERVER superglobal instead.
 // Help requests (--help/-h) print raw text for the caller, so they bypass
@@ -195,7 +195,7 @@ if (
          $exit = proc_close($proc);
 
          // Extract the last valid JSON document from the captured output.
-         // Results::toJSON() emits a single-line object ending with PHP_EOL,
+         // Results::encode() emits a single-line object ending with PHP_EOL,
          // so the scan is by LINE, newest first: anything written AFTER the
          // document (an exception trace from a suite that threw) would hide
          // it from a scan bounded by the end of the buffer.
@@ -214,7 +214,7 @@ if (
                }
             }
          }
-         // ? No JSON document — the child died before Results::toJSON(), or it
+         // ? No JSON document — the child died before Results::encode(), or it
          //   never ran a suite at all. stdout belongs to the document and must
          //   stay parseable (empty is a valid "no document"), but emitting a
          //   lone PHP_EOL also DISCARDED every byte of diagnostic the child had

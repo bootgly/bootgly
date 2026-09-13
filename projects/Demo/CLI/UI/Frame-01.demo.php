@@ -62,5 +62,5 @@ for ($tick = 1; $tick <= 50; $tick++) {
 }
 
 $Output->Cursor->show();
-$Output->Cursor->moveTo(line: 16, column: 1);
+$Output->Cursor->place(line: 16, column: 1);
 $Output->render("@.;@#Green:✔@; Frame closed.@.;");

@@ -359,7 +359,7 @@ final class UnifiedStrict implements Output
    /**
     * @param array<string, mixed> $options
     */
-   private function resolve (array $options, string $option): ?string
+   private function resolve (array $options, string $option): null|string
    {
       $value = $options[$option];
 

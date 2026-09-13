@@ -52,10 +52,10 @@ final class Differ
 
    // * Config
    public private(set) Output $Output;
-   public private(set) ?Calculating $Calculator;
+   public private(set) null|Calculating $Calculator;
 
 
-   public function __construct (Output $Output, ?Calculating $Calculator = null)
+   public function __construct (Output $Output, null|Calculating $Calculator = null)
    {
       $this->Output     = $Output;
       $this->Calculator = $Calculator;
@@ -65,7 +65,7 @@ final class Differ
     * @param list<string>|string $from
     * @param list<string>|string $to
     */
-   public function diff (array|string $from, array|string $to, ?Calculating $Calculator = null): string
+   public function diff (array|string $from, array|string $to, null|Calculating $Calculator = null): string
    {
       $diff = $this->compose($from, $to, $Calculator);
 
@@ -79,7 +79,7 @@ final class Differ
     * @param list<string>|string $to
     * @return array<int, array{0: string, 1: int}>
     */
-   public function compose (array|string $from, array|string $to, ?Calculating $Calculator = null): array
+   public function compose (array|string $from, array|string $to, null|Calculating $Calculator = null): array
    {
       if (is_string($from)) {
          $from = $this->split($from);

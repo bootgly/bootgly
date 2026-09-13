@@ -241,7 +241,7 @@ class Frame extends Component implements Boxing
             continue;
          }
 
-         $this->Host->Cursor->moveTo(line: $this->row + $offset, column: $this->column);
+         $this->Host->Cursor->place(line: $this->row + $offset, column: $this->column);
          $this->Host->write($row);
 
          $this->front[$offset] = $row;

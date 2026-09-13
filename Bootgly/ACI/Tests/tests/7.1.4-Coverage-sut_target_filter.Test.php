@@ -16,10 +16,20 @@ return new Test(
    $neighbor = dirname(__DIR__) . '/Coverage/Driver.php';
 
       $Driver = new class ($targetAlias, $neighbor) extends Driver {
+         // * Data
+         private string $target;
+         private string $neighbor;
+
+
          public function __construct (
-            private string $target,
-            private string $neighbor,
-         ) {}
+            string $target,
+            string $neighbor,
+         )
+         {
+            // * Data
+            $this->target = $target;
+            $this->neighbor = $neighbor;
+         }
 
          public function collect (): array
          {

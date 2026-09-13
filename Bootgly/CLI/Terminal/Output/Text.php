@@ -92,7 +92,7 @@ class Text
    // * Data
    // ...
    // * Metadata
-   private ? string $color;
+   private null|string $color;
 
 
    public function __construct (Output $Output)
@@ -229,7 +229,7 @@ class Text
     *
     * @return Output
     */
-   public function delete (? int $characters = null, ? int $lines = null): Output
+   public function delete (null|int $characters = null, null|int $lines = null): Output
    {
       $Output = &$this->Output;
 
@@ -265,7 +265,7 @@ class Text
     *
     * @return Output
     */
-   public function insert (? int $lines = null, ? int $spaces = null): Output
+   public function insert (null|int $lines = null, null|int $spaces = null): Output
    {
       $Output = &$this->Output;
 

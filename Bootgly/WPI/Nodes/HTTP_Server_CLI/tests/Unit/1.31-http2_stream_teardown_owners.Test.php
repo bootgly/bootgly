@@ -37,13 +37,23 @@ return new Test(
       $OwnerB = clone $Prototype;
       $OwnerB->throws = true;
       $Reentrant = new class($Stream, $OwnerB) implements Disconnecting {
+         // * Data
+         private Stream $Stream;
+         private Disconnecting $OwnerB;
+
+         // * Metadata
          public int $calls = 0;
          public bool $ownerCleared = false;
 
          public function __construct (
-            private Stream $Stream,
-            private Disconnecting $OwnerB,
-         ) {}
+            Stream $Stream,
+            Disconnecting $OwnerB,
+         )
+         {
+            // * Data
+            $this->Stream = $Stream;
+            $this->OwnerB = $OwnerB;
+         }
 
          public function disconnect (): void
          {
@@ -57,9 +67,17 @@ return new Test(
          }
       };
       $Self = new class($Stream) implements Disconnecting {
+         // * Data
+         private Stream $Stream;
+
+         // * Metadata
          public int $calls = 0;
 
-         public function __construct (private Stream $Stream) {}
+         public function __construct (Stream $Stream)
+         {
+            // * Data
+            $this->Stream = $Stream;
+         }
 
          public function disconnect (): void
          {
@@ -94,9 +112,17 @@ return new Test(
 
       $Stream->close();
       $Late = new class($Stream) implements Disconnecting {
+         // * Data
+         private Stream $Stream;
+
+         // * Metadata
          public int $calls = 0;
 
-         public function __construct (private Stream $Stream) {}
+         public function __construct (Stream $Stream)
+         {
+            // * Data
+            $this->Stream = $Stream;
+         }
 
          public function disconnect (): void
          {

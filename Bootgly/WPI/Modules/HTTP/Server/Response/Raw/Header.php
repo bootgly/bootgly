@@ -43,7 +43,7 @@ abstract class Header
    abstract public function get (string $name): string;
 
    abstract public function set (string $field, string $value): bool;
-   abstract public function append (string $field, string $value = '', ?string $separator = ', '): void;
+   abstract public function append (string $field, string $value = '', null|string $separator = ', '): void;
    abstract public function queue (string $field, string $value = ''): bool;
 
    abstract public function build (): bool;

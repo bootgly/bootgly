@@ -42,11 +42,11 @@ class Agent
    ];
 
    public readonly bool $detected;
-   public readonly ?string $name;
-   public readonly ?Agents $known;
+   public readonly null|string $name;
+   public readonly null|Agents $known;
 
 
-   public function __construct (bool $detected, ?string $name = null)
+   public function __construct (bool $detected, null|string $name = null)
    {
       // * Data
       $this->detected = $detected;

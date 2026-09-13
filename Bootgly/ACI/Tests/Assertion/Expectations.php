@@ -116,7 +116,7 @@ abstract class Expectations
     */
    public function expect (
       mixed $actual,
-      ?Op $comparator = null,
+      null|Op $comparator = null,
       mixed $expected = Argument::Undefined
    ): self
    {
@@ -196,6 +196,6 @@ abstract class Expectations
    abstract public function assert (
       mixed $actual = Argument::Undefined,
       mixed $expected = Argument::Undefined,
-      ?Asserting $using = null
+      null|Asserting $using = null
    ): self;
 }

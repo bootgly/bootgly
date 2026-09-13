@@ -29,11 +29,27 @@ class Viewport
       $this->Output = $Output;
    }
 
-   public function panDown (? int $lines = null): Output
+   /**
+    * Pans the viewport down: the content scrolls up and blank lines enter at the
+    * bottom (SU). Without `$lines` the terminal pans a single line.
+    *
+    * @param null|int $lines The number of lines to pan.
+    *
+    * @return Output
+    */
+   public function down (null|int $lines = null): Output
    {
       return $this->Output->escape($lines . self::_VIEWPORT_SCROLL_UP);
    }
-   public function panUp (? int $lines = null): Output
+   /**
+    * Pans the viewport up: the content scrolls down and blank lines enter at the
+    * top (SD). Without `$lines` the terminal pans a single line.
+    *
+    * @param null|int $lines The number of lines to pan.
+    *
+    * @return Output
+    */
+   public function up (null|int $lines = null): Output
    {
       return $this->Output->escape($lines . self::_VIEWPORT_SCROLL_DOWN);
    }

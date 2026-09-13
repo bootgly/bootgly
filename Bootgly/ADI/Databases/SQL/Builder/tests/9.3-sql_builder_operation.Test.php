@@ -9,9 +9,9 @@ use const STREAM_SOCK_STREAM;
 use function assert;
 use function fclose;
 use function fread;
+use function str_contains;
 use function stream_set_blocking;
 use function stream_socket_pair;
-use function str_contains;
 use InvalidArgumentException;
 
 use Bootgly\ACI\Tests\Suite\Test;

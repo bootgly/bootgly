@@ -155,7 +155,7 @@ class Header
     *
     * @return string|null
     */
-   public function get (string $name): ?string
+   public function get (string $name): null|string
    {
       if ($this->built === false) {
          $this->build();

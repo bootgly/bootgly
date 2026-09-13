@@ -315,7 +315,7 @@ class Scrollbar extends Component implements Boxing
       // ? Placed — repaint the strip in place at its column
       if ($this->row >= 1 && $this->column >= 1) {
          foreach ($rows as $offset => $row) {
-            $this->Output->Cursor->moveTo(line: $this->row + $offset, column: $this->column);
+            $this->Output->Cursor->place(line: $this->row + $offset, column: $this->column);
             $this->Output->write($row);
          }
 

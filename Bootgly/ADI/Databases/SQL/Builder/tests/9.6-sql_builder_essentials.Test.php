@@ -9,13 +9,13 @@ use ReflectionProperty;
 
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\ADI\Databases\SQL\Builder;
-use Bootgly\ADI\Databases\SQL\Builder\Conjunction;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Aggregates;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Joins;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Junctions;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Locks;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Operators;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Orders;
+use Bootgly\ADI\Databases\SQL\Builder\Conjunction;
 use Bootgly\ADI\Databases\SQL\Builder\Expression;
 use Bootgly\ADI\Databases\SQL\Builder\Identifier;
 

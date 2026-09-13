@@ -70,11 +70,11 @@ if (BOOTGLY_TTY === true) {
       $Graph->width = $CPU->columns;
       $Graph->height = $CPU->lines;
 
-      $Output->Cursor->moveTo(line: $lines, column: 1);
+      $Output->Cursor->place(line: $lines, column: 1);
       $Output->render($hint);
    });
 
-   $Output->Cursor->moveTo(line: CLI->Terminal::$lines, column: 1);
+   $Output->Cursor->place(line: CLI->Terminal::$lines, column: 1);
    $Output->render($hint);
 }
 

@@ -60,5 +60,7 @@ return new Suite(
       '1.12-project-refusal-purity',
       // # project stop/restart reporting over tombstones and unverifiable state
       '9.1-project-stop-report',
+      // # lint submodules (fixable vs check-only) through the launcher
+      '10.1-lint-submodules',
    ]
 );

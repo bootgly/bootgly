@@ -325,7 +325,7 @@ class TestCommand extends Command
       // So we only need to:
       //   - enable Results collection
       //   - suppress the framework's own human output (guards on Results::$enabled)
-      //   - emit Results::toJSON() at the end
+      //   - emit Results::encode() at the end
       $Agent = Agent::detect();
       if ($Agent->detected) {
          Display::show(Display::NONE);
@@ -819,7 +819,7 @@ class TestCommand extends Command
       // last valid JSON document from the captured stdout, so a plain echo
       // is sufficient.
       if (Results::$enabled) {
-         echo Results::toJSON();
+         echo Results::encode();
       }
 
       $this->completed = true;

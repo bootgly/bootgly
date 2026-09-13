@@ -23,7 +23,7 @@ $Output->Cursor->left(columns: 53);
 $Output->writing("Bootgly: moving down 2 lines and going to column 1...");
 
 $Output->Cursor->down(lines: 2);
-$Output->Cursor->moveTo(column: 1);
+$Output->Cursor->place(column: 1);
 
 $Output->writing("Continuing writing and moving down 2 lines to column 3...");
 $Output->Cursor->down(lines: 2, column: 3);
@@ -39,7 +39,7 @@ $Output->writing("+ Continue writing and moving down 2 lines to column 1...");
 $Output->Cursor->down(2, column: 1);
 // Example 2 - Cursor right / left methods
 $Output->write("_______");
-$Output->Cursor->moveTo(column: 1);
+$Output->Cursor->place(column: 1);
 
 $Output->wait = 100000; // @ Set wait time between writes (in microseconds)
 

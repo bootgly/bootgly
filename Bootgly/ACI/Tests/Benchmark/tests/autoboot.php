@@ -81,5 +81,7 @@ return new Suite(
       // ! Appended last on purpose — a new case only ever goes at the end,
       //   so every existing case index above stays stable.
       '6.18.3-http_tracker-reclaim_timestamps',
+      // Configs — load discovery (.lua + .php)
+      '4.3.1-loads-load-lua_and_php',
    ],
 );

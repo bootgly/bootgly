@@ -11,10 +11,10 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_HTTP2;
 
 
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Bodies as WorkerBodies;
-
 use function max;
 use function min;
+
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Bodies as WorkerBodies;
 
 
 /**

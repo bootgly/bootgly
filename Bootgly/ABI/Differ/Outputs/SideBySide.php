@@ -341,14 +341,14 @@ final class SideBySide implements Output
     * @param array<int, array{0: string, 1: int}>|null $newSegments
     */
    private function row (
-      ?int $oldNum,
+      null|int $oldNum,
       string $oldContent,
-      ?int $newNum,
+      null|int $newNum,
       string $newContent,
       int $colWidth,
       bool $context = false,
-      ?array $oldSegments = null,
-      ?array $newSegments = null
+      null|array $oldSegments = null,
+      null|array $newSegments = null
    ): string {
       // @ Line numbers
       $lNum = $oldNum === null
@@ -539,7 +539,7 @@ final class SideBySide implements Output
       string $baseBackground,
       string $highlightBackground,
       int $highlightCode,
-      ?array $segments
+      null|array $segments
    ): string {
       $segments ??= [[$content, Codes::OLD->value]];
 

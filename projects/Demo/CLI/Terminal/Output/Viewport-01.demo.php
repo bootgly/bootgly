@@ -35,7 +35,7 @@ sleep(1);
 $Output->write("\nPanning down (content scrolls up)...\n");
 sleep(1);
 for ($step = 0; $step < 6; $step++) {
-   $Viewport->panDown(1);
+   $Viewport->down(1);
    usleep(180000);
 }
 
@@ -45,7 +45,7 @@ sleep(1);
 $Output->write("Panning up (content scrolls down)...\n");
 sleep(1);
 for ($step = 0; $step < 6; $step++) {
-   $Viewport->panUp(1);
+   $Viewport->up(1);
    usleep(180000);
 }
 

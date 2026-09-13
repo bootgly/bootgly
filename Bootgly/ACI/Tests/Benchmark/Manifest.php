@@ -76,25 +76,37 @@ final class Manifest
       'BOOTGLY_WORKERS',
    ];
 
-   private readonly float $started;
-   private readonly int $startedMonotonic;
-   /** @var array<int,string> */
+   // * Data
+   private readonly Artifacts $Artifacts;
+   private readonly string $caseName;
+   /** @var array<int,string> The invocation argv, redacted. */
    private readonly array $arguments;
+   private readonly string $workingDirectory;
    /** @var array<string,mixed> */
    private array $selection = [];
+
+   // * Metadata
+   private readonly float $started;
+   private readonly int $startedMonotonic;
 
 
    /** @param array<int,string> $arguments */
    public function __construct (
-      private readonly Artifacts $Artifacts,
-      private readonly string $caseName,
+      Artifacts $Artifacts,
+      string $caseName,
       array $arguments,
-      private readonly string $workingDirectory,
+      string $workingDirectory,
    )
    {
+      // * Data
+      $this->Artifacts = $Artifacts;
+      $this->caseName = $caseName;
+      $this->arguments = $this->redact($arguments);
+      $this->workingDirectory = $workingDirectory;
+
+      // * Metadata
       $this->started = microtime(true);
       $this->startedMonotonic = hrtime(true);
-      $this->arguments = $this->redact($arguments);
    }
 
    /** @param array<string,mixed> $selection */

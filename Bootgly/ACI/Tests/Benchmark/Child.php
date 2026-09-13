@@ -82,11 +82,17 @@ fwrite(STDERR, "Could not execute isolated benchmark child.\n");
 exit(127);
 PHP;
 
+   // * Data
+   private readonly Artifacts $Artifacts;
+
+   // * Metadata
    private int $sequence = 0;
 
 
-   public function __construct (private readonly Artifacts $Artifacts)
+   public function __construct (Artifacts $Artifacts)
    {
+      // * Data
+      $this->Artifacts = $Artifacts;
    }
 
    /**

@@ -230,7 +230,7 @@ class Wizard extends Component
       //   relative movement only (up from the frame end, then the column)
       $rows = substr_count($tail, "\n") + $reserve - 1;
       $this->Output->Cursor->up($rows, column: 1);
-      $this->Output->Cursor->moveTo(column: 4);
+      $this->Output->Cursor->place(column: 4);
    }
 
    /**

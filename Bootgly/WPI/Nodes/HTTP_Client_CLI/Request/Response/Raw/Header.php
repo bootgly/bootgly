@@ -66,7 +66,7 @@ class Header
     *
     * @return string|null
     */
-   public function get (string $name): ?string
+   public function get (string $name): null|string
    {
       if ($this->built === false) {
          $this->build();
@@ -87,14 +87,14 @@ class Header
    }
 
    /**
-    * Get all values for a header field as an array.
+    * Collect every value of a header field as an array.
     * Use this for headers that should not be combined (e.g., Set-Cookie).
     *
     * @param string $name
     *
     * @return array<int, string>
     */
-   public function getAll (string $name): array
+   public function collect (string $name): array
    {
       if ($this->built === false) {
          $this->build();

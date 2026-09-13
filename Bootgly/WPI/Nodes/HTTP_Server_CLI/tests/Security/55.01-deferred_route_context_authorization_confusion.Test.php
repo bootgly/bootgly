@@ -38,8 +38,14 @@ $Probe = new class {
 
 $PersistentRouter = new Router;
 $Authorization = new class($PersistentRouter) implements Middleware {
-   public function __construct (private Router $Router)
+   // * Data
+   private Router $Router;
+
+
+   public function __construct (Router $Router)
    {
+      // * Data
+      $this->Router = $Router;
    }
 
    public function process (object $Request, object $Response, Closure $Next): object

@@ -110,7 +110,7 @@ final class Frame
    public array $fields = [];
 
    // # Framing decisions
-   public ?int $contentLength = null;
+   public null|int $contentLength = null;
    public bool $chunked = false;
    public bool $expectContinue = false;
    public string $contentType = '';
@@ -203,7 +203,7 @@ final class Frame
     *   has already been invoked). Both cases must result in the caller
     *   returning `0` from `Request::decode()`.
     */
-   public static function parse (Packages $Package, string &$buffer, int $size): ?self
+   public static function parse (Packages $Package, string &$buffer, int $size): null|self
    {
       // @ Locate the head/body separator.
       $separator_position = strpos($buffer, "\r\n\r\n");

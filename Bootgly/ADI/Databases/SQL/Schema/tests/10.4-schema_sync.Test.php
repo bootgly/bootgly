@@ -4,6 +4,7 @@ namespace Bootgly\ADI\Databases\SQL\Schema\Tests\Sync;
 
 
 use const BOOTGLY_STORAGE_DIR;
+use const DELETE;
 use function assert;
 use function file_put_contents;
 use function glob;

@@ -13,15 +13,15 @@ namespace Bootgly\ABI\Debugging\Backtrace;
 
 class Call
 {
-   public ?string $file;
-   public ?int $line;
+   public null|string $file;
+   public null|int $line;
    public string $function;
-   public ?string $class;
-   public ?string $type;
+   public null|string $class;
+   public null|string $type;
    /**
     * @var array<mixed>|null
     */
-   public ?array $args;
+   public null|array $args;
 
 
    /**

@@ -11,21 +11,24 @@
 namespace Bootgly\ABI\Syntax;
 
 
-use Bootgly\ABI\Syntax\Imports\Analyzer;
 use Bootgly\ABI\Syntax\Imports\Analyzer\Result;
 use Bootgly\ABI\Syntax\Imports\Formatter;
 
 
-class Imports
+/**
+ * `bootgly lint imports` — the `use` statements of a file: missing, unused,
+ * backslash-prefixed and misordered imports. Fixable.
+ */
+class Imports extends Analyzers
 {
    // * Data
-   private readonly Analyzer $Analyzer;
+   private readonly Imports\Analyzer $Analyzer;
    private readonly Formatter $Formatter;
 
 
    public function __construct ()
    {
-      $this->Analyzer = new Analyzer;
+      $this->Analyzer = new Imports\Analyzer;
       $this->Formatter = new Formatter;
    }
 
@@ -44,12 +47,12 @@ class Imports
    /**
     * Format the import block of a file based on analysis result.
     *
-    * @param Result $result
+    * @param Result $Result
     *
     * @return string The corrected source code
     */
-   public function format (Result $result): string
+   public function format (Result $Result): string
    {
-      return $this->Formatter->format($result);
+      return $this->Formatter->format($Result);
    }
 }

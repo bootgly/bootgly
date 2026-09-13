@@ -24,10 +24,10 @@ return new Test(
          description: 'Single-value Server: ' . $Header->get('Server')
       );
 
-      // @ getAll() returns array for multi-value headers
+      // @ collect() returns array for multi-value headers
       yield assert(
-         assertion: $Header->getAll('Set-Cookie') === ['a=1', 'b=2'],
-         description: 'getAll(Set-Cookie) returns array'
+         assertion: $Header->collect('Set-Cookie') === ['a=1', 'b=2'],
+         description: 'collect(Set-Cookie) returns array'
       );
    }
 );

@@ -11,7 +11,6 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
 
-use const Bootgly\WPI;
 use function ctype_xdigit;
 use function explode;
 use function hexdec;
@@ -24,6 +23,8 @@ use function strpos;
 use function strspn;
 use function substr;
 use function time;
+
+use const Bootgly\WPI;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Endpoints\Servers\Disconnecting;
 use Bootgly\WPI\Endpoints\Servers\Feeding;

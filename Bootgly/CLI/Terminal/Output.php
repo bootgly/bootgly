@@ -146,7 +146,7 @@ class Output
          return $this;
       }
 
-      $this->Viewport->panDown($lines);
+      $this->Viewport->down($lines);
 
       $this->Cursor->up($lines);
 

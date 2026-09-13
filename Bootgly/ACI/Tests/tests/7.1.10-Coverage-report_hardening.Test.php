@@ -14,7 +14,15 @@ return new Test(
       $file = BOOTGLY_WORKING_DIR . 'tmp/coverage-<node>-"quotes"-&-\'apostrophe\'.php';
 
       $Driver = new class ($file) extends Driver {
-         public function __construct (private string $file) {}
+         // * Data
+         private string $file;
+
+
+         public function __construct (string $file)
+         {
+            // * Data
+            $this->file = $file;
+         }
 
          public function collect (): array
          {

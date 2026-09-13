@@ -26,6 +26,16 @@ jobs:
           ini-values: disable_functions=""
           extensions: mbstring, pcntl
       -
+        name: Run Bootgly Lint command
+        run: |
+          # The four style rules CLAUDE.md pins down, in check mode over the
+          # framework tree: every submodule runs, and any issue fails the lane.
+          status=0
+          for submodule in imports nullables promotions methods; do
+            php bootgly lint "$submodule" Bootgly/ || status=1
+          done
+          exit "$status"
+      -
         name: Run Bootgly Test command
         env:
           BOOTGLY_TEST_TRACE: 1

@@ -3,8 +3,11 @@
 namespace Bootgly\ADI\Databases\SQL\Repository\Tests\HydrationWidth;
 
 
+use const PHP_INT_MAX;
+use const PHP_INT_MIN;
 use function assert;
 use function get_debug_type;
+use function str_contains;
 use Throwable;
 
 use Bootgly\ACI\Tests\Suite\Test;

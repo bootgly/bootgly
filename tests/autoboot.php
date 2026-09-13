@@ -233,5 +233,10 @@ return new Suites(
       'Bootgly/ABI/Data/SemVer/',
       // # ACI/VCS — git engine, tags, remotes, submodules (fixture repositories under the temp dir)
       'Bootgly/ACI/VCS/',
+      // # ABI/Syntax — the analyzers behind `lint nullables|promotions|methods`
+      //   (appended last to keep every suite index above stable)
+      'Bootgly/ABI/Syntax/Nullables/',
+      'Bootgly/ABI/Syntax/Promotions/',
+      'Bootgly/ABI/Syntax/Methods/',
    ]
 );

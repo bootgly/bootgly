@@ -138,7 +138,7 @@ class __String
    }
 
 
-   public function __construct (string $string, ?string $encoding = null)
+   public function __construct (string $string, null|string $encoding = null)
    {
       // * Config
       $this->encoding = $encoding;
@@ -281,7 +281,7 @@ class __String
     * 
     * @return object
     */
-   protected static function search (string $string, $search, ?int $offset = null): object
+   protected static function search (string $string, $search, null|int $offset = null): object
    {
       // !
       $terms = (array) $search;

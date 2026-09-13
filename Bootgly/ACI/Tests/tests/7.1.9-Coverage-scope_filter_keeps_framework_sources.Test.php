@@ -16,11 +16,23 @@ return new Test(
       $outside = '/repo/Bootgly/ACI/Logs/Logger.php';
 
       $Driver = new class ($source, $script, $outside) extends Driver {
+         // * Data
+         private string $source;
+         private string $script;
+         private string $outside;
+
+
          public function __construct (
-            private string $source,
-            private string $script,
-            private string $outside,
-         ) {}
+            string $source,
+            string $script,
+            string $outside,
+         )
+         {
+            // * Data
+            $this->source = $source;
+            $this->script = $script;
+            $this->outside = $outside;
+         }
 
          public function collect (): array
          {

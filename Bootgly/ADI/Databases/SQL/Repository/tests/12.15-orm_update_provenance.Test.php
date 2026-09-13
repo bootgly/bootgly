@@ -5,7 +5,6 @@ namespace Bootgly\ADI\Databases\SQL\Repository\Tests\Provenance;
 
 use function assert;
 use function str_contains;
-use RuntimeException;
 use Throwable;
 
 use Bootgly\ACI\Tests\Suite\Test;

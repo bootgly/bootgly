@@ -42,7 +42,7 @@ class Scopes
    /**
     * Fetch a loaded scope by name.
     */
-   public function get (string $name): ?Config
+   public function get (string $name): null|Config
    {
       return $this->scopes[$name] ?? null;
    }

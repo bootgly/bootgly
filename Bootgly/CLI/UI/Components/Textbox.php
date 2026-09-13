@@ -190,7 +190,7 @@ class Textbox extends Component
 
       // @ Back onto the prompt line, after the prompt — relative only
       $this->Output->Cursor->up($rule === '' ? 1 : 2, column: 1);
-      $this->Output->Cursor->moveTo(column: mb_strwidth($painted) + 1);
+      $this->Output->Cursor->place(column: mb_strwidth($painted) + 1);
    }
 
    /**

@@ -60,10 +60,20 @@ if (! class_exists('HTTPServerCLISessionCapacityWorkerState', false)) {
 if (! class_exists('HTTPServerCLISessionCapacityHandler', false)) {
    class HTTPServerCLISessionCapacityHandler implements SessionCommitting
    {
+      // * Data
+      private SessionCache $Handler;
+      private string $marker;
+
+
       public function __construct (
-         private SessionCache $Handler,
-         private string $marker,
-      ) {}
+         SessionCache $Handler,
+         string $marker,
+      )
+      {
+         // * Data
+         $this->Handler = $Handler;
+         $this->marker = $marker;
+      }
 
       public function read (string $sessionID): string|false
       {

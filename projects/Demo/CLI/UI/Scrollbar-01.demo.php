@@ -57,7 +57,7 @@ $View = static function () use ($Output, $Scrollbar, &$first, $total, $height): 
    for ($index = 0; $index < $height; $index++) {
       $item = $first + $index + 1;
 
-      $Output->Cursor->moveTo(line: 8 + $index, column: 1);
+      $Output->Cursor->place(line: 8 + $index, column: 1);
       $Output->escape('2K');
       $Output->render("@#Black:#{$item}@; Item {$item}");
    }
@@ -68,7 +68,7 @@ $View = static function () use ($Output, $Scrollbar, &$first, $total, $height): 
 
    // @ Status line
    $last = min($first + $height, $total);
-   $Output->Cursor->moveTo(line: 21, column: 1);
+   $Output->Cursor->place(line: 21, column: 1);
    $Output->escape('2K');
    $Output->render("@#Black:rows {$first}..{$last} of {$total} · wheel scrolls · drag the thumb · `q` quits@;");
 };
@@ -190,5 +190,5 @@ while (true) {
 $Mouse->report(false);
 $Input->configure(blocking: true, canonical: true, echo: true);
 $Output->Cursor->show();
-$Output->Cursor->moveTo(line: 22, column: 1);
+$Output->Cursor->place(line: 22, column: 1);
 $Output->render("@.;@#Green:✔@; Scrollbar demo closed.@.;");

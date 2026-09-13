@@ -14,9 +14,9 @@ use function trim;
 use Bootgly\ABI\Code\__String;
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\CLI\Terminal\Output;
+use Bootgly\CLI\UI\Base\Frame\Borders;
 use Bootgly\CLI\UI\Components\Chart\Gradient;
 use Bootgly\CLI\UI\Components\Charts\Sparkline;
-use Bootgly\CLI\UI\Base\Frame\Borders;
 
 
 return new Test(

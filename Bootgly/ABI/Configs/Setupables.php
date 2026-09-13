@@ -22,7 +22,7 @@ trait Setupables // @ Use with enums
     * 
     * @return object
     */
-   public function __call (string $name, array $arguments): ?object
+   public function __call (string $name, array $arguments): null|object
    {
       static $values = [];
       /** @var ?object $class */

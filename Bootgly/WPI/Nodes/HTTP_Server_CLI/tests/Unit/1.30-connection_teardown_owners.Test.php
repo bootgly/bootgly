@@ -102,13 +102,23 @@ return new Test(
          $OwnerB = clone $Prototype;
          $OwnerB->throws = true;
          $Reentrant = new class($Connection, $OwnerB) implements Disconnecting {
+            // * Data
+            private Connection $Connection;
+            private Disconnecting $OwnerB;
+
+            // * Metadata
             public int $calls = 0;
             public bool $slotsCleared = false;
 
             public function __construct (
-               private Connection $Connection,
-               private Disconnecting $OwnerB,
-            ) {}
+               Connection $Connection,
+               Disconnecting $OwnerB,
+            )
+            {
+               // * Data
+               $this->Connection = $Connection;
+               $this->OwnerB = $OwnerB;
+            }
 
             public function disconnect (): void
             {
@@ -124,9 +134,17 @@ return new Test(
             }
          };
          $Self = new class($Connection) implements Disconnecting {
+            // * Data
+            private Connection $Connection;
+
+            // * Metadata
             public int $calls = 0;
 
-            public function __construct (private Connection $Connection) {}
+            public function __construct (Connection $Connection)
+            {
+               // * Data
+               $this->Connection = $Connection;
+            }
 
             public function disconnect (): void
             {
@@ -199,9 +217,17 @@ return new Test(
          ];
 
          $Late = new class($Connection) implements Disconnecting {
+            // * Data
+            private Connection $Connection;
+
+            // * Metadata
             public int $calls = 0;
 
-            public function __construct (private Connection $Connection) {}
+            public function __construct (Connection $Connection)
+            {
+               // * Data
+               $this->Connection = $Connection;
+            }
 
             public function disconnect (): void
             {

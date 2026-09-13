@@ -29,7 +29,7 @@ trait Comparators // @phpstan-ignore-line
     *
     * @return self Returns the current instance for method chaining.
     */
-   public function compare (?Op $comparator = null, mixed $expected): self
+   public function compare (null|Op $comparator = null, mixed $expected): self
    {
       $expectation = match ($comparator) {
          Op::Equal =>

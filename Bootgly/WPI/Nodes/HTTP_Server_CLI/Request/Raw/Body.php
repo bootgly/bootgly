@@ -122,7 +122,7 @@ class Body
       $this->input = null;
    }
 
-   public function parse (string $content, ?string $type): bool|string
+   public function parse (string $content, null|string $type): bool|string
    {
       if ($type === null) {
          return false;

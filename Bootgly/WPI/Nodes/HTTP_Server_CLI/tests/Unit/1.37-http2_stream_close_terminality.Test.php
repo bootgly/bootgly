@@ -92,11 +92,19 @@ return new Test(
       $StreamB->body = 'SSE-BODY';
 
       $Reentrant = new class ($StreamB) implements Disconnecting {
+         // * Data
+         private Stream $Stream;
+
+         // * Metadata
          public int $calls = 0;
          public string $before = '';
          public string $after = '';
 
-         public function __construct (private Stream $Stream) {}
+         public function __construct (Stream $Stream)
+         {
+            // * Data
+            $this->Stream = $Stream;
+         }
 
          public function disconnect (): void
          {

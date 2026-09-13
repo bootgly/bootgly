@@ -11,7 +11,6 @@
 namespace Bootgly\ACI\Tests\Benchmark;
 
 
-use Bootgly\ACI\Tests\Benchmark\Configs\Options;
 use function array_unique;
 use function array_values;
 use function explode;
@@ -21,6 +20,8 @@ use function strtolower;
 use function substr;
 use function trim;
 use RuntimeException;
+
+use Bootgly\ACI\Tests\Benchmark\Configs\Options;
 
 
 class Configs

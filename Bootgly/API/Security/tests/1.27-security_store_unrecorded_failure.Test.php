@@ -34,6 +34,13 @@ final class StoreFailureSQL extends SQLDatabase
    /** Failure recorded on the Operation before the store sees it. */
    public const string RECORDED = 'Injected recorded database failure.';
 
+   // * Data
+   private bool $recorded;
+   private bool $unfinished;
+   private bool $failed;
+   private bool $delayed;
+
+   // * Metadata
    /** Number of calls that reached await(). */
    public int $awaits = 0;
    /** @var array<int,null|string> Operation errors observed on entry to await(). */
@@ -46,12 +53,18 @@ final class StoreFailureSQL extends SQLDatabase
     * Build a connection-free SQL facade in recorded or unrecorded mode.
     */
    public function __construct (
-      private bool $recorded,
-      private bool $unfinished = false,
-      private bool $failed = false,
-      private bool $delayed = false
+      bool $recorded,
+      bool $unfinished = false,
+      bool $failed = false,
+      bool $delayed = false
    )
    {
+      // * Data
+      $this->recorded = $recorded;
+      $this->unfinished = $unfinished;
+      $this->failed = $failed;
+      $this->delayed = $delayed;
+
       parent::__construct([
          'driver' => 'pgsql',
          'pool' => ['min' => 0, 'max' => 0],

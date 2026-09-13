@@ -33,7 +33,7 @@ final class GitDiff implements InputContract
    private Parser $Parser;
 
 
-   public function __construct (?Parser $Parser = null)
+   public function __construct (null|Parser $Parser = null)
    {
       $this->Parser = $Parser ?? new Parser;
    }
@@ -70,7 +70,7 @@ final class GitDiff implements InputContract
       return $extracted;
    }
 
-   private function convert (Diff $Diff, Chunk $Chunk): ?Hunk
+   private function convert (Diff $Diff, Chunk $Chunk): null|Hunk
    {
       $fromLines = [];
       $toLines   = [];

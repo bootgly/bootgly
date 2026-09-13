@@ -23,7 +23,7 @@ abstract class Subassertion implements Output
 
 
    // * Config
-   public ?Closure $subassertion = null {
+   public null|Closure $subassertion = null {
       get => $this->subassertion;
       set => $this->subassertion = $value;
    }

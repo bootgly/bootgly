@@ -253,7 +253,7 @@ final class Provenance
    }
 
    /** Locate a Git marker without relying on the Git executable. */
-   private static function locate (string $path, bool $ascend): ?string
+   private static function locate (string $path, bool $ascend): null|string
    {
       $candidate = $path;
       while (true) {
@@ -278,7 +278,7 @@ final class Provenance
     *
     * @return null|array{0:string,1:string,2:string}
     */
-   private static function fingerprint (string $path, string $SHA): ?array
+   private static function fingerprint (string $path, string $SHA): null|array
    {
       if (self::normalize(self::execute($path, ['rev-parse', '--verify', 'HEAD']), 'sha') !== $SHA) {
          return null;
@@ -366,7 +366,7 @@ final class Provenance
     *
     * @return null|array{0:string,1:bool}
     */
-   private static function compare (string $path, string $SHA): ?array
+   private static function compare (string $path, string $SHA): null|array
    {
       $format = strlen($SHA) === 40 ? 'sha1' : 'sha256';
 
@@ -576,7 +576,7 @@ final class Provenance
     * Regular content is streamed; symlinks hash their target text and are never
     * followed. Git-canonical modes make host-only permission bits irrelevant.
     */
-   private static function catalog (string $path, string $listed): ?string
+   private static function catalog (string $path, string $listed): null|string
    {
       if ($listed === '') {
          return self::EMPTY_SHA256;
@@ -666,7 +666,7 @@ final class Provenance
     *
     * @param array<int,string> $arguments
     */
-   private static function execute (string $path, array $arguments): ?string
+   private static function execute (string $path, array $arguments): null|string
    {
       $process = @proc_open(
          [
@@ -720,7 +720,7 @@ final class Provenance
       return $environment;
    }
 
-   private static function normalize (string|false|null $value, string $type): ?string
+   private static function normalize (string|false|null $value, string $type): null|string
    {
       if ($value === false || $value === null) {
          return null;

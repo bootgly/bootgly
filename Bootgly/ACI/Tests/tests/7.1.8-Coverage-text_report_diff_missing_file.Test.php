@@ -18,7 +18,15 @@ return new Test(
       unlink($file);
 
       $Driver = new class ($file) extends Driver {
-         public function __construct (private string $file) {}
+         // * Data
+         private string $file;
+
+
+         public function __construct (string $file)
+         {
+            // * Data
+            $this->file = $file;
+         }
 
          public function collect (): array
          {

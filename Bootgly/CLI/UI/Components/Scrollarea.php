@@ -342,7 +342,7 @@ class Scrollarea extends Component
 
       // @ Repaint the band rows in place, then the bar strip over the right edge
       foreach ($lines as $index => $content) {
-         $this->Output->Cursor->moveTo(line: $this->row + $index, column: 1);
+         $this->Output->Cursor->place(line: $this->row + $index, column: 1);
          $this->Output->Text->trim(right: true);
          $this->Output->write($content);
       }

@@ -27,7 +27,7 @@ final class Configuration extends InvalidArgumentException implements Exceptioni
       string $expected,
       mixed $value,
       int $code = 0,
-      ?Throwable $previous = null
+      null|Throwable $previous = null
    ) {
       parent::__construct(
          sprintf(

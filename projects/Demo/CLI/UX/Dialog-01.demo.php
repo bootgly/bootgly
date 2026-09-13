@@ -69,5 +69,5 @@ $Standalone->alert('This box lives in the alternate screen.');
 
 $deployed = $deploy === true ? 'yes' : 'no';
 
-$Output->Cursor->moveTo(line: 19, column: 1);
+$Output->Cursor->place(line: 19, column: 1);
 $Output->render("@.;@#Green:✔@; Dialog demo complete — deploy: {$deployed}, tag: {$tag}.@.;");

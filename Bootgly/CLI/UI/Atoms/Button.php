@@ -250,7 +250,7 @@ class Button extends Component implements Boxing
 
       // ? Placed — repaint in place at the rectangle
       if ($this->row >= 1 && $this->column >= 1) {
-         $this->Output->Cursor->moveTo(line: $this->row, column: $this->column);
+         $this->Output->Cursor->place(line: $this->row, column: $this->column);
          $this->Output->write($output);
 
          return null;

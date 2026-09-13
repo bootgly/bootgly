@@ -99,7 +99,7 @@ abstract class Benchmark
 
       return $elapsed;
    }
-   public static function show (? string $tag = null): string
+   public static function show (null|string $tag = null): string
    {
       // ?!
       if (!$tag && !self::$tag) {
@@ -122,7 +122,7 @@ abstract class Benchmark
 
       return Benchmark::class;
    }
-   public static function save (? string $tag = null): string
+   public static function save (null|string $tag = null): string
    {
       // ?!
       if (!$tag && !self::$tag) {

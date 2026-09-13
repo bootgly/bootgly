@@ -40,22 +40,25 @@ use function file_get_contents;
 use function in_array;
 use function is_array;
 use function preg_match;
+use function preg_match_all;
 use function str_contains;
 use function strcasecmp;
 use function strlen;
+use function strpos;
 use function strrpos;
 use function strtolower;
 use function substr;
 use function token_get_all;
 use function trim;
 
+use Bootgly\ABI\Syntax\Analyzers;
+use Bootgly\ABI\Syntax\Analyzers\Issue;
 use Bootgly\ABI\Syntax\Builtins;
-use Bootgly\ABI\Syntax\Imports\Analyzer\Issue;
 use Bootgly\ABI\Syntax\Imports\Analyzer\Result;
 use Bootgly\ABI\Syntax\Imports\Analyzer\Tokens;
 
 
-class Analyzer
+class Analyzer extends Analyzers
 {
    // * Config
    // * Data
@@ -126,9 +129,23 @@ class Analyzer
       $importedConstants = [];
       $importedClasses = [];
       $inClassBody = 0;
-      $namespaceCount = 0;
 
       // ---
+      // ? Imports are per namespace block, the body scan is per file: a file
+      //   with more than one block is not linted — and the result says so
+      if ($this->count($tokens, $count) > 1) {
+         return new Result(
+            file: $file,
+            source: $source,
+            namespace: '',
+            imports: [],
+            importRange: ['start' => -1, 'end' => -1],
+            symbols: [],
+            issues: [],
+            notice: 'More than one namespace declared — the file is not linted'
+         );
+      }
+
       // Phase 1: Extract namespace and imports
       // ---
       $bodyStart = 0;
@@ -139,21 +156,11 @@ class Analyzer
             continue;
          }
 
-         // @ Namespace
+         // @ Namespace — only a declaration names the file's namespace: the
+         //   keyword is also a legal argument label, method or constant name
          if ($token[0] === T_NAMESPACE) {
-            $namespaceCount++;
-
-            // @ Skip files with multiple namespace blocks
-            if ($namespaceCount > 1) {
-               return new Result(
-                  file: $file,
-                  source: $source,
-                  namespace: $namespace,
-                  imports: [],
-                  importRange: ['start' => -1, 'end' => -1],
-                  symbols: [],
-                  issues: []
-               );
+            if ($this->check($tokens, $count, $i) === false) {
+               continue;
             }
 
             $namespace = $this->parse($Tokens, $i);
@@ -616,11 +623,6 @@ class Analyzer
          $token = $tokens[$i];
 
          if ($token === ';') {
-            $byteEnd = $byteStart;
-            // Calculate byte end from source position
-            for ($k = 0; $k <= $i; $k++) {
-               // just use the final semicolon position
-            }
             $byteEnd = $Tokens->locate($i, true);
 
             $symbol = trim($parts);
@@ -801,20 +803,29 @@ class Analyzer
       $break = strpos($source, "\n", $range['end']);
       $blockEnd = $break === false ? strlen($source) : $break;
 
+      // ! Offsets are tracked inline — Tokens::locate() rescans from the
+      //   start, which made this walk quadratic in the comments of a file
+      $offset = 0;
+
       // @
       for ($i = 0; $i < $count; $i++) {
          $token = $tokens[$i];
+         $at = $offset;
+         /** @var string $content */
+         $content = is_array($token) ? $token[1] : $token;
+         $offset += strlen($content);
 
+         // ? Past the block — nothing after it can sit inside it
+         if ($at >= $blockEnd) {
+            break;
+         }
          if (is_array($token) === false) {
             continue;
          }
          if ($token[0] !== T_COMMENT && $token[0] !== T_DOC_COMMENT) {
             continue;
          }
-
-         $offset = $Tokens->locate($i);
-
-         if ($offset < $range['start'] || $offset >= $blockEnd) {
+         if ($at < $range['start']) {
             continue;
          }
 
@@ -828,7 +839,7 @@ class Analyzer
             line: $line,
             message: 'Comment inside the import block: reordering would drop it, '
                . 'so the block is left untouched — move the comment above or below it',
-            offset: $offset
+            offset: $at
          );
 
          // : One report per block is enough to explain why nothing was rewritten
@@ -910,8 +921,19 @@ class Analyzer
             continue;
          }
 
-         // ? A fully qualified name (`\Foo\Bar`) resolves without consulting an
-         //   import, and a relative one (`namespace\Foo`) never does either
+         // ? A fully qualified GLOBAL name (`\strlen`) is reported as a prefix
+         //   to drop — once dropped it reaches the import, so the import is
+         //   in use; a qualified one (`\Foo\Bar`) resolves on its own, and a
+         //   relative one (`namespace\Foo`) never consults an import either
+         if ($token[0] === T_NAME_FULLY_QUALIFIED) {
+            $bare = substr($content, 1);
+            if (str_contains($bare, '\\') === false) {
+               $names[strtolower($bare)] = true;
+               $exact[$bare] = true;
+            }
+
+            continue;
+         }
          if ($token[0] !== T_STRING) {
             continue;
          }
@@ -962,6 +984,48 @@ class Analyzer
    }
 
    /**
+    * Count the namespace DECLARATIONS of a file — the keyword is also a
+    * legal argument label (`f(namespace: 'x')`), which names nothing.
+    *
+    * @param array<int,mixed> $tokens
+    * @param int $count
+    */
+   private function count (array $tokens, int $count): int
+   {
+      $declared = 0;
+      for ($i = 0; $i < $count; $i++) {
+         $token = $tokens[$i];
+         if (is_array($token) && $token[0] === T_NAMESPACE && $this->check($tokens, $count, $i)) {
+            $declared++;
+         }
+      }
+
+      // :
+      return $declared;
+   }
+
+   /**
+    * Whether the `namespace` token at a position DECLARES a namespace.
+    *
+    * The keyword is also a legal argument label (`f(namespace: 'x')`), a
+    * legal method name (`function namespace ()`) and a legal constant name
+    * (`Foo::namespace`); only one followed by a name — or by `{`, the global
+    * block — declares.
+    *
+    * @param array<int,mixed> $tokens
+    * @param int $count
+    * @param int $i The position of the T_NAMESPACE token
+    */
+   private function check (array $tokens, int $count, int $i): bool
+   {
+      $following = $tokens[$this->advance($tokens, $i, $count)] ?? null;
+
+      // :
+      return $following === '{'
+         || (is_array($following) && in_array($following[0], [T_STRING, T_NAME_QUALIFIED], true));
+   }
+
+   /**
     * Validate import ordering and generate issues.
     *
     * @param array<int,array{symbol:string,kind:string,global:bool,line:int,alias:string}> $imports
@@ -980,12 +1044,30 @@ class Analyzer
       $prevGlobal = true;
       $prevSymbol = '';
       $prevKind = '';
+      // ! Once a namespaced import was seen, every later global one is misplaced
+      $namespaced = false;
 
       foreach ($imports as $import) {
          $kindIndex = $kindOrder[$import['kind']];
          $isGlobal = $import['global'];
 
-         // @ Reset kind tracking when crossing the global/namespaced boundary
+         // @ The global block comes first, whole: a global import after any
+         //   namespaced one is out of place whatever its kind
+         if ($isGlobal && $namespaced) {
+            $issues[] = new Issue(
+               type: 'global_not_first',
+               symbol: $import['symbol'],
+               kind: $import['kind'],
+               line: $import['line'],
+               message: "Global import should come before namespaced: {$import['symbol']}"
+            );
+         }
+         if ($isGlobal === false) {
+            $namespaced = true;
+         }
+
+         // @ Kind tracking restarts when crossing the global/namespaced boundary:
+         //   each block orders const → function → class on its own
          if ($isGlobal !== $prevGlobal) {
             $prevKindIndex = -1;
             $prevSymbol = '';
@@ -999,17 +1081,6 @@ class Analyzer
                kind: $import['kind'],
                line: $import['line'],
                message: "Wrong import order: use {$import['kind']} should come before use {$prevKind}"
-            );
-         }
-
-         // @ Within same kind: globals should come before namespaced
-         if ($kindIndex === $prevKindIndex && $isGlobal && !$prevGlobal) {
-            $issues[] = new Issue(
-               type: 'global_not_first',
-               symbol: $import['symbol'],
-               kind: $import['kind'],
-               line: $import['line'],
-               message: "Global import should come before namespaced: {$import['symbol']}"
             );
          }
 

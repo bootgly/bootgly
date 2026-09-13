@@ -22,7 +22,17 @@ return new Test(
 
       try {
          $Driver = new class ($target, $neighbor) extends Driver {
-            public function __construct (private string $target, private string $neighbor) {}
+            // * Data
+            private string $target;
+            private string $neighbor;
+
+
+            public function __construct (string $target, string $neighbor)
+            {
+               // * Data
+               $this->target = $target;
+               $this->neighbor = $neighbor;
+            }
 
             public function collect (): array
             {

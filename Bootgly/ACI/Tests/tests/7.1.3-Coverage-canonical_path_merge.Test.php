@@ -16,11 +16,23 @@ return new Test(
       $excluded = dirname(__DIR__) . '/tests/fake.php';
 
       $Driver = new class ($target, $targetAlias, $excluded) extends Driver {
+         // * Data
+         private string $target;
+         private string $targetAlias;
+         private string $excluded;
+
+
          public function __construct (
-            private string $target,
-            private string $targetAlias,
-            private string $excluded,
-         ) {}
+            string $target,
+            string $targetAlias,
+            string $excluded,
+         )
+         {
+            // * Data
+            $this->target = $target;
+            $this->targetAlias = $targetAlias;
+            $this->excluded = $excluded;
+         }
 
          public function collect (): array
          {

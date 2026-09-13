@@ -72,7 +72,7 @@ class Header
     *
     * @return string|null
     */
-   public function get (string $name): ?string
+   public function get (string $name): null|string
    {
       $value = $this->fields[$name] ?? $this->fields[strtolower($name)] ?? null;
 

@@ -160,7 +160,7 @@ class Tester
       return null;
    }
 
-   private function describe (null|string $description, ?bool $status, string $indicator = '╟'): void
+   private function describe (null|string $description, null|bool $status, string $indicator = '╟'): void
    {
       if ($description === null) {
          return;
@@ -630,7 +630,7 @@ class Tester
          $this->Suite->summarize();
 
          if (Results::$enabled) {
-            file_put_contents('php://stdout', Results::toJSON());
+            file_put_contents('php://stdout', Results::encode());
          }
 
          exit(1);

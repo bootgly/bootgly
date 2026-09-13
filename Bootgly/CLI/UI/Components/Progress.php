@@ -267,7 +267,7 @@ class Progress extends Component
                $this->Output->Cursor->restore();
             }
             else {
-               $this->Output->Cursor->moveTo(line: $this->cursor[0], column: $this->cursor[1]);
+               $this->Output->Cursor->place(line: $this->cursor[0], column: $this->cursor[1]);
             }
 
             // @ Write to output

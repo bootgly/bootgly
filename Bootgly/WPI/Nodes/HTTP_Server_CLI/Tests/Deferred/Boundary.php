@@ -11,13 +11,13 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Deferred;
 
 
-use const Bootgly\WPI;
 use function json_encode;
 use function str_starts_with;
 use Closure;
 use LogicException;
 use Throwable;
 
+use const Bootgly\WPI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Timeout;

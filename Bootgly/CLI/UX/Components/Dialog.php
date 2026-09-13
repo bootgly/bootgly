@@ -692,7 +692,7 @@ class Dialog extends Component implements Boxing
 
       // @@
       for ($offset = 0; $offset < $this->height; $offset++) {
-         $this->Output->Cursor->moveTo(line: $this->row + $offset, column: $this->column);
+         $this->Output->Cursor->place(line: $this->row + $offset, column: $this->column);
          $this->Output->write($spaces);
       }
    }

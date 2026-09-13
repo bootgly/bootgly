@@ -4,7 +4,6 @@ namespace Bootgly\API\Security\Tests\AuthorizationRBACCache;
 
 
 use function assert;
-use function count;
 use function sys_get_temp_dir;
 use function uniqid;
 

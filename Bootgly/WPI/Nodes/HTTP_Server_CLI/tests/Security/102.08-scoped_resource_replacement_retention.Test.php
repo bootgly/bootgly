@@ -77,8 +77,15 @@ return new Test(
          Response $Response,
       ) use ($Probe): Response {
          $Resource = new class($Probe) extends Resource {
-            public function __construct (private object $Probe)
+            // * Data
+            private object $Probe;
+
+
+            public function __construct (object $Probe)
             {
+               // * Data
+               $this->Probe = $Probe;
+
                parent::__construct(persistent: true, scoped: true);
             }
 

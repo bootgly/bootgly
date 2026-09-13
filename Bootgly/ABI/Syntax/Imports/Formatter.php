@@ -11,16 +11,26 @@
 namespace Bootgly\ABI\Syntax\Imports;
 
 
+use const T_COMMENT;
+use const T_DOC_COMMENT;
+use const T_NAME_QUALIFIED;
+use const T_NAMESPACE;
+use const T_STRING;
+use const T_WHITESPACE;
 use function array_filter;
 use function count;
 use function implode;
+use function in_array;
+use function is_array;
 use function rsort;
 use function str_contains;
+use function str_replace;
 use function strcasecmp;
 use function strlen;
 use function strpos;
 use function substr;
 use function substr_replace;
+use function token_get_all;
 use function usort;
 
 use Bootgly\ABI\Syntax\Imports\Analyzer\Result;
@@ -28,20 +38,24 @@ use Bootgly\ABI\Syntax\Imports\Analyzer\Result;
 
 class Formatter
 {
+   // * Metadata
+   /** The tokens between a keyword and the name it declares */
+   private const array BLANKS = [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT];
+
    /**
     * Format the import block of a file based on analysis result.
     *
-    * @param Result $result
+    * @param Result $Result
     *
     * @return string The corrected source code
     */
-   public function format (Result $result): string
+   public function format (Result $Result): string
    {
-      $source = $result->source;
+      $source = $Result->source;
 
       // @ Remove backslash prefixes from body (process in reverse offset order)
       $offsets = [];
-      foreach ($result->issues as $Issue) {
+      foreach ($Result->issues as $Issue) {
          if ($Issue->type === 'backslash_prefix' && $Issue->offset >= 0) {
             $offsets[] = $Issue->offset;
          }
@@ -57,7 +71,7 @@ class Formatter
       // ! Drop what nothing in the body names — keyed by kind + symbol, so an
       //   alias that repeats across kinds never removes the wrong statement
       $unused = [];
-      foreach ($result->issues as $Issue) {
+      foreach ($Result->issues as $Issue) {
          if ($Issue->type === 'unused_import') {
             $unused[$Issue->kind . ':' . $Issue->symbol] = true;
          }
@@ -65,7 +79,7 @@ class Formatter
 
       // @ Collect all imports (existing minus unused, plus missing from issues)
       $allImports = [];
-      foreach ($result->imports as $import) {
+      foreach ($Result->imports as $import) {
          if (isset($unused[$import['kind'] . ':' . $import['symbol']])) {
             continue;
          }
@@ -74,7 +88,7 @@ class Formatter
       }
 
       // @ Add missing imports from issues
-      foreach ($result->issues as $Issue) {
+      foreach ($Result->issues as $Issue) {
          if ($Issue->type !== 'missing_import') {
             continue;
          }
@@ -155,19 +169,27 @@ class Formatter
          $sections[] = implode("\n", $namespacedLines);
       }
       $importBlock = implode("\n\n", $sections);
+      // ! The line ending in force where the lines are added — the first
+      //   break at or after the block, or after the namespace declaration
+      $from = $Result->importRange['start'] !== -1 ? $Result->importRange['start'] : ($this->locate($source) ?? 0);
+      $break = strpos($source, "\n", $from);
+      $eol = $break !== false && $break > 0 && $source[$break - 1] === "\r" ? "\r\n" : "\n";
+      if ($eol !== "\n") {
+         $importBlock = str_replace("\n", $eol, $importBlock);
+      }
 
       // ? The block carries something a rewrite cannot place — leave it to a human
       //   (the backslash fixes above are outside it and still stand)
-      foreach ($result->issues as $Issue) {
+      foreach ($Result->issues as $Issue) {
          if ($Issue->type === 'comment_in_imports') {
             return $source;
          }
       }
 
       // @ Replace in source
-      if ($result->importRange['start'] !== -1 && $result->importRange['end'] !== -1) {
-         $start = $result->importRange['start'];
-         $end = $result->importRange['end'];
+      if ($Result->importRange['start'] !== -1 && $Result->importRange['end'] !== -1) {
+         $start = $Result->importRange['start'];
+         $end = $Result->importRange['end'];
 
          // @ Adjust offsets for removed backslash chars before import range
          foreach ($offsets as $offset) {
@@ -186,17 +208,18 @@ class Formatter
          }
 
          // @ Walk back further to consume blank lines (to reach namespace line end)
-         while ($start > 0 && $source[$start - 1] === "\n") {
+         //   — in the file's own line ending, `\r\n` included
+         while ($start > 0 && ($source[$start - 1] === "\n" || $source[$start - 1] === "\r")) {
             $start--;
          }
-         // @ Keep exactly at the char after namespace line's \n
+         // @ Keep exactly at the char after namespace line's ending
          if ($start > 0) {
-            $start++;
+            $start += strlen($eol);
          }
 
-         // @ Walk forward past any trailing newlines after last import
+         // @ Walk forward past any trailing line breaks after last import
          $sourceLen = strlen($source);
-         while ($end < $sourceLen && $source[$end] === "\n") {
+         while ($end < $sourceLen && ($source[$end] === "\n" || $source[$end] === "\r")) {
             $end++;
          }
 
@@ -206,11 +229,11 @@ class Formatter
          // ?: Every import was unused — the file now carries none, so it takes
          //    the shape of one that never had any: 2 blank lines, then the code
          if ($importBlock === '') {
-            return $before . "\n\n" . $after;
+            return $before . $eol . $eol . $after;
          }
 
          // @ 2 blank lines after namespace, 2 blank lines after imports
-         return $before . "\n\n" . $importBlock . "\n\n\n" . $after;
+         return $before . $eol . $eol . $importBlock . $eol . $eol . $eol . $after;
       }
 
       // ? Nothing to insert — never rewrite the namespace spacing for an empty
@@ -219,15 +242,15 @@ class Formatter
          return $source;
       }
 
-      // @ No existing imports: insert after namespace declaration
-      $nsPos = strpos($source, 'namespace ' . $result->namespace . ';');
-      if ($nsPos !== false) {
-         $semiPos = strpos($source, ';', $nsPos);
+      // @ No existing imports: insert after the namespace declaration — found
+      //   by token, so a space before the `;` or a comment inside it is no obstacle
+      $semiPos = $this->locate($source);
+      if ($semiPos !== null) {
          $insertPos = $semiPos + 1;
 
-         // @ Skip any newlines after the namespace;
+         // @ Skip any line breaks after the namespace — in the file's own ending
          $sourceLen = strlen($source);
-         while ($insertPos < $sourceLen && $source[$insertPos] === "\n") {
+         while ($insertPos < $sourceLen && ($source[$insertPos] === "\n" || $source[$insertPos] === "\r")) {
             $insertPos++;
          }
 
@@ -235,10 +258,67 @@ class Formatter
          $after = substr($source, $insertPos);
 
          // @ 2 blank lines after namespace, 2 blank lines after imports
-         return $before . "\n\n\n" . $importBlock . "\n\n\n" . $after;
+         return $before . $eol . $eol . $eol . $importBlock . $eol . $eol . $eol . $after;
       }
 
       return $source;
+   }
+
+   /**
+    * Locate the `;` that ends the file's namespace declaration.
+    *
+    * The keyword is also a legal argument label (`f(namespace: 'x')`) and a
+    * relative-name prefix, so only a `namespace` followed by a name (or `{`)
+    * counts — and the braced form has no `;` to insert after.
+    *
+    * @param string $source The PHP source
+    *
+    * @return null|int The byte offset of the `;`, null when there is none
+    */
+   private function locate (string $source): null|int
+   {
+      $tokens = token_get_all($source);
+      $count = count($tokens);
+      $offset = 0;
+
+      // @
+      for ($i = 0; $i < $count; $i++) {
+         $token = $tokens[$i];
+         $at = $offset;
+         $offset += strlen(is_array($token) ? $token[1] : $token);
+
+         if (is_array($token) === false || $token[0] !== T_NAMESPACE) {
+            continue;
+         }
+
+         // ? A declaration names a namespace — a label is followed by `:`
+         $j = $i + 1;
+         while ($j < $count && is_array($tokens[$j]) && in_array($tokens[$j][0], self::BLANKS, true)) {
+            $j++;
+         }
+         $named = $tokens[$j] ?? null;
+         if (is_array($named) === false || in_array($named[0], [T_STRING, T_NAME_QUALIFIED], true) === false) {
+            continue;
+         }
+
+         // @ The statement ends at its `;` — or opens a block, which is not insertable
+         $end = $at;
+         for ($k = $i; $k < $count; $k++) {
+            $piece = $tokens[$k];
+            if ($piece === ';') {
+               return $end;
+            }
+            if ($piece === '{') {
+               return null;
+            }
+            $end += strlen(is_array($piece) ? $piece[1] : $piece);
+         }
+
+         return null;
+      }
+
+      // :
+      return null;
    }
 
    /**

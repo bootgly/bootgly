@@ -12,6 +12,7 @@ namespace Bootgly\CLI;
 
 
 use const BOOTGLY_ROOT_DIR;
+use const PHP_BINARY;
 use function assert;
 use function fclose;
 use function file_get_contents;

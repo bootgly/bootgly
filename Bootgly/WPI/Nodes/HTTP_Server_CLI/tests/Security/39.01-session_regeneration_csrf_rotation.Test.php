@@ -58,8 +58,14 @@ return new Test(
 
    middlewares: [
       new class($knownToken) implements Middleware {
-         public function __construct (private string $knownToken)
+         // * Data
+         private string $knownToken;
+
+
+         public function __construct (string $knownToken)
          {
+            // * Data
+            $this->knownToken = $knownToken;
          }
 
          public function process (object $Request, object $Response, Closure $next): object

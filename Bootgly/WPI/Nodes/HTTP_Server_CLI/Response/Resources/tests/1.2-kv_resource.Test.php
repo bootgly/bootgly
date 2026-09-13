@@ -7,7 +7,6 @@ use function assert;
 use function spl_object_id;
 use function str_contains;
 use RuntimeException;
-use Throwable;
 
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\ADI\Database\Operation\Result;

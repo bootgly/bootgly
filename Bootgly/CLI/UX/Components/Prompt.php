@@ -374,7 +374,7 @@ class Prompt extends Component
          rewind($Memory->stream);
          $painted = (string) stream_get_contents($Memory->stream);
 
-         $this->Output->Cursor->moveTo(line: $this->region + 1 + $index, column: 1);
+         $this->Output->Cursor->place(line: $this->region + 1 + $index, column: 1);
          $this->Output->Text->trim(right: true);
          $this->Output->write($painted);
       }
@@ -463,7 +463,7 @@ class Prompt extends Component
       //   they belong to the content again (the frame only repaints its own)
       if ($previous > 0 && $region > $previous) {
          for ($row = $previous + 1; $row <= $region; $row++) {
-            $this->Output->Cursor->moveTo(line: $row, column: 1);
+            $this->Output->Cursor->place(line: $row, column: 1);
             $this->Output->Text->clear(lines: 1);
          }
       }
@@ -497,7 +497,7 @@ class Prompt extends Component
       $this->resized = false;
 
       // ! No painted row survives an emulator reflow — wipe and re-anchor
-      $this->Output->Cursor->moveTo(line: 1, column: 1);
+      $this->Output->Cursor->place(line: 1, column: 1);
       $this->Output->Text->clear(down: true);
 
       // ! The band geometry follows the new size (fit() re-clips the region)
@@ -632,14 +632,14 @@ class Prompt extends Component
          }
 
          // @ Clear the frame — its rows never enter the scrollback
-         $this->Output->Cursor->moveTo(line: $this->region + 1, column: 1);
+         $this->Output->Cursor->place(line: $this->region + 1, column: 1);
          $this->Output->Text->clear(down: true);
 
          // ? Scroll the screen up to fit the content above the frame — line feeds
          //   at the last screen row are the only path into the scrollback
          $overflow = ($this->flowed + $lines - 1) - $this->region;
          if ($overflow > 0) {
-            $this->Output->Cursor->moveTo(line: (int) Terminal::$height, column: 1);
+            $this->Output->Cursor->place(line: (int) Terminal::$height, column: 1);
             $this->Output->write(str_repeat("\n", $overflow));
 
             $this->flowed -= $overflow;
@@ -649,7 +649,7 @@ class Prompt extends Component
          }
 
          // @ Write the content at the flow position
-         $this->Output->Cursor->moveTo(line: $this->flowed, column: 1);
+         $this->Output->Cursor->place(line: $this->flowed, column: 1);
          $this->Output->write($painted);
 
          $this->flowed += $lines;
@@ -1627,7 +1627,7 @@ class Prompt extends Component
       // ? Band mode: reset the scroll region (full screen — DECSTBM homes the cursor)
       if ($this->buffered === true) {
          $this->Output->Viewport->clip();
-         $this->Output->Cursor->moveTo(line: (int) Terminal::$height, column: 1);
+         $this->Output->Cursor->place(line: (int) Terminal::$height, column: 1);
       }
 
       $this->Output->write("\n");

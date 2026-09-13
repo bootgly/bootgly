@@ -141,7 +141,7 @@ class Cursor
    public function up (int $lines, null|int $column = null): Output
    {
       if ($column > 1 || $column < 0) {
-         $this->moveTo(null, $column);
+         $this->place(null, $column);
       }
 
       return match ($column) {
@@ -156,7 +156,7 @@ class Cursor
    public function down (int $lines, null|int $column = null): Output
    {
       if ($column > 1 || $column < 0) {
-         $this->moveTo(null, $column);
+         $this->place(null, $column);
       }
 
       return match ($column) {
@@ -169,7 +169,20 @@ class Cursor
       return $this->Output->escape($columns . self::_CURSOR_LEFT);
    }
 
-   public function moveTo (null|int $line = null, null|int $column = null): Output
+   /**
+    * Places the cursor at an absolute position on the screen.
+    *
+    * With only `$line`, the cursor keeps its column and moves to that row; with
+    * only `$column`, it keeps its row and moves to that column — and a negative
+    * value given alone is offset from the terminal size (`$line + Terminal::$lines`,
+    * `$column + Terminal::$columns`). With both, it jumps to the coordinate as given.
+    *
+    * @param null|int $line The target row (1-based).
+    * @param null|int $column The target column (1-based).
+    *
+    * @return Output
+    */
+   public function place (null|int $line = null, null|int $column = null): Output
    {
       if ($line === null && $column >= 0) {
          return $this->Output->escape($column . self::_CURSOR_LEFT_ABSOLUTE);

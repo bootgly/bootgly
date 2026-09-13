@@ -52,12 +52,22 @@ return new Test(
 
    middlewares: [
       new class($sessionKey, $headerName, $tokenBytes) implements Middleware {
+         // * Data
+         private string $sessionKey;
+         private string $headerName;
+         private int $tokenBytes;
+
+
          public function __construct (
-            private string $sessionKey,
-            private string $headerName,
-            private int $tokenBytes
+            string $sessionKey,
+            string $headerName,
+            int $tokenBytes
          )
          {
+            // * Data
+            $this->sessionKey = $sessionKey;
+            $this->headerName = $headerName;
+            $this->tokenBytes = $tokenBytes;
          }
 
          public function process (object $Request, object $Response, Closure $next): object
@@ -93,13 +103,25 @@ return new Test(
          }
       },
       new class($knownToken, $sessionKey, $headerName, $tokenBytes) implements Middleware {
+         // * Data
+         private string $knownToken;
+         private string $sessionKey;
+         private string $headerName;
+         private int $tokenBytes;
+
+
          public function __construct (
-            private string $knownToken,
-            private string $sessionKey,
-            private string $headerName,
-            private int $tokenBytes
+            string $knownToken,
+            string $sessionKey,
+            string $headerName,
+            int $tokenBytes
          )
          {
+            // * Data
+            $this->knownToken = $knownToken;
+            $this->sessionKey = $sessionKey;
+            $this->headerName = $headerName;
+            $this->tokenBytes = $tokenBytes;
          }
 
          public function process (object $Request, object $Response, Closure $next): object

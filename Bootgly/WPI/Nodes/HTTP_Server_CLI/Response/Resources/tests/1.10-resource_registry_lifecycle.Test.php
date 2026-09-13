@@ -4,6 +4,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Tests\RegistryLif
 
 
 use function assert;
+use function count;
 use RuntimeException;
 use stdClass;
 

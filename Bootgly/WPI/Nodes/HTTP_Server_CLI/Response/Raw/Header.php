@@ -742,7 +742,7 @@ class Header extends HeaderBase
 
       return true;
    }
-   public function append (string $field, string $value = '', ? string $separator = ', '): void
+   public function append (string $field, string $value = '', null|string $separator = ', '): void
    {
       // ! Strip CRLF from header values to prevent HTTP response splitting
       $field = str_replace(["\r", "\n"], '', $field);

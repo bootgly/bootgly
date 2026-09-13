@@ -49,7 +49,7 @@ if (BOOTGLY_TTY === false) {
    return;
 }
 
-$Output->Cursor->moveTo(line: 21, column: 1);
+$Output->Cursor->place(line: 21, column: 1);
 $Output->render("@#Black:PgUp/PgDn or wheel scroll · drag the scrollbar · `q` quits@;");
 
 // @ Drive the band with the keyboard and the mouse
@@ -153,5 +153,5 @@ while (true) {
 $Mouse->report(false);
 $Input->configure(blocking: true, canonical: true, echo: true);
 $Output->Cursor->show();
-$Output->Cursor->moveTo(line: 22, column: 1);
+$Output->Cursor->place(line: 22, column: 1);
 $Output->render("@.;@#Green:✔@; Scrollarea closed.@.;");

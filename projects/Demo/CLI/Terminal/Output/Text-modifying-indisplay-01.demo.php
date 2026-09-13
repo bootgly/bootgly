@@ -1,7 +1,11 @@
 <?php
 namespace Bootgly\CLI;
 
+
+use function sleep;
+
 use const Bootgly\CLI;
+
 
 $Output = CLI->Terminal->Output;
 $Output->reset();
@@ -19,7 +23,7 @@ $Output->writing("Writing something here...\n");
 $Output->writing("---------------------\n");
 $Output->writing("Writing again here...\n");
 $Output->Cursor->up(2);
-$Output->Cursor->moveTo(column: 1);
+$Output->Cursor->place(column: 1);
 sleep(2);
 $Output->Text->clear(down: true);
 sleep(3);

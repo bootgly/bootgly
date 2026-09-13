@@ -3,7 +3,9 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
 
+use function gc_collect_cycles;
 use RuntimeException;
+use WeakReference;
 
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
@@ -19,7 +21,7 @@ return new Test(
    test: new Assertions(Case: function (): \Generator {
       $Exchange = new Exchange;
       $Response = new Response(202);
-      $Weak = \WeakReference::create($Response);
+      $Weak = WeakReference::create($Response);
       $calls = [];
       $nested = null;
       $initial = $Exchange->check();
@@ -145,7 +147,7 @@ return new Test(
       $Registry = new Exchange;
       $Owner = new HTTPRequest;
       $Alias = new HTTPRequest;
-      $SourceWeak = \WeakReference::create($Owner);
+      $SourceWeak = WeakReference::create($Owner);
       $registryCodes = [];
       $registryRegistered = $Registry->observe(
          static function (Exchange $Observed, null|int $code) use (
@@ -182,7 +184,7 @@ return new Test(
          && $Registry->check() === false;
 
       $Terminal = new Response(207);
-      $TerminalWeak = \WeakReference::create($Terminal);
+      $TerminalWeak = WeakReference::create($Terminal);
       $finishedRegistry = $Registry->finish($Terminal);
       $aliasPurged = Exchange::fetch($Alias) === null;
       $TerminalAlias = new HTTPRequest;
@@ -238,7 +240,7 @@ return new Test(
 
       $Snapshot = new Exchange;
       $SnapshotOwner = new \stdClass;
-      $SnapshotWeak = \WeakReference::create($SnapshotOwner);
+      $SnapshotWeak = WeakReference::create($SnapshotOwner);
       Exchange::track($SnapshotOwner, $Snapshot);
       $snapshotActive = Exchange::fetch($SnapshotOwner) === $Snapshot;
       $snapshotFinished = $Snapshot->finish(new Response(204));
@@ -575,7 +577,7 @@ return new Test(
       );
       Exchange::admit($OrphanOwner, $Orphan);
       $orphanShared = Exchange::share($OrphanOwner, $OrphanAlias) === $Orphan;
-      $OrphanWeak = \WeakReference::create($Orphan);
+      $OrphanWeak = WeakReference::create($Orphan);
       unset($Orphan);
       $heldWhileOwned = $OrphanWeak->get() instanceof Exchange;
       unset($OrphanOwner);

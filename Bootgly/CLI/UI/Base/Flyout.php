@@ -165,7 +165,7 @@ class Flyout extends Component
       // @@ Below — `\n` (not CNL) steps down, so the bottom row still scrolls
       foreach ($painted as $row) {
          $this->Output->write("\n");
-         $this->Output->Cursor->moveTo(column: 1);
+         $this->Output->Cursor->place(column: 1);
          $this->Output->Text->trim(right: true);
          $this->Output->write($row);
       }

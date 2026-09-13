@@ -70,16 +70,34 @@ return new Test(
          $stoppedKey,
          $tokenBytes
       ) implements Middleware {
+         // * Data
+         private string $sessionKey;
+         private string $headerName;
+         private string $guardKey;
+         private string $stopperKey;
+         private string $sameBusKey;
+         private string $stoppedKey;
+         private int $tokenBytes;
+
+
          public function __construct (
-            private string $sessionKey,
-            private string $headerName,
-            private string $guardKey,
-            private string $stopperKey,
-            private string $sameBusKey,
-            private string $stoppedKey,
-            private int $tokenBytes
+            string $sessionKey,
+            string $headerName,
+            string $guardKey,
+            string $stopperKey,
+            string $sameBusKey,
+            string $stoppedKey,
+            int $tokenBytes
          )
          {
+            // * Data
+            $this->sessionKey = $sessionKey;
+            $this->headerName = $headerName;
+            $this->guardKey = $guardKey;
+            $this->stopperKey = $stopperKey;
+            $this->sameBusKey = $sameBusKey;
+            $this->stoppedKey = $stoppedKey;
+            $this->tokenBytes = $tokenBytes;
          }
 
          public function process (object $Request, object $Response, Closure $next): object
@@ -142,17 +160,37 @@ return new Test(
          $stoppedKey,
          $tokenBytes
       ) implements Middleware {
+         // * Data
+         private string $knownToken;
+         private string $sessionKey;
+         private string $headerName;
+         private string $guardKey;
+         private string $stopperKey;
+         private string $sameBusKey;
+         private string $stoppedKey;
+         private int $tokenBytes;
+
+
          public function __construct (
-            private string $knownToken,
-            private string $sessionKey,
-            private string $headerName,
-            private string $guardKey,
-            private string $stopperKey,
-            private string $sameBusKey,
-            private string $stoppedKey,
-            private int $tokenBytes
+            string $knownToken,
+            string $sessionKey,
+            string $headerName,
+            string $guardKey,
+            string $stopperKey,
+            string $sameBusKey,
+            string $stoppedKey,
+            int $tokenBytes
          )
          {
+            // * Data
+            $this->knownToken = $knownToken;
+            $this->sessionKey = $sessionKey;
+            $this->headerName = $headerName;
+            $this->guardKey = $guardKey;
+            $this->stopperKey = $stopperKey;
+            $this->sameBusKey = $sameBusKey;
+            $this->stoppedKey = $stoppedKey;
+            $this->tokenBytes = $tokenBytes;
          }
 
          public function process (object $Request, object $Response, Closure $next): object

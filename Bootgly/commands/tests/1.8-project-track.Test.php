@@ -5,8 +5,8 @@ namespace Bootgly\commands;
 
 use function array_diff;
 use function assert;
-use function exec;
 use function escapeshellarg;
+use function exec;
 use function file_put_contents;
 use function getenv;
 use function getmypid;

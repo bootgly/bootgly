@@ -14,19 +14,29 @@ namespace Bootgly\commands;
 use const BOOTGLY_WORKING_DIR;
 use const JSON_UNESCAPED_SLASHES;
 use const JSON_UNESCAPED_UNICODE;
+use const PHP_BINARY;
 use const PHP_EOL;
 use function array_slice;
+use function basename;
+use function bin2hex;
+use function chmod;
 use function count;
+use function dirname;
 use function fclose;
-use function file_put_contents;
+use function fopen;
+use function function_exists;
 use function fwrite;
 use function implode;
 use function is_array;
 use function is_dir;
 use function is_file;
+use function is_writable;
 use function json_encode;
+use function lstat;
 use function proc_close;
 use function proc_open;
+use function random_bytes;
+use function rename;
 use function rtrim;
 use function sort;
 use function str_contains;
@@ -36,13 +46,21 @@ use function str_replace;
 use function str_starts_with;
 use function stream_get_contents;
 use function strlen;
+use function substr;
 use function ucfirst;
+use function unlink;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use Throwable;
 
 use const Bootgly\CLI;
+use Bootgly\ABI\Syntax\Analyzers;
+use Bootgly\ABI\Syntax\Analyzers\Result;
 use Bootgly\ABI\Syntax\Builtins;
 use Bootgly\ABI\Syntax\Imports;
+use Bootgly\ABI\Syntax\Methods;
+use Bootgly\ABI\Syntax\Nullables;
+use Bootgly\ABI\Syntax\Promotions;
 use Bootgly\API\Environment\Agent;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Base\Fieldset;
@@ -56,12 +74,44 @@ class LintCommand extends Command
 
    // * Data
    public string $name = 'lint';
-   public string $description = 'Lint and fix import code style violations';
+   public string $description = 'Lint and fix code style violations';
 
-   /** @var array<string,array{description:string,arguments:array<string,string>}> */
+   /**
+    * The submodules — one per style rule, each behind an `Analyzers` facade.
+    * `fixable` says whether the facade also formats: `--fix` and `--dry-run`
+    * are honored only there; a check-only submodule reports and writes nothing.
+    *
+    * @var array<string,array{description:string,facade:class-string<Analyzers>,fixable:bool,arguments:array<string,string>}>
+    */
    public array $arguments = [ // @phpstan-ignore property.phpDocType
       'imports' => [
          'description' => 'Lint import code style for use statements',
+         'facade'      => Imports::class,
+         'fixable'     => true,
+         'arguments'   => [
+            '[path]' => 'File or directory path (default: Bootgly/)'
+         ]
+      ],
+      'nullables' => [
+         'description' => 'Lint nullable shorthands (?T) in parameter, return and property types',
+         'facade'      => Nullables::class,
+         'fixable'     => true,
+         'arguments'   => [
+            '[path]' => 'File or directory path (default: Bootgly/)'
+         ]
+      ],
+      'promotions' => [
+         'description' => 'Lint constructor property promotion (check-only)',
+         'facade'      => Promotions::class,
+         'fixable'     => false,
+         'arguments'   => [
+            '[path]' => 'File or directory path (default: Bootgly/)'
+         ]
+      ],
+      'methods' => [
+         'description' => 'Lint multi-word (camelCase) method names (check-only)',
+         'facade'      => Methods::class,
+         'fixable'     => false,
          'arguments'   => [
             '[path]' => 'File or directory path (default: Bootgly/)'
          ]
@@ -117,16 +167,53 @@ class LintCommand extends Command
          $path = BOOTGLY_WORKING_DIR . $path;
       }
 
+      // ! Submodule
+      /** @var array{description:string,facade:class-string<Analyzers>,fixable:bool,arguments:array<string,string>} $meta */
+      $meta = $this->arguments[$submodule];
+      $fixable = $meta['fixable'];
+
       // ! Options
       $fix = isset($options['fix']);
       $dryRun = isset($options['dry-run']);
 
+      // ? A check-only submodule has no formatter: say so, then run the check
+      $refused = $fixable === false && ($fix || $dryRun);
+      if ($refused) {
+         $fix = false;
+         $dryRun = false;
+      }
+
       // @ Collect PHP files
       $files = $this->collect($path);
 
+      // ? Nothing to scan: an existing path without PHP files passes, a path
+      //   that is not there fails — a gate must never go green on a typo
       if (count($files) === 0) {
-         $Output->render("@.;@#Yellow: No PHP files found in: {$path} @;@..;");
-         return true;
+         $missing = is_dir($path) === false && is_file($path) === false;
+         $relative = str_replace(BOOTGLY_WORKING_DIR, '', $path);
+
+         if ($Agent->detected) {
+            echo json_encode([
+               'result'    => $missing ? 'failed' : 'passed',
+               'submodule' => $submodule,
+               'fixable'   => $fixable,
+               'agent'     => $Agent->name,
+               'mode'      => $fix ? 'fix' : ($dryRun ? 'dry-run' : 'check'),
+               'message'   => $missing ? "Path not found: {$relative}" : "No PHP files found in: {$relative}",
+               'files'     => ['scanned' => 0, 'failed' => 0, 'fixed' => 0, 'skipped' => 0],
+               'issues'    => ['total' => 0, 'unresolved' => 0],
+               'report'    => [],
+               'skipped'   => [],
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . PHP_EOL;
+         }
+         else if ($missing) {
+            $Output->render("@.;@#Red: Path not found: {$relative} @;@..;");
+         }
+         else {
+            $Output->render("@.;@#Yellow: No PHP files found in: {$relative} @;@..;");
+         }
+
+         return $missing === false;
       }
 
       // @ Section title (human output)
@@ -134,33 +221,73 @@ class LintCommand extends Command
       if (!$Agent->detected) {
          $Output->render("@.;@#Cyan: {$title} @;@.;");
          $Output->render("@#Black: ─────────────────────────────────────── @;@.;");
+
+         if ($refused) {
+            $Output->render(
+               "@#Yellow: ! {$submodule} is check-only: --fix and --dry-run are ignored, nothing is written @;@.;"
+            );
+         }
       }
 
       // @ Analyze
       $totalIssues = 0;
       $totalFiles = 0;
       $fixedFiles = 0;
+      // ! What is still there when the run ends — a file left untouched by
+      //   --fix (a comment in its import block, a rewrite that would not
+      //   parse), a --dry-run or a plain check keeps its issues unresolved
+      $unresolved = 0;
+      /** @var array<int,array{file:string,notice:string}> Files an analyzer declined, and why */
+      $skipped = [];
 
       /** @var array<int,array{file:string,issues:array<int,array{type:string,symbol:string,kind:string,line:int,message:string}>,fixed:bool}> */
       $report = [];
 
-      // * imports
+      // * imports — the only submodule that resolves names against PHP's builtins
       if ($submodule === 'imports') {
          Builtins::load();
       }
 
-      $Imports = new Imports;
+      $Facade = new $meta['facade'];
 
       foreach ($files as $file) {
-         $Result = $Imports->analyze($file);
+         // ? Collected as a regular file, read as one: a name that became a
+         //   link (or anything else) since is not read — content must never
+         //   flow into the tree through a name someone planted
+         $entry = @lstat($file);
+         if ($entry === false || ((int) $entry['mode'] & 0170000) !== 0100000) {
+            $relativePath = str_replace(BOOTGLY_WORKING_DIR, '', $file);
+            $skipped[] = ['file' => $relativePath, 'notice' => 'No longer a regular file — not analyzed'];
+            if (!$Agent->detected) {
+               $Output->render("@.;@#White: {$relativePath} @;\n  @#Yellow: ! @; No longer a regular file — not analyzed\n");
+            }
 
-         if (!$Result->failed()) {
+            continue;
+         }
+         $mode = (int) $entry['mode'] & 0o777;
+
+         $Result = $Facade->analyze($file);
+
+         // ? Declined — said out loud, counted apart, never green by silence;
+         //   whatever issues came with the notice are still reported below
+         if ($Result->notice !== null) {
+            $relativePath = str_replace(BOOTGLY_WORKING_DIR, '', $file);
+            $skipped[] = ['file' => $relativePath, 'notice' => $Result->notice];
+            if (!$Agent->detected) {
+               $Output->render("@.;@#White: {$relativePath} @;\n  @#Yellow: ! @; {$Result->notice}\n");
+            }
+         }
+
+         if ($Result->failed === false) {
             continue;
          }
 
          $totalFiles++;
          $issueCount = count($Result->issues);
          $totalIssues += $issueCount;
+         // ! What the entry reports: what was found — or, after a rewrite that
+         //   left issues, what remains
+         $reported = $Result->issues;
 
          $relativePath = str_replace(BOOTGLY_WORKING_DIR, '', $file);
          $fixed = false;
@@ -175,8 +302,8 @@ class LintCommand extends Command
          }
 
          // ? A block the formatter refuses to rewrite is not fixable — saying otherwise
-         //   would report a fix that never happened
-         $rewritable = true;
+         //   would report a fix that never happened; a declined file is reported, never rewritten
+         $rewritable = $Result->notice === null;
          foreach ($Result->issues as $Issue) {
             if ($Issue->type === 'comment_in_imports') {
                $rewritable = false;
@@ -193,36 +320,76 @@ class LintCommand extends Command
             }
          }
          else if ($fix || $dryRun) {
-            $corrected = $Imports->format($Result);
+            $corrected = $this->format($Facade, $Result);
 
-            if ($dryRun) {
+            if ($corrected === null) {
+               if (!$Agent->detected) {
+                  $Output->render("@#Red:   ✗ No formatter for this result — skipped @;\n\n");
+               }
+            }
+            else if ($dryRun) {
                if (!$Agent->detected) {
                   $Output->render("@#Cyan:   [dry-run] Would fix {$issueCount} issue(s) @;\n\n");
                }
             }
-            else {
-               // @ Validate syntax before writing
-               if ($this->validate($corrected)) {
-                  file_put_contents($file, $corrected);
-                  $fixedFiles++;
-                  $fixed = true;
-
-                  if (!$Agent->detected) {
-                     $Output->render("@#Green:   ✓ Fixed {$issueCount} issue(s) @;\n\n");
-                  }
-               }
-               else {
-                  if (!$Agent->detected) {
-                     $Output->render("@#Red:   ✗ Fix produced invalid PHP — skipped @;\n\n");
-                  }
+            else if ($corrected === $Result->source) {
+               // ? The formatter had nothing to rewrite: the issues stay
+               if (!$Agent->detected) {
+                  $Output->render("@#Yellow:   ! Left untouched — nothing to rewrite for these issues @;\n\n");
                }
             }
+            else if (is_writable($file) === false || is_writable(dirname($file)) === false) {
+               // ? Not ours to write — the file, or the directory the sibling
+               //   temporary must land in: the issues stay, the run goes on
+               if (!$Agent->detected) {
+                  $Output->render("@#Yellow:   ! Left untouched — the file or its directory is not writable @;\n\n");
+               }
+            }
+            else if (($valid = $this->validate($corrected)) !== true) {
+               if (!$Agent->detected) {
+                  $Output->render($valid === null
+                     ? "@#Red:   ✗ Could not validate the fix (no php -l available) — skipped @;\n\n"
+                     : "@#Red:   ✗ Fix produced invalid PHP — skipped @;\n\n"
+                  );
+               }
+            }
+            else if ($this->replace($file, $corrected, $mode) === false) {
+               // ? The rewrite went to a sibling temporary and was discarded:
+               //   the file on disk is byte-identical to what was analyzed
+               if (!$Agent->detected) {
+                  $Output->render("@#Yellow:   ! Left untouched — the rewrite could not replace the file @;\n\n");
+               }
+            }
+            else {
+               // ! Fixed means RESOLVED: what was written is analyzed again,
+               //   and only a clean file counts — what remains is reported
+               //   as it stands now, not as it was; what was fixed, as it was
+               $Result = $Facade->analyze($file);
+               $fixed = $Result->failed === false;
+               if ($fixed) {
+                  $fixedFiles++;
+               }
+               else {
+                  $reported = $Result->issues;
+                  $issueCount = count($reported);
+               }
+               if (!$Agent->detected) {
+                  $Output->render($fixed
+                     ? "@#Green:   ✓ Fixed {$issueCount} issue(s) @;\n\n"
+                     : "@#Yellow:   ! Rewritten, but {$issueCount} issue(s) remain @;\n\n"
+                  );
+               }
+            }
+         }
+
+         if ($fixed === false) {
+            $unresolved += $issueCount;
          }
 
          // @ Collect report entry
          if ($Agent->detected) {
             $issueEntries = [];
-            foreach ($Result->issues as $Issue) {
+            foreach ($reported as $Issue) {
                $issueEntries[] = [
                   'type'    => $Issue->type,
                   'symbol'  => $Issue->symbol,
@@ -240,33 +407,36 @@ class LintCommand extends Command
          }
       }
 
-      $Output->render("\n");
-
       // @ Output
       if ($Agent->detected) {
          // @ JSON output for AI agents
          echo json_encode([
-            'result'    => $totalIssues > 0 && !$fix ? 'failed' : 'passed',
+            'result'    => $unresolved === 0 ? 'passed' : 'failed',
             'submodule' => $submodule,
+            'fixable'   => $fixable,
             'agent'     => $Agent->name,
             'mode'      => $fix ? 'fix' : ($dryRun ? 'dry-run' : 'check'),
             'files'     => [
                'scanned' => count($files),
                'failed'  => $totalFiles,
                'fixed'   => $fixedFiles,
+               'skipped' => count($skipped),
             ],
             'issues' => [
-               'total' => $totalIssues,
+               'total'      => $totalIssues,
+               'unresolved' => $unresolved,
             ],
-            'report' => $report,
+            'report'  => $report,
+            'skipped' => $skipped,
          ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . PHP_EOL;
 
-         return $totalIssues === 0 || $fix;
+         return $unresolved === 0;
       }
 
       // @ Summary (human output)
+      $Output->render("\n");
       if ($totalIssues === 0) {
-         $Output->render("@#Green: ✓ No import issues found. @;@.;");
+         $Output->render("@#Green: ✓ No {$submodule} issues found. @;@.;");
       }
       else {
          $Output->render("@#Yellow: Found {$totalIssues} issue(s) in {$totalFiles} file(s). @;@.;");
@@ -274,20 +444,41 @@ class LintCommand extends Command
          if ($fixedFiles > 0) {
             $Output->render("@#Green: ✓ Fixed {$fixedFiles} file(s). @;@.;");
          }
+         if ($unresolved > 0 && ($fix || $dryRun)) {
+            $Output->render("@#Yellow: ! {$unresolved} issue(s) remain. @;@.;");
+         }
       }
 
       $Output->render("@#Black: ─────────────────────────────────────── @;@..;");
 
-      if ($totalIssues === 0) {
-         return true;
+      if ($skipped !== []) {
+         $declined = count($skipped);
+         $Output->render("@#Yellow: ! {$declined} file(s) not linted — see the notices above. @;@.;");
       }
 
-      // @ Exit with failure in check mode
-      if (!$fix && !$dryRun) {
-         return false;
+      // : Green only when nothing is left — in every mode
+      return $unresolved === 0;
+   }
+
+   /**
+    * Rewrite a failed result through the facade that produced it.
+    *
+    * Only the fixable facades format, and each formats its own analyzer's
+    * result — the imports formatter reads the import block only the imports
+    * result carries — so the pairing is checked here instead of assumed.
+    *
+    * @return null|string The corrected source, or null when the facade cannot format this result
+    */
+   private function format (Analyzers $Facade, Result $Result): null|string
+   {
+      if ($Facade instanceof Imports && $Result instanceof Imports\Analyzer\Result) {
+         return $Facade->format($Result);
+      }
+      if ($Facade instanceof Nullables) {
+         return $Facade->format($Result);
       }
 
-      return true;
+      return null;
    }
 
    // # Help
@@ -314,7 +505,7 @@ class LintCommand extends Command
          // # Arguments
          $content = '';
          foreach ($this->arguments as $name => $value) {
-            /** @var array{description: string, arguments: array<string,string>}|string $value */
+            /** @var array{description: string, fixable: bool, arguments: array<string,string>}|string $value */
             $description = is_array($value) ? $value['description'] : $value;
             $label = $name;
             $content .= '@#Yellow:' . $name . '@;';
@@ -349,10 +540,11 @@ class LintCommand extends Command
 
          // # Examples
          $examples = '@#Black:bootgly lint imports@;' . PHP_EOL;
-         $examples .= '@#Black:bootgly lint imports Bootgly/ABI/@;' . PHP_EOL;
-         $examples .= '@#Black:bootgly lint imports --fix@;' . PHP_EOL;
-         $examples .= '@#Black:bootgly lint imports --dry-run@;' . PHP_EOL;
-         $examples .= '@#Black:bootgly lint imports Bootgly/ABI/ --fix@;';
+         $examples .= '@#Black:bootgly lint imports Bootgly/ABI/ --fix@;' . PHP_EOL;
+         $examples .= '@#Black:bootgly lint nullables --dry-run@;' . PHP_EOL;
+         $examples .= '@#Black:bootgly lint nullables app/ --fix@;' . PHP_EOL;
+         $examples .= '@#Black:bootgly lint promotions@;' . PHP_EOL;
+         $examples .= '@#Black:bootgly lint methods app/@;';
          $Fieldset = new Fieldset($Output);
          $Fieldset->title = '@#green: Lint examples @;';
          $Fieldset->content = $examples;
@@ -361,8 +553,9 @@ class LintCommand extends Command
       else if ( isSet($this->arguments[$arguments[0]]) ) {
          // @ Show usage for a valid submodule
          $submodule = $arguments[0];
-         /** @var array{description: string, arguments: array<string,string>} $meta */
+         /** @var array{description: string, fixable: bool, arguments: array<string,string>} $meta */
          $meta = $this->arguments[$submodule];
+         $fixable = $meta['fixable'];
 
          $Output->write(PHP_EOL);
          $Output->render("@#Black: {$meta['description']}@;@.;");
@@ -381,20 +574,24 @@ class LintCommand extends Command
             $Fieldset->render();
          }
 
-         // # Usage
+         // # Usage — a check-only submodule has no --fix / --dry-run
          $Fieldset = new Fieldset($Output);
-         $Fieldset->title = '@#Cyan: Lint ' . $submodule . ' usage @;';
-         $Fieldset->content = 'bootgly lint ' . $submodule . ' @#Black: [path] @;' . PHP_EOL
-            . 'bootgly lint ' . $submodule . ' @#Black: [path] --fix @;' . PHP_EOL
-            . 'bootgly lint ' . $submodule . ' @#Black: --dry-run @;';
+         $Fieldset->title = "@#Cyan: Lint {$submodule} usage @;";
+         $Fieldset->content = "bootgly lint {$submodule} @#Black: [path] @;";
+         if ($fixable) {
+            $Fieldset->content .= PHP_EOL . "bootgly lint {$submodule} @#Black: [path] --fix @;"
+               . PHP_EOL . "bootgly lint {$submodule} @#Black: --dry-run @;";
+         }
          $Fieldset->render();
 
          // # Example
          $Fieldset = new Fieldset($Output);
-         $Fieldset->title = '@#Cyan: Lint ' . $submodule . ' example @;';
-         $Fieldset->content = '@#Black:bootgly lint ' . $submodule . '@;' . PHP_EOL
-            . '@#Black:bootgly lint ' . $submodule . ' Bootgly/ABI/@;' . PHP_EOL
-            . '@#Black:bootgly lint ' . $submodule . ' --fix@;';
+         $Fieldset->title = "@#Cyan: Lint {$submodule} example @;";
+         $Fieldset->content = "@#Black:bootgly lint {$submodule}@;" . PHP_EOL
+            . "@#Black:bootgly lint {$submodule} Bootgly/ABI/@;";
+         if ($fixable) {
+            $Fieldset->content .= PHP_EOL . "@#Black:bootgly lint {$submodule} --fix@;";
+         }
          $Fieldset->render();
       }
       else {
@@ -441,16 +638,24 @@ class LintCommand extends Command
          new RecursiveDirectoryIterator($path)
       );
 
+      $root = rtrim($path, '/') . '/';
       /** @var \SplFileInfo $file */
       foreach ($iterator as $file) {
+         // ? A link is scanned where it points, never through the name that
+         //   points — `--fix` must never write outside the tree it was given
+         if ($file->isLink()) {
+            continue;
+         }
          if ($file->isFile() && str_ends_with($file->getPathname(), '.php')) {
             $pathname = $file->getPathname();
 
-            // @ Skip vendor, tests, examples
-            if (str_contains($pathname, '/vendor/')
-               || str_contains($pathname, '/tests/')
-               || str_contains($pathname, '/examples/')
-               || str_contains($pathname, '/vs/')
+            // @ Skip vendor, examples and vs INSIDE the scanned path — tests
+            //   are code and are linted too; what the caller named is scanned
+            //   whatever its ancestors are called
+            $relative = '/' . substr($pathname, strlen($root));
+            if (str_contains($relative, '/vendor/')
+               || str_contains($relative, '/examples/')
+               || str_contains($relative, '/vs/')
             ) {
                continue;
             }
@@ -465,26 +670,95 @@ class LintCommand extends Command
    }
 
    /**
+    * Replace a file's content atomically — through a sibling temporary and a
+    * rename, never through the name that was collected.
+    *
+    * A name inside the scanned tree may have become a link since collection
+    * (`--fix` must never write outside the tree it was given), and a write
+    * may stop short (a full disk): the temporary is created exclusively next
+    * to the file, written whole, given the file's mode and renamed over it —
+    * a rename replaces the NAME, so a planted link is discarded, not
+    * followed, and a failed write leaves the original byte-identical. The
+    * new inode keeps the file's mode only: a hard link to the old inode
+    * keeps the old content, setuid/setgid/sticky bits and ACLs are not
+    * carried over — a source file needs none — the new inode belongs to
+    * whoever runs the fix (root rewrites to root), and a DIRECTORY swapped
+    * inside the tree mid-run is still resolved at the rename, which no
+    * portable call can pin.
+    *
+    * @param string $file The file to replace
+    * @param string $source Its new content
+    * @param int $mode The mode the file had when it was read — the new inode's
+    *
+    * @return bool Whether the file now carries the content
+    */
+   private function replace (string $file, string $source, int $mode): bool
+   {
+      $temporary = null;
+
+      try {
+         $temporary = dirname($file) . '/.' . basename($file) . '.' . bin2hex(random_bytes(8));
+         $handle = fopen($temporary, 'x');
+         if ($handle === false) {
+            return false;
+         }
+
+         // ! The file's mode first — before a byte lands in the temporary, so
+         //   a private source is never readable by others for an instant
+         chmod($temporary, $mode);
+
+         $written = fwrite($handle, $source);
+         $closed = fclose($handle);
+         if ($written !== strlen($source) || $closed === false) {
+            unlink($temporary);
+            return false;
+         }
+
+         if (rename($temporary, $file) === false) {
+            unlink($temporary);
+            return false;
+         }
+      }
+      catch (Throwable) {
+         if ($temporary !== null && is_file($temporary)) {
+            unlink($temporary);
+         }
+         return false;
+      }
+
+      // :
+      return true;
+   }
+
+   /**
     * Validate PHP syntax of source code using php -l.
     *
     * @param string $source PHP source code to validate
     *
-    * @return bool True if syntax is valid
+    * @return null|bool True if syntax is valid, false if not — null when nothing could check it
     */
-   private function validate (string $source): bool
+   private function validate (string $source): null|bool
    {
-      $process = proc_open(
-         'php -l',
-         [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-         ],
-         $pipes
-      );
-
+      // ? No way to validate: never write what nobody checked
+      if (function_exists('proc_open') === false) {
+         return null;
+      }
+      try {
+         $process = proc_open(
+            [PHP_BINARY, '-l'],
+            [
+               0 => ['pipe', 'r'],
+               1 => ['pipe', 'w'],
+               2 => ['pipe', 'w'],
+            ],
+            $pipes
+         );
+      }
+      catch (Throwable) {
+         return null;
+      }
       if ($process === false) {
-         return true; // If we can't validate, allow the write
+         return null;
       }
 
       fwrite($pipes[0], $source);

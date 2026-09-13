@@ -31,7 +31,10 @@ use Bootgly\CLI\Commands\Middlewares;
 class Commands
 {
    // * Config
-   // ...
+   /** The command-line argument parser. */
+   public Arguments $Arguments;
+   /** The command middleware pipeline. */
+   public Middlewares $Middlewares;
 
    // * Data
    protected null|string $banner;
@@ -51,12 +54,13 @@ class Commands
 
 
    public function __construct (
-      public Arguments $Arguments = new Arguments,
-      public Middlewares $Middlewares = new Middlewares
+      Arguments $Arguments = new Arguments,
+      Middlewares $Middlewares = new Middlewares
    )
    {
       // * Config
-      // ...
+      $this->Arguments = $Arguments;
+      $this->Middlewares = $Middlewares;
 
       // * Data
       $this->banner = null;

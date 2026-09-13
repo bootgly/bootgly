@@ -37,9 +37,9 @@ OUTPUT);
 $presses = 0;
 $running = true;
 $Status = static function (string $message) use ($Output): void {
-   $Output->Cursor->moveTo(line: 10, column: 1);
+   $Output->Cursor->place(line: 10, column: 1);
    $Output->escape('2K');
-   $Output->Cursor->moveTo(line: 10, column: 2);
+   $Output->Cursor->place(line: 10, column: 2);
    $Output->render($message);
 };
 
@@ -99,7 +99,7 @@ foreach ($Buttons as $Button) {
 }
 
 $Status('@#Black:Waiting for a press...@;');
-$Output->Cursor->moveTo(line: 12, column: 2);
+$Output->Cursor->place(line: 12, column: 2);
 $Output->render('@#Black:Hover paints · click presses · Tab cycles · Enter presses · `q` quits@;');
 
 // @ Drive the buttons with the mouse and the keyboard
@@ -213,5 +213,5 @@ while ($running === true) {
 $Mouse->report(false);
 $Input->configure(blocking: true, canonical: true, echo: true);
 $Output->Cursor->show();
-$Output->Cursor->moveTo(line: 14, column: 1);
+$Output->Cursor->place(line: 14, column: 1);
 $Output->render("@.;@#Green:✔@; Button demo closed — {$presses} presses.@.;");

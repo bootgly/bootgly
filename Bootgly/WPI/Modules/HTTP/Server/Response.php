@@ -47,7 +47,7 @@ abstract class Response
     * @param array<string>|null $headers The headers of the response.
     * @param string $body The body of the response.
     */
-   abstract public function __construct (int $code = 200, ? array $headers = null, string $body = '');
+   abstract public function __construct (int $code = 200, null|array $headers = null, string $body = '');
    /**
     * Prepare the response for sending.
     *
@@ -93,5 +93,5 @@ abstract class Response
     * 
     * @return self The Response instance, for chaining
     */
-   abstract public function upload (string $file, int $offset = 0, ?int $length = null): self;
+   abstract public function upload (string $file, int $offset = 0, null|int $length = null): self;
 }

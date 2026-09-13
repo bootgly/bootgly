@@ -2,10 +2,11 @@
 
 namespace Bootgly\WPI\Nodes\HTTP_Client_CLI\tests\E2E_SSL;
 
+
 use Bootgly\ACI\Logs\Data\Display;
-use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI;
+
 
 return new Suite(
    // * Config

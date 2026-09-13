@@ -17,5 +17,8 @@ return new Suite(
       '1.1-analyzer-grouped-use',
       '1.2-formatter-comments',
       '1.3-analyzer-unused-imports',
+      '1.4-analyzer-namespace-label',
+      '1.5-analyzer-block-order',
+      '1.6-analyzer-multiple-namespaces',
    ]
 );
