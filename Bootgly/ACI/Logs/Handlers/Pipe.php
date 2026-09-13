@@ -12,8 +12,8 @@ namespace Bootgly\ACI\Logs\Handlers;
 
 
 use const STREAM_SOCK_DGRAM;
-use function strlen;
 use function str_ends_with;
+use function strlen;
 use InvalidArgumentException;
 
 use Bootgly\ABI\IO\IPC\Pipe as IPCPipe;
