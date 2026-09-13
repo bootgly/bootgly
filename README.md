@@ -39,7 +39,7 @@ curl -fsSL https://bootgly.com/install | bash
 > Check [Benchmark Detailed Results](https://github.com/bootgly/bootgly_benchmarks/tree/main/HTTP_Server_CLI/)
 
 > [!NOTE]
-> **Beta — stabilizing toward 1.0.** Bootgly is under active development and the public API is still being finalized ahead of the 1.0 release. Pin a version and expect some changes before then; not yet recommended for production use. [Documentation is a work in progress.][PROJECT_DOCS]
+> **Stable — the `1.x` line.** Bootgly follows [Semantic Versioning][SEMANTIC_VERSIONING]: minor releases add capabilities, patch releases repair, and nothing documented breaks before `2.0.0`. Fixes land on the latest `1.x` minor — read the [Versioning](#-versioning) and [Support policy](#-support-policy) sections below, or the full [Versioning guide][VERSIONING_GUIDE]. The [documentation][PROJECT_DOCS] covers every layer.
 
 ## Table of Contents
 
@@ -84,7 +84,7 @@ CLI tooling runs natively — use Docker for everything else.
 - PHP 8.4+ ⚠️
 - Opcache + JIT enabled (+50% performance) 👍
 
-> 🐳 **Docker:** `docker run -it bootgly/bootgly.kit:<version>` gives you the whole kit — framework, Console and Web — ready to create and run projects. Name a tag: `latest` arrives with the first stable release. This repository publishes `bootgly/bootgly`, the framework image you build your own on; see the [`Dockerfile`](Dockerfile) and the [Docker guide][DOCKER_GUIDE].
+> 🐳 **Docker:** `docker run -it bootgly/bootgly.kit` gives you the whole kit — framework, Console and Web — ready to create and run projects. `latest` and the `1` / `1.x` aliases follow the stable line; pin an exact version (`bootgly/bootgly.kit:<version>`) for a build that never moves. This repository publishes `bootgly/bootgly`, the framework image you build your own on — it is always pulled by an explicit tag (`<version>`, `1.x`, `1`; never `latest`); see the [`Dockerfile`](Dockerfile) and the [Docker guide][DOCKER_GUIDE].
 
 #### PHP Packages
 
