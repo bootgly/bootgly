@@ -471,10 +471,10 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
          // ? TLS on the HTTP-01 validation port is a contradiction
          if ($port === $secure->port) {
-            $this->Logger->log(
-               error: "@\\;Auto-TLS: the server port ({$port}) cannot be the HTTP-01 validation port — the CA validates over plain HTTP.@\\;"
+            // ? Thrown, not logged: the sinks are not held yet at configure time
+            throw new RuntimeException(
+               "Auto-TLS: the server port ({$port}) cannot be the HTTP-01 validation port — the CA validates over plain HTTP."
             );
-            exit(1);
          }
 
          // ! The NEW configuration must prove servable BEFORE the previous

@@ -16,6 +16,7 @@ use function microtime;
 use Throwable;
 
 use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
+use Bootgly\ACI\Logs\Handlers\File;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Results;
@@ -70,6 +71,9 @@ class Suites
     */
    public function __construct (array $directories)
    {
+      // ! The suites refuse file sinks on purpose: keep that out of the host's journal
+      File::mute();
+
       // * Config
       $this->directories = $directories;
 

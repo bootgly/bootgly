@@ -32,6 +32,19 @@ class Line implements Formatter
 {
    use Formattable;
 
+   // * Data
+   /** A fixed `Display` segment mask; null follows the process-wide `Display::$segments`. */
+   private null|int $segments;
+
+
+   /**
+    * @param null|int $segments A fixed `Display` segment mask for a destination that must not
+    *   follow the terminal (a system logger, a file) — null follows `Display::$segments`.
+    */
+   public function __construct (null|int $segments = null)
+   {
+      $this->segments = $segments;
+   }
 
    /**
     * Render a record as a single human/terminal line with ANSI colors.
@@ -44,7 +57,7 @@ class Line implements Formatter
     */
    public function format (Record $Record): string
    {
-      $segments = Display::$segments;
+      $segments = $this->segments ?? Display::$segments;
 
       $color = $this->color($Record->Level);
 

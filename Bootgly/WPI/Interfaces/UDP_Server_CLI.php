@@ -12,7 +12,6 @@ namespace Bootgly\WPI\Interfaces;
 
 
 use const BOOTGLY_ENVIRONMENT;
-use const BOOTGLY_STORAGE_DIR;
 use const LOCK_EX;
 use const LOCK_NB;
 use const PHP_BINARY;
@@ -114,7 +113,6 @@ use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Data\Record;
 use Bootgly\ACI\Logs\Handlers;
-use Bootgly\ACI\Logs\Handlers\File as FileHandler;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Process;
 use Bootgly\API\Endpoints\Server\Modes;
@@ -124,6 +122,7 @@ use Bootgly\API\Environments;
 use Bootgly\API\Projects;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\WPI\Endpoints\Configurable;
+use Bootgly\WPI\Endpoints\Demotable;
 use Bootgly\WPI\Endpoints\Servers;
 use Bootgly\WPI\Endpoints\Servers\Decoder;
 use Bootgly\WPI\Endpoints\Servers\Encoder;
@@ -140,6 +139,7 @@ use Bootgly\WPI\Interfaces\UDP_Server_CLI\Router;
 class UDP_Server_CLI implements Servers
 {
    use Configurable;
+   use Demotable;
 
    // # Configs
    /** The Configs carrying the socket — host, port and workers. */
@@ -738,6 +738,10 @@ class UDP_Server_CLI implements Servers
          }
          $Configure($this, $Connections, $Config);
 
+         // ! The runtime identity is known from here on: install the log
+         //   sinks — or withhold them from root — before any record
+         $this->store();
+
          return;
       }
 
@@ -1018,6 +1022,10 @@ class UDP_Server_CLI implements Servers
 
    public function start (): bool
    {
+      // ! The log sinks first — installed, or on a root launch withheld — so
+      //   not one record start() writes is ever written as root
+      $this->store();
+
       $PreviousSignals = self::mask();
       $Starting = new stdClass;
       $Claimed = false;
@@ -1155,10 +1163,7 @@ class UDP_Server_CLI implements Servers
       }
       fclose($probeSocket);
 
-      // ! Daemon runs detached: install the default sink BEFORE the daemon and worker
-      //   forks so every process inherits the static (post-fork writes never propagate).
-      $this->store();
-      if ($this->launch($Starting) === false) {
+      if ($this->launch($Starting) === false) { // @phpstan-ignore identical.alwaysFalse
          return false;
       }
 
@@ -1167,6 +1172,7 @@ class UDP_Server_CLI implements Servers
       //   every advertised worker is its real child.
       if ($this->Mode === Modes::Daemon) {
          $this->detach();
+         $this->inherit();
       }
 
       if ($State->lock(LOCK_EX | LOCK_NB) === false) {
@@ -1407,6 +1413,9 @@ class UDP_Server_CLI implements Servers
          $this->Logger->log(error: '@\;Failed to set UID to ' . $uid . '.@\;');
          exit(1);
       }
+
+      // @ The sinks store() withheld: installed NOW, as the runtime identity
+      $this->settle();
    }
 
    /** Install inherited-resource hygiene and the worker parent watchdog. */
@@ -1434,34 +1443,6 @@ class UDP_Server_CLI implements Servers
             }
          },
          persistent: true
-      );
-   }
-
-   /**
-    * Install the default global log sink for detached (Daemon) runs.
-    *
-    * A daemon has no terminal: with no sinks configured, every server record would be
-    * silently dropped at the Logger entry guard. Installs one File sink (JSON lines,
-    * default rotation) at `storage/logs/{channel}.log` and notices where records land.
-    * A project that already configured `Logger::$Sinks` is never touched. Runs pre-fork
-    * so the daemon master and every worker inherit the static.
-    */
-   protected function store (): void
-   {
-      // ? Daemon-only fallback; a configured project keeps its own sinks
-      if ($this->Mode !== Modes::Daemon || Logger::$Sinks !== null) {
-         return;
-      }
-
-      // ! Default sink — one JSON file per channel under the storage dir
-      $path = BOOTGLY_STORAGE_DIR . 'logs/{channel}.log';
-      Logger::$Sinks = new Handlers;
-      Logger::$Sinks->push(new FileHandler($path));
-
-      // @ Announce through the sink itself (this server logger is global) — the sink is
-      //   installed first, so this notice is the file's first record
-      $this->Logger->log(
-         notice: "No global log sinks configured — Daemon logs will persist to $path@.;"
       );
    }
 

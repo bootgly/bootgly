@@ -42,6 +42,11 @@ return new Suite(
       '9.1-record-provenance',
       '9.2-file-project-placeholder',
       '9.3-record-instance',
+      // # A sink never appends through a planted symbolic link
+      '9.4-file-symlink-refusal',
+      '9.5-memory-handler',
+      '9.6-syslog-handler',
+      '9.7-file-overflow-uid',
       // # Backlog (persisted-log reading + file-follow)
       '10.1-backlog-scan',
       '10.2-backlog-merge',

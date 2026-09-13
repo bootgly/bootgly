@@ -13,7 +13,6 @@ namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 use const STREAM_SERVER_BIND;
 use const STREAM_SERVER_LISTEN;
-use function chmod;
 use function count;
 use function fclose;
 use function feof;
@@ -84,7 +83,7 @@ class Tap
       @unlink($this->path);
 
       // ! Owner-only FROM CREATION: bind() honors the umask, so the inode is never
-      //   group/other-connectable — not even before the explicit chmod below
+      //   group/other-connectable — no chmod on the pathname afterwards is needed
       $mask = umask(0177);
       try {
          $Listener = @stream_socket_server(
@@ -101,8 +100,9 @@ class Tap
          return false;
       }
 
-      // ! Owner-only: attaching requires the same trust as reading storage/logs
-      @chmod($this->path, 0600);
+      // ! Owner-only from creation (the umask above) — attaching requires the
+      //   same trust as reading storage/logs. No chmod on the pathname after
+      //   the fact: it would follow a link planted there.
       stream_set_blocking($Listener, false);
 
       $this->Listener = $Listener;

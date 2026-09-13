@@ -19,5 +19,11 @@ return new Suite(
       '1.2-tap-backpressure',
       '1.3-tap-fork-hygiene',
       '1.4-server-log-command',
+      // # The root ownership handoff never follows a link (store/tap)
+      '1.5-store-handoff',
+      '1.6-store-root-handoff',
+      '1.7-store-before-records',
+      '1.8-inherit-launcher-hold',
+      '1.9-privilege-source-pins',
    ]
 );

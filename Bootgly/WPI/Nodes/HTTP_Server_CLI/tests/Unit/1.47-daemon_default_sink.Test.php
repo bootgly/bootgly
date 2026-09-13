@@ -97,18 +97,20 @@ return new Test(
                . 'the literal {channel} surviving templating'
          );
 
-         // @@ D) A configured project is never touched (??= semantics)
+         // @@ D) A configured project is never touched (??= semantics) — a
+         //       fresh server: store() decides once per server
          $Custom = new Handlers;
          Logger::$Sinks = $Custom;
+         $Probe = new TCPServerCLIDefaultSinkProbe(Modes::Daemon);
          $Probe->store();
          yield assert(
             assertion: Logger::$Sinks === $Custom,
             description: 'pre-configured sinks are left exactly as the project set them'
          );
 
-         // @@ E) Non-Daemon modes never install
-         $Probe->Mode = Modes::Foreground;
+         // @@ E) Non-Daemon modes never install — a fresh Foreground server
          Logger::$Sinks = null;
+         $Probe = new TCPServerCLIDefaultSinkProbe(Modes::Foreground);
          $Probe->store();
          yield assert(
             assertion: Logger::$Sinks === null,

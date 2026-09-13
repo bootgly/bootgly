@@ -17,10 +17,13 @@ use function closelog;
 use function openlog;
 use function preg_replace;
 use function syslog;
+use function trim;
 
+use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Data\Levels;
 use Bootgly\ACI\Logs\Data\Record;
 use Bootgly\ACI\Logs\Formatter;
+use Bootgly\ACI\Logs\Formatters\Line;
 use Bootgly\ACI\Logs\Handler;
 
 
@@ -49,7 +52,12 @@ class Syslog extends Handler
       Levels $Level = Levels::Debug
    )
    {
-      parent::__construct($Formatter, $Level);
+      // ! A system logger stamps its own time and never follows the terminal:
+      //   a detached daemon (Display::NONE) must still send whole records
+      parent::__construct(
+         $Formatter ?? new Line(Display::MESSAGE | Display::CHANNEL | Display::SEVERITY | Display::CONTEXT),
+         $Level
+      );
 
       // * Config
       $this->ident = $ident;
@@ -68,8 +76,10 @@ class Syslog extends Handler
       // @ RFC5424 backing value (1..8) maps to syslog priority (0..7)
       $priority = $Record->Level->value - 1;
 
-      // @ Strip ANSI styling
+      // @ Strip ANSI styling, and keep the record on one line — the system
+      //   logger makes an entry per line, and a bare one carries nothing
       $message = preg_replace(self::ANSI, '', $formatted) ?? $formatted;
+      $message = trim(preg_replace('/\s*\R\s*/', ' ', $message) ?? $message);
 
       // @ Emit
       openlog($this->ident, LOG_PID, $this->facility);

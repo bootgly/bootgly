@@ -80,5 +80,6 @@ return new Suite(
       '1.48-configure_configs_contract',
       // # rc.1: every Request\Configs field owns one inbound limit
       '1.49-request_configs_limits',
+      '1.50-autotls_port_contradiction',
    ]
 );

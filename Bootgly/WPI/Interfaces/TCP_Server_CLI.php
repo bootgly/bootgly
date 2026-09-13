@@ -12,7 +12,6 @@ namespace Bootgly\WPI\Interfaces;
 
 
 use const BOOTGLY_ENVIRONMENT;
-use const BOOTGLY_STORAGE_DIR;
 use const LOCK_EX;
 use const LOCK_NB;
 use const PHP_BINARY;
@@ -66,9 +65,7 @@ use function array_values;
 use function basename;
 use function bin2hex;
 use function chdir;
-use function chgrp;
 use function chmod;
-use function chown;
 use function count;
 use function defined;
 use function explode;
@@ -183,7 +180,6 @@ use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Data\Record;
 use Bootgly\ACI\Logs\Handlers;
-use Bootgly\ACI\Logs\Handlers\File as FileHandler;
 use Bootgly\ACI\Logs\Handlers\Pipe as PipeHandler;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Process;
@@ -198,6 +194,7 @@ use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Screen;
 use Bootgly\CLI\UI\Components\Logs as LogsViewer;
 use Bootgly\WPI\Endpoints\Configurable;
+use Bootgly\WPI\Endpoints\Demotable;
 use Bootgly\WPI\Endpoints\Servers;
 use Bootgly\WPI\Endpoints\Servers\Decoder;
 use Bootgly\WPI\Endpoints\Servers\Encoder;
@@ -213,6 +210,7 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Tap;
 class TCP_Server_CLI implements Servers
 {
    use Configurable;
+   use Demotable;
 
    // # Configs
    /** The Configs carrying the socket — host, port and workers. */
@@ -660,6 +658,10 @@ class TCP_Server_CLI implements Servers
          $this->user = $Config->user;
          $this->group = $Config->group;
 
+         // ! The runtime identity is known from here on: install the log
+         //   sinks — or withhold them from root — before any record
+         $this->store();
+
          return;
       }
 
@@ -822,6 +824,10 @@ class TCP_Server_CLI implements Servers
    }
    public function start (): bool
    {
+      // ! The log sinks first — installed, or on a root launch withheld — so
+      //   not one record start() writes is ever written as root
+      $this->store();
+
       $this->Status = Status::Starting;
 
       // ! Capture the launch command NOW — before any daemon chdir — so reload()
@@ -897,15 +903,12 @@ class TCP_Server_CLI implements Servers
          fclose($probeSocket);
       }
 
-      // ! Daemon runs detached: install the default sink BEFORE the daemon and worker
-      //   forks so every process inherits the static (post-fork writes never propagate).
-      $this->store();
-
       // ! Daemonize BEFORE any worker or auxiliary fork. The child that
       //   continues from here is the final master and therefore the real
       //   parent/reaper of every process created below.
       if ($this->Mode === Modes::Daemon && $handoff !== true) {
          $this->detach();
+         $this->inherit();
       }
 
       // ! Process
@@ -1460,6 +1463,9 @@ class TCP_Server_CLI implements Servers
       }
 
       $this->demoted = true;
+
+      // @ The sinks store() withheld: installed NOW, as the runtime identity
+      $this->settle();
    }
 
    /**
@@ -1869,57 +1875,6 @@ class TCP_Server_CLI implements Servers
       }
    }
    /**
-    * Install the default global log sink for detached (Daemon) runs.
-    *
-    * A daemon has no terminal: with no sinks configured, every server record would be
-    * silently dropped at the Logger entry guard. Installs one File sink (JSON lines,
-    * default rotation) at `storage/logs/{channel}.log` and notices where records land.
-    * A project that already configured `Logger::$Sinks` is never touched. Runs pre-fork
-    * so the daemon master and every worker inherit the static.
-    */
-   protected function store (): void
-   {
-      // ? Daemon-only fallback; a configured project keeps its own sinks
-      if ($this->Mode !== Modes::Daemon || Logger::$Sinks !== null) {
-         return;
-      }
-
-      // ! Default sink — one JSON file per channel under the storage dir
-      $path = BOOTGLY_STORAGE_DIR . 'logs/{channel}.log';
-      Logger::$Sinks = new Handlers;
-      Logger::$Sinks->push(new FileHandler($path));
-
-      // @ Announce through the sink itself (this server logger is global) — the sink is
-      //   installed first, so this notice is the file's first record
-      $this->Logger->log(
-         notice: "No global log sinks configured — Daemon logs will persist to $path@.;"
-      );
-
-      // ! A root launch demotes later: hand the sink directory (and the file the
-      //   notice just created, as root) to the configured runtime identity — the
-      //   same delegation own() performs for the state files. Without it every
-      //   post-demote write fails with EACCES and the black hole returns.
-      if (posix_getuid() === 0 && $this->user !== null) {
-         $userInfo = posix_getpwnam($this->user);
-         if ($userInfo !== false) {
-            $UID = (int) $userInfo['uid'];
-            $GID = (int) $userInfo['gid'];
-            if ($this->group !== null) {
-               $groupInfo = posix_getgrnam($this->group);
-               if ($groupInfo !== false) {
-                  $GID = (int) $groupInfo['gid'];
-               }
-            }
-            $directory = BOOTGLY_STORAGE_DIR . 'logs';
-            @chown($directory, $UID);
-            @chgrp($directory, $GID);
-            $notice = "$directory/{$this->Logger->channel}.log";
-            @chown($notice, $UID);
-            @chgrp($notice, $GID);
-         }
-      }
-   }
-   /**
     * Open the live-log pipe before forking so workers inherit it — in EVERY mode
     * except Test: the Monitor drains it into its viewer, and `logs -f` sessions
     * drain it through the tap hub. One socketpair at startup is the whole cost;
@@ -1956,7 +1911,10 @@ class TCP_Server_CLI implements Servers
       }
 
       // ! Root boot: hand the socket to the configured runtime identity so the
-      //   demoted operator flow can attach (mirrors the state-file delegation)
+      //   demoted operator flow can attach (mirrors the state-file delegation).
+      //   Through hand(): the pathname sits in a directory the runtime identity
+      //   owns after the first boot, and a chown() that followed a link there
+      //   would hand it whatever the link points at.
       if (posix_getuid() === 0 && $this->user !== null) {
          $userInfo = posix_getpwnam($this->user);
          if ($userInfo !== false) {
@@ -1967,8 +1925,9 @@ class TCP_Server_CLI implements Servers
                   $GID = (int) $groupInfo['gid'];
                }
             }
-            @chown($Tap->path, (int) $userInfo['uid']);
-            @chgrp($Tap->path, $GID);
+            if ($this->hand($Tap->path, (int) $userInfo['uid'], $GID, 0140000) === false) {
+               $this->Logger->log(warning: "The live-log tap socket was not handed to {$this->user}: not a plain socket — `logs -f` cannot attach.@.;");
+            }
          }
       }
 
