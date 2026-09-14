@@ -20,5 +20,6 @@ return new Suite(
       '1.4-analyzer-namespace-label',
       '1.5-analyzer-block-order',
       '1.6-analyzer-multiple-namespaces',
+      '1.7-analyzer-typed-constants',
    ]
 );

@@ -87,6 +87,7 @@ class Analyzer extends Analyzers
    ];
 
 
+
    /**
     * Analyze a PHP file for import violations.
     *
@@ -447,6 +448,13 @@ class Analyzer extends Analyzers
                   T_CASE,
                ], true)
             ) {
+               continue;
+            }
+
+            // ? Skip class constant declarations — typed (`const string NAME =`)
+            //   or listed (`const A = 1, B = 2`): the statement the name sits in
+            //   starts with `const`, whatever lies between
+            if ($nextToken === '=' && $this->trace($tokens, $i)) {
                continue;
             }
 
@@ -1023,6 +1031,40 @@ class Analyzer extends Analyzers
       // :
       return $following === '{'
          || (is_array($following) && in_array($following[0], [T_STRING, T_NAME_QUALIFIED], true));
+   }
+
+   /**
+    * Whether a name followed by `=` sits in a `const` statement — the type
+    * tokens, an earlier `NAME = value,` of a list, or nothing at all may lie
+    * between the keyword and the name.
+    *
+    * @param array<int,mixed> $tokens
+    * @param int $i The position of the name
+    */
+   private function trace (array $tokens, int $i): bool
+   {
+      $depth = 0;
+      for ($j = $i - 1; $j >= 0; $j--) {
+         $token = $tokens[$j];
+         if ($token === ')') {
+            $depth++;
+            continue;
+         }
+         if ($token === '(') {
+            $depth--;
+            continue;
+         }
+         // ? The statement boundary: no `const` was found on the way
+         if ($depth === 0 && ($token === ';' || $token === '{' || $token === '}')) {
+            return false;
+         }
+         if (is_array($token) && $token[0] === T_CONST) {
+            return true;
+         }
+      }
+
+      // :
+      return false;
    }
 
    /**
