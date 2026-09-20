@@ -48,7 +48,7 @@ for ($i = 1; $i <= $loops; $i++) {
 
    // ! Cells
    $Table->Cells->align($alignment);
-   $Output->append('Cells - text aligment: ' . $alignment . '   ');
+   $Output->append('Cells - text alignment: ' . $alignment . '   ');
 
    $Table->render();
 

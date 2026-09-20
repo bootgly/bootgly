@@ -45,7 +45,7 @@ class Columns
       $this->section = null;
       // @ Width
       // @phpstan-ignore-next-line
-      $this->Autowiden = Autowiden::Based_On_Entiry_Column->set();
+      $this->Autowiden = Autowiden::Based_On_Entire_Column->set();
 
       // * Data
       // ...
@@ -89,7 +89,7 @@ class Columns
                      $this->Width->max($column_index, $column_data_length, $section);
                      break;
 
-                  case Autowiden::Based_On_Entiry_Column:
+                  case Autowiden::Based_On_Entire_Column:
                      $this->Width->max($column_index, $column_data_length);
                }
             }
@@ -120,6 +120,6 @@ enum Autowiden
 {
    use \Bootgly\ABI\Configs\Set;
 
-   case Based_On_Entiry_Column;
+   case Based_On_Entire_Column;
    case Based_On_Section;
 }

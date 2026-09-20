@@ -35,9 +35,9 @@ class Cells
       // ...
    }
 
-   public function align (string $aligment): int
+   public function align (string $alignment): int
    {
-      return $this->alignment = match ($aligment) {
+      return $this->alignment = match ($alignment) {
          'left' => 1,
          'right' => 0,
          'center' => 2,

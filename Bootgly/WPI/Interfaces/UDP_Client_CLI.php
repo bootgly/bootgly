@@ -53,6 +53,7 @@ use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Process;
 use Bootgly\API\Projects;
+use Bootgly\WPI\Endpoints\Clients;
 use Bootgly\WPI\Endpoints\Configurable;
 use Bootgly\WPI\Event;
 use Bootgly\WPI\Events;
@@ -62,7 +63,7 @@ use Bootgly\WPI\Interfaces\UDP_Client_CLI\Configs;
 use Bootgly\WPI\Interfaces\UDP_Client_CLI\Connections;
 
 
-class UDP_Client_CLI
+class UDP_Client_CLI implements Clients
 {
    use Configurable;
 

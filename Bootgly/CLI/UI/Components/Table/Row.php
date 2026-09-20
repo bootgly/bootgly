@@ -61,7 +61,7 @@ class Row
       // ! Table
       $borders = $this->Table->borders;
       // > Cells
-      $aligment = $this->Table->Cells->alignment;
+      $alignment = $this->Table->Cells->alignment;
       // > Columns
       $Columns = $this->Table->Columns;
       $Columns->section = $section;
@@ -86,7 +86,7 @@ class Row
             string: $row[$column_index] ?? '',
             length: $widths[$column_index], // @phpstan-ignore-line
             padding: ' ',
-            type: $aligment
+            type: $alignment
          );
       }
 
