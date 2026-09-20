@@ -12,15 +12,27 @@ namespace Bootgly\ABI\Resources\Cache;
 
 
 use const BOOTGLY_STORAGE_DIR;
+use function array_diff;
+use function array_key_exists;
+use function array_keys;
 use function defined;
+use function implode;
 use function is_array;
 use function is_bool;
+use function is_finite;
+use function is_int;
+use function is_numeric;
 use function is_scalar;
 use function is_string;
 use function ltrim;
+use function preg_match;
+use function reset;
 use function rtrim;
+use function strcmp;
+use function strlen;
 use function sys_get_temp_dir;
 use Closure;
+use InvalidArgumentException;
 
 
 /**
@@ -46,13 +58,37 @@ class Config
    public const bool DEFAULT_SECURE = false;
    public const bool DEFAULT_PERSISTENT = false;
 
-   // * Config
-   public string $driver;
-   public string $prefix;
    /**
-    * Default time-to-live in seconds applied when store()/increment() receive 0.
+    * Every option `__construct()` accepts — anything else is refused by name.
+    *
+    * @var array<int,string>
     */
-   public int $TTL;
+   public const array OPTIONS = [
+      'driver',
+      'prefix',
+      'TTL',
+      'classes',
+      'path',
+      'segment',
+      'size',
+      'permissions',
+      'host',
+      'port',
+      'password',
+      'database',
+      'timeout',
+      'secure',
+      'persistent',
+      'clock'
+   ];
+
+   // * Config
+   public private(set) string $driver;
+   public private(set) string $prefix;
+   /**
+    * Default time-to-live in seconds applied when a write receives 0.
+    */
+   public private(set) int $TTL;
    /**
     * Classes the cache is allowed to reconstruct from a stored record.
     *
@@ -74,55 +110,55 @@ class Config
     *
     * @var array<int,string>
     */
-   public array $classes;
+   public private(set) array $classes;
    /**
     * Base directory used by the File driver.
     */
-   public string $path;
+   public private(set) string $path;
    /**
     * System V IPC key for the Shared-memory driver; 0 derives an application-local key.
     */
-   public int $segment;
+   public private(set) int $segment;
    /**
     * Shared-memory segment size in bytes.
     */
-   public int $size;
+   public private(set) int $size;
    /**
     * Unix permission bits used when Shared creates its SysV objects.
     */
-   public int $permissions;
+   public private(set) int $permissions;
    /**
     * Redis server host.
     */
-   public string $host;
+   public private(set) string $host;
    /**
     * Redis server port.
     */
-   public int $port;
+   public private(set) int $port;
    /**
     * Redis AUTH password ('' disables AUTH).
     */
-   public string $password;
+   public private(set) string $password;
    /**
     * Redis logical database index.
     */
-   public int $database;
+   public private(set) int $database;
    /**
     * Redis connect/read timeout in seconds.
     */
-   public float $timeout;
+   public private(set) float $timeout;
    /**
     * Whether the Redis connection uses TLS.
     */
-   public bool $secure;
+   public private(set) bool $secure;
    /**
     * Whether the Redis connection is persistent across requests/processes.
     */
-   public bool $persistent;
+   public private(set) bool $persistent;
    /**
     * Optional clock override returning a Unix timestamp; null uses time().
     */
-   public null|Closure $clock;
+   public private(set) null|Closure $clock;
 
    // * Data
    // ...
@@ -138,9 +174,30 @@ class Config
     */
    public function __construct (array $config = [])
    {
+      // ? Unknown option — a misspelled key would silently take the default
+      $unknown = array_diff(array_keys($config), self::OPTIONS);
+      if ($unknown !== []) {
+         $option = (string) reset($unknown);
+         throw new InvalidArgumentException(
+            "Unknown cache option '{$option}'."
+            . ' Valid options: ' . implode(', ', self::OPTIONS) . '.'
+         );
+      }
+      // ? Invalid TTL. The property is an int and `0` means forever, so every
+      //   value that cannot survive the cast is refused here instead of
+      //   becoming one: '1h' and 0.5 would truncate to 0 (forever), -5 would
+      //   never expire, INF/NAN would throw out of the cast itself, and an
+      //   explicit null is a misconfiguration, not an omission
+      if (array_key_exists('TTL', $config) && self::check($config['TTL']) === false) {
+         throw new InvalidArgumentException(
+            "Invalid cache option 'TTL': expected whole, non-negative seconds."
+         );
+      }
+
+      // !
       $driver = $config['driver'] ?? self::DEFAULT_DRIVER;
       $prefix = $config['prefix'] ?? self::DEFAULT_PREFIX;
-      $TTL = $config['ttl'] ?? self::DEFAULT_TTL;
+      $TTL = $config['TTL'] ?? self::DEFAULT_TTL;
       $classes = $config['classes'] ?? self::DEFAULT_CLASSES;
       $path = $config['path'] ?? self::locate();
       $segment = $config['segment'] ?? self::DEFAULT_SEGMENT;
@@ -188,6 +245,32 @@ class Config
 
       // :
       return sys_get_temp_dir() . '/bootgly-cache';
+   }
+
+   /**
+    * Whether a TTL option is whole, non-negative seconds an int can hold.
+    */
+   private static function check (mixed $seconds): bool
+   {
+      // ?: An int only has to be non-negative
+      if (is_int($seconds)) {
+         return $seconds >= 0;
+      }
+      // ?: Digits are compared as digits — a 19-digit string near the ceiling
+      //    rounds up in float space and would be refused or, worse, cast
+      if (is_string($seconds) && preg_match('/\A\+?[0-9]+\z/', $seconds) === 1) {
+         $digits = ltrim(ltrim($seconds, '+'), '0');
+
+         return strlen($digits) < 19
+            || (strlen($digits) === 19 && strcmp($digits, '9223372036854775807') <= 0);
+      }
+      // : Everything else goes through float space, where the ceiling is the
+      //   float 2^63 — `(float) PHP_INT_MAX` already rounds up to it
+      return is_numeric($seconds)
+         && is_finite((float) $seconds)
+         && (float) $seconds >= 0
+         && (float) $seconds < 9223372036854775808.0
+         && (float) (int) $seconds === (float) $seconds;
    }
 
    /**

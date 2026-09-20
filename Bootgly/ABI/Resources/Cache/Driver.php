@@ -170,10 +170,12 @@ abstract class Driver
 
    /**
     * Atomically decrease an integer counter.
+    *
+    * A positive TTL is applied when the counter is created, like `increment()`.
     */
-   public function decrement (string $key, int $by = 1): int
+   public function decrement (string $key, int $by = 1, int $TTL = 0): int
    {
-      return $this->increment($key, -$by);
+      return $this->increment($key, -$by, $TTL);
    }
 
    // ---

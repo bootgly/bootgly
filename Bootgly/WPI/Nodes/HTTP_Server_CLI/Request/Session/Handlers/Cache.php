@@ -88,7 +88,10 @@ class Cache implements Committing
    /**
     * @param array<string,mixed>|CacheResource $config Cache config array or
     *        a prepared Cache instance. Array-only security options:
-    *        `secret` (at least 32 bytes) and `secret_path`.
+    *        `secret` (at least 32 bytes) and `secret_path`. Every other key
+    *        must be a `Cache\Config` option: the array reaches it with those
+    *        two removed (the `shared` driver also forces `permissions` to
+    *        0600), and an unknown key is refused by name.
     */
    public function __construct (array|CacheResource $config = [])
    {

@@ -169,12 +169,20 @@ class Cache
 
    public function increment (string $key, int $by = 1, int $TTL = 0): int
    {
+      if ($TTL === 0) {
+         $TTL = $this->Config->TTL;
+      }
+
       return $this->Driver->increment("{$this->prefix}{$key}", $by, $TTL);
    }
 
-   public function decrement (string $key, int $by = 1): int
+   public function decrement (string $key, int $by = 1, int $TTL = 0): int
    {
-      return $this->Driver->decrement("{$this->prefix}{$key}", $by);
+      if ($TTL === 0) {
+         $TTL = $this->Config->TTL;
+      }
+
+      return $this->Driver->decrement("{$this->prefix}{$key}", $by, $TTL);
    }
 
    public function remain (string $key): int

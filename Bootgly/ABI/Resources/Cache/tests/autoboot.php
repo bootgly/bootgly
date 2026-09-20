@@ -45,5 +45,6 @@ return new Suite(
       '7.3-security-redis-deserialization',
       '7.4-security-extension-drivers',
       '5.8-redis-tls-connect',
+      '1.9-config-keys',
    ]
 );
