@@ -21,7 +21,9 @@ use function explode;
 use function getcwd;
 use function implode;
 use function in_array;
+use function is_array;
 use function is_file;
+use function is_string;
 use function str_replace;
 
 use const Bootgly\ABI\BOOTSTRAP_FILENAME;
@@ -35,6 +37,13 @@ class Scripts
 
    public const ROOT_DIR = BOOTGLY_ROOT_BASE . '/scripts/';
    public const WORKING_DIR = BOOTGLY_WORKING_BASE . '/scripts/';
+
+   /**
+    * Every script group a bootstrap file may declare.
+    *
+    * @var array<int,string>
+    */
+   public const GROUPS = ['bootstrap', 'built-in', 'imported', 'user'];
 
    // * Config
    // ...
@@ -90,6 +99,17 @@ class Scripts
       if (self::ROOT_DIR !== self::WORKING_DIR) {
          $resource_dirs[] = self::WORKING_DIR;
       }
+      // @@ Merge every bootstrap first, group by group. `+=` on the map would
+      //    keep the group the framework bootstrap already declared and drop
+      //    the consumer's whole group — a project could never add a script.
+      //    The `bootstrap` group is intrinsic: it names the entry point itself,
+      //    so it is seeded here and stays registered even when no resource dir
+      //    carries a bootstrap file — the binary still resolves itself
+      /** @var array<string,array<int,string>> $groups */
+      $groups = [];
+      foreach ($this->includes['filenames'] as $group => $filenames) {
+         $groups[$group] = $filenames;
+      }
       foreach ($resource_dirs as $dir) {
          // ? Consumer dirs may not have booted their resources yet (fresh kit)
          if (is_file("{$dir}" . BOOTSTRAP_FILENAME) === false) {
@@ -97,39 +117,57 @@ class Scripts
          }
 
          $bootstrap = (include $dir . BOOTSTRAP_FILENAME);
-         if ($bootstrap !== false) {
-            $this->includes['filenames'] += $bootstrap['scripts'];
+         $scripts = is_array($bootstrap)
+            ? ($bootstrap['scripts'] ?? null)
+            : null;
+         if (is_array($scripts) === false) {
+            continue;
+         }
 
-            foreach ($this->includes['filenames'] as $group => $filenames) {
-               foreach ($filenames as $filename) {
-                  switch ($group) {
-                     case 'bootstrap':
-                        break;
-                     case 'built-in':
-                        $filename = self::ROOT_DIR . $filename;
-                        break;
-                     case 'imported':
-                        // ? Consumers (platform repos, packages) run imported scripts
-                        // from their own working directory — the Bootgly working
-                        // directory falls back to the root when booted via Composer
-                        $cwd = getcwd();
-                        if ($cwd !== false && "$cwd/" !== BOOTGLY_WORKING_DIR) {
-                           $this->scripts[] = "$cwd/$filename";
-                        }
+         foreach ($scripts as $group => $filenames) {
+            // ? Only a named group of filenames is a declaration
+            if (is_string($group) === false || is_array($filenames) === false) {
+               continue;
+            }
 
-                        $filename = BOOTGLY_WORKING_DIR . $filename;
-                        break;
-                     case 'user':
-                        $filename = self::WORKING_DIR . $filename;
-                        break;
-                     default:
-                        $filename = null;
-                        break;
-                  }
-
-                  $this->scripts[] = $filename;
+            foreach ($filenames as $filename) {
+               // ? The kit copies the framework `scripts/` template, so a
+               //   consumer bootstrap repeats the framework entries verbatim
+               if (is_string($filename) && in_array($filename, $groups[$group] ?? [], true) === false) {
+                  $groups[$group][] = $filename;
                }
             }
+         }
+      }
+      $this->includes['filenames'] = $groups;
+
+      // ---
+
+      // @@ Register once, from the merged map — registering inside the loop
+      //    above would re-register every earlier entry per resource directory
+      foreach ($groups as $group => $filenames) {
+         // ? Unknown group — nothing to resolve it against
+         if (in_array($group, self::GROUPS, true) === false) {
+            continue;
+         }
+
+         foreach ($filenames as $filename) {
+            // ? Consumers (platform repos, packages) run imported scripts from
+            //   their own working directory — the Bootgly working directory
+            //   falls back to the root when booted via Composer
+            if ($group === 'imported') {
+               $cwd = getcwd();
+               if ($cwd !== false && "$cwd/" !== BOOTGLY_WORKING_DIR) {
+                  $this->scripts[] = "$cwd/$filename";
+               }
+            }
+
+            $this->scripts[] = match ($group) {
+               'bootstrap' => $filename,
+               'built-in' => self::ROOT_DIR . $filename,
+               'imported' => BOOTGLY_WORKING_DIR . $filename,
+               'user' => self::WORKING_DIR . $filename
+            };
          }
       }
    }

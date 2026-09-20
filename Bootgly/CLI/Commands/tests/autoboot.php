@@ -22,5 +22,6 @@ return new Suite(
       'TestCommand-scope-01',
       'TestCommand-scope-02',
       'TestCommand-nesting-01',
+      'Scripts-bootstrap-01',
    ]
 );
