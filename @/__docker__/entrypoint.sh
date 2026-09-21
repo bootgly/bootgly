@@ -26,7 +26,7 @@ if [ "${1:-}" = 'docker-default' ]; then
          bootgly projects create
          touch "$MARKER"
          # ! The marker belongs to whoever mounted projects/, like the rest
-         chown --reference=/bootgly/projects "$MARKER" 2>/dev/null || true
+         chown -h --reference=/bootgly/projects "$MARKER" 2>/dev/null || true
 
          exit 0
       fi

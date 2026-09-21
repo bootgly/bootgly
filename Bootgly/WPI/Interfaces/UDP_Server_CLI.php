@@ -696,7 +696,7 @@ class UDP_Server_CLI implements Servers
                         //   takes the runtime account the kit image ships — the same
                         //   default as TCP
                         'user' => $Config->user ?? (
-                           Container::detect() === true && posix_getuid() === 0 && posix_getpwnam(Servers::RUNTIME_USER) !== false
+                           Container::check() === true && posix_getuid() === 0 && posix_getpwnam(Servers::RUNTIME_USER) !== false
                               ? Servers::RUNTIME_USER
                               : null
                         ),

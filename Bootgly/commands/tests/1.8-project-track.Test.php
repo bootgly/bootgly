@@ -158,40 +158,32 @@ return new Test(
          foreach (['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL'] as $handed) {
             putenv($handed);
          }
-         // @ What git would auto-detect (EMAIL, a hostname) is not the user's word
+         // @ What git would fill in by itself is not the user's word — each
+         //   half of the identity is refused on its own, in a shape git COULD
+         //   complete: an email from EMAIL on any host, a name from the OS
+         //   account where it has one (gecos). A gate that let a half through
+         //   would commit here, not fail inside git
+         $clear = static function (): void {
+            foreach (['EMAIL', 'GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL'] as $handed) {
+               putenv($handed);
+            }
+         };
+
+         // # Author email missing — EMAIL would fill it
+         putenv('GIT_CONFIG_GLOBAL=/dev/null');
+         putenv('GIT_AUTHOR_NAME=Ada Lovelace');
+         putenv('GIT_COMMITTER_NAME=Ada Lovelace');
+         putenv('GIT_COMMITTER_EMAIL=ada@example.com');
          putenv('EMAIL=guess@example.com');
          $mint("{$base}Guess");
          $Track->invoke($Command, $base, 'Guess', []);
          yield assert(
             assertion: is_dir("{$base}Guess/.git") === true && $git("{$base}Guess", 'rev-list --count HEAD') === '',
-            description: 'an EMAIL the shell exports does not author — auto-detected identities never commit'
+            description: 'an EMAIL the shell exports does not fill the author email — auto-detected halves never author'
          );
-         putenv('EMAIL');
+         $clear();
 
-         // @ Half an identity: a name git would take from the OS account is
-         //   not the user's word either. Only observable where the account HAS
-         //   a name to take (a gecos field): elsewhere git refuses by itself
-         //   and the gate is not what is being measured
-         $gecos = trim(explode(',', (string) (posix_getpwuid(posix_geteuid())['gecos'] ?? ''))[0]);
-         if ($gecos !== '') {
-            $half = "{$root}/gitconfig-half";
-            file_put_contents($half, "[user]\n\temail = only@example.com\n");
-            putenv("GIT_CONFIG_GLOBAL={$half}");
-            $mint("{$base}Half");
-            $Track->invoke($Command, $base, 'Half', []);
-            yield assert(
-               assertion: is_dir("{$base}Half/.git") === true && $git("{$base}Half", 'rev-list --count HEAD') === '',
-               description: 'a configured user.email without user.name does not author — the name half would be auto-detected'
-            );
-         }
-         else {
-            yield assert(assertion: true, description: 'Skipped: the name half cannot be observed — this account has no gecos name for git to take');
-         }
-
-         // @ An author without a committer: git would auto-detect the other
-         //   half — and it CAN here on any host (a committer name from the
-         //   config, the email from EMAIL), so a gate that let the author half
-         //   through would commit, not fail inside git
+         // # Committer email missing — EMAIL would fill it, the name is in the config
          $named = "{$root}/gitconfig-named";
          file_put_contents($named, "[user]\n\tname = Auto Detect\n");
          putenv("GIT_CONFIG_GLOBAL={$named}");
@@ -202,11 +194,40 @@ return new Test(
          $Track->invoke($Command, $base, 'Author', []);
          yield assert(
             assertion: is_dir("{$base}Author/.git") === true && $git("{$base}Author", 'rev-list --count HEAD') === '',
-            description: 'GIT_AUTHOR_* without GIT_COMMITTER_* does not author — the committer half would be auto-detected'
+            description: 'GIT_AUTHOR_* without GIT_COMMITTER_EMAIL does not author — the committer email would be auto-detected'
          );
-         putenv('GIT_AUTHOR_NAME');
-         putenv('GIT_AUTHOR_EMAIL');
-         putenv('EMAIL');
+         $clear();
+
+         // # The name halves — only observable where the account has a gecos
+         //   name for git to take; elsewhere git refuses by itself and the
+         //   gate is not what is being measured
+         $gecos = trim(explode(',', (string) (posix_getpwuid(posix_geteuid())['gecos'] ?? ''))[0]);
+         if ($gecos !== '') {
+            $half = "{$root}/gitconfig-half";
+            file_put_contents($half, "[user]\n\temail = only@example.com\n");
+            putenv("GIT_CONFIG_GLOBAL={$half}");
+            putenv('GIT_COMMITTER_NAME=Ada Lovelace');
+            $mint("{$base}Half");
+            $Track->invoke($Command, $base, 'Half', []);
+            yield assert(
+               assertion: is_dir("{$base}Half/.git") === true && $git("{$base}Half", 'rev-list --count HEAD') === '',
+               description: 'a configured user.email without user.name does not author — the author name would be auto-detected'
+            );
+            $clear();
+
+            putenv("GIT_CONFIG_GLOBAL={$half}");
+            putenv('GIT_AUTHOR_NAME=Ada Lovelace');
+            $mint("{$base}Committer");
+            $Track->invoke($Command, $base, 'Committer', []);
+            yield assert(
+               assertion: is_dir("{$base}Committer/.git") === true && $git("{$base}Committer", 'rev-list --count HEAD') === '',
+               description: 'GIT_AUTHOR_NAME without GIT_COMMITTER_NAME does not author — the committer name would be auto-detected'
+            );
+            $clear();
+         }
+         else {
+            yield assert(assertion: true, description: 'Skipped: the name halves cannot be observed — this account has no gecos name for git to take');
+         }
       }
       finally {
          foreach ($environment as $name => $value) {

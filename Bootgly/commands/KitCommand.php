@@ -29,6 +29,7 @@ use function copy;
 use function dirname;
 use function explode;
 use function file_exists;
+use function file_get_contents;
 use function filegroup;
 use function fileowner;
 use function getenv;
@@ -49,6 +50,8 @@ use function realpath;
 use function rename;
 use function rmdir;
 use function rtrim;
+use function shell_exec;
+use function str_contains;
 use function str_pad;
 use function str_replace;
 use function str_starts_with;
@@ -160,6 +163,8 @@ class KitCommand extends Command
    protected string $repository = self::REPOSITORY;
    /** Where `boot` takes the resource templates from — the framework checkout. */
    protected string $templates = BOOTGLY_ROOT_DIR;
+   /** The line `setup` writes into the global wrapper — the walk-up one; a launcher copied onto PATH never carries it. */
+   public const string WRAPPER_STAMP = '# bootgly-wrapper: walk-up';
    /** @var array<int,string> Files a container runtime leaves behind — Docker, then Podman. */
    protected array $markers = Container::MARKERS;
 
@@ -420,14 +425,16 @@ class KitCommand extends Command
     * The group directories above the entry go with it while they are still
     * root's — the ones this run created for a nested name. On a mount shared
     * by several root runs that also hands over a group directory an earlier
-    * run left behind: its entry only, never the trees inside it.
+    * run left behind: its entry, and with it what owning a directory means —
+    * the power to rename or remove whatever it holds; the trees inside keep
+    * their own owners and modes.
     *
     * @param string $path An absolute path under `projects/`.
     */
    public static function grant (string $path): void
    {
       // ?
-      if (Container::detect() === false || posix_geteuid() !== 0) {
+      if (Container::check() === false || posix_geteuid() !== 0) {
          return;
       }
       if (is_link($path) || file_exists($path) === false) {
@@ -492,6 +499,49 @@ class KitCommand extends Command
          @lchown($Entry->getPathname(), $UID);
          @lchgrp($Entry->getPathname(), $GID);
       }
+   }
+
+   /**
+    * How the next command should be typed in a tip: bare `bootgly` only when
+    * the `bootgly` on PATH will run THIS kit — inside a container, where the
+    * image's own launcher is on PATH, or when the global wrapper is the
+    * walk-up one that selects the kit around the working directory. Any
+    * other `bootgly` (a stale wrapper pinned to another kit, a launcher
+    * copied onto PATH, an unrelated binary) would operate somewhere else, so
+    * the tip says `php bootgly`, which always means this kit — and a stale
+    * wrapper is pointed at `setup`, once per run.
+    */
+   public static function suggest (): string
+   {
+      // ?: A container: the launcher on PATH is the image's own
+      if (Container::check() === true) {
+         return '';
+      }
+      // ?: No global at all
+      $global = trim((string) shell_exec('command -v bootgly 2>/dev/null'));
+      if ($global === '' || is_file($global) === false) {
+         return 'php ';
+      }
+      // ?: The walk-up wrapper — the stamp only `setup` writes; a launcher
+      //    copied or linked onto PATH carries the launcher's own text, never
+      //    the stamp
+      static $noted = false;
+      $wrapper = (string) @file_get_contents($global, false, null, 0, 65536);
+      if (str_contains($wrapper, self::WRAPPER_STAMP) === false) {
+         if ($noted === false) {
+            $noted = true;
+            CLI->Terminal->Output->render(
+               '@#Yellow:Note:@; the global @#cyan:bootgly@; on PATH is not the walk-up wrapper of this '
+               . 'release — it runs the kit it points at, not this one. Refresh it with '
+               . '@#cyan:php bootgly setup@;.@.;'
+            );
+         }
+
+         return 'php ';
+      }
+
+      // :
+      return '';
    }
 
    /**
@@ -1052,28 +1102,15 @@ class KitCommand extends Command
    }
 
    /**
-    * Whether this process runs inside a container.
-    *
-    * The image sets `BOOTGLY_DOCKER`; the markers cover an image built
-    * elsewhere — the same signals as `Container::detect()`, read through the
-    * instance so a spec can point the markers elsewhere. None of it is
-    * trusted for anything but the WORDING of a refusal, and only when the kit
-    * has no checkout at all.
+    * Whether this process runs inside a container — `Container::check()`
+    * over the instance's markers, so a spec can point them at fixtures. Here
+    * it is trusted for nothing but the WORDING of a refusal, and only when
+    * the kit has no checkout at all.
     */
    protected function check (): bool
    {
-      if ((string) getenv('BOOTGLY_DOCKER') !== '') {
-         return true;
-      }
-
-      foreach ($this->markers as $marker) {
-         if (file_exists($marker) === true) {
-            return true;
-         }
-      }
-
       // :
-      return false;
+      return Container::check($this->markers);
    }
    /**
     * Where this run stands: `host`, or which image it is inside.

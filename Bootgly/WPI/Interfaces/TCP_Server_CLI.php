@@ -663,7 +663,7 @@ class TCP_Server_CLI implements Servers
          //   as root. A host keeps its own behavior — an account that happens
          //   to carry the name there is nobody's default
          $defaulted = $this->user === null
-            && Container::detect() === true
+            && Container::check() === true
             && posix_getuid() === 0
             && posix_getpwnam(self::RUNTIME_USER) !== false;
          if ($defaulted === true) {

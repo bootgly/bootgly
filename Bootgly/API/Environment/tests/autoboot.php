@@ -24,6 +24,6 @@ return new Suite(
       // # No certificate or private key but the localhost fixtures (INFRA-1)
       '1.5-tracked-certificates',
       // # Where the process runs: the image's variable or a runtime marker
-      '1.6-container-detect',
+      '1.6-container-check',
    ]
 );

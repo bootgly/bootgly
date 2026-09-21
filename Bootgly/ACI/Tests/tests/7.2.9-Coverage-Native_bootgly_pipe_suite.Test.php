@@ -1,9 +1,9 @@
 <?php
 
-use Bootgly\API\Environment\Agent;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test;
+use Bootgly\API\Environment\Agent;
 
 
 return new Test(

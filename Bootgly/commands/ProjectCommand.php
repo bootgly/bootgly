@@ -344,7 +344,8 @@ class ProjectCommand extends Command
       if ($path === '' || Projects::check($path) === false) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = 'Usage: @#cyan:bootgly project <Name> boot@;';
+         $prefix = KitCommand::suggest();
+         $Alert->message = "Usage: @#cyan:{$prefix}bootgly project <Name> boot@;";
          $Alert->render();
 
          return false;
@@ -1614,7 +1615,8 @@ class ProjectCommand extends Command
 
          $Output->render('@#yellow:Warning:@; installing under @#cyan:/etc/systemd/system@; needs root — the units were staged instead.@.;');
          foreach ($conflicts as $unit => $qualifier) {
-            $Output->render("@#yellow:Warning:@; @#cyan:{$projectName}@; is already running by hand (instance @#cyan:{$qualifier}@;) — stop it with @#Blue:bootgly project {$projectName} stop@; before starting @#cyan:{$unit}@;.@.;");
+            $prefix = KitCommand::suggest();
+            $Output->render("@#yellow:Warning:@; @#cyan:{$projectName}@; is already running by hand (instance @#cyan:{$qualifier}@;) — stop it with @#Blue:{$prefix}bootgly project {$projectName} stop@; before starting @#cyan:{$unit}@;.@.;");
          }
          $Output->render(
             '@#Green:Install:@; @#Blue:sudo install -m 0644 -o root -g root ' . implode(' ', $files) . ' ' . Service::$directory
@@ -1632,7 +1634,8 @@ class ProjectCommand extends Command
          $Alert->Type::Failure->set();
          $Alert->message = "@#cyan:{$projectName}@; is already running (instance @#cyan:{$conflicts[$unit]}@;).";
          $Alert->render();
-         $Output->render("Stop the hand-started instance first — @#Blue:bootgly project {$projectName} stop@; — then let systemd own it.@.;");
+         $prefix = KitCommand::suggest();
+         $Output->render("Stop the hand-started instance first — @#Blue:{$prefix}bootgly project {$projectName} stop@; — then let systemd own it.@.;");
 
          return false;
       }
@@ -1890,13 +1893,15 @@ class ProjectCommand extends Command
       // ?
       if ($installed === false) {
          if ($skipped === false) {
-            $Output->render("@.;@#yellow:Note:@; no service is installed for @#cyan:{$projectName}@; — install one with @#Blue:bootgly project {$projectName} startup@;.@.;");
+            $prefix = KitCommand::suggest();
+            $Output->render("@.;@#yellow:Note:@; no service is installed for @#cyan:{$projectName}@; — install one with @#Blue:{$prefix}bootgly project {$projectName} startup@;.@.;");
          }
 
          return true;
       }
 
-      $Output->render("@.;@#Green:Tip:@; Use @#Blue:bootgly project {$projectName} show@; for the running instances.@.;");
+      $prefix = KitCommand::suggest();
+      $Output->render("@.;@#Green:Tip:@; Use @#Blue:{$prefix}bootgly project {$projectName} show@; for the running instances.@.;");
 
       // :
       return true;
@@ -2259,8 +2264,9 @@ class ProjectCommand extends Command
          $Alert->message = "Project not registered: @#cyan:{$projectName}@;@.;";
          $Alert->render();
 
+         $prefix = KitCommand::suggest();
          $Output->render(
-            '@#Green:Tip:@; Register it in @#Cyan:projects/Bootgly.projects.php@; or use @#Blue:bootgly projects list@;.@..;'
+            "@#Green:Tip:@; Register it in @#Cyan:projects/Bootgly.projects.php@; or use @#Blue:{$prefix}bootgly projects list@;.@..;"
          );
 
          return null;
@@ -2279,8 +2285,9 @@ class ProjectCommand extends Command
          $Alert->message = "Project not found: @#cyan:{$projectName}@;@.;";
          $Alert->render();
 
+         $prefix = KitCommand::suggest();
          $Output->render(
-            '@#Green:Tip:@; Use @#Blue:bootgly projects list@; to see all available projects.@..;'
+            "@#Green:Tip:@; Use @#Blue:{$prefix}bootgly projects list@; to see all available projects.@..;"
          );
 
          return null;
@@ -2605,6 +2612,8 @@ class ProjectCommand extends Command
     */
    public function help (array $arguments = []): bool
    {
+      // ! The launcher the tips name: bare `bootgly` only where it means this kit
+      $prefix = KitCommand::suggest();
       $Output = CLI->Terminal->Output;
 
       // @
@@ -2638,25 +2647,25 @@ class ProjectCommand extends Command
          // # Usage
          $Fieldset = new Fieldset($Output);
          $Fieldset->title = '@#green: Project usage @;';
-         $Fieldset->content = 'bootgly project @#Black: <argument> @;@.;';
-         $Fieldset->content .= 'bootgly project @#Black: <argument> <name> @;@.;';
-         $Fieldset->content .= 'bootgly project @#Black: <name> <argument> @;';
+         $Fieldset->content = "{$prefix}bootgly project @#Black: <argument> @;@.;";
+         $Fieldset->content .= "{$prefix}bootgly project @#Black: <argument> <name> @;@.;";
+         $Fieldset->content .= "{$prefix}bootgly project @#Black: <name> <argument> @;";
          $Fieldset->render();
 
          // # Examples
-         $exampleLines = '@#Blue:bootgly project Demo/HTTP_Server_CLI start@;' . PHP_EOL;
-         $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI stop@;' . PHP_EOL;
-         $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI show@;' . PHP_EOL;
-         $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI restart@;' . PHP_EOL;
-         $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI info@;' . PHP_EOL;
-         $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI logs -f@; @#Black:(follow live — unrelated to `start -f`)@;' . PHP_EOL;
-         $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI schedule run@; @#Black:(cron-style worker — no server started)@;' . PHP_EOL;
-         $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI startup --now@; @#Black:(systemd service — boots at startup)@;' . PHP_EOL;
-         $exampleLines .= '@#Blue:bootgly project Demo/HTTP_Server_CLI status@;' . PHP_EOL;
+         $exampleLines = "@#Blue:{$prefix}bootgly project Demo/HTTP_Server_CLI start@;" . PHP_EOL;
+         $exampleLines .= "@#Blue:{$prefix}bootgly project Demo/HTTP_Server_CLI stop@;" . PHP_EOL;
+         $exampleLines .= "@#Blue:{$prefix}bootgly project Demo/HTTP_Server_CLI show@;" . PHP_EOL;
+         $exampleLines .= "@#Blue:{$prefix}bootgly project Demo/HTTP_Server_CLI restart@;" . PHP_EOL;
+         $exampleLines .= "@#Blue:{$prefix}bootgly project Demo/HTTP_Server_CLI info@;" . PHP_EOL;
+         $exampleLines .= "@#Blue:{$prefix}bootgly project Demo/HTTP_Server_CLI logs -f@; @#Black:(follow live — unrelated to `start -f`)@;" . PHP_EOL;
+         $exampleLines .= "@#Blue:{$prefix}bootgly project Demo/HTTP_Server_CLI schedule run@; @#Black:(cron-style worker — no server started)@;" . PHP_EOL;
+         $exampleLines .= "@#Blue:{$prefix}bootgly project Demo/HTTP_Server_CLI startup --now@; @#Black:(systemd service — boots at startup)@;" . PHP_EOL;
+         $exampleLines .= "@#Blue:{$prefix}bootgly project Demo/HTTP_Server_CLI status@;" . PHP_EOL;
          $exampleLines .= PHP_EOL;
-         $exampleLines .= '@#Blue:bootgly project start Demo/HTTP_Server_CLI@;' . PHP_EOL;
-         $exampleLines .= '@#Blue:bootgly project stop Demo/HTTP_Server_CLI@;' . PHP_EOL;
-         $exampleLines .= '@#Blue:bootgly project show Demo/HTTP_Server_CLI@;';
+         $exampleLines .= "@#Blue:{$prefix}bootgly project start Demo/HTTP_Server_CLI@;" . PHP_EOL;
+         $exampleLines .= "@#Blue:{$prefix}bootgly project stop Demo/HTTP_Server_CLI@;" . PHP_EOL;
+         $exampleLines .= "@#Blue:{$prefix}bootgly project show Demo/HTTP_Server_CLI@;";
          $Fieldset = new Fieldset($Output);
          $Fieldset->title = '@#green: Project examples @;';
          $Fieldset->content = $exampleLines;
@@ -2711,8 +2720,8 @@ class ProjectCommand extends Command
          // # Usage
          $Fieldset = new Fieldset($Output);
          $Fieldset->title = '@#Cyan: Project ' . $subcommand . ' usage @;';
-         $Fieldset->content = 'bootgly project ' . $subcommand . ' @#Black: <name> @;' . PHP_EOL
-            . 'bootgly project @#Black: <name>  @;' . $subcommand;
+         $Fieldset->content = "{$prefix}bootgly project " . $subcommand . ' @#Black: <name> @;' . PHP_EOL
+            . "{$prefix}bootgly project @#Black: <name>  @;" . $subcommand;
          $Fieldset->render();
 
          // # Options — the ones tagged for this verb, then the global ones
@@ -2733,8 +2742,8 @@ class ProjectCommand extends Command
          // # Example
          $Fieldset = new Fieldset($Output);
          $Fieldset->title = '@#Cyan: Project ' . $subcommand . ' example @;';
-         $Fieldset->content = '@#Blue:bootgly project Demo/HTTP_Server_CLI ' . $subcommand . '@;' . PHP_EOL
-            . '@#Blue:bootgly project ' . $subcommand . ' Demo/HTTP_Server_CLI@;';
+         $Fieldset->content = "@#Blue:{$prefix}bootgly project Demo/HTTP_Server_CLI " . $subcommand . '@;' . PHP_EOL
+            . "@#Blue:{$prefix}bootgly project " . $subcommand . ' Demo/HTTP_Server_CLI@;';
          $Fieldset->render();
 
          // # Hint

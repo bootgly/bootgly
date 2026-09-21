@@ -28,15 +28,26 @@ class Container
 
 
    /**
-    * Detect whether the current process runs inside a container: the image's
-    * own `BOOTGLY_DOCKER`, or a runtime marker file — either one, so an image
-    * that erases the variable and a runtime that leaves no marker (containerd)
-    * are both still recognized. A hint about where the process runs, never a
-    * security verdict on its own.
+    * Whether the current process runs inside a container: the image's own
+    * `BOOTGLY_DOCKER`, or a marker file the runtime leaves — either one.
+    *
+    * Each signal fails in its own direction: the variable can be erased from
+    * outside (`docker run -e BOOTGLY_DOCKER=`) and the markers are absent
+    * under a runtime that leaves none (containerd), so neither is trusted
+    * alone. What it gates is what the image relies on — the default demotion
+    * of a root launch to the runtime account, the handover of what root
+    * writes into a mounted `projects/`, the wording of the `kit` refusal —
+    * and every one of those moves toward LESS privilege when armed: arming
+    * it from outside costs privilege, and disarming it would need both the
+    * variable erased and no marker present. It is never a security verdict
+    * on its own — a canary must not read the variable (see the docker-context
+    * fixtures of the Environment suite).
+    *
+    * @param array<int,string> $markers The marker files to look for — the shipped set, or a spec's fixtures.
     *
     * @return bool
     */
-   public static function detect (): bool
+   public static function check (array $markers = self::MARKERS): bool
    {
       // ? The image's own variable
       if ((string) getenv('BOOTGLY_DOCKER') !== '') {
@@ -44,7 +55,7 @@ class Container
       }
 
       // @ The runtime's marker files
-      foreach (self::MARKERS as $marker) {
+      foreach ($markers as $marker) {
          if (file_exists($marker) === true) {
             return true;
          }

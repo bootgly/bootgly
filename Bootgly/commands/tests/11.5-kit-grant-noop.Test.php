@@ -24,11 +24,13 @@ use Bootgly\ACI\Tests\Temporaries;
 
 
 /**
- * `KitCommand::grant()` is inert outside the image, for a non-root caller and
- * for a path outside the kit's own `projects/`; `KitCommand::hand()` — the
- * walk it delegates to — changes the owner of what is under the tree and
- * never of what a link points at. The handover itself needs a second group
- * to be observable, so a single-group host skips instead of passing blind.
+ * `KitCommand::grant()` returns before touching anything for a non-root
+ * caller — the euid guard, the only one of its guards a non-root spec can
+ * see (the container check and the `projects/` anchor decide only as root:
+ * `I-27`); `KitCommand::hand()` — the walk it delegates to — changes the
+ * owner of what is under the tree and never of what a link points at. The
+ * handover itself needs a second group to be observable, so a single-group
+ * host skips instead of passing blind.
  */
 return new Test(
    description: '`grant()` is inert outside the image; `hand()` re-owns the tree and never follows a link',

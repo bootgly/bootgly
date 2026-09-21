@@ -38,7 +38,6 @@ use function explode;
 use function fclose;
 use function fgets;
 use function file_exists;
-use function file_get_contents;
 use function filesize;
 use function function_exists;
 use function getmypid;
@@ -65,7 +64,6 @@ use function rmdir;
 use function rtrim;
 use function scandir;
 use function shell_exec;
-use function str_contains;
 use function str_pad;
 use function str_replace;
 use function str_starts_with;
@@ -105,8 +103,6 @@ use Bootgly\CLI\UX\Components\Wizard;
  */
 class ProjectsCommand extends Command
 {
-   /** The line `setup` stamps into the global wrapper — what makes it the walk-up one. */
-   public const string WRAPPER_STAMP = '# bootgly-wrapper: walk-up';
 
    // * Config
    /** The wizard Validator and the non-interactive create enforce the same port rule: 1–65535, no leading zeros. */
@@ -1432,7 +1428,7 @@ class ProjectsCommand extends Command
 
          $this->summarize("Imported projects ({$listed})", $rows);
 
-         $prefix = self::suggest();
+         $prefix = KitCommand::suggest();
 
          $Output->render(
             "@#Green:Tip:@; Use @#Blue:{$prefix}bootgly projects list@; to see them all.@.;"
@@ -2556,7 +2552,7 @@ class ProjectsCommand extends Command
 
       $Output = CLI->Terminal->Output;
 
-      $prefix = self::suggest();
+      $prefix = KitCommand::suggest();
 
       // ! Database steps — only when the project ships the resources
       $database = Projects::CONSUMER_DIR . "{$path}/database/";
@@ -2659,19 +2655,22 @@ class ProjectsCommand extends Command
       $Fieldset->content = $content;
       $Fieldset->render();
 
+      // ! The launcher the tips name: bare `bootgly` only where it means this kit
+      $prefix = KitCommand::suggest();
+
       // # Usage
       $Fieldset = new Fieldset($Output);
       $Fieldset->title = '@#green: Projects usage @;';
-      $Fieldset->content = 'bootgly projects @#Black: <argument> @;';
+      $Fieldset->content = "{$prefix}bootgly projects @#Black: <argument> @;";
       $Fieldset->render();
 
       // # Examples
-      $exampleLines = '@#Blue:bootgly projects create@;' . PHP_EOL;
-      $exampleLines .= '@#Blue:bootgly projects create App/API --from=scratch --interfaces=WPI --yes@;' . PHP_EOL;
-      $exampleLines .= '@#Blue:bootgly projects import https://github.com/foo/project1 Project1@;' . PHP_EOL;
-      $exampleLines .= '@#Blue:bootgly projects list@;' . PHP_EOL;
-      $exampleLines .= '@#Blue:bootgly projects show@; @#Black:(every running instance — the `ps` view)@;' . PHP_EOL;
-      $exampleLines .= '@#Blue:bootgly projects show --all --json@;';
+      $exampleLines = "@#Blue:{$prefix}bootgly projects create@;" . PHP_EOL;
+      $exampleLines .= "@#Blue:{$prefix}bootgly projects create App/API --from=scratch --interfaces=WPI --yes@;" . PHP_EOL;
+      $exampleLines .= "@#Blue:{$prefix}bootgly projects import https://github.com/foo/project1 Project1@;" . PHP_EOL;
+      $exampleLines .= "@#Blue:{$prefix}bootgly projects list@;" . PHP_EOL;
+      $exampleLines .= "@#Blue:{$prefix}bootgly projects show@; @#Black:(every running instance — the `ps` view)@;" . PHP_EOL;
+      $exampleLines .= "@#Blue:{$prefix}bootgly projects show --all --json@;";
       $Fieldset = new Fieldset($Output);
       $Fieldset->title = '@#green: Projects examples @;';
       $Fieldset->content = $exampleLines;
@@ -2681,49 +2680,4 @@ class ProjectsCommand extends Command
 
       return $status;
    }
-   /**
-    * How the next command should be typed: bare `bootgly` only when the global
-    * wrapper on PATH is the walk-up one — it runs the kit around the working
-    * directory. Any other `bootgly` (a stale wrapper pinned to another kit,
-    * or an unrelated binary) would operate somewhere else, so the tip says
-    * `php bootgly`, which always means this kit.
-    */
-   private static function suggest (): string
-   {
-      $global = self::locate();
-      // ?: No global at all
-      if ($global === null) {
-         return 'php ';
-      }
-      // ?: The walk-up wrapper — the one that selects the kit around the cwd
-      //    — the stamp only `setup` writes; a launcher copied or linked onto
-      //    PATH carries the launcher's own text, never the stamp
-      static $noted = false;
-      $wrapper = (string) @file_get_contents($global, false, null, 0, 65536);
-      if (str_contains($wrapper, self::WRAPPER_STAMP) === false) {
-         if ($noted === false) {
-            $noted = true;
-            CLI->Terminal->Output->render(
-               '@#Yellow:Note:@; the global @#cyan:bootgly@; on PATH is not the walk-up wrapper of this '
-               . 'release — it runs the kit it points at, not this one. Refresh it with '
-               . '@#cyan:php bootgly setup@;.@.;'
-            );
-         }
-
-         return 'php ';
-      }
-
-      return '';
-   }
-
-   /**
-    * The global `bootgly` on the caller's PATH, when there is one.
-    */
-   private static function locate (): null|string
-   {
-      $global = trim((string) shell_exec('command -v bootgly 2>/dev/null'));
-
-      return $global !== '' && is_file($global) ? $global : null;
-   }
-
 }
