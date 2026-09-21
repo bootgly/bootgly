@@ -1,5 +1,6 @@
 <?php
 
+use Bootgly\API\Environment\Agent;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test;
@@ -20,12 +21,7 @@ return new Test(
       //   already exported BOOTGLY_AGENT_STDOUT_REDIRECTED into the harness;
       //   scrub the markers so the probe states its own requirement.
       $environment = getenv();
-      foreach ([
-         'AI_AGENT', 'AMP_CURRENT_THREAD_ID', 'ANTIGRAVITY_AGENT',
-         'AUGMENT_AGENT', 'CLAUDECODE', 'CLAUDE_CODE', 'CODEX_SANDBOX',
-         'CODEX_THREAD_ID', 'COPILOT_CLI', 'CURSOR_AGENT', 'GEMINI_CLI',
-         'OPENCODE', 'OPENCODE_CLIENT', 'REPL_ID',
-      ] as $variable) {
+      foreach ([...array_merge(...array_values(Agent::MARKERS)), 'AI_AGENT'] as $variable) {
          unset($environment[$variable]);
       }
 

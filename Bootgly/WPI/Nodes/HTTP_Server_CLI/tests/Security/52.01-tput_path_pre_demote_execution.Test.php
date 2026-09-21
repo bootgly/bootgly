@@ -1,6 +1,7 @@
 <?php
 
 
+use Bootgly\API\Environment\Agent;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
@@ -81,23 +82,7 @@ SH;
          if (! is_array($environment)) {
             throw new RuntimeException('L3 could not capture the child environment.');
          }
-         foreach ([
-            'AI_AGENT',
-            'AMP_CURRENT_THREAD_ID',
-            'ANTIGRAVITY_AGENT',
-            'AUGMENT_AGENT',
-            'CLAUDECODE',
-            'CLAUDE_CODE',
-            'CODEX_SANDBOX',
-            'CODEX_THREAD_ID',
-            'COPILOT_CLI',
-            'CURSOR_AGENT',
-            'GEMINI_CLI',
-            'OPENCODE',
-            'OPENCODE_CLIENT',
-            'REPL_ID',
-            'BOOTGLY_AGENT_STDOUT_REDIRECTED',
-         ] as $variable) {
+         foreach ([...array_merge(...array_values(Agent::MARKERS)), 'AI_AGENT', 'BOOTGLY_AGENT_STDOUT_REDIRECTED'] as $variable) {
             unset($environment[$variable]);
          }
          $environment['PATH'] = $directory . PATH_SEPARATOR

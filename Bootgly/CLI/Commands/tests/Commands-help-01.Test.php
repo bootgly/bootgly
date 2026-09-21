@@ -4,6 +4,8 @@ namespace Bootgly\CLI;
 
 use const BOOTGLY_ROOT_DIR;
 use const PHP_BINARY;
+use function array_merge;
+use function array_values;
 use function assert;
 use function fclose;
 use function function_exists;
@@ -15,6 +17,7 @@ use function str_contains;
 use function stream_get_contents;
 
 use Bootgly\ACI\Tests\Suite\Test;
+use Bootgly\API\Environment\Agent;
 
 
 return new Test(
@@ -39,13 +42,7 @@ return new Test(
 
       // ! Human environment — scrub agent markers so children emit human output
       $human = getenv();
-      foreach ([
-         'AI_AGENT', 'AMP_CURRENT_THREAD_ID', 'ANTIGRAVITY_AGENT',
-         'AUGMENT_AGENT', 'CLAUDECODE', 'CLAUDE_CODE', 'CODEX_SANDBOX',
-         'CODEX_THREAD_ID', 'COPILOT_CLI', 'CURSOR_AGENT', 'GEMINI_CLI',
-         'OPENCODE', 'OPENCODE_CLIENT', 'REPL_ID',
-         'BOOTGLY_AGENT_STDOUT_REDIRECTED',
-      ] as $variable) {
+      foreach ([...array_merge(...array_values(Agent::MARKERS)), 'AI_AGENT', 'BOOTGLY_AGENT_STDOUT_REDIRECTED'] as $variable) {
          unset($human[$variable]);
       }
       $human['BOOTGLY_TEST_HELP_PROBE'] = '1';
