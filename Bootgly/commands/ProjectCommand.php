@@ -227,8 +227,9 @@ class ProjectCommand extends Command
    public array $options = [
       'Increase the verbosity of the command' => ['-v', '-vv', '-vvv'],
       'Show help information' => ['--help', '-h'],
-      'Preview seed run without executing SQL' => ['--dry-run'],
-      'Keep following new records — logs (unrelated to `start -f`)' => ['-f', '--follow'],
+      'Server mode — foreground, interactive or monitor; the scaffold maps them (start)' => ['-f', '-i', '-m'],
+      'Preview the run without executing SQL (seed)' => ['--dry-run'],
+      'Keep following new records — unrelated to `start -f` (logs)' => ['-f', '--follow'],
       'Log filters and output shape (logs)' => ['--instance=<id>', '--channel=<channel>', '--level=<level>', '--since=<time>', '--json'],
       'Account the OS service runs as — the current one by default (startup)' => ['--user=<name>'],
       'Enable and start the OS service right away (startup)' => ['--now'],
@@ -2126,10 +2127,20 @@ class ProjectCommand extends Command
       //   minted in full: nothing user-authored can exist in it yet
       shell_exec("git -C {$dir} add . 2>/dev/null");
 
-      // ? Identity — never fabricated
-      $name = trim((string) shell_exec("git -C {$dir} config user.name 2>/dev/null"));
-      $email = trim((string) shell_exec("git -C {$dir} config user.email 2>/dev/null"));
-      if ($name === '' || $email === '') {
+      // ? Identity — never fabricated: only one the user set, in git's config
+      //   or handed down by the environment (the kit image ships one in
+      //   `GIT_AUTHOR_*`/`GIT_COMMITTER_*`), every half of it — name and email,
+      //   author and committer. What git would auto-detect for a missing half
+      //   (a hostname, `EMAIL`, the OS account's name) is not the user's word,
+      //   so it does not author
+      $configured = static fn (string $key): string => trim((string) shell_exec("git -C {$dir} config {$key} 2>/dev/null"));
+      $name = $configured('user.name');
+      $email = $configured('user.email');
+      $explicit = (trim((string) getenv('GIT_AUTHOR_NAME')) !== '' || $name !== '')
+         && (trim((string) getenv('GIT_AUTHOR_EMAIL')) !== '' || $email !== '')
+         && (trim((string) getenv('GIT_COMMITTER_NAME')) !== '' || $name !== '')
+         && (trim((string) getenv('GIT_COMMITTER_EMAIL')) !== '' || $email !== '');
+      if ($explicit === false) {
          $Output->render(
             '@#yellow:Note:@; git identity unset — repository initialized, initial commit skipped. '
             . 'Set @#cyan:git config user.name/user.email@; and commit.@.;'
@@ -2651,8 +2662,17 @@ class ProjectCommand extends Command
          $Fieldset->content = $exampleLines;
          $Fieldset->render();
       }
-      else if ( isSet($this->arguments[$arguments[0]]) ) {
+      else if ( isSet($this->arguments[$arguments[0]]) || isSet($arguments[1], $this->arguments[$arguments[1]]) ) {
          $status = false;
+         // ! `project <name> <verb> --help` names the verb second — the same
+         //   order run() accepts, so help answers for the same command line
+         $named = null;
+         if (isSet($this->arguments[$arguments[0]]) === false) {
+            [$arguments[0], $arguments[1]] = [$arguments[1], $arguments[0]];
+         }
+         if (isSet($arguments[1]) && isSet($this->arguments[$arguments[1]]) === false) {
+            $named = $arguments[1];
+         }
 
          // @ Show usage for a valid subcommand
          $subcommand = $arguments[0];
@@ -2662,12 +2682,17 @@ class ProjectCommand extends Command
          $Output->write(PHP_EOL);
          $Output->render("@#Black: {$meta['description']}@;@.;");
 
-         // @ Alert missing <name>
-         $Alert = new Alert($Output);
-         $Alert->Type::Failure->set();
-         $Alert->message = 'Missing required argument: @#cyan:<name>@;';
-         $Alert->render();
-         $Output->write(PHP_EOL);
+         // @ Alert missing <name> — only when none was given
+         if ($named === null) {
+            $Alert = new Alert($Output);
+            $Alert->Type::Failure->set();
+            $Alert->message = 'Missing required argument: @#cyan:<name>@;';
+            $Alert->render();
+            $Output->write(PHP_EOL);
+         }
+         else {
+            $status = true;
+         }
 
          // @ Show arguments if any
          if ( !empty($meta['arguments']) ) {
@@ -2690,6 +2715,21 @@ class ProjectCommand extends Command
             . 'bootgly project @#Black: <name>  @;' . $subcommand;
          $Fieldset->render();
 
+         // # Options — the ones tagged for this verb, then the global ones
+         $optionLines = '';
+         foreach ($this->options as $description => $flags) {
+            $tagged = str_contains($description, "({$subcommand})");
+            $global = str_contains($description, 'help') || str_contains($description, 'verbosity');
+            if ($tagged === false && $global === false) {
+               continue;
+            }
+            $label = implode(', ', $flags);
+            $optionLines .= '@#cyan:' . str_pad($label, 44) . '@; ' . str_replace(" ({$subcommand})", '', $description) . PHP_EOL;
+         }
+         $Fieldset = new Fieldset($Output);
+         $Fieldset->title = '@#Cyan: Project ' . $subcommand . ' options @;';
+         $Fieldset->content = rtrim($optionLines);
+         $Fieldset->render();
          // # Example
          $Fieldset = new Fieldset($Output);
          $Fieldset->title = '@#Cyan: Project ' . $subcommand . ' example @;';

@@ -187,6 +187,7 @@ use Bootgly\ACI\Process\Events as Worker;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Endpoints\Server\Status;
 use Bootgly\API\Environment;
+use Bootgly\API\Environment\Container;
 use Bootgly\API\Environments;
 use Bootgly\API\Projects;
 use Bootgly\API\Workables\Server as SAPI;
@@ -657,10 +658,25 @@ class TCP_Server_CLI implements Servers
 
          $this->user = $Config->user;
          $this->group = $Config->group;
+         // ? Root with no identity configured, inside a container: take the
+         //   runtime account the kit image ships instead of running the workers
+         //   as root. A host keeps its own behavior — an account that happens
+         //   to carry the name there is nobody's default
+         $defaulted = $this->user === null
+            && Container::detect() === true
+            && posix_getuid() === 0
+            && posix_getpwnam(self::RUNTIME_USER) !== false;
+         if ($defaulted === true) {
+            $this->user = self::RUNTIME_USER;
+         }
 
          // ! The runtime identity is known from here on: install the log
          //   sinks — or withhold them from root — before any record
          $this->store();
+         // ! A demotion nobody configured is said, never assumed
+         if ($defaulted === true) {
+            $this->Logger->log(notice: 'Runtime identity defaulted to "' . self::RUNTIME_USER . '": root launch with no user configured.@.;');
+         }
 
          return;
       }

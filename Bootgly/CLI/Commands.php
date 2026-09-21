@@ -12,6 +12,9 @@ namespace Bootgly\CLI;
 
 
 use const BOOTGLY_ROOT_DIR;
+use const BOOTGLY_VERSION;
+use const PHP_EOL;
+use const PHP_VERSION;
 use function array_merge;
 use function array_values;
 use function count;
@@ -23,6 +26,7 @@ use Closure;
 use Error;
 
 use const Bootgly\ABI\BOOTSTRAP_FILENAME;
+use const Bootgly\CLI;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\Commands\Arguments;
 use Bootgly\CLI\Commands\Middlewares;
@@ -259,6 +263,14 @@ class Commands
       ] = $this->Arguments->parse(
          $route ?? $argv
       );
+
+      // ?: The version is the one flag every CLI answers — before any
+      //    routing, so a script can read it without parsing the help
+      if ($command === '' && (isSet($options['version']) || isSet($options['V']))) {
+         CLI->Terminal->Output->write('Bootgly v' . BOOTGLY_VERSION . ' | PHP v' . PHP_VERSION . PHP_EOL);
+
+         return true;
+      }
 
       // @ Get the command | help command
       $Command = $this->find(

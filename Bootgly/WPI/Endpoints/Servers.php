@@ -17,6 +17,9 @@ use Bootgly\API\Endpoints\Server;
 
 interface Servers extends Server
 {
+   /** The account a root launch demotes to when none is configured — the kit image creates it. */
+   public const string RUNTIME_USER = 'bootgly';
+
    /**
     * Configure the Server.
     *

@@ -57,8 +57,11 @@ return new Project(
             //    email: 'admin@example.com',
             //    staging: true, // validate with the staging CA first — flip to false for the real certificate
             // ),
-            user: 'debian',   // demote workers from root (root needed to bind port 80 for HTTP-01)
-            group: 'debian',
+            // ! Workers demote from root to this account (root is needed to bind
+            //   port 80 for HTTP-01). The kit image ships it; on a host, create it
+            //   (`useradd -r bootgly`) or set both to null to keep the launcher's user
+            user: 'bootgly',
+            group: 'bootgly',
             // health: '/health', // built-in K8s probe endpoint (answers before middlewares)
          )
       );

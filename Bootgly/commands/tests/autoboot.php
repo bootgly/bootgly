@@ -62,5 +62,12 @@ return new Suite(
       '9.1-project-stop-report',
       // # lint submodules (fixable vs check-only) through the launcher
       '10.1-lint-submodules',
+      // # v1.0.1 hotfix: version flag, verb help, runtime identity, tips, grant, first byte
+      '11.1-version-flag',
+      '11.2-project-verb-help',
+      '11.3-wpi-stub-runtime-user',
+      '11.4-tips-launcher',
+      '11.5-kit-grant-noop',
+      '11.6-server-first-byte',
    ]
 );

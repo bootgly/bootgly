@@ -23,10 +23,14 @@ use function array_key_first;
 use function array_keys;
 use function array_map;
 use function array_slice;
+use function chown;
 use function clearstatcache;
 use function copy;
+use function dirname;
 use function explode;
 use function file_exists;
+use function filegroup;
+use function fileowner;
 use function getenv;
 use function getmypid;
 use function implode;
@@ -35,7 +39,10 @@ use function is_dir;
 use function is_file;
 use function is_link;
 use function json_encode;
+use function lchgrp;
+use function lchown;
 use function mkdir;
+use function posix_geteuid;
 use function preg_match;
 use function preg_replace;
 use function realpath;
@@ -44,6 +51,7 @@ use function rmdir;
 use function rtrim;
 use function str_pad;
 use function str_replace;
+use function str_starts_with;
 use function strlen;
 use function strtolower;
 use function substr;
@@ -62,6 +70,7 @@ use Bootgly\ACI\Process\States;
 use Bootgly\ACI\VCS;
 use Bootgly\ACI\VCS\Git;
 use Bootgly\API\Environment\Agent;
+use Bootgly\API\Environment\Container;
 use Bootgly\API\Projects;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Base\Fieldset;
@@ -152,7 +161,7 @@ class KitCommand extends Command
    /** Where `boot` takes the resource templates from — the framework checkout. */
    protected string $templates = BOOTGLY_ROOT_DIR;
    /** @var array<int,string> Files a container runtime leaves behind — Docker, then Podman. */
-   protected array $markers = ['/.dockerenv', '/run/.containerenv'];
+   protected array $markers = Container::MARKERS;
 
    // * Metadata
    /** @var array<string,mixed> The document `--json` emits, built as the run goes. */
@@ -384,6 +393,12 @@ class KitCommand extends Command
          $Alert->Type::Success->set();
          $Alert->message = 'Resource dir created: @#cyan:projects/@;';
          $Alert->render();
+
+         // @ The registry root just laid down inside a mounted projects/ belongs
+         //   to whoever mounted it — the host user, in the documented Docker
+         //   flow. Only the file this run wrote: a tree that was already there
+         //   is not root's to give, and projects/ itself is the mount
+         self::grant($registry);
       }
 
       $Output->render('@#green:OK@;@.;');
@@ -391,6 +406,92 @@ class KitCommand extends Command
 
       // :
       return true;
+   }
+
+   /**
+    * Hand what root just wrote to the owner of the kit's `projects/`. Only
+    * inside the kit image, only when running as root, only for an entry under
+    * `projects/` — a project tree or the registry; never `storage/`, which is
+    * the runtime's and changes hands to the runtime identity on its own terms
+    * — and only when `projects/` is owned by someone else: the host user who
+    * bind-mounted it. A directory Docker created itself is root's, and root
+    * keeps it — there is nobody to hand it to.
+    *
+    * The group directories above the entry go with it while they are still
+    * root's — the ones this run created for a nested name. On a mount shared
+    * by several root runs that also hands over a group directory an earlier
+    * run left behind: its entry only, never the trees inside it.
+    *
+    * @param string $path An absolute path under `projects/`.
+    */
+   public static function grant (string $path): void
+   {
+      // ?
+      if (Container::detect() === false || posix_geteuid() !== 0) {
+         return;
+      }
+      if (is_link($path) || file_exists($path) === false) {
+         return;
+      }
+      // ? Anchored on the kit's own projects/, both sides resolved — never a
+      //   lexical walk a `..` could steer outside it; projects/ itself is the
+      //   mount and is never re-owned
+      $mount = realpath(rtrim(Projects::CONSUMER_DIR, '/'));
+      $real = realpath($path);
+      if ($mount === false || $real === false || $real === $mount || str_starts_with($real, "{$mount}/") === false) {
+         return;
+      }
+      $UID = (int) fileowner($mount);
+      $GID = (int) filegroup($mount);
+      if ($UID === 0) {
+         return;
+      }
+
+      if (is_dir($real)) {
+         self::hand($real, $UID, $GID);
+      }
+      @lchown($real, $UID);
+      @lchgrp($real, $GID);
+      // @ The group directories root created on the way — `projects/<Group>/`
+      //   for a nested name — go with it, and only while they are still root's:
+      //   one that was already the owner's is left as found
+      for ($up = dirname($real); $up !== $mount && str_starts_with($up, "{$mount}/"); $up = dirname($up)) {
+         // ? A failed stat (the directory went away) stops the walk too
+         $owner = @fileowner($up);
+         if ($owner !== 0) {
+            break;
+         }
+         @lchown($up, $UID);
+         @lchgrp($up, $GID);
+      }
+   }
+
+   /**
+    * Change the owner of every entry under a directory — never through a
+    * symbolic link. `chown()` follows links, so a link a project carries
+    * (`vendor/bin/*`, `public/storage -> …`, or one planted by an imported
+    * repository) would hand its TARGET over instead; links are left exactly
+    * as found, and the walk never descends into a linked directory.
+    *
+    * Residual: PHP has no `fchownat()`, so a path COMPONENT swapped for a
+    * link between the `isLink()` stat and the `lchown()` would redirect that
+    * one call. It takes a writer inside `projects/` racing root's import —
+    * the mount owner, who is also the beneficiary of the handover.
+    */
+   private static function hand (string $path, int $UID, int $GID): void
+   {
+      $Iterator = new RecursiveIteratorIterator(
+         new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS),
+         RecursiveIteratorIterator::CHILD_FIRST
+      );
+      /** @var SplFileInfo $Entry */
+      foreach ($Iterator as $Entry) {
+         if ($Entry->isLink()) {
+            continue;
+         }
+         @lchown($Entry->getPathname(), $UID);
+         @lchgrp($Entry->getPathname(), $GID);
+      }
    }
 
    /**
@@ -702,7 +803,8 @@ class KitCommand extends Command
    {
       $opened = $this->open('list', $options, ['json']);
       if ($opened === null) {
-         return false;
+         // ?: Inside the image the question was answered, not refused
+         return ($this->document['status'] ?? null) === 'image';
       }
       ['VCS' => $VCS, 'releases' => $releases, 'current' => $current] = $opened;
 
@@ -797,6 +899,31 @@ class KitCommand extends Command
             ? $this->stand()
             : 'host';
 
+         if ($place === 'kit' && $verb === 'list') {
+            // ?: `list` is a question — answer it: the image is the release,
+            //    and the other releases are image tags, not git tags
+            $this->document['status'] = 'image';
+            $this->document['current'] = [
+               'tag' => null,
+               'version' => BOOTGLY_VERSION,
+               'commit' => (string) getenv('BOOTGLY_FRAMEWORK_SHA') ?: null,
+               'distance' => null,
+               'source' => 'image',
+            ];
+            $this->document['detail'] = 'Releases are image tags here: docker pull bootgly/bootgly.kit:<version>; latest follows the stable line.';
+            if ($this->json) {
+               $this->emit();
+            }
+            else {
+               CLI->Terminal->Output->render(
+                  '@#Green:This image ships Bootgly @_:v' . BOOTGLY_VERSION . '@;@; — releases are image tags here.@.;'
+                  . 'Move with @#cyan:docker pull bootgly/bootgly.kit:<version>@; and run that tag; '
+                  . '@#cyan:latest@; follows the stable line.@.;'
+               );
+            }
+
+            return null;
+         }
          if ($place === 'kit') {
             $this->fail(
                'The image ships the kit, not a git checkout.',
@@ -804,7 +931,6 @@ class KitCommand extends Command
                . 'This image carries framework @#cyan:' . BOOTGLY_VERSION . '@; — a build from a '
                . 'branch reports its development version, which is not a tag you can pull.'
             );
-
             return null;
          }
          if ($place === 'framework') {
@@ -929,8 +1055,10 @@ class KitCommand extends Command
     * Whether this process runs inside a container.
     *
     * The image sets `BOOTGLY_DOCKER`; the markers cover an image built
-    * elsewhere. None of it is trusted for anything but the WORDING of a
-    * refusal, and only when the kit has no checkout at all.
+    * elsewhere — the same signals as `Container::detect()`, read through the
+    * instance so a spec can point the markers elsewhere. None of it is
+    * trusted for anything but the WORDING of a refusal, and only when the kit
+    * has no checkout at all.
     */
    protected function check (): bool
    {

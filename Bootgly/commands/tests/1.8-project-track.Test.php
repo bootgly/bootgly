@@ -7,6 +7,7 @@ use function array_diff;
 use function assert;
 use function escapeshellarg;
 use function exec;
+use function explode;
 use function file_put_contents;
 use function getenv;
 use function getmypid;
@@ -14,10 +15,13 @@ use function implode;
 use function is_dir;
 use function is_file;
 use function mkdir;
+use function posix_geteuid;
+use function posix_getpwuid;
 use function putenv;
 use function rmdir;
 use function scandir;
 use function sys_get_temp_dir;
+use function trim;
 use function unlink;
 use ReflectionMethod;
 
@@ -57,7 +61,16 @@ return new Test(
          'GIT_CONFIG_GLOBAL' => getenv('GIT_CONFIG_GLOBAL'),
          'GIT_CONFIG_SYSTEM' => getenv('GIT_CONFIG_SYSTEM'),
          'GIT_CONFIG_NOSYSTEM' => getenv('GIT_CONFIG_NOSYSTEM'),
+         // ! An identity the shell hands down would author the commits below
+         'EMAIL' => getenv('EMAIL'),
+         'GIT_AUTHOR_NAME' => getenv('GIT_AUTHOR_NAME'),
+         'GIT_AUTHOR_EMAIL' => getenv('GIT_AUTHOR_EMAIL'),
+         'GIT_COMMITTER_NAME' => getenv('GIT_COMMITTER_NAME'),
+         'GIT_COMMITTER_EMAIL' => getenv('GIT_COMMITTER_EMAIL'),
       ];
+      foreach (['EMAIL', 'GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL'] as $handed) {
+         putenv($handed);
+      }
       $identified = "{$root}/gitconfig";
 
       $git = static function (string $dir, string $command): string {
@@ -128,6 +141,72 @@ return new Test(
                && $git("{$base}Anon", 'diff --cached --name-only') === 'scaffold.php',
             description: 'an identity-less machine keeps the repo initialized with the scaffold staged — no commit is fabricated'
          );
+
+         // @ An identity handed down by the environment — the kit image ships
+         //   one — is the user's word as much as a config file: it authors
+         putenv('GIT_AUTHOR_NAME=Ada Lovelace');
+         putenv('GIT_AUTHOR_EMAIL=ada@example.com');
+         putenv('GIT_COMMITTER_NAME=Ada Lovelace');
+         putenv('GIT_COMMITTER_EMAIL=ada@example.com');
+         $mint("{$base}Env");
+         $Track->invoke($Command, $base, 'Env', []);
+         yield assert(
+            assertion: $git("{$base}Env", 'rev-list --count HEAD') === '1'
+               && $git("{$base}Env", "log -1 --format='%an <%ae>'") === 'Ada Lovelace <ada@example.com>',
+            description: 'an identity from GIT_AUTHOR_*/GIT_COMMITTER_* authors the initial commit'
+         );
+         foreach (['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL'] as $handed) {
+            putenv($handed);
+         }
+         // @ What git would auto-detect (EMAIL, a hostname) is not the user's word
+         putenv('EMAIL=guess@example.com');
+         $mint("{$base}Guess");
+         $Track->invoke($Command, $base, 'Guess', []);
+         yield assert(
+            assertion: is_dir("{$base}Guess/.git") === true && $git("{$base}Guess", 'rev-list --count HEAD') === '',
+            description: 'an EMAIL the shell exports does not author — auto-detected identities never commit'
+         );
+         putenv('EMAIL');
+
+         // @ Half an identity: a name git would take from the OS account is
+         //   not the user's word either. Only observable where the account HAS
+         //   a name to take (a gecos field): elsewhere git refuses by itself
+         //   and the gate is not what is being measured
+         $gecos = trim(explode(',', (string) (posix_getpwuid(posix_geteuid())['gecos'] ?? ''))[0]);
+         if ($gecos !== '') {
+            $half = "{$root}/gitconfig-half";
+            file_put_contents($half, "[user]\n\temail = only@example.com\n");
+            putenv("GIT_CONFIG_GLOBAL={$half}");
+            $mint("{$base}Half");
+            $Track->invoke($Command, $base, 'Half', []);
+            yield assert(
+               assertion: is_dir("{$base}Half/.git") === true && $git("{$base}Half", 'rev-list --count HEAD') === '',
+               description: 'a configured user.email without user.name does not author — the name half would be auto-detected'
+            );
+         }
+         else {
+            yield assert(assertion: true, description: 'Skipped: the name half cannot be observed — this account has no gecos name for git to take');
+         }
+
+         // @ An author without a committer: git would auto-detect the other
+         //   half — and it CAN here on any host (a committer name from the
+         //   config, the email from EMAIL), so a gate that let the author half
+         //   through would commit, not fail inside git
+         $named = "{$root}/gitconfig-named";
+         file_put_contents($named, "[user]\n\tname = Auto Detect\n");
+         putenv("GIT_CONFIG_GLOBAL={$named}");
+         putenv('GIT_AUTHOR_NAME=Ada Lovelace');
+         putenv('GIT_AUTHOR_EMAIL=ada@example.com');
+         putenv('EMAIL=guess@example.com');
+         $mint("{$base}Author");
+         $Track->invoke($Command, $base, 'Author', []);
+         yield assert(
+            assertion: is_dir("{$base}Author/.git") === true && $git("{$base}Author", 'rev-list --count HEAD') === '',
+            description: 'GIT_AUTHOR_* without GIT_COMMITTER_* does not author — the committer half would be auto-detected'
+         );
+         putenv('GIT_AUTHOR_NAME');
+         putenv('GIT_AUTHOR_EMAIL');
+         putenv('EMAIL');
       }
       finally {
          foreach ($environment as $name => $value) {

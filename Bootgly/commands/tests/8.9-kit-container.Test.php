@@ -4,6 +4,7 @@ namespace Bootgly\commands;
 
 
 use const BOOTGLY_ROOT_DIR;
+use const BOOTGLY_VERSION;
 use const BOOTGLY_WORKING_DIR;
 use function array_diff;
 use function assert;
@@ -89,7 +90,7 @@ return new Test(
          $Restore = $Terminal->Output;
          $Terminal->Output = $Host;
          try {
-            $Command->run($arguments, ['json' => true]);
+            $routed = $Command->run($arguments, ['json' => true]);
          }
          finally {
             $Terminal->Output = $Restore;
@@ -97,7 +98,11 @@ return new Test(
          rewind($Host->stream);
          $document = json_decode((string) stream_get_contents($Host->stream), true);
 
-         return is_array($document) ? $document : [];
+         $document = is_array($document) ? $document : [];
+
+         $document['@routed'] = $routed;
+
+         return $document;
       };
 
       try {
@@ -113,7 +118,19 @@ return new Test(
          );
 
          // @@ B) Inside the KIT image: every verb names the image move instead
-         foreach (['list', 'upgrade', 'downgrade'] as $verb) {
+         // ! `list` answers instead: the image IS the release, the others are image tags
+         $listed = $Probe($Bind($base, 'kit'), ['list']);
+         yield assert(
+            assertion: ($listed['status'] ?? null) === 'image'
+               && ($listed['@routed'] ?? null) === true
+               && ($listed['current']['version'] ?? null) === BOOTGLY_VERSION
+               && ($listed['current']['source'] ?? null) === 'image'
+               && str_contains((string) ($listed['detail'] ?? ''), 'bootgly/bootgly.kit:')
+               && str_contains((string) ($listed['detail'] ?? ''), 'curl') === false,
+            description: '`kit list` in a container answers (exit 0) with the version the image carries and the tagged pull — '
+               . var_export([$listed['status'] ?? null, $listed['current']['version'] ?? null, $listed['@routed'] ?? null], true)
+         );
+         foreach (['upgrade', 'downgrade'] as $verb) {
             $contained = $Probe($Bind($base, 'kit'), [$verb]);
 
             yield assert(

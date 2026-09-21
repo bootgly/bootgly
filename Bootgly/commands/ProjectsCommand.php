@@ -38,6 +38,7 @@ use function explode;
 use function fclose;
 use function fgets;
 use function file_exists;
+use function file_get_contents;
 use function filesize;
 use function function_exists;
 use function getmypid;
@@ -64,6 +65,7 @@ use function rmdir;
 use function rtrim;
 use function scandir;
 use function shell_exec;
+use function str_contains;
 use function str_pad;
 use function str_replace;
 use function str_starts_with;
@@ -103,6 +105,9 @@ use Bootgly\CLI\UX\Components\Wizard;
  */
 class ProjectsCommand extends Command
 {
+   /** The line `setup` stamps into the global wrapper — what makes it the walk-up one. */
+   public const string WRAPPER_STAMP = '# bootgly-wrapper: walk-up';
+
    // * Config
    /** The wizard Validator and the non-interactive create enforce the same port rule: 1–65535, no leading zeros. */
    private const string PORT_PATTERN = '#^(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5])$#D';
@@ -1427,7 +1432,7 @@ class ProjectsCommand extends Command
 
          $this->summarize("Imported projects ({$listed})", $rows);
 
-         $prefix = shell_exec('command -v bootgly 2>/dev/null') ? '' : 'php ';
+         $prefix = self::suggest();
 
          $Output->render(
             "@#Green:Tip:@; Use @#Blue:{$prefix}bootgly projects list@; to see them all.@.;"
@@ -1536,6 +1541,13 @@ class ProjectsCommand extends Command
 
          $this->remind($path);
          $paths[] = $path;
+         KitCommand::grant(Projects::CONSUMER_DIR . $path);
+      }
+
+      // @ The registry was rewritten for every import above — root's inode,
+      //   handed over with the projects it lists
+      if ($paths !== []) {
+         KitCommand::grant(Projects::CONSUMER_DIR . 'Bootgly.projects.php');
       }
 
       // :
@@ -2509,6 +2521,8 @@ class ProjectsCommand extends Command
          $Alert->Type::Success->set();
          $Alert->message = "Project @#cyan:{$path}@; created!";
          $Alert->render();
+         KitCommand::grant(BOOTGLY_WORKING_DIR . "projects/{$path}");
+         KitCommand::grant(BOOTGLY_WORKING_DIR . 'projects/Bootgly.projects.php');
 
          $this->remind($path);
          $this->advise([$path]);
@@ -2542,7 +2556,7 @@ class ProjectsCommand extends Command
 
       $Output = CLI->Terminal->Output;
 
-      $prefix = shell_exec('command -v bootgly 2>/dev/null') ? '' : 'php ';
+      $prefix = self::suggest();
 
       // ! Database steps — only when the project ships the resources
       $database = Projects::CONSUMER_DIR . "{$path}/database/";
@@ -2667,4 +2681,49 @@ class ProjectsCommand extends Command
 
       return $status;
    }
+   /**
+    * How the next command should be typed: bare `bootgly` only when the global
+    * wrapper on PATH is the walk-up one — it runs the kit around the working
+    * directory. Any other `bootgly` (a stale wrapper pinned to another kit,
+    * or an unrelated binary) would operate somewhere else, so the tip says
+    * `php bootgly`, which always means this kit.
+    */
+   private static function suggest (): string
+   {
+      $global = self::locate();
+      // ?: No global at all
+      if ($global === null) {
+         return 'php ';
+      }
+      // ?: The walk-up wrapper — the one that selects the kit around the cwd
+      //    — the stamp only `setup` writes; a launcher copied or linked onto
+      //    PATH carries the launcher's own text, never the stamp
+      static $noted = false;
+      $wrapper = (string) @file_get_contents($global, false, null, 0, 65536);
+      if (str_contains($wrapper, self::WRAPPER_STAMP) === false) {
+         if ($noted === false) {
+            $noted = true;
+            CLI->Terminal->Output->render(
+               '@#Yellow:Note:@; the global @#cyan:bootgly@; on PATH is not the walk-up wrapper of this '
+               . 'release — it runs the kit it points at, not this one. Refresh it with '
+               . '@#cyan:php bootgly setup@;.@.;'
+            );
+         }
+
+         return 'php ';
+      }
+
+      return '';
+   }
+
+   /**
+    * The global `bootgly` on the caller's PATH, when there is one.
+    */
+   private static function locate (): null|string
+   {
+      $global = trim((string) shell_exec('command -v bootgly 2>/dev/null'));
+
+      return $global !== '' && is_file($global) ? $global : null;
+   }
+
 }

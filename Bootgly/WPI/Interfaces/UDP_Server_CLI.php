@@ -118,6 +118,7 @@ use Bootgly\ACI\Process;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Endpoints\Server\Status;
 use Bootgly\API\Environment;
+use Bootgly\API\Environment\Container;
 use Bootgly\API\Environments;
 use Bootgly\API\Projects;
 use Bootgly\API\Workables\Server as SAPI;
@@ -691,7 +692,14 @@ class UDP_Server_CLI implements Servers
                         'host' => $Config->host,
                         'port' => $Config->port,
                         'workers' => $Config->workers,
-                        'user' => $Config->user,
+                        // ? Root with no identity configured, inside a container,
+                        //   takes the runtime account the kit image ships — the same
+                        //   default as TCP
+                        'user' => $Config->user ?? (
+                           Container::detect() === true && posix_getuid() === 0 && posix_getpwnam(Servers::RUNTIME_USER) !== false
+                              ? Servers::RUNTIME_USER
+                              : null
+                        ),
                         'group' => $Config->group,
                         'maxConnections' => $Config->maxConnections,
                         'maxConnectionsPerIP' => $Config->maxConnectionsPerIP,
@@ -741,6 +749,10 @@ class UDP_Server_CLI implements Servers
          // ! The runtime identity is known from here on: install the log
          //   sinks — or withhold them from root — before any record
          $this->store();
+         // ! A demotion nobody configured is said, never assumed
+         if ($Config->user === null && $this->user === Servers::RUNTIME_USER) {
+            $this->Logger->log(notice: 'Runtime identity defaulted to "' . Servers::RUNTIME_USER . '": root launch with no user configured.@.;');
+         }
 
          return;
       }
