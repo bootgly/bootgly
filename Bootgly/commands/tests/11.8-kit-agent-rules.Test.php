@@ -28,6 +28,7 @@ use function preg_replace;
 use function preg_split;
 use function sort;
 use function str_contains;
+use function str_starts_with;
 use function strlen;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -65,8 +66,14 @@ return new Test(
          description: 'templates/projects/.agents/rules holds exactly one file per section, got: ' . json_encode($files)
       );
 
-      // @ The entry point lists and imports every section
+      // @ The entry point opens with the stamp `kit boot` recognizes as its own
       $entry = (string) file_get_contents("{$templates}/AGENTS.md");
+      yield assert(
+         assertion: str_starts_with($entry, KitCommand::STAMP),
+         description: 'projects/AGENTS.md opens with KitCommand::STAMP — without it `kit boot` treats the file as the user\'s'
+      );
+
+      // @ The entry point lists and imports every section
       preg_match_all('/^@\.agents\/rules\/([A-Za-z_]+)\.md$/m', $entry, $imports);
       $unlisted = [];
       foreach ($sections as $section) {

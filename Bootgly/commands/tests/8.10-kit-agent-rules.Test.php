@@ -1,0 +1,414 @@
+<?php
+
+namespace Bootgly\commands;
+
+
+use const BOOTGLY_ROOT_BASE;
+use const BOOTGLY_ROOT_DIR;
+use const PHP_BINARY;
+use function assert;
+use function chmod;
+use function copy;
+use function file_exists;
+use function file_get_contents;
+use function file_put_contents;
+use function function_exists;
+use function getenv;
+use function is_dir;
+use function is_file;
+use function is_link;
+use function is_resource;
+use function json_decode;
+use function json_encode;
+use function mkdir;
+use function posix_geteuid;
+use function preg_replace;
+use function proc_close;
+use function proc_open;
+use function rename;
+use function rewind;
+use function rmdir;
+use function str_contains;
+use function str_starts_with;
+use function stream_get_contents;
+use function symlink;
+use function time;
+use function touch;
+use Closure;
+
+use const Bootgly\CLI;
+use Bootgly\ACI\Tests\Suite\Test;
+use Bootgly\ACI\Tests\Temporaries;
+use Bootgly\CLI\Terminal\Output;
+
+
+/**
+ * The agent rules a kit keeps in `projects/`: `kit boot` lays down
+ * `AGENTS.md` and `.agents/rules/` from the framework's templates and
+ * REFRESHES them whenever they differ — but only while they are the
+ * framework's (a stamped `AGENTS.md`): a user's own file in their place is
+ * left alone and said, the rest of `.agents/` is never touched, a link is
+ * never written through, and an interrupted run's staging is swept. After a
+ * move the new release's launcher re-lays them, and a release that predates
+ * them takes the framework's away.
+ */
+
+return new Test(
+   description: '`kit boot` lays down and refreshes the framework\'s agent rules in projects/, never the user\'s; a move re-lays them or takes them away',
+   test: function () {
+      $base = Temporaries::reserve('kit-agent-rules');
+      $stamp = KitCommand::STAMP . ": do not edit. -->\n";
+
+      // ! A miniature framework checkout as the template source
+      $Framework = static function (string $root, bool $rules) use ($stamp): string {
+         mkdir("{$root}/Bootgly/commands/stubs", 0775, true);
+         copy(BOOTGLY_ROOT_BASE . '/Bootgly/commands/stubs/Bootgly.projects.php', "{$root}/Bootgly/commands/stubs/Bootgly.projects.php");
+         mkdir("{$root}/scripts", 0775, true);
+         file_put_contents("{$root}/scripts/autoboot.php", "<?php return [];\n");
+         if ($rules === true) {
+            mkdir("{$root}/Bootgly/commands/templates/projects/.agents/rules", 0775, true);
+            file_put_contents("{$root}/Bootgly/commands/templates/projects/AGENTS.md", "{$stamp}\n# Rules\n\n@.agents/rules/Alpha.md\n");
+            file_put_contents("{$root}/Bootgly/commands/templates/projects/.agents/rules/Alpha.md", "# Alpha\n\n- **MUST** — alpha.\n");
+         }
+
+         return $root;
+      };
+      $templates = $Framework("{$base}/templates", true);
+      $old = $Framework("{$base}/old", false);
+      $rules = "{$templates}/Bootgly/commands/templates/projects";
+
+      $Bind = static function (string $kit, string $templates): KitCommand {
+         return new class ($kit, $templates) extends KitCommand {
+            public function __construct (string $kit, string $templates)
+            {
+               parent::__construct();
+               $this->kit = $kit;
+               $this->templates = $templates;
+            }
+         };
+      };
+      $Capture = static function (callable $Run): array {
+         $Host = new Output('php://memory');
+         $Terminal = CLI->Terminal;
+         $Restore = $Terminal->Output;
+         $Terminal->Output = $Host;
+         try {
+            $result = $Run();
+         }
+         finally {
+            $Terminal->Output = $Restore;
+         }
+         rewind($Host->stream);
+
+         return [$result, (string) preg_replace('/\e\[[0-9;]*m/', '', (string) stream_get_contents($Host->stream))];
+      };
+      $Boot = static fn (KitCommand $Command, array $options = []): array => $Capture(static fn (): bool => $Command->run(['boot'], $options));
+      $Same = static fn (string $kit): bool => file_get_contents("{$kit}/projects/AGENTS.md") === file_get_contents("{$rules}/AGENTS.md")
+         && file_get_contents("{$kit}/projects/.agents/rules/Alpha.md") === file_get_contents("{$rules}/.agents/rules/Alpha.md");
+
+      // # A fresh kit: the directories and the rules
+      $kit = "{$base}/kit";
+      mkdir($kit, 0775, true);
+      $Command = $Bind($kit, $templates);
+      [$result, $output] = $Boot($Command);
+      yield assert(
+         assertion: $result === true && $Same($kit) === true && str_contains($output, 'Agent rules laid down'),
+         description: '`kit boot` lays down projects/AGENTS.md and projects/.agents/rules/ from the templates, got: ' . json_encode($output)
+      );
+
+      // # Up to date: nothing is written
+      [$result, $output] = $Boot($Command);
+      yield assert(
+         assertion: $result === true && $Same($kit) === true && str_contains($output, 'Agent rules laid down') === false,
+         description: 'a kit whose rules match the templates is left untouched, got: ' . json_encode($output)
+      );
+
+      // # The framework's rules drift: a hand edit under the stamp, a stray file,
+      //   a template reworded with the same set of files — each replaced
+      file_put_contents("{$kit}/projects/AGENTS.md", "{$stamp}\n# edited by hand\n");
+      [$result] = $Boot($Command);
+      yield assert(
+         assertion: $result === true && $Same($kit) === true,
+         description: 'a hand edit of the stamped AGENTS.md is replaced by the template'
+      );
+      file_put_contents("{$kit}/projects/.agents/rules/Stray.md", "stray\n");
+      [$result] = $Boot($Command);
+      yield assert(
+         assertion: $result === true && file_exists("{$kit}/projects/.agents/rules/Stray.md") === false,
+         description: 'a stray file in .agents/rules/ goes with the whole-directory swap'
+      );
+      file_put_contents("{$rules}/.agents/rules/Alpha.md", "# Alpha\n\n- **MUST** — alpha, reworded.\n");
+      [$result] = $Boot($Command);
+      yield assert(
+         assertion: $result === true && $Same($kit) === true,
+         description: 'a template reworded with the same set of files reaches the kit'
+      );
+
+      // # The rest of .agents/ is the user's
+      mkdir("{$kit}/projects/.agents/skills/deploy", 0775, true);
+      file_put_contents("{$kit}/projects/.agents/skills/deploy/SKILL.md", "mine\n");
+      file_put_contents("{$kit}/projects/AGENTS.md", "{$stamp}\n# edited again\n");
+      [$result] = $Boot($Command);
+      yield assert(
+         assertion: $result === true && $Same($kit) === true
+            && file_get_contents("{$kit}/projects/.agents/skills/deploy/SKILL.md") === "mine\n",
+         description: 'a refresh never touches the user\'s own files elsewhere in .agents/'
+      );
+
+      // # A link in place of .agents/rules/ is replaced; what it pointed at is left alone
+      $outside = "{$base}/outside";
+      mkdir($outside, 0775, true);
+      file_put_contents("{$outside}/Alpha.md", "outside\n");
+      rename("{$kit}/projects/.agents/rules", "{$base}/retired-rules");
+      symlink($outside, "{$kit}/projects/.agents/rules");
+      [$result] = $Boot($Command);
+      yield assert(
+         assertion: $result === true && is_link("{$kit}/projects/.agents/rules") === false && $Same($kit) === true
+            && file_get_contents("{$outside}/Alpha.md") === "outside\n",
+         description: 'a link in place of .agents/rules/ is replaced by a real directory, and its target is left alone'
+      );
+
+      // # An interrupted run's staging is swept once it is old — a concurrent
+      //   run's live staging (fresh) is not
+      mkdir("{$kit}/projects/.bootgly.4242.0123456789ab/rules", 0700, true);
+      touch("{$kit}/projects/.bootgly.4242.0123456789ab", time() - 3600);
+      mkdir("{$kit}/projects/.bootgly.4343.0123456789ab", 0700);
+      file_put_contents("{$kit}/projects/AGENTS.md", "{$stamp}\n# drift\n");
+      [$result] = $Boot($Command);
+      yield assert(
+         assertion: $result === true && file_exists("{$kit}/projects/.bootgly.4242.0123456789ab") === false
+            && is_dir("{$kit}/projects/.bootgly.4343.0123456789ab") === true,
+         description: 'an old leftover staging directory is swept, a fresh one (a concurrent run) is left'
+      );
+      rmdir("{$kit}/projects/.bootgly.4343.0123456789ab");
+
+      // # The user's own AGENTS.md — no stamp — is never replaced, and said
+      $theirs = "{$base}/theirs";
+      mkdir("{$theirs}/projects", 0775, true);
+      file_put_contents("{$theirs}/projects/AGENTS.md", "# Use pnpm. Generated code is Machine-managed by our codegen.\n");
+      [$result, $output] = $Boot($Bind($theirs, $templates));
+      yield assert(
+         assertion: $result === true
+            && file_get_contents("{$theirs}/projects/AGENTS.md") === "# Use pnpm. Generated code is Machine-managed by our codegen.\n"
+            && file_exists("{$theirs}/projects/.agents/rules") === false && str_contains($output, 'is not Bootgly'),
+         description: 'an unstamped AGENTS.md is left alone and the boot says why (still a successful boot), got: ' . json_encode($output)
+      );
+      [$result] = $Boot($Bind($theirs, $templates), ['agents' => true]);
+      yield assert(
+         assertion: $result === true && file_exists("{$theirs}/projects/.agents/rules") === false,
+         description: 'a skip is not a failure: `kit boot --agents` succeeds and still lays nothing over the user\'s entry point'
+      );
+
+      // # A stamped entry point under a linked .agents/: the link leads outside
+      //   the kit — neither laid through nor written
+      $linkedAgents = "{$base}/linked-agents";
+      mkdir("{$linkedAgents}/projects", 0775, true);
+      mkdir("{$base}/dotfiles/rules", 0775, true);
+      file_put_contents("{$base}/dotfiles/rules/Mine.md", "mine\n");
+      file_put_contents("{$linkedAgents}/projects/AGENTS.md", "{$stamp}\n# laid once\n");
+      symlink("{$base}/dotfiles", "{$linkedAgents}/projects/.agents");
+      [$result] = $Boot($Bind($linkedAgents, $templates));
+      yield assert(
+         assertion: $result === true && file_get_contents("{$base}/dotfiles/rules/Mine.md") === "mine\n"
+            && file_exists("{$base}/dotfiles/rules/Alpha.md") === false,
+         description: 'a linked .agents/ is never laid through, even under a stamped AGENTS.md'
+      );
+
+      // # A link in place of AGENTS.md is the user's: neither it nor its target is written
+      $linked = "{$base}/linked";
+      mkdir("{$linked}/projects", 0775, true);
+      file_put_contents("{$base}/victim.txt", "secret\n");
+      symlink("{$base}/victim.txt", "{$linked}/projects/AGENTS.md");
+      [$result] = $Boot($Bind($linked, $templates));
+      yield assert(
+         assertion: $result === true && is_link("{$linked}/projects/AGENTS.md") === true
+            && file_get_contents("{$base}/victim.txt") === "secret\n",
+         description: 'an AGENTS.md link is left alone, and what it points at is never written'
+      );
+
+      // # The sets: --resources lays no rules, --agents lays nothing else
+      $sets = "{$base}/sets";
+      mkdir($sets, 0775, true);
+      [$result] = $Boot($Bind($sets, $templates), ['resources' => true]);
+      yield assert(
+         assertion: $result === true && is_file("{$sets}/projects/Bootgly.projects.php") === true
+            && file_exists("{$sets}/projects/AGENTS.md") === false,
+         description: '`kit boot --resources` lays down the directories only'
+      );
+      $only = "{$base}/only";
+      mkdir("{$only}/projects", 0775, true);
+      [$result] = $Boot($Bind($only, $templates), ['agents' => true]);
+      yield assert(
+         assertion: $result === true && is_file("{$only}/projects/AGENTS.md") === true
+            && is_dir("{$only}/scripts") === false && is_dir("{$only}/storage") === false
+            && is_file("{$only}/projects/Bootgly.projects.php") === false,
+         description: '`kit boot --agents` lays down the rules only'
+      );
+
+      // # A framework that predates the rules lays nothing
+      $bare = "{$base}/bare";
+      mkdir($bare, 0775, true);
+      [$result, $output] = $Boot($Bind($bare, $old));
+      yield assert(
+         assertion: $result === true && file_exists("{$bare}/projects/AGENTS.md") === false && file_exists("{$bare}/projects/.agents") === false,
+         description: 'a framework without the templates lays no agent rules, got: ' . json_encode($output)
+      );
+
+      // ---
+
+      // # After a move — `refresh()`, called once the swap landed
+      $Refresh = static function (KitCommand $Command): array {
+         // ! Private to KitCommand — bound to its scope, not the subclass's
+         $Run = Closure::bind(function (): array {
+            $this->refresh();
+
+            return $this->document;
+         }, $Command, KitCommand::class);
+
+         return $Run();
+      };
+
+      // @ A release that predates the rules (the kit's own Bootgly/ has no
+      //   templates): the framework's go, the user's own .agents/ files stay
+      mkdir("{$kit}/Bootgly", 0775, true);
+      [$document] = $Capture(static fn (): array => $Refresh($Bind($kit, $old)));
+      yield assert(
+         assertion: ($document['agents'] ?? null) === 'removed'
+            && file_exists("{$kit}/projects/AGENTS.md") === false && file_exists("{$kit}/projects/.agents/rules") === false
+            && file_get_contents("{$kit}/projects/.agents/skills/deploy/SKILL.md") === "mine\n",
+         description: 'moving to a release without the templates removes the framework\'s rules only, got: ' . json_encode($document)
+      );
+      // @ …never an AGENTS.md without the stamp, whatever it mentions
+      file_put_contents("{$kit}/projects/AGENTS.md", "# ours — Machine-managed by our codegen\n");
+      [$document] = $Capture(static fn (): array => $Refresh($Bind($kit, $old)));
+      yield assert(
+         assertion: ($document['agents'] ?? null) === 'kept'
+            && file_get_contents("{$kit}/projects/AGENTS.md") === "# ours — Machine-managed by our codegen\n",
+         description: 'an unstamped AGENTS.md is kept by the refresh, got: ' . json_encode($document)
+      );
+      // @ …nor anything through a linked .agents/, under a stamped entry point
+      mkdir("{$linkedAgents}/Bootgly", 0775, true);
+      file_put_contents("{$linkedAgents}/projects/Bootgly.projects.php", "<?php\n\nreturn [];\n");
+      [$document] = $Capture(static fn (): array => $Refresh($Bind($linkedAgents, $old)));
+      yield assert(
+         assertion: ($document['agents'] ?? null) === 'kept' && file_get_contents("{$base}/dotfiles/rules/Mine.md") === "mine\n",
+         description: 'a downgrade never deletes through a linked .agents/, got: ' . json_encode($document)
+      );
+
+      // @ A release that carries them: its own launcher re-lays them (a stub
+      //   launcher stands in, leaving a trace of the call)
+      file_put_contents("{$kit}/projects/AGENTS.md", "{$stamp}\n");
+      mkdir("{$kit}/Bootgly/Bootgly/commands/templates/projects", 0775, true);
+      copy("{$rules}/AGENTS.md", "{$kit}/Bootgly/Bootgly/commands/templates/projects/AGENTS.md");
+      file_put_contents("{$kit}/bootgly", "<?php file_put_contents(__DIR__ . '/called', implode(' ', array_slice(\$argv, 1)));\n");
+      [$document] = $Capture(static fn (): array => $Refresh($Bind($kit, $templates)));
+      yield assert(
+         assertion: ($document['agents'] ?? null) === 'refreshed'
+            && is_file("{$kit}/called") === true && file_get_contents("{$kit}/called") === 'kit boot --agents',
+         description: 'moving to a release with the templates runs its launcher\'s `kit boot --agents`, got: ' . json_encode($document)
+      );
+      // @ A launcher that writes a lot never stalls the move (its output is discarded)
+      file_put_contents("{$kit}/bootgly", "<?php fwrite(STDERR, str_repeat('x', 300000)); fwrite(STDOUT, str_repeat('y', 300000));\n");
+      [$document] = $Capture(static fn (): array => $Refresh($Bind($kit, $templates)));
+      yield assert(
+         assertion: ($document['agents'] ?? null) === 'refreshed',
+         description: 'a launcher flooding stdout and stderr still completes, got: ' . json_encode($document)
+      );
+      // @ A launcher that fails is reported, never hidden
+      file_put_contents("{$kit}/bootgly", "<?php exit(1);\n");
+      [$document] = $Capture(static fn (): array => $Refresh($Bind($kit, $templates)));
+      yield assert(
+         assertion: ($document['agents'] ?? null) === 'failed',
+         description: 'a re-lay that fails is reported as failed, got: ' . json_encode($document)
+      );
+      // @ A kit never booted is left for its first `projects create` — even
+      //   with templates and a launcher that would leave a trace
+      $fresh = "{$base}/fresh";
+      mkdir("{$fresh}/Bootgly/Bootgly/commands/templates/projects", 0775, true);
+      copy("{$rules}/AGENTS.md", "{$fresh}/Bootgly/Bootgly/commands/templates/projects/AGENTS.md");
+      file_put_contents("{$fresh}/bootgly", "<?php file_put_contents(__DIR__ . '/called', 'called');\n");
+      [$document] = $Capture(static fn (): array => $Refresh($Bind($fresh, $templates)));
+      yield assert(
+         assertion: isset($document['agents']) === false && file_exists("{$fresh}/called") === false,
+         description: 'a kit without a registry is not touched by the refresh, got: ' . json_encode($document)
+      );
+
+      // @ Nothing the refresh meets escapes it — an unreadable rules tree
+      //   (root reads everything: skipped there)
+      if (function_exists('posix_geteuid') === false || posix_geteuid() !== 0) {
+         $locked = "{$base}/locked";
+         mkdir("{$locked}/Bootgly", 0775, true);
+         mkdir("{$locked}/projects/.agents/rules/sub", 0775, true);
+         file_put_contents("{$locked}/projects/Bootgly.projects.php", "<?php\n\nreturn [];\n");
+         file_put_contents("{$locked}/projects/AGENTS.md", "{$stamp}\n");
+         chmod("{$locked}/projects/.agents/rules/sub", 0000);
+         try {
+            [$document] = $Capture(static fn (): array => $Refresh($Bind($locked, $old)));
+         }
+         finally {
+            chmod("{$locked}/projects/.agents/rules/sub", 0775);
+         }
+         yield assert(
+            assertion: ($document['agents'] ?? null) === 'failed',
+            description: 'an error inside the refresh is reported as failed, never thrown into the move, got: ' . json_encode($document)
+         );
+      }
+
+      // # A fresh kit's first `projects create` lays the rules too (the
+      //   installer and the Docker wizard go through it)
+      $created = Temporaries::reserve('kit-agent-rules-create');
+      file_put_contents(
+         "{$created}/bootgly",
+         "<?php\n"
+            . "define('BOOTGLY_WORKING_BASE', __DIR__);\n"
+            . "define('BOOTGLY_WORKING_DIR', BOOTGLY_WORKING_BASE . DIRECTORY_SEPARATOR);\n"
+            . "(include '" . BOOTGLY_ROOT_DIR . "autoboot.php') || exit(1);\n"
+      );
+      $environment = getenv();
+      $environment['AI_AGENT'] = '1';
+      $process = proc_open(
+         [PHP_BINARY, '-d', 'opcache.jit=0', "{$created}/bootgly", 'projects', 'create', 'Hello', '--yes', '--platform=none', '--interfaces=CLI', '--no-git'],
+         [0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
+         $pipes,
+         $created,
+         $environment
+      );
+      $status = is_resource($process) === true ? proc_close($process) : -1;
+      yield assert(
+         assertion: $status === 0 && is_file("{$created}/projects/Hello/Hello.Project.php") === true
+            && str_starts_with((string) @file_get_contents("{$created}/projects/AGENTS.md"), KitCommand::STAMP)
+            && is_dir("{$created}/projects/.agents/rules") === true,
+         description: '`projects create` on a fresh kit lays projects/AGENTS.md and .agents/rules/, got status ' . $status
+      );
+
+      // # A real move calls it: a fixture kit whose releases predate the rules
+      $fixture = (require __DIR__ . '/fixtures/kit_fixture.php')("{$base}/lineage");
+      $moved = $fixture['clone']('moved', 'refs/tags/v1.0.0');
+      file_put_contents("{$moved}/projects/Bootgly.projects.php", "<?php\n\nreturn [];\n");
+      copy("{$rules}/AGENTS.md", "{$moved}/projects/AGENTS.md");
+      mkdir("{$moved}/projects/.agents/rules", 0775, true);
+      copy("{$rules}/.agents/rules/Alpha.md", "{$moved}/projects/.agents/rules/Alpha.md");
+      $Mover = new class ($moved, $fixture['canon']) extends KitCommand {
+         public function __construct (string $kit, string $repository)
+         {
+            parent::__construct();
+            $this->kit = $kit;
+            $this->repository = $repository;
+         }
+
+         // ! The registry and the pid files belong to the process's own kit, not the fixture's
+         protected function scan (): array
+         {
+            return [];
+         }
+      };
+      [$result, $output] = $Capture(static fn (): bool => $Mover->run(['upgrade'], ['json' => true, 'yes' => true]));
+      $document = json_decode($output, true);
+      yield assert(
+         assertion: $result === true && ($document['status'] ?? null) === 'moved' && ($document['agents'] ?? null) === 'removed'
+            && file_exists("{$moved}/projects/AGENTS.md") === false && file_exists("{$moved}/projects/.agents") === false
+            && is_file("{$moved}/projects/App/notes.txt") === true,
+         description: '`kit upgrade` to a release without the rules removes them and nothing else of projects/, got: ' . json_encode($document)
+      );
+   }
+);

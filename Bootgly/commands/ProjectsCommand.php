@@ -1552,7 +1552,8 @@ class ProjectsCommand extends Command
 
    /**
     * Prepare the working directory (kit) on first run: platform submodules
-    * (system git) and resource directories (`kit boot --resources`).
+    * (system git), then `kit boot` — the resource directories and the agent
+    * rules.
     *
     * @param array<string, bool|int|string> $options
     *
@@ -1681,8 +1682,9 @@ class ProjectsCommand extends Command
       // # Resource directories
       $fresh = is_file(BOOTGLY_WORKING_DIR . 'projects/Bootgly.projects.php') === false;
       if ($fresh === true) {
-         // ! `kit boot` — the resource directories, laid down once
-         if (new KitCommand()->boot(['resources' => true]) === false) {
+         // ! `kit boot` — the resource directories, laid down once, and the
+         //   agent rules (advisory: their failure never fails the boot)
+         if (new KitCommand()->boot([]) === false) {
             return false;
          }
       }

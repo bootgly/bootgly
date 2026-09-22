@@ -1,6 +1,6 @@
-# Bootgly projects — agent rules
+<!-- Machine-managed by `bootgly kit boot`: it lays this file and `.agents/rules/` down and rewrites them. Do not edit. -->
 
-<!-- Machine-managed: `bootgly kit boot` lays this file and `.agents/` down, and `kit upgrade` rewrites them. Do not edit. -->
+# Bootgly projects — agent rules
 
 Every directory here is an application built on the Bootgly framework this kit pins (`../Bootgly/`,
 read-only). Before you write, review or answer questions about code under `projects/`, read the rule

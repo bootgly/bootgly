@@ -76,5 +76,7 @@ return new Suite(
       '11.7-scaffold-attribution',
       // # the agent rules a kit lays down in projects/
       '11.8-kit-agent-rules',
+      // # kit boot lays down and refreshes the agent rules; a move re-lays them
+      '8.10-kit-agent-rules',
    ]
 );

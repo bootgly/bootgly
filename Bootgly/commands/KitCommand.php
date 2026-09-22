@@ -17,15 +17,19 @@ use const BOOTGLY_VERSION;
 use const BOOTGLY_WORKING_DIR;
 use const JSON_INVALID_UTF8_SUBSTITUTE;
 use const JSON_UNESCAPED_SLASHES;
+use const PHP_BINARY;
 use const PHP_EOL;
 use function array_intersect_key;
 use function array_key_first;
 use function array_keys;
 use function array_map;
 use function array_slice;
+use function bin2hex;
 use function chown;
 use function clearstatcache;
+use function constant;
 use function copy;
+use function defined;
 use function dirname;
 use function explode;
 use function file_exists;
@@ -39,17 +43,27 @@ use function in_array;
 use function is_dir;
 use function is_file;
 use function is_link;
+use function is_resource;
 use function json_encode;
+use function ksort;
 use function lchgrp;
 use function lchown;
+use function lstat;
 use function mkdir;
 use function posix_geteuid;
 use function preg_match;
 use function preg_replace;
+use function proc_close;
+use function proc_open;
+use function random_bytes;
+use function readlink;
 use function realpath;
 use function rename;
 use function rmdir;
 use function rtrim;
+use function scandir;
+use function sha1;
+use function sha1_file;
 use function shell_exec;
 use function str_contains;
 use function str_pad;
@@ -58,6 +72,7 @@ use function str_starts_with;
 use function strlen;
 use function strtolower;
 use function substr;
+use function time;
 use function trim;
 use function unlink;
 use FilesystemIterator;
@@ -114,6 +129,8 @@ class KitCommand extends Command
     * Vault the same) — pre-creating them at the umask would break the first session.
     */
    private const array STORAGE = ['cache/', 'locks/', 'logs/', 'pids/', 'queues/', 'schedule/', 'temp/', 'tests/'];
+   /** The first line of an agent-rules entry point `boot` owns — anything else in its place is the user's. */
+   public const string STAMP = '<!-- Machine-managed by `bootgly kit boot`';
    /** The transports a releases remote may use — anything else is refused. */
    private const array TRANSPORTS = ['https', 'ssh', 'git+ssh', 'file'];
 
@@ -128,7 +145,7 @@ class KitCommand extends Command
    /** @var array<string,array<string,array<string,string>|string>> */
    public array $arguments = [ // @phpstan-ignore property.phpDocType
       'boot' => [
-         'description' => 'Lay down the kit\'s resource directories (projects, scripts, storage)',
+         'description' => 'Lay down the kit\'s resource directories (projects, scripts, storage) and its agent rules',
          'arguments'   => []
       ],
       'upgrade' => [
@@ -154,7 +171,8 @@ class KitCommand extends Command
       'Show help information' => ['--help', '-h'],
       'Machine output — one JSON document (upgrade/downgrade/list)' => ['--json'],
       'Answer every confirmation: running instances, a major crossing, a release predating this command (upgrade/downgrade)' => ['--yes'],
-      'The resource directories to lay down — the default and, today, the only set (boot)' => ['--resources'],
+      'Lay down only the resource directories: projects, scripts, storage (boot)' => ['--resources'],
+      'Lay down only the agent rules: projects/AGENTS.md and projects/.agents/rules/ (boot)' => ['--agents'],
    ];
    // # Kit
    /** The kit root — the launcher's directory. */
@@ -295,6 +313,12 @@ class KitCommand extends Command
     * what is already there. No kit-level `public/`: the serving APIs are
     * jailed to the project directory, so assets live per project.
     *
+    * The one exception is the agent rules — `projects/AGENTS.md` and
+    * `projects/.agents/rules/`: the framework's, not the kit's, so they are
+    * laid down AND refreshed whenever they differ from the pinned templates —
+    * but only while they are the framework's (see `lay()`). `--resources`
+    * lays down only the directories, `--agents` only the rules; both by default.
+    *
     * `projects create` and `import` run this on a fresh kit by themselves.
     *
     * @param array<string,bool|int|string> $options
@@ -304,14 +328,17 @@ class KitCommand extends Command
    public function boot (array $options = []): bool
    {
       // ? Refuse a flag this verb does not take
-      if ($this->admit(['resources'], $options) === false) {
+      if ($this->admit(['resources', 'agents'], $options) === false) {
          return false;
       }
+      // ! The sets to lay down — both unless one is named
+      $resources = isSet($options['agents']) === false || isSet($options['resources']) === true;
+      $agents = isSet($options['resources']) === false || isSet($options['agents']) === true;
 
       $Output = CLI->Terminal->Output;
       $kit = rtrim($this->kit, '/') ?: '/';
 
-      $Output->render('@.;@#green:Booting resource directories...@;@.;');
+      $Output->render('@.;@#green:' . ($resources === true ? 'Booting resource directories...' : 'Booting agent rules...') . '@;@.;');
 
       // ? The framework checkout is not a kit: its resources are the templates
       $Alert = new Alert($Output);
@@ -329,7 +356,7 @@ class KitCommand extends Command
       // # scripts/ — the framework's template, mirrored into a staging directory
       //   and renamed into place: a copy that fails leaves nothing behind that a
       //   later run's `is_dir` could take for the real thing
-      if (is_dir("{$kit}/scripts") === false) {
+      if ($resources === true && is_dir("{$kit}/scripts") === false) {
          $staging = "{$kit}/.scripts." . getmypid() . '.partial';
          $this->wipe($staging);
          $mirrored = $this->mirror("{$templates}/scripts/", "{$staging}/")
@@ -354,7 +381,7 @@ class KitCommand extends Command
       //   checkout that has been run carries sessions, pid files and key material
       //   that belong to it alone. A layout that cannot be completed is removed
       $created = false;
-      if (is_dir("{$kit}/storage") === false) {
+      if ($resources === true && is_dir("{$kit}/storage") === false) {
          $laid = @mkdir("{$kit}/storage", 0755, true);
          $created = $laid;
          foreach (self::STORAGE as $inner) {
@@ -382,7 +409,7 @@ class KitCommand extends Command
       //   so a boot that fails before it leaves the next run free to repair —
       //   and it is gated on the file it promises, never on the directory alone
       $registry = "{$kit}/projects/Bootgly.projects.php";
-      if (is_file($registry) === false) {
+      if ($resources === true && is_file($registry) === false) {
          $created = (is_dir("{$kit}/projects") === true || @mkdir("{$kit}/projects", 0755, true))
             && @copy("{$templates}/Bootgly/commands/stubs/Bootgly.projects.php", $registry)
             && is_file($registry);
@@ -406,11 +433,242 @@ class KitCommand extends Command
          self::grant($registry);
       }
 
+      // # projects/AGENTS.md + projects/.agents/rules/ — the agent rules, refreshed
+      //   whenever they differ from the pinned framework's templates. Advisory:
+      //   a failure is said, and fails only a run that asked for the rules alone
+      //   (the registry above is already written — a boot that stops here would
+      //   leave a kit that never gets its examples stocked)
+      if ($agents === true && $this->lay($kit, $templates, $Alert) === false && $resources === false) {
+         return false;
+      }
+
       $Output->render('@#green:OK@;@.;');
       $Output->write(PHP_EOL);
 
       // :
       return true;
+   }
+
+   /**
+    * Lay down the agent rules in the kit's `projects/` — `AGENTS.md` and
+    * `.agents/rules/`, mirrored from the framework's `templates/projects/`.
+    *
+    * They are machine-managed, but only while they are the framework's: an
+    * `AGENTS.md` whose first line is the stamp, with `.agents/rules/` beside
+    * it (or neither there yet). Anything else in their place — an unstamped
+    * or linked `AGENTS.md`, a `.agents/rules/` with no stamped entry point, a
+    * linked `.agents/` — is the user's: left exactly as it is, and said. The
+    * rest of `.agents/` (a user's own skills) is never touched.
+    *
+    * When they are the framework's and differ from the pinned templates (a
+    * release that moved, a hand edit) they are replaced whole, never merged;
+    * when they match, nothing is written. Staging names are unguessable and
+    * created fresh, so nothing planted beside them is written through.
+    *
+    * @param string $kit The kit root.
+    * @param string $templates The framework checkout the templates come from.
+    * @param Alert $Alert The alert the boot reports through.
+    *
+    * @return bool False when the rules could not be laid down.
+    */
+   private function lay (string $kit, string $templates, Alert $Alert): bool
+   {
+      $source = "{$templates}/Bootgly/commands/templates/projects";
+      $target = "{$kit}/projects";
+      $entry = "{$target}/AGENTS.md";
+      $rules = "{$target}/.agents/rules";
+
+      // ? A framework that predates the rules, or a kit with no projects/ yet
+      if (is_file("{$source}/AGENTS.md") === false || is_dir($target) === false) {
+         return true;
+      }
+      // ? A platform checkout — its projects/ are its examples, not a kit's
+      foreach (['CONSOLE_ROOT_BASE', 'WEB_ROOT_BASE'] as $root) {
+         if (defined($root) === true && realpath((string) constant($root)) === realpath($kit)) {
+            return true;
+         }
+      }
+      // ? The user's, not the framework's — left as it is, and said (a skip,
+      //   not a failure: a kit may keep its own entry point there)
+      if (self::claim($target) === false) {
+         $Alert->Type::Attention->set();
+         $Alert->message = 'Agent rules skipped: @#cyan:projects/AGENTS.md@; is not Bootgly\'s.';
+         $Alert->render();
+
+         return true;
+      }
+      // ? Already the templates, file for file
+      if ($this->sign($source) === $this->sign($target)) {
+         return true;
+      }
+
+      // ! One staging directory for the whole run — unguessable, made fresh
+      //   and private (mkdir refuses a planted name): the new rules, the
+      //   retired ones and the entry point all pass through it
+      $this->sweep($target);
+      $staging = "{$target}/.bootgly." . getmypid() . '.' . bin2hex(random_bytes(6));
+      $created = is_dir("{$target}/.agents") === false;
+      $laid = @mkdir($staging, 0700) === true
+         && ($created === false || @mkdir("{$target}/.agents", 0755) === true)
+         && $this->mirror("{$source}/.agents/rules/", "{$staging}/rules/");
+
+      // @ .agents/rules/ — swapped in whole; the previous rules go back on failure
+      $present = file_exists($rules) === true || is_link($rules) === true;
+      if ($laid === true && $present === true) {
+         $laid = @rename($rules, "{$staging}/retired");
+      }
+      if ($laid === true) {
+         $laid = @rename("{$staging}/rules", $rules);
+         if ($laid === false && $present === true) {
+            @rename("{$staging}/retired", $rules);
+         }
+      }
+      // @ AGENTS.md last — renamed over the entry point: a link is replaced
+      if ($laid === true) {
+         $laid = @copy("{$source}/AGENTS.md", "{$staging}/AGENTS.md") === true
+            && @rename("{$staging}/AGENTS.md", $entry) === true;
+      }
+      $this->wipe($staging);
+      // ?
+      if ($laid === false) {
+         $Alert->Type::Attention->set();
+         $Alert->message = 'Could not lay down the agent rules in @#cyan:projects/@;.';
+         $Alert->render();
+
+         return false;
+      }
+
+      // @ Handed over like the registry — only what this run wrote: a
+      //   bind-mounted projects/ is its owner's, and so is a .agents/ that
+      //   was already there
+      self::grant($rules);
+      self::grant($entry);
+      if ($created === true) {
+         self::grant("{$target}/.agents");
+      }
+
+      $Alert->Type::Success->set();
+      $Alert->message = 'Agent rules laid down in @#cyan:projects/@;';
+      $Alert->render();
+
+      // :
+      return true;
+   }
+
+   /**
+    * Tell whether the agent rules in a kit's `projects/` are the
+    * framework's to write: a stamped `AGENTS.md` (or no entry point and no
+    * `.agents/rules/` yet), under a `.agents/` that is not a link. Anything
+    * else there is the user's.
+    *
+    * @param string $target The kit's `projects/`.
+    *
+    * @return bool
+    */
+   private static function claim (string $target): bool
+   {
+      $entry = "{$target}/AGENTS.md";
+      $rules = "{$target}/.agents/rules";
+
+      // ? A linked .agents/ leads outside the kit
+      if (is_link("{$target}/.agents") === true) {
+         return false;
+      }
+
+      // :
+      return self::recognize($entry) === true
+         || (file_exists($entry) === false && is_link($entry) === false
+            && file_exists($rules) === false && is_link($rules) === false);
+   }
+
+   /**
+    * Tell whether an agent-rules entry point is the framework's: a regular
+    * file (never a link) whose first line opens with the stamp.
+    *
+    * @param string $file
+    *
+    * @return bool
+    */
+   private static function recognize (string $file): bool
+   {
+      // ?
+      if (is_link($file) === true || is_file($file) === false) {
+         return false;
+      }
+
+      $head = @file_get_contents($file, false, null, 0, strlen(self::STAMP));
+
+      // :
+      return $head === self::STAMP;
+   }
+
+   /**
+    * Sweep the staging directories an interrupted `lay()` left behind — only
+    * this command's own name pattern, only once they are minutes old (a
+    * concurrent boot's live staging is not a leftover), each removed without
+    * following a link.
+    *
+    * @param string $target The kit's `projects/`.
+    */
+   private function sweep (string $target): void
+   {
+      // @@
+      foreach ((array) @scandir($target) as $name) {
+         $path = "{$target}/{$name}";
+         if (preg_match('/^\.bootgly\.\d+\.[0-9a-f]{12}$/', (string) $name) !== 1) {
+            continue;
+         }
+         $entry = @lstat($path);
+         if ($entry !== false && (int) $entry['mtime'] < time() - 300) {
+            $this->wipe($path);
+         }
+      }
+   }
+
+   /**
+    * Sign the agent rules under a directory — `AGENTS.md` and every entry of
+    * `.agents/rules/`, by relative path and content — so two trees compare as
+    * one string. A link is signed by where it points, never followed.
+    *
+    * @param string $base The directory holding `AGENTS.md` and `.agents/`.
+    *
+    * @return string
+    */
+   private function sign (string $base): string
+   {
+      $entries = [];
+
+      // @@ AGENTS.md, then .agents/rules/ and everything under it
+      $paths = ["{$base}/AGENTS.md", "{$base}/.agents/rules"];
+      if (is_dir("{$base}/.agents/rules") === true && is_link("{$base}/.agents/rules") === false) {
+         // ? An unreadable tree cannot be the templates — it is drift
+         try {
+            $Entries = new RecursiveIteratorIterator(
+               new RecursiveDirectoryIterator("{$base}/.agents/rules", FilesystemIterator::SKIP_DOTS),
+               RecursiveIteratorIterator::SELF_FIRST
+            );
+            /** @var SplFileInfo $Entry */
+            foreach ($Entries as $Entry) {
+               $paths[] = $Entry->getPathname();
+            }
+         }
+         catch (Throwable) {
+            return '';
+         }
+      }
+      foreach ($paths as $path) {
+         $relative = substr($path, strlen($base) + 1);
+         $entries[$relative] = match (true) {
+            is_link($path) => 'link:' . (string) @readlink($path),
+            is_file($path) => 'file:' . (string) @sha1_file($path),
+            is_dir($path)  => 'dir',
+            default        => 'none',
+         };
+      }
+      ksort($entries);
+
+      // :
+      return sha1((string) json_encode($entries));
    }
 
    /**
@@ -809,6 +1067,8 @@ class KitCommand extends Command
          $this->document['status'] = 'moved';
 
          $this->say("@.;@#green:The kit is on@; @#cyan:{$target['tag']}@;.");
+         // @ The agent rules follow the release
+         $this->refresh();
          // ! A submodule the release declares that this kit never set up stays
          //   absent — `submodule update` runs without `--init` on purpose — and is named
          $pending = [];
@@ -840,6 +1100,75 @@ class KitCommand extends Command
 
       // :
       return $moved;
+   }
+
+   /**
+    * Bring the agent rules in `projects/` in line with the release the kit
+    * just moved to. This process still runs the outgoing code, so the NEW
+    * launcher re-lays them (`kit boot --agents`, its output discarded — it
+    * never reaches the stream or the JSON document); a release that predates
+    * the rules takes the framework's away — a stamped `AGENTS.md` and
+    * `.agents/rules/` — and nothing else. Only built-ins and this class run
+    * here — it is called after the swap — and nothing it does may throw.
+    */
+   private function refresh (): void
+   {
+      try {
+         $kit = rtrim($this->kit, '/');
+         // ! The kit's own framework, as the release just checked it out
+         $templates = "{$kit}/" . self::FRAMEWORK . '/Bootgly/commands/templates/projects/AGENTS.md';
+
+         // ? A kit that was never booted — its first `projects create` boots it
+         if (is_file("{$kit}/projects/Bootgly.projects.php") === false) {
+            return;
+         }
+
+         // ? The user's own entry point or .agents/ — never the release's to touch
+         if (self::claim("{$kit}/projects") === false) {
+            $this->document['agents'] = 'kept';
+            $this->say('   Agent rules in @#cyan:projects/@; are not Bootgly\'s — left as they are.');
+
+            return;
+         }
+
+         // ? A release that predates the rules: the framework's go
+         if (is_file($templates) === false) {
+            if (self::recognize("{$kit}/projects/AGENTS.md") === false) {
+               return;
+            }
+            @unlink("{$kit}/projects/AGENTS.md");
+            $this->wipe("{$kit}/projects/.agents/rules");
+            @rmdir("{$kit}/projects/.agents");
+            $this->document['agents'] = 'removed';
+            $this->say('   Agent rules removed from @#cyan:projects/@; — this release predates them.');
+
+            return;
+         }
+
+         // @ The new launcher re-lays them
+         $status = -1;
+         if (is_file("{$kit}/bootgly") === true) {
+            $process = @proc_open(
+               [PHP_BINARY, "{$kit}/bootgly", 'kit', 'boot', '--agents'],
+               [0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
+               $pipes,
+               $kit
+            );
+            if (is_resource($process) === true) {
+               $status = proc_close($process);
+            }
+         }
+
+         $this->document['agents'] = $status === 0 ? 'refreshed' : 'failed';
+         $this->say(
+            $status === 0
+               ? '   Agent rules in @#cyan:projects/@; follow the release.'
+               : '   Agent rules could not be refreshed — run @#cyan:bootgly kit boot --agents@;.'
+         );
+      }
+      catch (Throwable) {
+         $this->document['agents'] = 'failed';
+      }
    }
 
    /**

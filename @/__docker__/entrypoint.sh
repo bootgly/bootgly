@@ -37,5 +37,13 @@ if [ "${1:-}" = 'docker-default' ]; then
    set -- help
 fi
 
+# @ The agent rules in projects/ follow the image's framework: a host-mounted
+#   projects/ never sees `kit upgrade`, so every start of a prepared kit
+#   re-lays them when they drifted (`kit boot --agents` touches nothing else)
+if [ -f /bootgly/projects/Bootgly.projects.php ]; then
+   bootgly kit boot --agents >/dev/null 2>&1 \
+      || echo 'bootgly: the agent rules in projects/ were not refreshed — `bootgly kit boot --agents` says why.' >&2
+fi
+
 # : Any explicit command goes straight to the framework CLI
 exec bootgly "$@"
