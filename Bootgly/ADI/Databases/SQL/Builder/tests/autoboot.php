@@ -27,5 +27,6 @@ return new Suite(
       '9.9-sql_builder_cte',
       '9.10-sql_builder_upsert_ordering',
       '9.11-sql_builder_slice',
+      '9.12-sql_builder_aggregates',
    ]
 );

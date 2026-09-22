@@ -100,6 +100,8 @@ class Builder
    private array $columnAliases = [];
    /** @var array<string,string> */
    private array $expressionAliases = [];
+   /** @var array<int,array{aggregate:Aggregates,column:string,alias:null|string,distinct:bool}> */
+   private array $aggregations = [];
    private null|self|Query $source = null;
    /** @var array<string,array<int,mixed>> */
    private array $assignments = [];
@@ -358,20 +360,34 @@ class Builder
 
    /**
     * Add a selected aggregate expression.
+    *
+    * `distinct: true` aggregates each distinct value once — `COUNT(DISTINCT col)`.
+    * It does not touch `distinct()`, which keeps meaning `SELECT DISTINCT` for the row.
+    * A bare `*` is refused: `COUNT(*)` is `count()`, and no engine accepts `*` in any
+    * other aggregate or after `DISTINCT`.
     */
-   public function aggregate (Aggregates $Aggregate, BackedEnum|Stringable $Column, null|BackedEnum|Stringable $Alias = null): static
+   public function aggregate (Aggregates $Aggregate, BackedEnum|Stringable $Column, null|BackedEnum|Stringable $Alias = null, bool $distinct = false): static
    {
       $column = $this->identify($Column);
-      $expression = "{$Aggregate->value}({$column})";
 
-      if ($Alias !== null) {
-         $alias = $this->identify($Alias);
-         $expression = "{$expression} AS {$alias}";
+      // ?
+      if ($column === '*') {
+         throw new InvalidArgumentException('SQL aggregate cannot take *: use count() for COUNT(*).');
       }
 
+      $alias = $Alias === null ? null : $this->identify($Alias);
+
       $this->Mode = Modes::Select;
-      $this->columns[] = $expression;
-      $this->record(__FUNCTION__, $Aggregate, $Column, $Alias);
+      // @ Keep the parts, not only the text: the column resolves in `project()`, so a
+      //   table alias registered before or after this call still reaches it.
+      $this->aggregations[count($this->columns)] = [
+         'aggregate' => $Aggregate,
+         'column' => $column,
+         'alias' => $alias,
+         'distinct' => $distinct,
+      ];
+      $this->columns[] = $this->summarize($Aggregate, $column, $alias, $distinct);
+      $this->record(__FUNCTION__, $Aggregate, $Column, $Alias, $distinct);
 
       return $this;
    }
@@ -647,7 +663,28 @@ class Builder
    private function project (array &$parameters): string
    {
       $table = $this->derive($parameters);
-      $columns = $this->columns === [] ? '*' : implode(', ', $this->map($this->columns));
+      $projections = [];
+
+      foreach ($this->columns as $index => $column) {
+         $aggregation = $this->aggregations[$index] ?? null;
+
+         if ($aggregation === null) {
+            $projections[] = $this->render($column);
+
+            continue;
+         }
+
+         // @ An aggregate without its own alias still honours an `alias()` registered
+         //   on its text as an `Expression`.
+         $projections[] = $this->summarize(
+            $aggregation['aggregate'],
+            $this->target($aggregation['column'], exact: false),
+            $aggregation['alias'] ?? $this->expressionAliases[$column] ?? null,
+            $aggregation['distinct']
+         );
+      }
+
+      $columns = $projections === [] ? '*' : implode(', ', $projections);
       $select = $this->distinct ? 'SELECT DISTINCT' : 'SELECT';
       $sql = "{$select} {$columns} FROM {$table}";
 
@@ -810,6 +847,21 @@ class Builder
       $position = count($parameters);
 
       return $this->Dialect->mark($position);
+   }
+
+   /**
+    * Compile one aggregate call: `FUNC([DISTINCT ]column)[ AS alias]`.
+    */
+   private function summarize (Aggregates $Aggregate, string $column, null|string $alias, bool $distinct): string
+   {
+      $argument = $distinct ? "DISTINCT {$column}" : $column;
+      $expression = "{$Aggregate->value}({$argument})";
+
+      if ($alias === null) {
+         return $expression;
+      }
+
+      return "{$expression} AS {$alias}";
    }
 
    /**

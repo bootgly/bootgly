@@ -17,6 +17,7 @@ namespace Bootgly\ADI\Databases\SQL\Builder\Auxiliaries;
 enum Aggregates: string
 {
    case Average = 'AVG';
+   case Count = 'COUNT';
    case Maximum = 'MAX';
    case Minimum = 'MIN';
    case Sum = 'SUM';
