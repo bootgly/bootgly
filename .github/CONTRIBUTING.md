@@ -46,7 +46,8 @@ These are enforced in review; most of them are also checked by tooling.
 - **Comments:** [Semantic Commenting Code](https://github.com/bootgly/semantic_commenting_code)
   — `// ?` guard, `// !` setup, `// @` action, `// :` return, `// *` property section,
   `// #` subsection. Properties are grouped as `// * Config`, `// * Data`, `// * Metadata`.
-- **PHPDoc** on every public method and property. **The license header** on every PHP file.
+- **PHPDoc** on every public method and property. **The license header** on every framework PHP
+  file — never in the files a scaffold writes into a user's project.
 
 ## Tests
 
