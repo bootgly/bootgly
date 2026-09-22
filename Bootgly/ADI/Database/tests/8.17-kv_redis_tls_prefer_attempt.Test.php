@@ -38,6 +38,7 @@ use function glob;
 use function in_array;
 use function ini_get;
 use function is_array;
+use function is_bool;
 use function is_dir;
 use function is_file;
 use function is_resource;
@@ -305,7 +306,7 @@ $pump = static function (Redis $Redis, Operation $Operation, float $limit): void
  * construction; `closed` closes the port before the client dials it, so no
  * peer ever runs.
  *
- * @param array{cafile?:string,peer?:string,certificate?:string,delay?:float,answer?:bool,rounds?:int,closed?:bool} $options
+ * @param array{cafile?:string,peer?:string,certificate?:string,delay?:float,answer?:bool,rounds?:int,closed?:bool,verify?:bool} $options
  * @return array{error:string,connections:array<int,array{first_hex:string,auth_seen:bool,encrypted:bool}>,client_error:string,response:mixed,elapsed:float,downgrade:null|string,rounds:array<int,array{response:mixed,error:string,downgrade:null|string}>}
  */
 $drive = static function (string $mode, string $shape, float $timeout = 3.0, array $options = []) use ($partial, $pump): array {
@@ -316,6 +317,7 @@ $drive = static function (string $mode, string $shape, float $timeout = 3.0, arr
    $answer = $options['answer'] ?? false;
    $rounds = $options['rounds'] ?? 1;
    $closed = $options['closed'] ?? false;
+   $verify = $options['verify'] ?? null;
    $shapes = explode(',', $shape);
    $failure = static fn (string $error): array => ['error' => $error, 'connections' => [], 'client_error' => '', 'response' => null, 'elapsed' => 0.0, 'downgrade' => null, 'rounds' => []];
 
@@ -502,6 +504,9 @@ $drive = static function (string $mode, string $shape, float $timeout = 3.0, arr
    }
 
    $secure = ['mode' => $mode]; // ! nothing else: the shipped defaults
+   if (is_bool($verify)) {
+      $secure['verify'] = $verify;
+   }
    if ($cafile !== '') {
       $secure['cafile'] = $cafile;
    }
@@ -733,7 +738,7 @@ return new Test(
          );
       }
       else {
-         $late = $drive('require', 'tls', 5.0, ['cafile' => $CA, 'certificate' => $server, 'delay' => 1.3, 'answer' => true]);
+         $late = $drive('require', 'tls', 5.0, ['cafile' => $CA, 'certificate' => $server, 'delay' => 1.3, 'answer' => true, 'verify' => true]);
          $only = $late['connections'][0] ?? [];
 
          yield assert(
@@ -766,26 +771,47 @@ return new Test(
             . json_encode($refused)
       );
 
-      // @@ G) prefer, shipped defaults, a TLS peer with an untrusted certificate —
-      //    the peer DID answer TLS, so there is nothing to downgrade from: the
-      //    operation fails on the verification and no plaintext contact follows
-      $untrusted = $drive('prefer', 'tls', $timeout);
+      // @@ G) prefer, shipped defaults, a TLS peer with an untrusted certificate
+      //    that serves RESP over it — the handshake completes: `prefer` verifies
+      //    nothing, so a self-signed peer is a TLS peer like any other. One
+      //    contact, encrypted, PONG over TLS, no plaintext AUTH, no downgrade.
+      $untrusted = $drive('prefer', 'tls', $timeout, ['answer' => true]);
       $only = $untrusted['connections'][0] ?? [];
 
       yield assert(
          assertion: $untrusted['error'] === ''
             && ($only['first_hex'] ?? '') === '16'
+            && ($only['auth_seen'] ?? true) === false
+            && ($only['encrypted'] ?? false) === true
             && count($untrusted['connections']) === 1
-            && $untrusted['response'] === null
-            && str_contains($untrusted['client_error'], 'certificate verify failed') === true
+            && $untrusted['response'] === 'PONG'
+            && $untrusted['client_error'] === ''
+            && $untrusted['downgrade'] === ''
             && $untrusted['elapsed'] < $timeout,
-         description: 'G) prefer never downgrades on an untrusted certificate: one TLS contact, a failure naming the verification, no plaintext AUTH — '
+         description: 'G) prefer with the shipped defaults completes the handshake with an untrusted certificate — no verification — and PONGs over TLS: one contact, no plaintext AUTH, no downgrade — '
             . json_encode($untrusted)
       );
 
-      // @@ H) require, shipped defaults, the same untrusted peer — one contact,
-      //    the abort names the verification, nothing plaintext
-      $strict = $drive('require', 'tls', $timeout);
+      // @@ G2) prefer opted into verification, the same untrusted peer — the
+      //    peer DID answer TLS, so there is nothing to downgrade from: the
+      //    operation fails on the verification and no plaintext contact follows
+      $verified = $drive('prefer', 'tls', $timeout, ['verify' => true]);
+      $only = $verified['connections'][0] ?? [];
+
+      yield assert(
+         assertion: $verified['error'] === ''
+            && ($only['first_hex'] ?? '') === '16'
+            && count($verified['connections']) === 1
+            && $verified['response'] === null
+            && str_contains($verified['client_error'], 'certificate verify failed') === true
+            && $verified['elapsed'] < $timeout,
+         description: 'G2) prefer with `verify` never downgrades on an untrusted certificate: one TLS contact, a failure naming the verification, no plaintext AUTH — '
+            . json_encode($verified)
+      );
+
+      // @@ H) require opted into verification, the same untrusted peer — one
+      //    contact, the abort names the verification, nothing plaintext
+      $strict = $drive('require', 'tls', $timeout, ['verify' => true]);
       $only = $strict['connections'][0] ?? [];
 
       yield assert(
@@ -795,14 +821,14 @@ return new Test(
             && count($strict['connections']) === 1
             && $strict['response'] === null
             && str_contains($strict['client_error'], 'certificate verify failed') === true,
-         description: 'H) require aborts on an untrusted certificate naming the verify failure: one contact, no plaintext — '
+         description: 'H) require with `verify` aborts on an untrusted certificate naming the verify failure: one contact, no plaintext — '
             . json_encode($strict)
       );
 
       // @@ I) prefer, a `cafile` that does not exist — refused before any socket:
       //    the exception names the path and the listener never sees a contact
       $missing = __DIR__ . '/fixtures/no-such-ca-' . bin2hex((string) getmypid()) . '.pem';
-      $cafile = $drive('prefer', 'silent', $timeout, ['cafile' => $missing]);
+      $cafile = $drive('prefer', 'silent', $timeout, ['cafile' => $missing, 'verify' => true]);
 
       yield assert(
          assertion: $cafile['error'] === ''
@@ -882,7 +908,7 @@ return new Test(
       //    warning into an exception — so it is masked here on purpose.
       $reporting = error_reporting(E_ALL & ~E_WARNING);
       try {
-         $store = $drive('prefer', 'tls', $timeout, ['cafile' => __FILE__]);
+         $store = $drive('prefer', 'tls', $timeout, ['cafile' => __FILE__, 'verify' => true]);
       }
       finally {
          error_reporting($reporting);
@@ -965,7 +991,7 @@ return new Test(
             'anchor' => 'OpenSSL Error messages: wrong version number',
             'transport' => 'stream_socket_enable_crypto(): SSL: x',
          ] as $leaf => $CN) {
-            $named = $drive('prefer', 'tls', $timeout, ['cafile' => $CA, 'certificate' => (string) $PKI->fetch($leaf, ''), 'peer' => 'redis.example']);
+            $named = $drive('prefer', 'tls', $timeout, ['cafile' => $CA, 'certificate' => (string) $PKI->fetch($leaf, ''), 'peer' => 'redis.example', 'verify' => true]);
             $only = $named['connections'][0] ?? [];
 
             yield assert(
@@ -997,7 +1023,7 @@ return new Test(
          );
       }
       else {
-         $again = $drive('prefer', 'reset,tls', $timeout, ['cafile' => $CA, 'certificate' => $server, 'answer' => true, 'rounds' => 2]);
+         $again = $drive('prefer', 'reset,tls', $timeout, ['cafile' => $CA, 'certificate' => $server, 'answer' => true, 'rounds' => 2, 'verify' => true]);
          $first = $again['rounds'][0] ?? [];
          $second = $again['rounds'][1] ?? [];
          $third = $again['connections'][2] ?? [];

@@ -135,8 +135,8 @@ return new Test(
       yield assert(
          assertion: $FallbackConfig->secure === [
             'mode' => ADIConfig::DEFAULT_SECURE_MODE,
-            'verify' => true,
-            'name' => true,
+            'verify' => false,
+            'name' => false,
             'peer' => 'fallback.local',
             'cafile' => ADIConfig::DEFAULT_SECURE_CAFILE,
             'key' => ADIConfig::DEFAULT_SECURE_KEY,

@@ -147,5 +147,9 @@ return new Suite(
       '8.17-kv_redis_tls_prefer_attempt',
       // # A pending TLS handshake parks on READ: WRITE spun the sync wait.
       '6.4-sql_tls_handshake_readiness',
+      // # `prefer`/`require` encrypt WITHOUT verification (MY-11): the shipped
+      //   default must reach a self-signed server, as libpq's and MySQL's do.
+      '1.2-config_secure_verification',
+      '6.5-sql_tls_unverified_modes',
    ]
 );

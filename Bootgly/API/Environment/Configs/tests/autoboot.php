@@ -36,5 +36,8 @@ return new Suite(
 
       '6.x-database_config_missing_driver_scope',
       '6.x-configs_scope_identity',
+
+      // # The Demo scaffold must not re-impose verification on `prefer` (MY-11).
+      '7.x-database_config_scaffold_verify',
    ]
 );

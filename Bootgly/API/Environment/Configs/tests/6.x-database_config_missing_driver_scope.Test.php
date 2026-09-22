@@ -75,8 +75,8 @@ return new Test(
                && $WrongConfig->timeout === ADIConfig::DEFAULT_TIMEOUT
                && $WrongConfig->secure === [
                   'mode' => ADIConfig::DEFAULT_SECURE_MODE,
-                  'verify' => true,
-                  'name' => true,
+                  'verify' => false,
+                  'name' => false,
                   'peer' => ADIConfig::DEFAULT_HOST,
                   'cafile' => ADIConfig::DEFAULT_SECURE_CAFILE,
                   'key' => ADIConfig::DEFAULT_SECURE_KEY,

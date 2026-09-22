@@ -11,10 +11,15 @@
 namespace Bootgly\ADI\Database;
 
 
+use const FILTER_NULL_ON_FAILURE;
+use const FILTER_VALIDATE_BOOLEAN;
+use function filter_var;
 use function in_array;
 use function is_array;
 use function is_bool;
 use function is_scalar;
+use function is_string;
+use function trim;
 use InvalidArgumentException;
 
 
@@ -120,9 +125,13 @@ class Config
       $this->timeout = is_scalar($timeout) ? (float) $timeout : self::DEFAULT_TIMEOUT;
 
       $secureMode = $this->validate(is_scalar($secureMode) ? (string) $secureMode : self::DEFAULT_SECURE_MODE);
-      $secureVerify = $secure['verify'] ?? $secureMode !== self::SECURE_DISABLE;
-      $secureVerify = is_bool($secureVerify) ? $secureVerify : $secureMode !== self::SECURE_DISABLE;
-      $secureName = $secure['name'] ?? ($secureVerify && $secureMode !== self::SECURE_VERIFY_CA && $secureMode !== self::SECURE_DISABLE);
+      // ! Verification is what `verify-ca`/`verify-full` ADD: `prefer` and
+      //   `require` encrypt without it unless `verify`/`name` opt in — the
+      //   libpq/MySQL `sslmode` contract these names come from. A default that
+      //   verified refused every stock MySQL 8 (TLS on, self-signed) at first contact.
+      $strict = $secureMode === self::SECURE_VERIFY_CA || $secureMode === self::SECURE_VERIFY_FULL;
+      $secureVerify = $this->cast($secure['verify'] ?? null, 'verify') ?? $strict;
+      $secureName = $this->cast($secure['name'] ?? null, 'name') ?? $secureVerify;
 
       if ($secureMode === self::SECURE_VERIFY_CA) {
          $secureVerify = true;
@@ -139,12 +148,22 @@ class Config
          $secureName = true;
       }
 
+      $secureCA = is_scalar($secureCA) ? (string) $secureCA : self::DEFAULT_SECURE_CAFILE;
+      // ? A `cafile` is only ever read by a verifying handshake — PHP loads it
+      //   with `verify_peer` alone — so one under an unverified mode would be
+      //   silently unused. Refused here, at config time, naming the way out.
+      if ($secureCA !== '' && $secureVerify === false && $secureMode !== self::SECURE_DISABLE) {
+         throw new InvalidArgumentException(
+            "Database TLS cafile requires certificate verification: use mode `verify-ca` or `verify-full`, or set `verify` to true."
+         );
+      }
+
       $this->secure = [
          'mode' => $secureMode,
          'verify' => $secureVerify,
-         'name' => is_bool($secureName) ? $secureName : true,
+         'name' => $secureName,
          'peer' => is_scalar($securePeer) && (string) $securePeer !== '' ? (string) $securePeer : $this->host,
-         'cafile' => is_scalar($secureCA) ? (string) $secureCA : self::DEFAULT_SECURE_CAFILE,
+         'cafile' => $secureCA,
          'key' => is_scalar($secureKey) ? (string) $secureKey : self::DEFAULT_SECURE_KEY,
       ];
       $this->pool = [
@@ -191,9 +210,15 @@ class Config
          $secureCA = $secure['cafile'] ?? $this->secure['cafile'];
          $secureKey = $secure['key'] ?? $this->secure['key'];
          $secureMode = $this->validate(is_scalar($secureMode) ? (string) $secureMode : $this->secure['mode']);
-         $secureVerify = $secure['verify'] ?? $this->secure['verify'];
-         $secureVerify = is_bool($secureVerify) ? $secureVerify : $this->secure['verify'];
-         $secureName = $secure['name'] ?? $this->secure['name'];
+         // ! A replica that declares its own `mode` derives its flags from it,
+         //   exactly like the primary; one that declares neither `mode` nor
+         //   `verify` inherits the primary's resolved flags.
+         $inherited = is_scalar($secure['mode'] ?? null) === false;
+         $strict = $secureMode === self::SECURE_VERIFY_CA || $secureMode === self::SECURE_VERIFY_FULL;
+         $verify = $this->cast($secure['verify'] ?? null, 'verify', $host);
+         $secureVerify = $verify ?? ($inherited ? $this->secure['verify'] : $strict);
+         $secureName = $this->cast($secure['name'] ?? null, 'name', $host)
+            ?? ($inherited && $verify === null ? $this->secure['name'] : $secureVerify);
 
          if ($secureMode === self::SECURE_VERIFY_CA) {
             $secureVerify = true;
@@ -210,6 +235,20 @@ class Config
             $secureName = true;
          }
 
+         // ? An inherited `cafile` is the primary's to verify with: a replica
+         //   that resolves unverified drops it, so nothing looks pinned that no
+         //   handshake reads — and the normalized endpoint, fed back through this
+         //   constructor by `SQL`, never trips the refusal below on its own.
+         if (isset($secure['cafile']) === false && $secureVerify === false) {
+            $secureCA = self::DEFAULT_SECURE_CAFILE;
+         }
+         // ? Same refusal as the primary's, for a `cafile` the replica itself declared
+         if (isset($secure['cafile']) && is_scalar($secureCA) && (string) $secureCA !== '' && $secureVerify === false && $secureMode !== self::SECURE_DISABLE) {
+            throw new InvalidArgumentException(
+               "Database TLS cafile requires certificate verification: use mode `verify-ca` or `verify-full`, or set `verify` to true (replica {$host})."
+            );
+         }
+
          $endpoint = [
             'driver' => is_scalar($replica['driver']) ? (string) $replica['driver'] : $this->driver,
             'host' => $host,
@@ -221,7 +260,7 @@ class Config
             'secure' => [
                'mode' => $secureMode,
                'verify' => $secureVerify,
-               'name' => is_bool($secureName) ? $secureName : true,
+               'name' => $secureName,
                'peer' => is_scalar($securePeer) && (string) $securePeer !== '' ? (string) $securePeer : (string) $host,
                'cafile' => is_scalar($secureCA) ? (string) $secureCA : self::DEFAULT_SECURE_CAFILE,
                'key' => is_scalar($secureKey) ? (string) $secureKey : self::DEFAULT_SECURE_KEY,
@@ -279,5 +318,37 @@ class Config
       }
 
       throw new InvalidArgumentException("Unsupported database TLS mode: {$mode}.");
+   }
+
+   /**
+    * Read one boolean TLS flag: absent stays `null` (derived from the mode), a
+    * boolean or boolean-like scalar is accepted, anything else — an empty or
+    * blank string included — is refused: a flag that cannot be read must never
+    * resolve to "off" in silence. `$host` names the replica the flag belongs to.
+    *
+    * @throws InvalidArgumentException when the flag is neither boolean nor absent
+    */
+   private function cast (mixed $flag, string $key, string $host = ''): null|bool
+   {
+      // ?
+      if ($flag === null) {
+         return null;
+      }
+      if (is_bool($flag)) {
+         return $flag;
+      }
+
+      $flag = is_string($flag) ? trim($flag) : $flag;
+      $parsed = is_scalar($flag) && $flag !== ''
+         ? filter_var($flag, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE)
+         : null;
+      if ($parsed === null) {
+         $where = $host === '' ? '' : " (replica {$host})";
+
+         throw new InvalidArgumentException("Database TLS `{$key}` must be a boolean{$where}.");
+      }
+
+      // :
+      return $parsed;
    }
 }

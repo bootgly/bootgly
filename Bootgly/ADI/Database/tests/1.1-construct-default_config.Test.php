@@ -34,8 +34,8 @@ return new Test(
       yield assert(
          assertion: $Database->Config->secure === [
             'mode' => Config::DEFAULT_SECURE_MODE,
-            'verify' => true,
-            'name' => true,
+            'verify' => false,
+            'name' => false,
             'peer' => Config::DEFAULT_HOST,
             'cafile' => Config::DEFAULT_SECURE_CAFILE,
             'key' => Config::DEFAULT_SECURE_KEY,
