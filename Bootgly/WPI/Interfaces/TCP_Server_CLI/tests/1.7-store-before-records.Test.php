@@ -35,7 +35,7 @@ use Bootgly\WPI\Interfaces\UDP_Server_CLI as UDPServer;
  * of the method, so a commented-out call cannot satisfy it.
  */
 return new Test(
-   description: 'start() calls store() before the first record it logs, in the TCP and the UDP server',
+   description: 'start() calls store(starting: true) before the first record it logs, in the TCP and the UDP server',
    test: function () {
       foreach ([TCPServer::class, UDPServer::class] as $class) {
          $Method = new ReflectionMethod($class, 'start');
@@ -47,7 +47,7 @@ return new Test(
          $signature = 'public function start ()';
          $from = strpos($stripped, $signature);
          $body = $from === false ? '' : substr($stripped, $from);
-         $store = strpos($body, '$this->store();');
+         $store = strpos($body, '$this->store(starting: true);');
          $record = strpos($body, '$this->Logger->log(');
 
          yield assert(

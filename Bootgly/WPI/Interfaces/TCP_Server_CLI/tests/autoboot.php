@@ -25,5 +25,7 @@ return new Suite(
       '1.7-store-before-records',
       '1.8-inherit-launcher-hold',
       '1.9-privilege-source-pins',
+      // # The Daemon fallback sink yields to a sink registered before start() (LOGS-10)
+      '1.10-fallback-yields',
    ]
 );

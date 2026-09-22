@@ -99,9 +99,9 @@ use Bootgly\WPI\Interfaces\UDP_Server_CLI\Configs as UDPConfigs;
 if (! class_exists(TCPServerCLIRootProbe::class, false)) {
    class TCPServerCLIRootProbe extends TCPServer
    {
-      public function store (): void
+      public function store (bool $starting = false): void
       {
-         parent::store();
+         parent::store($starting);
       }
       public function hold (string $message): void
       {
@@ -114,9 +114,9 @@ if (! class_exists(TCPServerCLIRootProbe::class, false)) {
    }
    class UDPServerCLIRootProbe extends UDPServer
    {
-      public function store (): void
+      public function store (bool $starting = false): void
       {
-         parent::store();
+         parent::store($starting);
       }
       public function hold (string $message): void
       {
@@ -163,7 +163,19 @@ if (! class_exists(TCPServerCLIRootProbe::class, false)) {
  *   J) a third identity's storage/logs is left as found too;
  *   I) two servers in one root process share one hold; the second, settling
  *      first, installs the withheld sinks, and the first's pending notice
- *      reaches them when the process ends.
+ *      reaches them when the process ends;
+ *   K) a sink registered between configure() and start() — the Web App's own
+ *      File sink — takes the fallback's place in the hold: withheld like it,
+ *      never live as root, created by the runtime identity with every held
+ *      record once, and no fallback file or notice appears;
+ *   L) one registered after start() but before the demotion takes the
+ *      fallback's place at settle() the same way;
+ *   M) one registered at a root-only path while root runs is never written
+ *      by root: the withheld sink writes nothing until the runtime identity
+ *      holds it, and then only what that identity may;
+ *   N) the fallback yielding does not silence what root found wrong with
+ *      `storage/logs`: that notice is still the first record, in the sink
+ *      that took the fallback's place.
  *
  * The legs need an unprivileged user namespace (`unshare --user` + `newuidmap`
  * with a subordinate uid range). Without one the case is skipped and says so;
@@ -228,7 +240,8 @@ return new Test(
             string $class = TCPServerCLIRootProbe::class,
             string $user = 'daemon',
             null|Handlers $Project = null,
-            null|string $beside = null
+            null|string $beside = null,
+            null|string $between = null
          ) use ($runtime, $trace): int {
             $pid = pcntl_fork();
             if ($pid === 0) {
@@ -249,8 +262,13 @@ return new Test(
                   // ! Logged after configure() and BEFORE the explicit store():
                   //   the transport adopt() must already be holding
                   $Probe->hold('configured-before-store');
+                  if ($between !== null) {
+                     // ! Registered between configure() and start() — as the
+                     //   Web App does, beside the hold
+                     Logger::$Sinks?->push(new FileHandler($between));
+                  }
                   $step('store');
-                  $Probe->store();
+                  $Probe->store(starting: true);
                   if ($beside !== null) {
                      // ! Pushed beside the hold, between store() and demote()
                      Logger::$Sinks?->push(new FileHandler($beside));
@@ -509,6 +527,89 @@ return new Test(
                   . count($records) . $probe() . ')'
             );
 
+            // @@ K) A sink registered between configure() and start() takes the
+            //       fallback's place in the hold — withheld, never live as root
+            $reset();
+            $exit = $boot(TCPServerCLIRootProbe::class, 'daemon', null, null, "$logs/app/{channel}.log");
+            $app = "$logs/app/TCP.Server.CLI.log";
+            $records = $lines($app);
+            $legs['K'] = $exit === 0
+               && $owned($logs, $runtime)
+               && $owned("$logs/app", $runtime)
+               && $owned($app, $runtime)
+               && is_file($log) === false
+               && count($records) === 2
+               && str_contains($records[0], 'configured-before-store')
+               && str_contains($records[1], 'held-while-root')
+               && str_contains((string) @file_get_contents($app), 'No global log sinks') === false;
+            yield assert(
+               assertion: $legs['K'],
+               description: 'a sink registered between configure() and start() takes the fallback\'s place: withheld from root, '
+                  . 'its file is created by the runtime identity with each held record once, and neither the fallback file '
+                  . "nor the notice appears (exit=$exit, records=" . count($records) . $probe() . ')'
+            );
+            // @@ L) Registered after start()'s store() and before the demotion:
+            //       the fallback yields at settle() the same way
+            $reset();
+            $exit = $boot(TCPServerCLIRootProbe::class, 'daemon', null, "$logs/late/{channel}.log");
+            $late = "$logs/late/TCP.Server.CLI.log";
+            $records = $lines($late);
+            $legs['L'] = $exit === 0
+               && $owned("$logs/late", $runtime)
+               && $owned($late, $runtime)
+               && is_file($log) === false
+               && count($records) === 2
+               && str_contains($records[0], 'configured-before-store')
+               && str_contains($records[1], 'held-while-root')
+               && str_contains((string) @file_get_contents($late), 'No global log sinks') === false;
+            yield assert(
+               assertion: $legs['L'],
+               description: 'a sink registered after start() and before the demotion takes the fallback\'s place at settle(): '
+                  . 'its file is the runtime identity\'s with each held record once, no fallback file, no notice '
+                  . "(exit=$exit, records=" . count($records) . $probe() . ')'
+            );
+            // @@ M) Registered between configure() and start() at a path only root
+            //       may write: withheld, so root never writes there — and the
+            //       runtime identity, refused, writes nothing either
+            $reset();
+            @mkdir("$aside/rootonly", 0o755);
+            $exit = $boot(TCPServerCLIRootProbe::class, 'daemon', null, null, "$aside/rootonly/{channel}.log");
+            $inside = array_values(array_diff((array) @scandir("$aside/rootonly"), ['.', '..']));
+            $legs['M'] = $exit === 0
+               && $owned("$aside/rootonly", 0)
+               && $inside === []
+               && is_file($log) === false;
+            yield assert(
+               assertion: $legs['M'],
+               description: 'a sink registered before start() at a root-only path is withheld like the fallback it replaces: '
+                  . "root writes nothing there while it runs, and no fallback file appears (exit=$exit, entries=" . implode(',', $inside) . $probe() . ')'
+            );
+            // @@ N) The fallback yields, but what root found wrong with storage/logs
+            //       is still said — first, in the sink that took its place
+            $reset();
+            @mkdir($logs, 0o700);
+            lchown($logs, 3);
+            lchgrp($logs, 3);
+            @mkdir("$aside/app", 0o755);
+            lchown("$aside/app", $runtime);
+            lchgrp("$aside/app", $group);
+            $exit = $boot(TCPServerCLIRootProbe::class, 'daemon', null, null, "$aside/app/{channel}.log");
+            $app = "$aside/app/TCP.Server.CLI.log";
+            $records = $lines($app);
+            $legs['N'] = $exit === 0
+               && $owned($logs, 3)
+               && $owned($app, $runtime)
+               && count($records) === 3
+               && str_contains($records[0], 'left as found')
+               && str_contains($records[0], 'No global log sinks') === false
+               && str_contains($records[1], 'configured-before-store')
+               && str_contains($records[2], 'held-while-root');
+            yield assert(
+               assertion: $legs['N'],
+               description: 'with storage/logs left as found and the fallback yielding to a sink registered before start(), '
+                  . 'the handover notice is still that sink\'s first record — without the fallback sentence — then each held '
+                  . "record once (exit=$exit, records=" . count($records) . $probe() . ')'
+            );
             // @@ G) A privileged writer follows no path another identity can steer:
             //       a link of root's on the way is fine; the same link owned by a third
             //       identity is refused; an attacker-owned STICKY directory is refused too
@@ -741,7 +842,7 @@ return new Test(
          static fn (array $failure): string => (string) ($failure['message'] ?? ''),
          $verdict['failures'] ?? []
       ) : [];
-      $expected = ['A-TCP', 'A-UDP', 'B', 'C-third', 'C-root', 'D', 'E', 'F', 'H', 'J', 'I', 'G'];
+      $expected = ['A-TCP', 'A-UDP', 'B', 'C-third', 'C-root', 'D', 'E', 'F', 'H', 'J', 'I', 'K', 'L', 'M', 'N', 'G'];
       $ran = is_array($legs) ? array_keys($legs) : [];
 
       // ? The records leg F held reach the system logger — read from OUTSIDE

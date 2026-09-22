@@ -53,6 +53,11 @@ use Bootgly\API\Endpoints\Server\Modes;
  * storage directory those sinks default to is prepared and handed over by
  * inode, never through a link, and root never names a file inside it.
  *
+ * The Daemon fallback stands in only for sinks nobody configured: one a
+ * platform shell registers after configure() — the Web App pushes its own
+ * File sink at the fallback's very path — takes its place, notice included,
+ * so no record is ever persisted twice (see retire()).
+ *
  * The using class carries `$Mode`, `$user`, `$group`, `$Logger` and `$Process`,
  * and calls store() as soon as its transport is configured (the runtime `user`
  * is known from then on) and at the top of start(), inherit() right after it
@@ -66,6 +71,10 @@ trait Demotable
    private null|Handlers $Sinks = null;
    /** The notice naming where the fallback sink writes — the first record the master persists. */
    private null|string $notice = null;
+   /** The fallback File sink store() installed for a Daemon with no sinks configured — see retire(). */
+   private null|FileHandler $Fallback = null;
+   /** What a root launch found wrong with `storage/logs` — said even when the fallback yields. */
+   private null|string $issue = null;
    /** Whether store() already decided — it runs once, as soon as the transport is configured. */
    private bool $stored = false;
 
@@ -76,24 +85,42 @@ trait Demotable
     * With no sinks configured, a Daemon has no terminal and every server
     * record would be silently dropped at the Logger entry guard: one File sink
     * (JSON lines, default rotation) at `storage/logs/{channel}.log` is the
-    * fallback, and a notice naming it is the first record the master
-    * persists. A project that configured `Logger::$Sinks` keeps them. Either
-    * way, on a root launch with a runtime `user` NO root process ever holds a
-    * file sink: the file root would create — through whatever the runtime
-    * identity left at that pathname since the last boot handed it the
-    * directory — is exactly the write a compromised worker wants root to make,
-    * and any check on the pathname before that write is a window. Until
+    * fallback, and a notice naming it is the first record start() persists —
+    * written by start()'s own call, before its first record, or by the
+    * master of a root launch right after it demotes, before it replays what it
+    * held. A project that configured `Logger::$Sinks` keeps them, and the
+    * fallback stands in only until start(): a sink registered in between — the
+    * Web App's own File sink, at that very path — takes its place, notice
+    * included (see retire()). Either way, on a root launch with a runtime
+    * `user` NO root process ever holds a file sink: the file root would
+    * create — through whatever the runtime identity left at that pathname
+    * since the last boot handed it the directory — is exactly the write a
+    * compromised worker wants root to make, and any check on the pathname
+    * before that write is a window. Until
     * settle() the records are held in memory; root only prepares the
     * DIRECTORY, verified to be a real one, and hands that over. Only the
     * File sink re-opens its file on every write, as whoever writes: a
     * handler that captured a descriptor while root ran (a Stream opened in
     * `boot()`) is withheld and installed like any other, but keeps writing
     * through root's descriptor.
+    *
+    * @param bool $starting Whether start() is the caller: the fallback is then
+    *                       confirmed, and a launch that keeps its identity says
+    *                       the notice. A later configure() never says it.
     */
-   protected function store (): void
+   protected function store (bool $starting = false): void
    {
-      // ? Decided once — at configure(), and again harmlessly at start()
+      // ? Decided at configure(); at every later call the fallback yields to
+      //   sinks registered since, and at start() a launch that keeps its
+      //   identity says the notice — before start()'s first record, once the
+      //   fallback is confirmed
       if ($this->stored) {
+         $this->retire();
+         if ($starting && $this->Sinks === null && $this->notice !== null) {
+            $this->Logger->log(notice: $this->notice);
+            $this->notice = null;
+         }
+
          return;
       }
       $this->stored = true;
@@ -104,8 +131,9 @@ trait Demotable
       // ! Daemon fallback — one JSON file per channel under the storage dir
       if ($Sinks === null && $this->Mode === Modes::Daemon) {
          $path = BOOTGLY_STORAGE_DIR . 'logs/{channel}.log';
+         $this->Fallback = new FileHandler($path);
          $Sinks = new Handlers;
-         $Sinks->push(new FileHandler($path));
+         $Sinks->push($this->Fallback);
          $notice = "No global log sinks configured — Daemon logs will persist to $path@.;";
       }
       // ? Nothing to install
@@ -113,12 +141,11 @@ trait Demotable
          return;
       }
       // ? Not root, or root that stays root: the identity that installs the
-      //   sinks is the one that keeps writing through them
+      //   sinks is the one that keeps writing through them — the notice waits
+      //   for start(), where the fallback is confirmed or yields
       if (posix_getuid() !== 0 || $this->user === null) {
          Logger::$Sinks = $Sinks;
-         if ($notice !== null) {
-            $this->Logger->log(notice: $notice);
-         }
+         $this->notice = $notice;
 
          return;
       }
@@ -172,11 +199,11 @@ trait Demotable
          }
          // @ Still held: no server settled this hold — the notice and the
          //   records go to the system logger, loaded while root ran
-         $Fallback = new SyslogHandler;
+         $Syslog = new SyslogHandler;
          if ($this->notice !== null) {
-            $Fallback->handle(new Record(Levels::Notice, $this->Logger->channel, $this->notice));
+            $Syslog->handle(new Record(Levels::Notice, $this->Logger->channel, $this->notice));
          }
-         $Hold->replay($Fallback);
+         $Hold->replay($Syslog);
       });
 
       // @ Prepare storage/logs and hand it over — by inode, never through a link
@@ -255,7 +282,64 @@ trait Demotable
       // ! The notice waits for settle(): the daemon master is itself forked
       //   from the launcher that runs store(), and a fork never carries its
       //   parent's hold — so the master writes it, first, as the runtime identity
+      $this->issue = $issue;
       $this->notice = $notice;
+   }
+
+   /**
+    * Let the fallback yield to the sinks registered since store() decided.
+    *
+    * store() decides at configure(), and a platform shell registers its own
+    * sinks after that — the Web App pushes a File sink at the fallback's very
+    * path between configure() and start(). Those are the configuration
+    * store() could not see: the fallback and its notice give way to whatever
+    * was pushed beside it — beside the hold, on a root launch, where the
+    * newcomers are withheld in the fallback's place, never live as root.
+    * Called by store() at start(), before its first record, and by settle(),
+    * before the withheld sinks are installed. A project that configured its
+    * own sinks has no fallback, and keeps them all. `Logger::$Sinks` is
+    * replaced, never mutated: read the static, do not cache the collection.
+    */
+   private function retire (): void
+   {
+      // ? No fallback in place
+      if ($this->Fallback === null) {
+         return;
+      }
+      // ? Nothing registered beside the fallback — or beside the hold
+      $Hold = MemoryHandler::hold();
+      $Installed = [];
+      foreach (Logger::$Sinks->Handlers ?? [] as $Handler) {
+         if ($Handler !== $this->Fallback && $Handler !== $Hold) {
+            $Installed[] = $Handler;
+         }
+      }
+      if ($Installed === []) {
+         return;
+      }
+
+      // @ The fallback and its notice give way — what a root launch found
+      //   wrong with storage/logs is still said
+      $this->Fallback = null;
+      $this->notice = $this->issue;
+      $Sinks = new Handlers;
+      foreach ($Installed as $Handler) {
+         $Sinks->push($Handler);
+      }
+      // ? Installed at configure(): the newcomers are the live sinks now
+      if ($this->Sinks === null) {
+         Logger::$Sinks = $Sinks;
+
+         return;
+      }
+      // @ Withheld from root: the newcomers take the fallback's place in the
+      //   hold — withheld like it, never live as root — and only the hold stays
+      $this->Sinks = $Sinks;
+      if ($Hold !== null) {
+         MemoryHandler::hold($Hold, $Sinks->Handlers);
+         Logger::$Sinks = new Handlers;
+         Logger::$Sinks->push($Hold);
+      }
    }
 
    /**
@@ -285,7 +369,11 @@ trait Demotable
     */
    protected function settle (): void
    {
-      if ($this->Sinks === null) {
+      // ! The fallback yields to whatever was registered beside the hold since —
+      //   retire() may replace the withheld set, so it is read after
+      $this->retire();
+      $Sinks = $this->Sinks;
+      if ($Sinks === null) {
          return;
       }
 
@@ -293,11 +381,11 @@ trait Demotable
       //   the hold itself, known by identity, does not
       $Hold = MemoryHandler::hold();
       foreach (Logger::$Sinks->Handlers ?? [] as $Handler) {
-         if ($Handler !== $Hold && in_array($Handler, $this->Sinks->Handlers, true) === false) {
-            $this->Sinks->push($Handler);
+         if ($Handler !== $Hold && in_array($Handler, $Sinks->Handlers, true) === false) {
+            $Sinks->push($Handler);
          }
       }
-      Logger::$Sinks = $this->Sinks;
+      Logger::$Sinks = $Sinks;
       $this->Sinks = null;
 
       // @ The fallback notice: the master's first record, before anything it held
@@ -308,7 +396,7 @@ trait Demotable
 
       // @ The hold, if this process still carries one, is replayed and released
       if ($Hold !== null) {
-         $Hold->replay(...Logger::$Sinks->Handlers);
+         $Hold->replay(...$Sinks->Handlers);
          MemoryHandler::release();
       }
    }

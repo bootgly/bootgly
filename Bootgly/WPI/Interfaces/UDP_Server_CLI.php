@@ -1036,7 +1036,7 @@ class UDP_Server_CLI implements Servers
    {
       // ! The log sinks first — installed, or on a root launch withheld — so
       //   not one record start() writes is ever written as root
-      $this->store();
+      $this->store(starting: true);
 
       $PreviousSignals = self::mask();
       $Starting = new stdClass;
