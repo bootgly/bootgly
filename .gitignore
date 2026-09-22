@@ -96,6 +96,9 @@ projects/**/configs/**/.env.*
 # Keep the community health files (`*.md` above ignores them)
 !.github/CONTRIBUTING.md
 !.github/PULL_REQUEST_TEMPLATE.md
+# Keep the agent rules and skills a kit mirrors into its projects/ (`.agents/`, `*.md` above ignore them)
+!Bootgly/commands/templates/projects/.agents/
+!Bootgly/commands/templates/projects/**/*.md
 # Ignore IA folders/files
 .agent/*
 .codex

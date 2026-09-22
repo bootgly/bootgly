@@ -74,5 +74,7 @@ return new Suite(
       '10.3-lint-pinned-framework',
       // # scaffolds carry no framework license and keep config secrets out
       '11.7-scaffold-attribution',
+      // # the agent rules a kit lays down in projects/
+      '11.8-kit-agent-rules',
    ]
 );
