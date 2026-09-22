@@ -13,9 +13,9 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI as TCPServer;
 if (! class_exists('TCPServerCLIDefaultSinkProbe', false)) {
    class TCPServerCLIDefaultSinkProbe extends TCPServer
    {
-      public function store (): void
+      public function store (bool $starting = false): void
       {
-         parent::store();
+         parent::store($starting);
       }
    }
 }
@@ -82,7 +82,10 @@ return new Test(
          );
 
          // @@ C) The NOTICE reached the sink itself (the sink is installed first).
+         //       It waits for start(): configure() stores, start() stores again
+         //       naming itself, and only then is the kept fallback announced.
          //       Same inode → what follows the snapshot; rotated → the whole new file
+         $Probe->store(starting: true);
          $appended = is_file($noticeFile)
             ? (string) file_get_contents($noticeFile, offset: $same() ? $noticeOffset : 0)
             : '';
