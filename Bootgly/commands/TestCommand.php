@@ -14,7 +14,6 @@ namespace Bootgly\commands;
 use const BOOTGLY_ROOT_DIR;
 use const BOOTGLY_TTY;
 use const BOOTGLY_VERSION;
-use const BOOTGLY_WORKING_BASE;
 use const BOOTGLY_WORKING_DIR;
 use const DIRECTORY_SEPARATOR;
 use const JSON_THROW_ON_ERROR;
@@ -144,6 +143,7 @@ use Bootgly\ACI\Tests\Suites;
 use Bootgly\ACI\Tests\Temporaries;
 use Bootgly\API\Environment;
 use Bootgly\API\Environment\Agent;
+use Bootgly\API\Environment\Workspaces;
 use Bootgly\API\Projects;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\Terminal;
@@ -551,8 +551,7 @@ class TestCommand extends Command
       // ? Platform checkouts (bootgly-web / bootgly-console developing
       //   themselves) are consumer contexts whose working registry IS the
       //   platform registry — the kit contract below must not swallow them
-      $checkout = (defined('WEB_ROOT_BASE') === true && constant('WEB_ROOT_BASE') === BOOTGLY_WORKING_BASE)
-         || (defined('CONSOLE_ROOT_BASE') === true && constant('CONSOLE_ROOT_BASE') === BOOTGLY_WORKING_BASE);
+      $checkout = Workspaces::detect() === Workspaces::Platform;
       if ($registry === null && BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR && $checkout === true) {
          $registry = BOOTGLY_WORKING_DIR . 'tests/' . BOOTSTRAP_FILENAME;
       }

@@ -69,5 +69,8 @@ return new Suite(
       '11.4-tips-launcher',
       '11.5-kit-grant-noop',
       '11.6-server-first-byte',
+      // # lint in a kit: paths follow the cwd, pinned trees are never fixed
+      '10.2-lint-kit-scope',
+      '10.3-lint-pinned-framework',
    ]
 );

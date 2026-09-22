@@ -25,5 +25,7 @@ return new Suite(
       '1.5-tracked-certificates',
       // # Where the process runs: the image's variable or a runtime marker
       '1.6-container-check',
+      // # Which checkout the launcher works in: framework, platform or kit
+      '1.7-workspaces-detect',
    ]
 );

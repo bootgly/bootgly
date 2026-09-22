@@ -11,6 +11,7 @@
 namespace Bootgly\commands;
 
 
+use const BOOTGLY_ROOT_BASE;
 use const BOOTGLY_WORKING_DIR;
 use const JSON_UNESCAPED_SLASHES;
 use const JSON_UNESCAPED_UNICODE;
@@ -20,12 +21,15 @@ use function array_slice;
 use function basename;
 use function bin2hex;
 use function chmod;
+use function constant;
 use function count;
+use function defined;
 use function dirname;
 use function fclose;
 use function fopen;
 use function function_exists;
 use function fwrite;
+use function getcwd;
 use function implode;
 use function is_array;
 use function is_dir;
@@ -36,6 +40,7 @@ use function lstat;
 use function proc_close;
 use function proc_open;
 use function random_bytes;
+use function realpath;
 use function rename;
 use function rtrim;
 use function sort;
@@ -62,6 +67,8 @@ use Bootgly\ABI\Syntax\Methods;
 use Bootgly\ABI\Syntax\Nullables;
 use Bootgly\ABI\Syntax\Promotions;
 use Bootgly\API\Environment\Agent;
+use Bootgly\API\Environment\Workspaces;
+use Bootgly\API\Projects;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Base\Fieldset;
 use Bootgly\CLI\UI\Components\Alert;
@@ -89,7 +96,7 @@ class LintCommand extends Command
          'facade'      => Imports::class,
          'fixable'     => true,
          'arguments'   => [
-            '[path]' => 'File or directory path (default: Bootgly/)'
+            '[path]' => 'File or directory path (default: Bootgly/; in a kit: the current directory under projects/)'
          ]
       ],
       'nullables' => [
@@ -97,7 +104,7 @@ class LintCommand extends Command
          'facade'      => Nullables::class,
          'fixable'     => true,
          'arguments'   => [
-            '[path]' => 'File or directory path (default: Bootgly/)'
+            '[path]' => 'File or directory path (default: Bootgly/; in a kit: the current directory under projects/)'
          ]
       ],
       'promotions' => [
@@ -105,7 +112,7 @@ class LintCommand extends Command
          'facade'      => Promotions::class,
          'fixable'     => false,
          'arguments'   => [
-            '[path]' => 'File or directory path (default: Bootgly/)'
+            '[path]' => 'File or directory path (default: Bootgly/; in a kit: the current directory under projects/)'
          ]
       ],
       'methods' => [
@@ -113,7 +120,7 @@ class LintCommand extends Command
          'facade'      => Methods::class,
          'fixable'     => false,
          'arguments'   => [
-            '[path]' => 'File or directory path (default: Bootgly/)'
+            '[path]' => 'File or directory path (default: Bootgly/; in a kit: the current directory under projects/)'
          ]
       ],
    ];
@@ -127,6 +134,9 @@ class LintCommand extends Command
       'Auto-fix violations' => ['--fix'],
       'Show changes without writing' => ['--dry-run'],
    ];
+   // # Pinning
+   /** The running framework's root — a kit pins it as the `Bootgly/` submodule. */
+   protected string $framework = BOOTGLY_ROOT_BASE;
 
 
    public function run (array $arguments = [], array $options = []): bool
@@ -157,10 +167,15 @@ class LintCommand extends Command
       // ! Agent detection
       $Agent = Agent::detect();
 
-      // ! Path
+      // ! Path — in a kit it follows the working directory; elsewhere the
+      //   working base, with the framework source as the default
       $path = $arguments[0] ?? null;
+      $kit = Workspaces::detect() === Workspaces::Kit;
 
-      if ($path === null) {
+      if ($kit === true) {
+         $path = $this->resolve($path);
+      }
+      else if ($path === null) {
          $path = BOOTGLY_WORKING_DIR . 'Bootgly/';
       }
       else if (!str_starts_with($path, '/')) {
@@ -182,6 +197,23 @@ class LintCommand extends Command
          $fix = false;
          $dryRun = false;
       }
+
+      // ? A kit has no default outside projects/, and `--fix` never rewrites
+      //   a pinned tree — the kit's next update would refuse it dirty
+      $message = match (true) {
+         $path === null && getcwd() === false
+            => 'The working directory no longer exists — pass an absolute path.',
+         $path === null
+            => 'No default path outside projects/ in a kit — pass a path, or run it from a project directory (projects/<Name>/).',
+         $fix === true && $this->overlap($path) === true
+            => '--fix never rewrites a pinned tree — Bootgly/, Console/ and Web/ are read-only submodules of the kit.',
+         default => null
+      };
+
+      if ($message !== null) {
+         return $this->refuse($Agent, $submodule, $fixable, $fix ? 'fix' : ($dryRun ? 'dry-run' : 'check'), $message);
+      }
+      /** @var string $path */
 
       // @ Collect PHP files
       $files = $this->collect($path);
@@ -538,13 +570,23 @@ class LintCommand extends Command
          $Fieldset->content .= 'bootgly lint @#Black: <submodule> [path] --fix @;';
          $Fieldset->render();
 
-         // # Examples
-         $examples = '@#Black:bootgly lint imports@;' . PHP_EOL;
-         $examples .= '@#Black:bootgly lint imports Bootgly/ABI/ --fix@;' . PHP_EOL;
-         $examples .= '@#Black:bootgly lint nullables --dry-run@;' . PHP_EOL;
-         $examples .= '@#Black:bootgly lint nullables app/ --fix@;' . PHP_EOL;
-         $examples .= '@#Black:bootgly lint promotions@;' . PHP_EOL;
-         $examples .= '@#Black:bootgly lint methods app/@;';
+         // # Examples — a kit runs them from a project directory
+         if (Workspaces::detect() === Workspaces::Kit) {
+            $examples = '@#Black:cd projects/<Name>@;' . PHP_EOL;
+            $examples .= '@#Black:bootgly lint imports@;' . PHP_EOL;
+            $examples .= '@#Black:bootgly lint imports Models/ --fix@;' . PHP_EOL;
+            $examples .= '@#Black:bootgly lint nullables --dry-run@;' . PHP_EOL;
+            $examples .= '@#Black:bootgly lint promotions@;' . PHP_EOL;
+            $examples .= '@#Black:bootgly lint methods Controllers/@;';
+         }
+         else {
+            $examples = '@#Black:bootgly lint imports@;' . PHP_EOL;
+            $examples .= '@#Black:bootgly lint imports Bootgly/ABI/ --fix@;' . PHP_EOL;
+            $examples .= '@#Black:bootgly lint nullables --dry-run@;' . PHP_EOL;
+            $examples .= '@#Black:bootgly lint nullables app/ --fix@;' . PHP_EOL;
+            $examples .= '@#Black:bootgly lint promotions@;' . PHP_EOL;
+            $examples .= '@#Black:bootgly lint methods app/@;';
+         }
          $Fieldset = new Fieldset($Output);
          $Fieldset->title = '@#green: Lint examples @;';
          $Fieldset->content = $examples;
@@ -587,8 +629,9 @@ class LintCommand extends Command
          // # Example
          $Fieldset = new Fieldset($Output);
          $Fieldset->title = "@#Cyan: Lint {$submodule} example @;";
+         $sample = Workspaces::detect() === Workspaces::Kit ? 'Models/' : 'Bootgly/ABI/';
          $Fieldset->content = "@#Black:bootgly lint {$submodule}@;" . PHP_EOL
-            . "@#Black:bootgly lint {$submodule} Bootgly/ABI/@;";
+            . "@#Black:bootgly lint {$submodule} {$sample}@;";
          if ($fixable) {
             $Fieldset->content .= PHP_EOL . "@#Black:bootgly lint {$submodule} --fix@;";
          }
@@ -613,6 +656,146 @@ class LintCommand extends Command
       $Output->render($output);
 
       return $status;
+   }
+
+   /**
+    * Resolve a path inside a kit: a relative path follows the working
+    * directory, and no path means the directory under projects/ the caller
+    * stands in — there is no default anywhere else.
+    *
+    * @param null|string $path The path argument, as given
+    *
+    * @return null|string The absolute path, or null when there is no default
+    */
+   private function resolve (null|string $path): null|string
+   {
+      $cwd = getcwd();
+
+      // ?: The working directory is gone — only an absolute path resolves
+      if ($cwd === false) {
+         return $path !== null && str_starts_with($path, '/') ? $path : null;
+      }
+
+      // ?: An explicit path — absolute as given, relative to the caller
+      if ($path !== null) {
+         return str_starts_with($path, '/') ? $path : "{$cwd}/{$path}";
+      }
+
+      // ! Where the caller stands, against the kit's projects/
+      $projects = realpath(Projects::CONSUMER_DIR);
+      $here = realpath($cwd);
+
+      // ?: Outside projects/ — no default
+      if ($projects === false || $here === false || str_starts_with("{$here}/", "{$projects}/") === false) {
+         return null;
+      }
+
+      // :
+      return $here;
+   }
+
+   /**
+    * Tell whether a path is, holds or lies inside a pinned tree — the trees
+    * `--fix` never rewrites. In a kit: its `Bootgly/`, `Console/` and `Web/`
+    * submodules, plus the framework and platforms the launcher runs. In the
+    * framework checkout: the framework itself when a kit pins it as a
+    * submodule (its own launcher, reached from inside `<kit>/Bootgly/`).
+    *
+    * @param string $path An absolute path
+    *
+    * @return bool
+    */
+   private function overlap (string $path): bool
+   {
+      $target = realpath($path);
+
+      // ?: Not there — the scan reports the missing path itself
+      if ($target === false) {
+         return false;
+      }
+      $target = rtrim($target, '/') . '/';
+
+      // ! The pinned trees of this workspace
+      $Workspace = Workspaces::detect();
+      $trees = [];
+      if ($Workspace === Workspaces::Kit) {
+         $trees = [
+            BOOTGLY_WORKING_DIR . 'Bootgly',
+            BOOTGLY_WORKING_DIR . 'Console',
+            BOOTGLY_WORKING_DIR . 'Web',
+            $this->framework,
+         ];
+         foreach (['CONSOLE_ROOT_BASE', 'WEB_ROOT_BASE'] as $root) {
+            if (defined($root) === true) {
+               $trees[] = (string) constant($root);
+            }
+         }
+      }
+      else if ($Workspace === Workspaces::Author) {
+         // # A submodule (a `.git` file) of a kit (`.gitmodules` + launcher
+         //   above): the framework and the platforms beside it are pinned
+         $kit = dirname($this->framework);
+         if (is_file("{$this->framework}/.git") && is_file("{$kit}/.gitmodules") && is_file("{$kit}/bootgly")) {
+            $trees = [$this->framework, "{$kit}/Console", "{$kit}/Web"];
+         }
+      }
+
+      // @@ Inside a pinned tree, or holding one
+      foreach ($trees as $tree) {
+         $pinned = realpath($tree);
+         if ($pinned === false) {
+            continue;
+         }
+         $pinned = rtrim($pinned, '/') . '/';
+
+         // ?: Inside it
+         if (str_starts_with($target, $pinned)) {
+            return true;
+         }
+         // ?: Holding it — unless the scan skips it anyway (a `vendor/` between
+         //   them: a framework installed through Composer)
+         if (str_starts_with($pinned, $target) && str_contains('/' . substr($pinned, strlen($target)), '/vendor/') === false) {
+            return true;
+         }
+      }
+
+      // :
+      return false;
+   }
+
+   /**
+    * Refuse the run before anything is scanned, saying why — as the agent
+    * JSON document or as a human alert.
+    *
+    * @param Agent $Agent The detected agent, if any
+    * @param string $submodule The submodule that was asked for
+    * @param bool $fixable Whether the submodule formats
+    * @param string $mode `check`, `fix` or `dry-run`
+    * @param string $message Why the run is refused
+    *
+    * @return false
+    */
+   private function refuse (Agent $Agent, string $submodule, bool $fixable, string $mode, string $message): false
+   {
+      if ($Agent->detected) {
+         echo json_encode([
+            'result'    => 'failed',
+            'submodule' => $submodule,
+            'fixable'   => $fixable,
+            'agent'     => $Agent->name,
+            'mode'      => $mode,
+            'message'   => $message,
+            'files'     => ['scanned' => 0, 'failed' => 0, 'fixed' => 0, 'skipped' => 0],
+            'issues'    => ['total' => 0, 'unresolved' => 0],
+            'report'    => [],
+            'skipped'   => [],
+         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . PHP_EOL;
+      }
+      else {
+         CLI->Terminal->Output->render("@.;@#Red: {$message} @;@..;");
+      }
+
+      return false;
    }
 
    /**
