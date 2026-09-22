@@ -90,6 +90,13 @@ class Builder
    public private(set) null|int $limited = null;
    public private(set) int $offset = 0;
    public private(set) null|Locks $Lock = null;
+   /**
+    * Assigned values by compiled column: quoted identifiers (raw SQL for an `Expression`
+    * column) mapped to one value per row, as `set()` received them.
+    *
+    * @var array<string,array<int,mixed>>
+    */
+   public private(set) array $assignments = [];
 
    // * Metadata
    /** @var array<int,array{name:string,query:self|Query,recursive:bool}> */
@@ -103,8 +110,6 @@ class Builder
    /** @var array<int,array{aggregate:Aggregates,column:string,alias:null|string,distinct:bool}> */
    private array $aggregations = [];
    private null|self|Query $source = null;
-   /** @var array<string,array<int,mixed>> */
-   private array $assignments = [];
    /** @var array<int,Predicate|PredicateGroup> */
    private array $filters = [];
    /** @var array<int,Predicate|PredicateGroup> */

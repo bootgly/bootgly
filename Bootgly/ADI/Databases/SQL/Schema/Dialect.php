@@ -128,6 +128,21 @@ abstract class Dialect
    }
 
    /**
+    * Compile the statement that moves identity sequences past the explicit integer keys one
+    * INSERT wrote, when the dialect needs one.
+    *
+    * Both arguments are what the Builder compiled for that INSERT: the quoted table and the
+    * quoted column → values map (`Builder::$assignments`). A dialect whose generated keys
+    * already move past explicit values returns `null`.
+    *
+    * @param array<string,array<int,mixed>> $assignments
+    */
+   public function resync (string $table, array $assignments): null|Query
+   {
+      return null;
+   }
+
+   /**
     * Compile DROP INDEX.
     */
    abstract public function unindex (

@@ -11,11 +11,19 @@
 namespace Bootgly\ADI\Databases\SQL\Schema\Dialects;
 
 
+use const FILTER_NULL_ON_FAILURE;
+use const FILTER_VALIDATE_INT;
 use function array_pop;
 use function count;
 use function explode;
+use function filter_var;
 use function implode;
+use function is_int;
+use function is_string;
+use function max;
+use function preg_match;
 use function str_contains;
+use function str_replace;
 use BackedEnum;
 use InvalidArgumentException;
 use Stringable;
@@ -219,6 +227,79 @@ class PostgreSQL extends Dialect
       $marker = $this->Dialect->mark(1);
 
       return new Query("SELECT pg_advisory_unlock({$marker}) AS \"unlocked\"", [$key]);
+   }
+
+   /**
+    * Compile the resync of identity sequences left behind by one INSERT's explicit keys.
+    *
+    * An identity (or serial) column accepts an explicit value without advancing its sequence,
+    * so the next generated id would collide with the written one. The statement moves each
+    * sequence to the highest explicit integer key — only when the sequence is behind it: a
+    * sequence already past the key when the statement runs is left untouched. Reading and moving
+    * are two steps, so a concurrent insert into the same table can slip between them; seed while
+    * nothing else writes to the seeded tables. The seeding role needs SELECT/USAGE and UPDATE on
+    * the sequence; without them the statement fails.
+    *
+    * @param array<string,array<int,mixed>> $assignments
+    */
+   public function resync (string $table, array $assignments): null|Query
+   {
+      // ? A raw (`Expression`) table is not a quoted name `pg_get_serial_sequence` can parse
+      if (preg_match('/^"(?:[^"]|"")+"(?:\."(?:[^"]|"")+")*$/', $table) !== 1) {
+         return null;
+      }
+
+      // ! Highest explicit integer key per column
+      $keys = [];
+      foreach ($assignments as $column => $values) {
+         // ? Only one quoted identifier names a column (an `Expression` key is raw SQL)
+         if (preg_match('/^"((?:[^"]|"")+)"$/', $column, $matches) !== 1) {
+            continue;
+         }
+
+         $name = str_replace('""', '"', $matches[1]);
+         foreach ($values as $value) {
+            $key = match (true) {
+               is_int($value) => $value,
+               is_string($value) => filter_var($value, FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE),
+               default => null,
+            };
+
+            if ($key !== null) {
+               $keys[$name] = max($keys[$name] ?? $key, $key);
+            }
+         }
+      }
+
+      // ?: No integer key was written — nothing can collide
+      if ($keys === []) {
+         return null;
+      }
+
+      // @ One (column, key) row per candidate — `pg_get_serial_sequence` yields NULL for a
+      //   column without a sequence, which leaves its row inert
+      $parameters = [$table];
+      $rows = [];
+      foreach ($keys as $name => $key) {
+         // ! An all-digit column name came back as an int array key — bind it as text
+         $parameters[] = (string) $name;
+         $parameters[] = $key;
+         $count = count($parameters);
+         $rows[] = "({$this->Dialect->mark($count - 1)}, {$this->Dialect->mark($count)}::bigint)";
+      }
+      $values = implode(', ', $rows);
+      $marker = $this->Dialect->mark(1);
+
+      // : Forward-only — `nextval` runs only when the sequence is behind the key
+      $SQL = implode(' ', [
+         'SELECT setval("identity"."sequence", "keys"."key", true)',
+         "FROM (VALUES {$values}) AS \"keys\" (\"column\", \"key\")",
+         "CROSS JOIN LATERAL (SELECT pg_get_serial_sequence({$marker}, \"keys\".\"column\")::regclass AS \"sequence\") AS \"identity\"",
+         'WHERE CASE WHEN pg_sequence_last_value("identity"."sequence") >= "keys"."key" THEN false',
+         'ELSE nextval("identity"."sequence") <= "keys"."key" END',
+      ]);
+
+      return new Query($SQL, $parameters);
    }
 
    /**

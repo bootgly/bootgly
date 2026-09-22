@@ -11,10 +11,13 @@
 namespace Bootgly\ADI\Databases\SQL\Seed;
 
 
+use function is_array;
 use RuntimeException;
 use Throwable;
 
 use Bootgly\ADI\Databases\SQL as SQLDatabase;
+use Bootgly\ADI\Databases\SQL\Builder;
+use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Modes;
 use Bootgly\ADI\Databases\SQL\Schema\Guard;
 use Bootgly\ADI\Databases\SQL\Seed;
 
@@ -104,7 +107,7 @@ class Runner
 
       foreach ($this->collect($name) as $seeder => $file) {
          $Seeder = $this->Seeders->load($file);
-         $queries = $Seeder->run($this->Database, $this->Seed);
+         $queries = $this->resync($Seeder->run($this->Database, $this->Seed));
          $preview[$seeder] = [];
 
          foreach ($this->Guard->normalize($queries) as $Query) {
@@ -128,7 +131,7 @@ class Runner
       //   the database asking a pool whose only connection is already locked. `preview()`
       //   composes outside a transaction too, and `Guard::execute()` takes the compiled SQL,
       //   so nothing here needs the transaction open before the queries exist.
-      $queries = $Seeder->run($this->Database, $this->Seed);
+      $queries = $this->resync($Seeder->run($this->Database, $this->Seed));
 
       if ($this->Guard->Dialect->transactions) {
          $Transaction = $this->Database->begin();
@@ -150,6 +153,38 @@ class Runner
       }
 
       $this->Guard->execute($queries);
+   }
+
+   /**
+    * Follow each Builder INSERT with the dialect's identity resync, when it compiles one.
+    *
+    * Explicit keys do not advance a PostgreSQL identity sequence, so the resync runs right
+    * after its own INSERT: a later generated insert — in the same seeder or in the
+    * application — does not reuse a seeded integer key. Anything else passes through untouched.
+    */
+   private function resync (mixed $queries): mixed
+   {
+      // @@ A list keeps its order, each item followed by its own resync
+      if (is_array($queries)) {
+         $resynced = [];
+         foreach ($queries as $key => $query) {
+            $resynced[$key] = $this->resync($query);
+         }
+
+         return $resynced;
+      }
+
+      // ? Only an INSERT into a named table writes keys
+      if (
+         $queries instanceof Builder === false
+         || $queries->Mode !== Modes::Insert
+         || $queries->table === null
+      ) {
+         return $queries;
+      }
+
+      // : A dialect that needs no resync answers `null`, which `Guard::normalize()` drops
+      return [$queries, $this->Guard->Dialect->resync($queries->table, $queries->assignments)];
    }
 
    /**

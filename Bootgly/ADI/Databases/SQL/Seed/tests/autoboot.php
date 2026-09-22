@@ -20,5 +20,9 @@ return new Suite(
       '11.2-seeders_runner',
       '11.3-seeders_transactions',
       '11.4-seeders_composition',
+      '11.5-seeders_resync_postgresql_live',
+      '11.6-seeders_resync_sqlite',
+      '11.7-seeders_resync_mysql_live',
+      '11.8-seeders_resync_runner',
    ]
 );
