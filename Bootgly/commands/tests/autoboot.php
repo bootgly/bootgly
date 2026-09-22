@@ -72,5 +72,7 @@ return new Suite(
       // # lint in a kit: paths follow the cwd, pinned trees are never fixed
       '10.2-lint-kit-scope',
       '10.3-lint-pinned-framework',
+      // # scaffolds carry no framework license and keep config secrets out
+      '11.7-scaffold-attribution',
    ]
 );

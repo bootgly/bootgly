@@ -1,12 +1,4 @@
 <?php
-/*
- * --------------------------------------------------------------------------
- * Bootgly PHP Framework
- * Developed by Rodrigo Vieira (@rodrigoslayertech)
- * Copyright (c) 2023-present Bootgly and contributors
- * Licensed under MIT
- * --------------------------------------------------------------------------
- */
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;

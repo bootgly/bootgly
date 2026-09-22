@@ -1,2 +1,5 @@
 # Composer — per-project dependencies (composer.lock is committed)
 /vendor/
+# Config environment files (secrets) — bound through Config `->bind(key: …)`
+configs/**/.env
+configs/**/.env.*
