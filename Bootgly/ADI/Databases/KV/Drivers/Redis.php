@@ -29,7 +29,6 @@ use function min;
 use function socket_import_stream;
 use function socket_set_option;
 use function stream_get_meta_data;
-use function stream_socket_get_name;
 use function strtolower;
 use function substr;
 use RuntimeException;
@@ -259,18 +258,20 @@ class Redis extends Driver
             return $this->abort($Operation, 'Redis socket is not available.');
          }
 
-         // ? The dial this write-readiness woke on may have FAILED — a closed
-         //   port, an unreachable host or network — and the socket then has
-         //   no peer, which getpeername() reports whatever the locale says.
-         //   Read at the handshake instead, the same failure was `SSL:
-         //   Connection refused`, the transport shape of a peer resetting the
-         //   ClientHello: `prefer` recorded a refusal that never happened and
-         //   spent a plaintext retry on a port nobody listens on.
-         if (stream_socket_get_name($this->Connection->socket, true) === false) {
-            return $this->abort(
-               $Operation,
-               "Redis connection failed: the connection to {$this->Config->host}:{$this->Config->port} was refused, or was reset before the handshake.",
-            );
+         // ? The dial may still be in flight, or may have FAILED — a closed
+         //   port, an unreachable host or network. Read at the handshake
+         //   instead, a failed dial was `SSL: Connection refused`, the
+         //   transport shape of a peer resetting the ClientHello: `prefer`
+         //   recorded a refusal that never happened and spent a plaintext
+         //   retry on a port nobody listens on.
+         $established = $this->Connection->establish();
+
+         if ($established === null) {
+            return $this->await($Operation, Scheduler::SCHEDULE_WRITE);
+         }
+
+         if ($established === false) {
+            return $this->abort($Operation, "Redis connection failed: {$this->Connection->failure}.");
          }
 
          // @ Socket tuning belongs to the raw TCP generation. After TLS,

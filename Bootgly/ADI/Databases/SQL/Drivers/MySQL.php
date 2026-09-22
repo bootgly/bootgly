@@ -88,6 +88,10 @@ class MySQL extends Driver
    // @ This driver tore its session down and must never drive a replacement
    //   socket attached to the same Connection object.
    private bool $aborted = false;
+   // @ The server sent a byte on this driver's connection (a driver dials once:
+   //   a torn-down session gets a fresh driver). A hang-up before it did is a
+   //   server that is not listening yet; one after it is not.
+   private bool $answered = false;
    // # Current result set (only the pipeline head is on the wire)
    private int $expected = 0;
    /** @var array<int,array<string,int|string>> */
@@ -261,6 +265,19 @@ class MySQL extends Driver
       }
 
       if ($Operation->state === OperationStates::Connecting) {
+         // ? The dial may still be in flight, or may have FAILED — which the
+         //   first read then reported as `MySQL socket read failed.`, naming
+         //   neither the endpoint nor the cause.
+         $established = $this->Connection->establish();
+
+         if ($established === null) {
+            return $this->await($Operation, Scheduler::SCHEDULE_WRITE);
+         }
+
+         if ($established === false) {
+            return $this->abort($Operation, "MySQL connection failed: {$this->Connection->failure}.");
+         }
+
          // @ The server speaks first — wait for the greeting packet.
          $this->Connection->transition(ConnectionStates::Startup);
          $this->Authentication->authenticated = false;
@@ -774,21 +791,29 @@ class MySQL extends Driver
 
       $bytes = @fread($socket, 8192);
 
-      if ($bytes === false) {
-         $this->abort($Operation, 'MySQL socket read failed.');
-
-         return $Operation->state;
-      }
-
-      if ($bytes === '') {
-         if (feof($socket)) {
-            $this->abort($Operation, 'MySQL socket closed.');
-
+      if ($bytes === false || $bytes === '') {
+         // ? Nothing yet on a socket that is still open
+         if ($bytes === '' && feof($socket) === false) {
             return $Operation->state;
+         }
+
+         // ? Gone before a byte of the greeting: the peer took the connection
+         //   and dropped it, closed or reset — what a published Docker port
+         //   does while the server behind it is not listening yet.
+         if ($Operation->state === OperationStates::Startup && $this->answered === false) {
+            $this->abort(
+               $Operation,
+               "MySQL connection failed: {$this->Config->host}:{$this->Config->port} closed the connection before sending its greeting; the server may still be starting."
+            );
+         }
+         else {
+            $this->abort($Operation, $bytes === false ? 'MySQL socket read failed.' : 'MySQL socket closed.');
          }
 
          return $Operation->state;
       }
+
+      $this->answered = true;
 
       // @ Framing and payload parsing share one guard: a packet that decodes
       //   into a length no payload can address is as unrecoverable as a broken

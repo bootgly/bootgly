@@ -12,28 +12,42 @@ namespace Bootgly\ADI\Database;
 
 
 use const FILTER_VALIDATE_IP;
+use const SO_ERROR;
+use const SOCKET_ECONNREFUSED;
+use const SOCKET_ECONNRESET;
+use const SOCKET_EHOSTUNREACH;
+use const SOCKET_ENETUNREACH;
+use const SOCKET_ETIMEDOUT;
+use const SOL_SOCKET;
 use const STREAM_CLIENT_ASYNC_CONNECT;
 use const STREAM_CLIENT_CONNECT;
 use const STREAM_CRYPTO_METHOD_TLS_CLIENT;
+use function extension_loaded;
 use function fclose;
 use function filter_var;
 use function implode;
 use function is_file;
+use function is_int;
 use function is_readable;
 use function is_resource;
 use function preg_replace;
 use function restore_error_handler;
 use function set_error_handler;
+use function socket_get_option;
+use function socket_import_stream;
 use function str_contains;
 use function str_starts_with;
 use function stream_context_create;
+use function stream_select;
 use function stream_set_blocking;
 use function stream_socket_client;
 use function stream_socket_enable_crypto;
+use function stream_socket_get_name;
 use function strpos;
 use function substr;
 use InvalidArgumentException;
 use RuntimeException;
+use Throwable;
 
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ADI\Database\Config;
@@ -101,6 +115,12 @@ class Connection
     * `false` — the refusal a `prefer` driver downgrades on. Empty until then.
     */
    public private(set) string $refusal = '';
+   /**
+    * Why the dial failed the last time establish() returned `false` — the
+    * endpoint and the cause, e.g. `127.0.0.1:3306 refused the connection
+    * (ECONNREFUSED)`. Empty until then.
+    */
+   public private(set) string $failure = '';
    /**
     * The SSL context options the last connect() built from the config — what
     * the handshake presents and verifies. Empty under `disable`.
@@ -179,8 +199,81 @@ class Connection
       $this->connected = false;
       $this->state = ConnectionStates::Connecting;
       $this->refusal = '';
+      $this->failure = '';
 
       return Readiness::write($socket, $deadline);
+   }
+
+   /**
+    * Settle the non-blocking dial connect() started.
+    *
+    * Returns `true` once the socket has a peer, `null` while the dial is still
+    * in flight, and `false` when it failed — refused, unreachable, reset or
+    * timed out — with the endpoint and the cause recorded in `$failure`. The
+    * cause is the socket's own errno when ext-sockets is loaded, and a
+    * generic "refused, unreachable, reset or timed out" without it.
+    *
+    * @throws InvalidArgumentException when no socket is attached
+    */
+   public function establish (): null|bool
+   {
+      // ?
+      if (is_resource($this->socket) === false) {
+         throw new InvalidArgumentException('Connection socket must be attached before the dial is established.');
+      }
+
+      // ?: Nothing to settle — an attached stream arrives connected, and it
+      //    need not be TCP: an unnamed peer (a socket pair) has no name to read
+      if ($this->connected) {
+         return true;
+      }
+
+      // ?: Not writable yet — the dial is still in flight. Callers are
+      //    re-entered on more than write-readiness: Pool::wait() wakes every
+      //    second whatever the socket's state, and a dial whose first SYN was
+      //    dropped (a full accept queue, a lossy link) is still in flight then.
+      //    A dial that completed — connected or failed — is writable at once.
+      $read = [];
+      $write = [$this->socket];
+      $except = [];
+      // ! A signal can interrupt even a zero-time probe (EINTR): `false` is a
+      //   retry, never a failure, so the warning is not raised
+      if (@stream_select($read, $write, $except, 0) !== 1) {
+         return null;
+      }
+
+      // ?: A completed dial with a peer is established; one without has failed
+      if (stream_socket_get_name($this->socket, true) !== false) {
+         return true;
+      }
+
+      // ! The failed dial's errno — read only through ext-sockets, which is optional
+      $errno = 0;
+      if (extension_loaded('sockets')) {
+         try {
+            $Raw = socket_import_stream($this->socket);
+            $option = $Raw === false ? false : socket_get_option($Raw, SOL_SOCKET, SO_ERROR);
+            $errno = is_int($option) ? $option : 0;
+         }
+         catch (Throwable) {
+            $errno = 0;
+         }
+      }
+
+      $endpoint = "{$this->Config->host}:{$this->Config->port}";
+      // ! Without an errno the constants below are never read: they exist only with ext-sockets
+      $this->failure = $errno === 0
+         ? "the connection to {$endpoint} failed: refused, unreachable, reset or timed out"
+         : match ($errno) {
+            SOCKET_ECONNREFUSED => "{$endpoint} refused the connection (ECONNREFUSED)",
+            SOCKET_ECONNRESET => "{$endpoint} reset the connection (ECONNRESET)",
+            SOCKET_EHOSTUNREACH => "{$endpoint} is unreachable: no route to host (EHOSTUNREACH)",
+            SOCKET_ENETUNREACH => "{$endpoint} is unreachable: network is unreachable (ENETUNREACH)",
+            SOCKET_ETIMEDOUT => "the connection to {$endpoint} timed out (ETIMEDOUT)",
+            default => "the connection to {$endpoint} failed (errno {$errno})",
+         };
+
+      return false;
    }
 
    /**

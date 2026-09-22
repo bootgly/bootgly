@@ -151,5 +151,9 @@ return new Suite(
       //   default must reach a self-signed server, as libpq's and MySQL's do.
       '1.2-config_secure_verification',
       '6.5-sql_tls_unverified_modes',
+      // # A failed dial names its endpoint and cause; one still in flight is
+      //   waited on, never reported as refused.
+      '3.6-connection-establish',
+      '3.7-connection-dial_failures',
    ]
 );

@@ -94,6 +94,10 @@ class PostgreSQL extends Driver
    // @ This driver tore its session down and must never drive a replacement
    //   socket attached to the same Connection object.
    private bool $aborted = false;
+   // @ The server sent a byte on this driver's connection (a driver dials once:
+   //   a torn-down session gets a fresh driver). A hang-up before it did is a
+   //   server that is not listening yet; one after it is not.
+   private bool $answered = false;
    // @ Operation currently holding the socket write stream (co-located pipelining).
    private null|Operation $writing = null;
    // @ Holder bytes accepted by the stream. A positive count makes withdrawal
@@ -350,6 +354,19 @@ class PostgreSQL extends Driver
       }
 
       if ($Operation->state === OperationStates::Connecting) {
+         // ? The dial may still be in flight, or may have FAILED — which the
+         //   first write then reported as `PostgreSQL socket write failed.`,
+         //   naming neither the endpoint nor the cause.
+         $established = $this->Connection->establish();
+
+         if ($established === null) {
+            return $this->await($Operation, Scheduler::SCHEDULE_WRITE);
+         }
+
+         if ($established === false) {
+            return $this->abort($Operation, "PostgreSQL connection failed: {$this->Connection->failure}.");
+         }
+
          $this->encrypted = false;
          $mode = $this->Config->secure['mode'];
 
@@ -1272,17 +1289,23 @@ class PostgreSQL extends Driver
 
       $response = @fread($socket, 1);
 
-      if ($response === false) {
-         return $this->abort($Operation, 'PostgreSQL SSL response read failed.');
-      }
-
-      if ($response === '') {
-         if (feof($socket)) {
-            return $this->abort($Operation, 'PostgreSQL socket closed during SSL negotiation.');
+      if ($response === false || $response === '') {
+         // ? Nothing yet on a socket that is still open
+         if ($response === '' && feof($socket) === false) {
+            return $this->await($Operation, Scheduler::SCHEDULE_READ);
          }
 
-         return $this->await($Operation, Scheduler::SCHEDULE_READ);
+         // ? Gone before answering the SSLRequest: the peer took the
+         //   connection and dropped it, closed or reset — what a published
+         //   Docker port does while the server behind it is not listening
+         //   yet (a reset, as the SSLRequest is left unread).
+         return $this->abort(
+            $Operation,
+            "PostgreSQL connection failed: {$this->Config->host}:{$this->Config->port} closed the connection during SSL negotiation; the server may still be starting."
+         );
       }
+
+      $this->answered = true;
 
       if ($response === 'S') {
          // @ Armed ONCE on WRITE, which is ready at once: the next advance()
@@ -1335,21 +1358,30 @@ class PostgreSQL extends Driver
 
       $bytes = @fread($socket, 8192);
 
-      if ($bytes === false) {
-         $this->abort($Operation, 'PostgreSQL socket read failed.');
-
-         return $Operation->state;
-      }
-
-      if ($bytes === '') {
-         if (feof($socket)) {
-            $this->abort($Operation, 'PostgreSQL socket closed.');
-
+      if ($bytes === false || $bytes === '') {
+         // ? Nothing yet on a socket that is still open
+         if ($bytes === '' && feof($socket) === false) {
             return $Operation->state;
+         }
+
+         // ? Gone during startup before a byte of an answer — no SSLRequest
+         //   reply, no ErrorResponse, which a running server sends before
+         //   hanging up: the same dropped connection, closed or reset, a
+         //   published Docker port makes while the server is not listening yet.
+         if ($Operation->state === OperationStates::Authenticating && $this->answered === false) {
+            $this->abort(
+               $Operation,
+               "PostgreSQL connection failed: {$this->Config->host}:{$this->Config->port} closed the connection during startup; the server may still be starting."
+            );
+         }
+         else {
+            $this->abort($Operation, $bytes === false ? 'PostgreSQL socket read failed.' : 'PostgreSQL socket closed.');
          }
 
          return $Operation->state;
       }
+
+      $this->answered = true;
 
       try {
          $Messages = $this->Decoder->decode($bytes);
