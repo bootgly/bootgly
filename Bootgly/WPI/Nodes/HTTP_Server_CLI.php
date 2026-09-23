@@ -109,6 +109,7 @@ use function stream_context_create;
 use function stream_get_contents;
 use function stream_select;
 use function stream_set_blocking;
+use function stream_set_timeout;
 use function stream_socket_accept;
 use function stream_socket_client;
 use function stream_socket_pair;
@@ -3199,12 +3200,29 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             // !
             $testFiles = SAPI::$tests[self::class] ?? [];
             $specIndex = 0;
-            // ! Consecutive cases that timed out — a server that keeps timing
-            //   out has stopped answering, and every later case would wait
-            //   out the same timeout for a failure that is not its own
+            // ! Consecutive cases that timed out without the server answering
+            //   in between. A timeout alone is not a hung server — a case may
+            //   hold its request open on purpose — so after `$limit` of them a
+            //   liveness probe decides: any HTTP answer on a fresh connection
+            //   means the server is alive and the run goes on; silence means
+            //   every later case would only wait out the same timeout.
             $timeouts = 0;
             $limit = 3;
-            $unresponsive = "the server stopped answering ({$limit} consecutive timeouts): the remaining cases are not reached";
+            $unresponsive = "the server stopped answering ({$limit} consecutive timeouts and an unanswered liveness probe): the run stops here";
+            // @ Probe liveness with a request the parser rejects before any
+            //   handler runs — no spec state is touched
+            $alive = static function () use ($TCP_Client_CLI): bool {
+               $Probe = @stream_socket_client("tcp://{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}", $errno, $error, 2);
+               if ($Probe === false) {
+                  return false;
+               }
+               stream_set_timeout($Probe, 2);
+               @fwrite($Probe, "BOOTGLY-PROBE\r\n\r\n");
+               $answer = @fread($Probe, 16);
+               @fclose($Probe);
+
+               return is_string($answer) && str_starts_with($answer, 'HTTP/');
+            };
             foreach ($testFiles as $index => $value) {
                // @ Reset connection state from previous test — both signals a
                //   dead peer leaves behind: `expired` (the unsized fast lane read
@@ -3329,16 +3347,28 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   if ($failure !== null) {
                      $test->Fixture?->dispose();
 
-                     // ? PHPStan keeps the per-case reset across `reading()`
-                     $timeouts = $expired ? $timeouts + 1 : 0; // @phpstan-ignore ternary.alwaysFalse
-                     if ($timeouts >= $limit) { // @phpstan-ignore greaterOrEqual.alwaysFalse
+                     // ? The counter moves only with the server: a timeout
+                     //   adds one, an answer resets it, a request that never
+                     //   reached the server leaves it (PHPStan keeps the
+                     //   per-case reset across `reading()`)
+                     if ($expired) { // @phpstan-ignore if.alwaysFalse
+                        $timeouts++;
+                     }
+                     else if ($responses !== []) {
+                        $timeouts = 0;
+                     }
+                     $stopped = $timeouts >= $limit && $alive() === false;
+                     if ($timeouts >= $limit) {
+                        $timeouts = 0;
+                     }
+                     if ($stopped) {
                         $failure .= "; {$unresponsive}";
                      }
 
                      $Test->fail($failure);
                      // ? A server that cannot take a write — or that stopped
                      //   answering — serves no later case
-                     if ($unreachable || $timeouts >= $limit || Suite::$exitOnFailure) { // @phpstan-ignore greaterOrEqual.alwaysFalse
+                     if ($unreachable || $stopped || Suite::$exitOnFailure) {
                         break;
                      }
                      $reconnect();
@@ -3453,17 +3483,25 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                      $Test->pass();
                   }
                   else {
-                     $timeouts = $expired ? $timeouts + 1 : 0;
+                     $stopped = false;
                      $message = null;
                      if ($expired) {
+                        $timeouts++;
                         $message = "the connection expired before a complete response ({$timeout} s)";
                         if ($timeouts >= $limit) {
-                           $message .= "; {$unresponsive}";
+                           $timeouts = 0;
+                           $stopped = $alive() === false;
+                           if ($stopped) {
+                              $message .= "; {$unresponsive}";
+                           }
                         }
+                     }
+                     else {
+                        $timeouts = 0;
                      }
 
                      $Test->fail($message);
-                     if ($timeouts >= $limit || Suite::$exitOnFailure) {
+                     if ($stopped || Suite::$exitOnFailure) {
                         break;
                      }
                      $reconnect();
@@ -3524,17 +3562,25 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   $Test->pass();
                }
                else {
-                  $timeouts = $expired ? $timeouts + 1 : 0;
+                  $stopped = false;
                   $message = null;
                   if ($expired) {
+                     $timeouts++;
                      $message = "the connection expired before a complete response ({$timeout} s)";
                      if ($timeouts >= $limit) {
-                        $message .= "; {$unresponsive}";
+                        $timeouts = 0;
+                        $stopped = $alive() === false;
+                        if ($stopped) {
+                           $message .= "; {$unresponsive}";
+                        }
                      }
+                  }
+                  else {
+                     $timeouts = 0;
                   }
 
                   $Test->fail($message);
-                  if ($timeouts >= $limit || Suite::$exitOnFailure) {
+                  if ($stopped || Suite::$exitOnFailure) {
                      break;
                   }
                   $reconnect();

@@ -2702,7 +2702,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             throw new Exception("Test case not found: \n {$file}");
          }
 
-         $test = require $Test_Case_File;
+         $test = self::load($Test_Case_File);
          // ?
          if ($test instanceof E2ETest === false) {
             throw new Exception("Test case must return a Test instance: \n {$file}");
@@ -2716,6 +2716,11 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $Suite->tests = CAPI::$tests[self::class];
       // ! No case runs until the harness starts one
       $Suite->case = 0;
+   }
+   /** Load one Test in an isolated local variable scope. */
+   private static function load (File $File): mixed
+   {
+      return require $File;
    }
    /**
     * Run E2E tests using a mock TCP server.
