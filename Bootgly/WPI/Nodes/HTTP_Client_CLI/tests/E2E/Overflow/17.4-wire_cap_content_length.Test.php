@@ -6,12 +6,14 @@ use Bootgly\WPI\Nodes\HTTP_Client_CLI\Tests\Suite\Test;
 
 
 // ? Wire-guard control (green before and after the HCLI-11/HCLI-3 fix) — a
-//   Content-Length body over maxResponseBytes fails with code 0 'Response
-//   Too Large' via the wire-byte counter, independent of the chunked
-//   decoder's cap. Pins the guard through the ceiling rewiring — the first
-//   client test to cover maxResponseBytes at all.
+//   body over maxResponseBytes fails with code 0 'Response Too Large' via the
+//   wire-byte counter, independent of the chunked decoder's cap. Pins the
+//   guard through the ceiling rewiring — the first client test to cover
+//   maxResponseBytes at all. The body is close-delimited: a declared
+//   Content-Length past the cap now fails before any body byte (17.11), so
+//   only an undeclared length still reaches the wire counter.
 return new Test(
-   description: 'It should fail a Content-Length body over maxResponseBytes',
+   description: 'It should fail a body over maxResponseBytes through the wire counter',
 
    response: function () { return ''; },
    request: function () { return new Response; },
@@ -20,7 +22,7 @@ return new Test(
       function (): string {
          $body = str_repeat('W', 100000);
 
-         return "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: 100000\r\nConnection: close\r\n\r\n{$body}";
+         return "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nConnection: close\r\n\r\n{$body}";
       },
       function (): string {
          return "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 5\r\nConnection: close\r\n\r\nafter";
@@ -34,7 +36,7 @@ return new Test(
          return $Client->request(method: 'GET', URI: '/overflow/wire-cap');
       },
       function (HTTP_Client_CLI $Client): Response {
-         $Client->maxResponseBytes = 0; // @ Restore default (unbounded)
+         $Client->maxResponseBytes = (int) (new ReflectionProperty(HTTP_Client_CLI::class, 'maxResponseBytes'))->getDefaultValue(); // @ Restore default
          $Response = $Client->request(method: 'GET', URI: '/overflow/wire-after');
          $Client->timeout = 30; // @ Restore default
          return $Response;

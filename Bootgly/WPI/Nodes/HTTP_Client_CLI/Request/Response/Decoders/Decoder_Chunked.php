@@ -36,6 +36,12 @@ class Decoder_Chunked extends Decoder
     * token is orders of magnitude beyond every real response anyway.
     */
    private const int CHUNK_SIZE_DIGITS = 15;
+   /**
+    * Maximum bytes of one chunk-size line (size + extensions), matching the server decoder —
+    * bounded whatever `maxSize` allows, so an origin that never ends the line cannot grow the
+    * leftover until the process dies (H-HCLI-1).
+    */
+   private const int CHUNK_LINE_LIMIT = 8192;
 
    /** @var string Accumulated raw body from decoded chunks. */
    protected string $body = '';
@@ -88,6 +94,17 @@ class Decoder_Chunked extends Decoder
       while (true) {
          // @ Find chunk-size line end
          $eol = strpos($data, "\r\n");
+         // ? A size line past the cap never ends — refused, never buffered (H-HCLI-1)
+         if (($eol === false ? strlen($data) : $eol) > self::CHUNK_LINE_LIMIT) {
+            $this->body     = '';
+            $this->leftover = '';
+
+            return [
+               'failed'   => true,
+               'status'   => 'Invalid Chunked Encoding',
+               'consumed' => $size,
+            ];
+         }
          if ($eol === false) {
             break; // Need more data
          }
@@ -149,6 +166,18 @@ class Decoder_Chunked extends Decoder
             //   - No trailers:   "0\r\n\r\n"     → found at $eol  (offset 0 from CRLF)
             //   - With trailers: "0\r\nX: v\r\n\r\n" → found after trailer fields
             $trailerTermPos = strpos($data, "\r\n\r\n", $eol);
+            // ? The trailer section is a header section: capped like the head,
+            //   whatever maxSize allows
+            if (($trailerTermPos === false ? strlen($data) : $trailerTermPos + 4) - $eol > Decoder_::MAX_HEADER_BYTES) {
+               $this->body     = '';
+               $this->leftover = '';
+
+               return [
+                  'failed'   => true,
+                  'status'   => 'Invalid Chunked Encoding',
+                  'consumed' => $size,
+               ];
+            }
             if ($trailerTermPos === false) {
                // Trailer section not yet complete, need more data
                break;

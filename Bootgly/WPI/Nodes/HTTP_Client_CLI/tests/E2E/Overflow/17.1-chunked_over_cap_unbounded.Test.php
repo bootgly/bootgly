@@ -27,10 +27,15 @@ return new Test(
    },
 
    request: function (HTTP_Client_CLI $Client): Response {
-      return $Client->request(
+      // ! Unbounded on purpose — the default is a finite cap
+      $Client->maxResponseBytes = 0;
+      $Response = $Client->request(
          method: 'GET',
          URI: '/chunked-over-cap'
       );
+      $Client->maxResponseBytes = (int) (new ReflectionProperty(HTTP_Client_CLI::class, 'maxResponseBytes'))->getDefaultValue(); // @ Restore default
+
+      return $Response;
    },
 
    test: function (Response $Response) use ($payload): Generator {

@@ -62,7 +62,7 @@ class HTTP extends Resource implements Scheduling
     * The embedded client — knob surface only.
     *
     * Every knob not covered by the constructor (`retryOn`, `retryDelay`,
-    * `maxResponseBytes`, ...) is set here. Never send through it: only
+    * `allowInsecureRedirect`, ...) is set here. Never send through it: only
     * `request()`, `batch()` and `drain()` claim the deferred context, and
     * only that claim releases the client when the deferral settles.
     */
@@ -90,6 +90,8 @@ class HTTP extends Resource implements Scheduling
     * @param int $maxRedirects Maximum redirects to follow (0 = disabled).
     * @param int $maxRetries Maximum retries on connection/timeout failure (0 = disabled).
     * @param null|bool $enableHTTP2 HTTP/2 negotiation (null = ALPN when secure; true = also h2c; false = never).
+    * @param null|int $maxResponseBytes Maximum raw response bytes per request (null = the client's default, 16 MiB;
+    *   0 = unbounded) — past it the handler gets code 0 `'Response Too Large'`.
     *
     * @throws RuntimeException When constructed outside the HTTP server reactor.
     */
@@ -102,7 +104,8 @@ class HTTP extends Resource implements Scheduling
       int|float $connectTimeout = 30,
       int $maxRedirects = 10,
       int $maxRetries = 0,
-      null|bool $enableHTTP2 = null
+      null|bool $enableHTTP2 = null,
+      null|int $maxResponseBytes = null
    )
    {
       parent::__construct();
@@ -130,6 +133,9 @@ class HTTP extends Resource implements Scheduling
       $Client->connectTimeout = $connectTimeout;
       $Client->maxRedirects = $maxRedirects;
       $Client->maxRetries = $maxRetries;
+      if ($maxResponseBytes !== null) {
+         $Client->maxResponseBytes = $maxResponseBytes;
+      }
 
       $this->Client = $Client;
    }

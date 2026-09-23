@@ -47,7 +47,7 @@ return new Test(
          return $Response;
       },
       function (HTTP_Client_CLI $Client): Response {
-         $Client->maxResponseBytes = 0; // @ Restore default (unbounded)
+         $Client->maxResponseBytes = (int) (new ReflectionProperty(HTTP_Client_CLI::class, 'maxResponseBytes'))->getDefaultValue(); // @ Restore default
          return $Client->request(method: 'GET', URI: '/overflow/keepalive-after');
       },
    ],

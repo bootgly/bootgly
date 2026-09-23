@@ -84,7 +84,7 @@ final class Session
    /** Partial-frame carry between feeds. */
    public string $buffer = '';
    // # Completion
-   /** @var array<int, array{stream: int, code: int, headerRaw: string, body: string, error: null|Errors, retryable: bool}> */
+   /** @var array<int, array{stream: int, code: int, headerRaw: string, body: string, error: null|Errors, retryable: bool, status: null|string}> */
    public array $done = [];
    // # Flow control (connection level)
    /** Send window (peer-replenished). */
@@ -362,7 +362,7 @@ final class Session
 
                // ? Per-stream response byte cap — local cancel
                if ($this->limit > 0 && strlen($Stream->head) + strlen($Stream->body) > $this->limit) {
-                  $this->reset($stream, Errors::Cancel);
+                  $this->reset($stream, Errors::Cancel, 'Response Too Large');
                   break;
                }
 
@@ -577,7 +577,8 @@ final class Session
                   'headerRaw' => $Stream->head,
                   'body' => $Stream->body,
                   'error' => Errors::tryFrom($code) ?? Errors::Internal,
-                  'retryable' => $code === Errors::RefusedStream->value
+                  'retryable' => $code === Errors::RefusedStream->value,
+                  'status' => null
                ];
                unset($this->Streams[$stream]);
                $this->opened--;
@@ -607,7 +608,8 @@ final class Session
                         'headerRaw' => '',
                         'body' => '',
                         'error' => Errors::RefusedStream,
-                        'retryable' => true
+                        'retryable' => true,
+                        'status' => null
                      ];
                      unset($this->Streams[$id]);
                      $this->opened--;
@@ -636,8 +638,13 @@ final class Session
    /**
     * Cancel a stream locally (timeout / response cap): queue RST_STREAM and
     * fail the stream with a non-retryable completion record.
+    *
+    * @param int $stream The stream to cancel.
+    * @param Errors $error The RST_STREAM error code sent to the peer.
+    * @param null|string $status The failure the caller reports for it (e.g. `'Response Too Large'`);
+    *   null reports the stream error itself.
     */
-   public function reset (int $stream, Errors $error): void
+   public function reset (int $stream, Errors $error, null|string $status = null): void
    {
       // ? Unknown / already-released stream
       $Stream = $this->Streams[$stream] ?? null;
@@ -656,7 +663,8 @@ final class Session
          'headerRaw' => $Stream->head,
          'body' => $Stream->body,
          'error' => $error,
-         'retryable' => false
+         'retryable' => false,
+         'status' => $status
       ];
       unset($this->Streams[$stream]);
       $this->opened--;
@@ -840,7 +848,8 @@ final class Session
          'headerRaw' => $Stream->head,
          'body' => $Stream->body,
          'error' => null,
-         'retryable' => false
+         'retryable' => false,
+         'status' => null
       ];
       unset($this->Streams[$stream]);
       $this->opened--;
@@ -925,7 +934,8 @@ final class Session
             'headerRaw' => $Stream->head,
             'body' => $Stream->body,
             'error' => $error,
-            'retryable' => $Stream->headed === false
+            'retryable' => $Stream->headed === false,
+            'status' => null
          ];
       }
       $this->Streams = [];

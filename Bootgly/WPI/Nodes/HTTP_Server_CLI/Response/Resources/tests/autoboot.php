@@ -29,5 +29,7 @@ return new Suite(
       '1.11-database_resource_transact_routing',
       '1.12-http_resource',
       '1.13-http_resource_dial',
+      // # 1.0.x (M2): the embedded client's response cap
+      '1.14-http_resource_response_cap',
    ]
 );

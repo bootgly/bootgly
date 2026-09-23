@@ -125,8 +125,14 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    public int|float $connectTimeout = 30;
    /** Response timeout in seconds (0 = no timeout). */
    public int|float $timeout = 30;
-   /** Maximum raw response bytes (headers + body); 0 keeps compatibility/unbounded. */
-   public int $maxResponseBytes = 0;
+   /**
+    * Maximum raw response bytes (headers + body) per request — 16 MiB by default, on HTTP/1.1
+    * and HTTP/2 alike. `0` removes the limit (an explicit opt-out). Past it the request fails
+    * with code 0 and status `'Response Too Large'`; a declared `Content-Length` past it fails
+    * before its body is downloaded. The response head has its own fixed cap
+    * (`Decoder_::MAX_HEADER_BYTES`), whatever this allows.
+    */
+   public int $maxResponseBytes = 16_777_216;
    // | Retry
    /** Maximum number of retries on connection/timeout failure (0 = disabled). */
    public int $maxRetries = 0;
@@ -498,15 +504,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                $HTTP_Client_CLI->maxResponseBytes > 0
                && $Request->bytesReceived > $HTTP_Client_CLI->maxResponseBytes
             ) {
-               $Request->Response->code = 0;
-               $Request->Response->status = 'Response Too Large';
-               $Request->completed = true;
-               $HTTP_Client_CLI->unwatch($Request);
-               $Request->connectionState = 'idle';
-               unset($HTTP_Client_CLI->pendingRequests[$socketId]);
-
-               // @ close() fires the disconnect hook: pool drop + promote + halt
-               $Connection->close();
+               $HTTP_Client_CLI->reject($Request, $Connection, $socketId, 'Response Too Large', $receivedNS);
                return;
             }
 
@@ -556,30 +554,24 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             }
 
             // @ Non-100 interim (e.g. 102 Processing): process pending buffer immediately
+            //   — the pending buffer keeps mirroring it: a final head split
+            //   across reads is still whole on the next read (HCLI-17)
             if ($Request->pendingBuffer !== '') {
                $buffer = $Request->pendingBuffer;
-               $Request->pendingBuffer = '';
+               $size = strlen($buffer);
                goto parse_response;
             }
 
             return;
          }
 
-         // ? A chunked decode failure is never a completion — deliver the same
-         //   failed Response the maxResponseBytes wire guard builds, carrying
-         //   the decoder's own status (an oversize body and malformed framing
-         //   are different answers), and drop the poisoned mid-stream
-         //   connection (HCLI-3/HCLI-11/HCLI-19)
+         // ? A decode failure — malformed framing, a head past its cap, a bad
+         //   chunk — is never a completion: the request fails with the
+         //   decoder's own status (an oversize body and malformed framing are
+         //   different answers) and the poisoned connection is dropped
+         //   (HCLI-3/HCLI-11/HCLI-19, M2)
          if (isSet($parsed['failed'])) {
-            $Request->Response->code = 0;
-            $Request->Response->status = (string) $parsed['status'];
-            $Request->completed = true;
-            $HTTP_Client_CLI->unwatch($Request);
-            $Request->connectionState = 'idle';
-            unset($HTTP_Client_CLI->pendingRequests[$socketId]);
-
-            // @ close() fires the disconnect hook: pool drop + promote + halt
-            $Connection->close();
+            $HTTP_Client_CLI->reject($Request, $Connection, $socketId, (string) $parsed['status'], $receivedNS);
             return;
          }
 
@@ -606,11 +598,27 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             $Response->status = (string) $parsed['status'];
             $Response->closeConnection = (bool) $parsed['closeConnection'];
 
-            $Response->Header->define((string) $parsed['headerRaw']);            $Response->Header->build();
+            $Response->Header->define((string) $parsed['headerRaw']);
+            $Response->Header->build();
             $Response->Body->raw = (string) $parsed['bodyRaw'];
             $Response->Body->length = (int) $parsed['bodyLength'];
             $Response->Body->downloaded = (int) $parsed['bodyDownloaded'];
             $Response->Body->waiting = (bool) $parsed['bodyWaiting'];
+
+            // ? A declared Content-Length past the cap fails now, before its
+            //   body is downloaded (chunked sizes already fail fast) — counted
+            //   like the wire guard: every byte already read that is not body
+            //   (the head, any interim) plus the declared body
+            if (
+               $parsed['bodyWaiting']
+               && $parsed['chunked'] === false
+               && $HTTP_Client_CLI->maxResponseBytes > 0
+               && $Request->bytesReceived - (int) $parsed['bodyDownloaded'] + (int) $parsed['bodyLength']
+                  > $HTTP_Client_CLI->maxResponseBytes
+            ) {
+               $HTTP_Client_CLI->reject($Request, $Connection, $socketId, 'Response Too Large', $receivedNS);
+               return;
+            }
 
             // @ Handle chunked transfer-encoding switch
             if ($parsed['chunked']) {
@@ -632,15 +640,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                //   in the same read as the headers fails here, before any body
                //   byte counts (HCLI-3/HCLI-19)
                if ($chunkedResult !== null && isSet($chunkedResult['failed'])) {
-                  $Request->Response->code = 0;
-                  $Request->Response->status = (string) $chunkedResult['status'];
-                  $Request->completed = true;
-                  $HTTP_Client_CLI->unwatch($Request);
-                  $Request->connectionState = 'idle';
-                  unset($HTTP_Client_CLI->pendingRequests[$socketId]);
-
-                  // @ close() fires the disconnect hook: pool drop + promote + halt
-                  $Connection->close();
+                  $HTTP_Client_CLI->reject($Request, $Connection, $socketId, (string) $chunkedResult['status'], $receivedNS);
                   return;
                }
 
@@ -985,12 +985,14 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                //   before complete headers) is a transport failure, never a
                //   successful close-delimited response. A non-EOF close with a
                //   pending request fails fast instead of waiting for a timeout.
-               $Response->code = 0;
+               // ! "Truncated" once the head was parsed (code > 0) — a status
+               //   line without a reason phrase leaves `status` empty
                $Response->status = match (true) {
                   $Connection->peerEOF === false => 'Connection Lost',
-                  $Response->status === '' => 'Connection Closed',
+                  $Response->code === 0 => 'Connection Closed',
                   default => 'Truncated Response'
                };
+               $Response->code = 0;
                $Request->completed = true;
                $HTTP_Client_CLI->unwatch($Request);
                $Request->connectionState = 'idle';
@@ -1555,7 +1557,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     * and retryable stream errors, release the pool stream.
     *
     * @param Request $Request The concluded request.
-    * @param array{stream:int,code:int,headerRaw:string,body:string,error:null|Errors,retryable:bool} $record
+    * @param array{stream:int,code:int,headerRaw:string,body:string,error:null|Errors,retryable:bool,status:null|string} $record
     * @param Session $Session The h2 connection engine.
     * @param Connection $Connection The transport connection.
     * @param int $socketId The connection socket ID.
@@ -1605,8 +1607,11 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             }
          }
 
+         // ! A local cancel names its own failure — the response cap reports
+         //   'Response Too Large' (deterministic, never retried), not the
+         //   RST_STREAM code it sent
          $Response->code = 0;
-         $Response->status = "HTTP/2 Stream Error: {$record['error']->name}";
+         $Response->status = $record['status'] ?? "HTTP/2 Stream Error: {$record['error']->name}";
          $Request->completed = true;
          $this->unwatch($Request);
          $Request->connectionState = 'idle';
@@ -1812,6 +1817,40 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       if ($this->Notified !== null) {
          @fwrite($this->Notified, "\0");
       }
+   }
+   /**
+    * Fail the in-flight HTTP/1.x response on its connection: the answer is refused (its framing
+    * is invalid, or it is past a size cap) and the connection it poisoned is dropped.
+    *
+    * Every consumer is told: the synchronous caller sees a completed code 0 response, and an
+    * event-driven consumer — which holds no Request to poll — gets its `ResponseReceive`
+    * callback with that response (HCLI-18).
+    *
+    * @param Request $Request The request whose response is refused.
+    * @param Connection $Connection The connection carrying it.
+    * @param int $socketId The connection socket ID.
+    * @param string $status The failure status (`'Response Too Large'`, `'Invalid Response'`, ...).
+    * @param int $receivedNS The monotonic arrival time of the read that refused it.
+    */
+   private function reject (Request $Request, Connection $Connection, int $socketId, string $status, int $receivedNS): void
+   {
+      // !
+      $Response = $Request->Response;
+      $Response->code = 0;
+      $Response->status = $status;
+
+      $Request->completed = true;
+      $this->unwatch($Request);
+      $Request->connectionState = 'idle';
+      unset($this->pendingRequests[$socketId]);
+
+      // @ Event-driven: the failure IS the response callback
+      if ($this->eventDriven && $this->onResponse !== null) {
+         ($this->onResponse)($Request, $Response, $receivedNS);
+      }
+
+      // @ close() fires the disconnect hook: pool drop + promote + halt
+      $Connection->close();
    }
    /**
     * Fail a request deterministically (code 0) outside any dispatch terminal.
@@ -2098,6 +2137,9 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       // ? Deterministic failures never become transient by retrying
       if (
          $Request->Response->status === 'Response Too Large'
+         || $Request->Response->status === 'Response Header Fields Too Large'
+         || $Request->Response->status === 'Invalid Response'
+         || $Request->Response->status === 'Invalid Chunked Encoding'
          || $Request->Response->status === 'Request Header Fields Too Large'
          || $Request->Response->status === 'Insecure Redirect'
          || $Request->Response->status === 'Redirect Failed'

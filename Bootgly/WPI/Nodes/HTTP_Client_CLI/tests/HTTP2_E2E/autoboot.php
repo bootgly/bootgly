@@ -95,6 +95,8 @@ return new Suite(
       '1.3-head_no_body',
       '2.1-multiplex',
       '2.2-large_download',
-      '3.1-redirect'
+      '3.1-redirect',
+      // # 1.0.x (M2): the default cap reaches HTTP/2 — named, never retried
+      '2.3-over_cap_status'
    ]
 );

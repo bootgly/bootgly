@@ -49,6 +49,9 @@ return new Suite(
          '6.2-decoder_chunked-ownership',
          '6.3-decoder_chunked-overflow',
          '6.4-decoder_chunked-size_line',
+         // # 1.0.x (M2): strict response framing, head and chunk-line caps
+         '6.5-decoder-response_framing',
+         '6.6-decoder_chunked-line_limits',
       ],
       // ! Client-level cases the E2E harness cannot host: event-driven mode is
       //   process-wide and its request() returns the client, not a Response.
@@ -69,5 +72,7 @@ return new Suite(
       '9.2-event_driven_memo_integrity',
       // # 1.0.x: the lock-step client harness accounts for every case
       '9.3-harness_lock_step',
+      // # 1.0.x (M2): a refused response still reaches the event-driven callback
+      '9.4-event_driven-failure_callback',
    ]
 );

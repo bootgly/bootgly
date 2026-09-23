@@ -42,6 +42,12 @@ return new Suite(
          '7.1-100_continue',
          '7.2-informational_1xx',
          '7.3-no_body_204',
+         // # 1.0.x (M2): strict response framing (+ HCLI-16/17)
+         '7.4-content_length_strict',
+         '7.5-status_line_strict',
+         '7.6-transfer_encoding_with_content_length',
+         '7.7-interim_split_final_head',
+         '7.8-connection_close_tokens',
       ],
       'CacheIsolation/' => [
          '12.1a-prime_cache_get_alpha',
@@ -79,6 +85,8 @@ return new Suite(
          '11.4-retry_on_status',
          '11.5-retry_after_date',
          '11.6-retry_post_blocked',
+         // # 1.0.x (M2): a response refused for its framing is never retried
+         '11.7-retry_deterministic_framing',
       ],
       'Pool/' => [
          '13.1-pool_reuse',
@@ -108,6 +116,9 @@ return new Suite(
          '17.7-malformed_chunk_size',
          '17.8-negative_chunk_size',
          '17.9-blind_chunk_terminator',
+         // # 1.0.x (M2): the head cap and a declared Content-Length past the cap
+         '17.10-unterminated_header_block',
+         '17.11-declared_content_length_oversize',
       ],
       // ! Last on purpose: these build a second client, which replaces the
       //   process-wide reactor. Nothing after them may rely on the previous one.

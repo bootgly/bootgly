@@ -36,7 +36,7 @@ return new Test(
          return $Client->request(method: 'GET', URI: '/overflow/later-read');
       },
       function (HTTP_Client_CLI $Client): Response {
-         $Client->maxResponseBytes = 0; // @ Restore default (unbounded)
+         $Client->maxResponseBytes = (int) (new ReflectionProperty(HTTP_Client_CLI::class, 'maxResponseBytes'))->getDefaultValue(); // @ Restore default
          $Response = $Client->request(method: 'GET', URI: '/overflow/later-after');
          $Client->timeout = 30; // @ Restore default
          return $Response;
