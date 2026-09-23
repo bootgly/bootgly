@@ -6,8 +6,9 @@
   database?), present them instead of picking one silently; say so when a simpler approach exists; stop
   and ask when something is unclear.
 - **SHOULD** — Search before inventing, in this order: the CLI scaffolders; the shipped examples in
-  `projects/`; the documentation (any page of https://docs.bootgly.com as Markdown by appending `.md`,
-  the index at https://docs.bootgly.com/llms.txt, or the MCP server at https://docs.bootgly.com/mcp);
+  `projects/`; the documentation (a page as Markdown at `<page>/overview.md`, e.g.
+  https://docs.bootgly.com/guide/database-migrations/overview.md, the index at
+  https://docs.bootgly.com/llms.txt, or the MCP server at https://docs.bootgly.com/mcp);
   the pinned source under `Bootgly/` (and `Console/`, `Web/`).
 - **MUST** — Never guess a Bootgly signature, named argument, enum case or configuration key. The kit
   pins one release; the documentation describes the latest. When they disagree, the pinned source wins.
@@ -29,8 +30,9 @@
 - **MUST** — Update the kit only with `bootgly kit upgrade` or `kit downgrade` — never `git pull`, never
   `git submodule update --remote`.
 - **MUST** — Never edit `Bootgly/`, `Console/` or `Web/`; never edit `projects/Bootgly.projects.php`,
-  `projects/AGENTS.md` or `projects/.agents/` — the tooling rewrites them; never edit the kit's own
-  `AGENTS.md` — a changed tracked file blocks the next `kit upgrade`.
+  `projects/AGENTS.md`, `projects/.agents/rules/` or the `bootgly-*` skills and their
+  `projects/.claude/skills/` links — the tooling rewrites them (the `bootgly-` prefix is reserved); never
+  edit the kit's own `AGENTS.md` — a changed tracked file blocks the next `kit upgrade`.
 - **MUST** — Never create a `CLAUDE.md` in the kit root or in `projects/` (and never run `/init` there):
   its presence stops Claude Code from reading these `AGENTS.md` files. If a client cannot read `AGENTS.md`
   natively, a `CLAUDE.md` holding only `@AGENTS.md` is the one exception. A project of yours that wants

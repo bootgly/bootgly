@@ -1,4 +1,4 @@
-<!-- Machine-managed by `bootgly kit boot`: it lays this file and `.agents/rules/` down and rewrites them. Do not edit. -->
+<!-- Machine-managed by `bootgly kit boot`: it lays this file, `.agents/rules/` and the `bootgly-*` skills down and rewrites them. Do not edit. -->
 
 # Bootgly projects — agent rules
 
@@ -20,8 +20,10 @@ RECOMMEND; before going against a MUST, tell the user what breaks. In the rules,
 `projects/`, `Bootgly/`, `Console/` or `Web/` are relative to the kit root; project paths (`configs/`,
 `router/`, `tests/`, ...) to the project.
 
-Operating the kit itself — install, create, import, upgrade and the non-interactive flags — is covered
-by `../AGENTS.md`.
+Step-by-step recipes live in `.agents/skills/` — `bootgly-project`, `bootgly-build`, `bootgly-config`,
+`bootgly-test` and `bootgly-review`, plus a `bootgly-build-<platform>` from each platform package set up
+in the kit; the `bootgly-` prefix is reserved for them, so name your own skills otherwise. Operating the
+kit itself — install, create, import, upgrade and the non-interactive flags — is covered by `../AGENTS.md`.
 
 @.agents/rules/Architecture_principles.md
 @.agents/rules/Coding_styles.md

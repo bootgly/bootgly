@@ -1553,7 +1553,8 @@ class ProjectsCommand extends Command
    /**
     * Prepare the working directory (kit) on first run: platform submodules
     * (system git), then `kit boot` — the resource directories and the agent
-    * rules.
+    * rules and skills. A platform set up on a prepared kit re-lays the skills
+    * alone, so its build skill arrives with it.
     *
     * @param array<string, bool|int|string> $options
     *
@@ -1687,6 +1688,10 @@ class ProjectsCommand extends Command
          if (new KitCommand()->boot([]) === false) {
             return false;
          }
+      }
+      // ! A platform set up on a prepared kit brings its skills — advisory
+      else if ($initialized !== []) {
+         new KitCommand()->boot(['agents' => true]);
       }
 
       // # Shipped example projects — the kit's living guides

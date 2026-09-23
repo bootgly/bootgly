@@ -23,12 +23,14 @@ use function array_intersect_key;
 use function array_key_first;
 use function array_keys;
 use function array_map;
+use function array_reverse;
 use function array_slice;
 use function bin2hex;
 use function chown;
 use function clearstatcache;
 use function constant;
 use function copy;
+use function count;
 use function defined;
 use function dirname;
 use function explode;
@@ -52,6 +54,7 @@ use function lstat;
 use function mkdir;
 use function posix_geteuid;
 use function preg_match;
+use function preg_quote;
 use function preg_replace;
 use function proc_close;
 use function proc_open;
@@ -72,6 +75,7 @@ use function str_starts_with;
 use function strlen;
 use function strtolower;
 use function substr;
+use function symlink;
 use function time;
 use function trim;
 use function unlink;
@@ -129,6 +133,8 @@ class KitCommand extends Command
     * Vault the same) — pre-creating them at the umask would break the first session.
     */
    private const array STORAGE = ['cache/', 'locks/', 'logs/', 'pids/', 'queues/', 'schedule/', 'temp/', 'tests/'];
+   /** The name of a skill `boot` owns — the `bootgly-` prefix is Bootgly's. */
+   private const string SKILL = '/^bootgly-[a-z0-9-]+$/';
    /** The first line of an agent-rules entry point `boot` owns — anything else in its place is the user's. */
    public const string STAMP = '<!-- Machine-managed by `bootgly kit boot`';
    /** The transports a releases remote may use — anything else is refused. */
@@ -172,7 +178,7 @@ class KitCommand extends Command
       'Machine output — one JSON document (upgrade/downgrade/list)' => ['--json'],
       'Answer every confirmation: running instances, a major crossing, a release predating this command (upgrade/downgrade)' => ['--yes'],
       'Lay down only the resource directories: projects, scripts, storage (boot)' => ['--resources'],
-      'Lay down only the agent rules: projects/AGENTS.md and projects/.agents/rules/ (boot)' => ['--agents'],
+      'Lay down only the agent rules and skills: projects/AGENTS.md, projects/.agents/ (boot)' => ['--agents'],
    ];
    // # Kit
    /** The kit root — the launcher's directory. */
@@ -313,11 +319,13 @@ class KitCommand extends Command
     * what is already there. No kit-level `public/`: the serving APIs are
     * jailed to the project directory, so assets live per project.
     *
-    * The one exception is the agent rules — `projects/AGENTS.md` and
-    * `projects/.agents/rules/`: the framework's, not the kit's, so they are
-    * laid down AND refreshed whenever they differ from the pinned templates —
-    * but only while they are the framework's (see `lay()`). `--resources`
-    * lays down only the directories, `--agents` only the rules; both by default.
+    * The one exception is the agent rules — `projects/AGENTS.md`,
+    * `projects/.agents/rules/` and the `bootgly-*` skills (the framework's and
+    * each platform package's) with their `projects/.claude/skills/` links:
+    * Bootgly's, not the kit's, so they are laid down AND refreshed whenever
+    * they differ from the pinned templates — but only while they are
+    * Bootgly's (stamped, see `lay()`). `--resources` lays down only the
+    * directories, `--agents` only the rules and skills; both by default.
     *
     * `projects create` and `import` run this on a fresh kit by themselves.
     *
@@ -451,7 +459,9 @@ class KitCommand extends Command
 
    /**
     * Lay down the agent rules in the kit's `projects/` — `AGENTS.md` and
-    * `.agents/rules/`, mirrored from the framework's `templates/projects/`.
+    * `.agents/rules/`, mirrored from the framework's `templates/projects/` —
+    * and the `bootgly-*` skills: the framework's and those of each platform
+    * package set up in the kit (see `gather()`).
     *
     * They are machine-managed, but only while they are the framework's: an
     * `AGENTS.md` whose first line is the stamp, with `.agents/rules/` beside
@@ -497,30 +507,94 @@ class KitCommand extends Command
 
          return true;
       }
-      // ? Already the templates, file for file
-      if ($this->sign($source) === $this->sign($target)) {
+      // ! The skills the framework and the platform packages carry — each a
+      //   `bootgly-*` directory. Bootgly's in .agents/skills/ are the stamped
+      //   ones (`own()`); every other entry there is the user's, a `bootgly-*`
+      //   one included (it may predate the reserved prefix)
+      $skills = $this->gather($source, $kit);
+      $shelf = "{$target}/.agents/skills";
+      // ? A linked skills directory leads outside the kit, and a file there is
+      //   not a directory — rules only
+      $shelved = is_link($shelf) === false && (is_dir($shelf) === true || file_exists($shelf) === false);
+      if ($shelved === false) {
+         $skills = [];
+      }
+      // ? A skill whose place holds something of the user's is not laid — said
+      foreach (array_keys($skills) as $name) {
+         $place = "{$shelf}/{$name}";
+         if ((file_exists($place) === true || is_link($place) === true) && self::own($place) === false) {
+            unset($skills[$name]);
+            $Alert->Type::Attention->set();
+            $Alert->message = "Skill @#cyan:{$name}@; kept: it is not Bootgly's.";
+            $Alert->render();
+         }
+      }
+
+      // ! Both sides as trees to sign: the entry point, the rules and each skill
+      $sources = ['AGENTS.md' => "{$source}/AGENTS.md", '.agents/rules' => "{$source}/.agents/rules"];
+      $targets = ['AGENTS.md' => $entry, '.agents/rules' => $rules];
+      if ($shelved === true) {
+         foreach ($skills as $name => $from) {
+            $sources[".agents/skills/{$name}"] = $from;
+         }
+         foreach ((array) @scandir($shelf) as $name) {
+            if (preg_match(self::SKILL, (string) $name) === 1 && self::own("{$shelf}/{$name}") === true) {
+               $targets[".agents/skills/{$name}"] = "{$shelf}/{$name}";
+            }
+         }
+      }
+
+      // ? Already the templates, file for file — only the Claude links to check
+      if ($this->sign($sources) === $this->sign($targets)) {
+         $this->link($target, array_keys($skills));
+
          return true;
       }
 
       // ! One staging directory for the whole run — unguessable, made fresh
-      //   and private (mkdir refuses a planted name): the new rules, the
-      //   retired ones and the entry point all pass through it
+      //   and private (mkdir refuses a planted name): the new rules and skills,
+      //   the retired ones and the entry point all pass through it
       $this->sweep($target);
       $staging = "{$target}/.bootgly." . getmypid() . '.' . bin2hex(random_bytes(6));
       $created = is_dir("{$target}/.agents") === false;
+      $stocked = is_dir($shelf) === false && is_link($shelf) === false && $skills !== [];
       $laid = @mkdir($staging, 0700) === true
          && ($created === false || @mkdir("{$target}/.agents", 0755) === true)
+         && ($stocked === false || @mkdir($shelf, 0755) === true)
          && $this->mirror("{$source}/.agents/rules/", "{$staging}/rules/");
-
-      // @ .agents/rules/ — swapped in whole; the previous rules go back on failure
-      $present = file_exists($rules) === true || is_link($rules) === true;
-      if ($laid === true && $present === true) {
-         $laid = @rename($rules, "{$staging}/retired");
+      $laid = $laid && ($skills === [] || @mkdir("{$staging}/skills", 0700) === true);
+      foreach ($skills as $name => $from) {
+         $laid = $laid && $this->mirror("{$from}/", "{$staging}/skills/{$name}/");
       }
-      if ($laid === true) {
-         $laid = @rename("{$staging}/rules", $rules);
-         if ($laid === false && $present === true) {
-            @rename("{$staging}/retired", $rules);
+
+      // @ .agents/rules/ and each skill — swapped in whole; when one fails, every
+      //   swap already done is rolled back, so the kit keeps the previous set
+      $swaps = ["{$staging}/rules" => [$rules, "{$staging}/retired"]];
+      foreach (array_keys($skills) as $name) {
+         $swaps["{$staging}/skills/{$name}"] = ["{$shelf}/{$name}", "{$staging}/retired-{$name}"];
+      }
+      $done = [];
+      foreach ($swaps as $fresh => [$place, $retired]) {
+         $laid = $laid && $this->exchange($fresh, $place, $retired);
+         if ($laid === true) {
+            $done[] = [$place, $retired, "{$fresh}.rolled"];
+         }
+      }
+      if ($laid === false) {
+         foreach (array_reverse($done) as [$place, $retired, $rolled]) {
+            @rename($place, $rolled);
+            if (file_exists($retired) === true || is_link($retired) === true) {
+               @rename($retired, $place);
+            }
+         }
+      }
+      // @ A skill of Bootgly's no longer carried (a platform removed, too) goes with the staging
+      if ($laid === true && is_dir($shelf) === true && is_link($shelf) === false) {
+         foreach ((array) @scandir($shelf) as $name) {
+            if (preg_match(self::SKILL, (string) $name) === 1 && isSet($skills[$name]) === false
+               && self::own("{$shelf}/{$name}") === true) {
+               @rename("{$shelf}/{$name}", "{$staging}/stale-{$name}");
+            }
          }
       }
       // @ AGENTS.md last — renamed over the entry point: a link is replaced
@@ -543,9 +617,17 @@ class KitCommand extends Command
       //   was already there
       self::grant($rules);
       self::grant($entry);
+      foreach (array_keys($skills) as $name) {
+         self::grant("{$shelf}/{$name}");
+      }
       if ($created === true) {
          self::grant("{$target}/.agents");
       }
+      else if ($stocked === true) {
+         self::grant($shelf);
+      }
+      // @ Claude Code reads skills from .claude/skills/ only
+      $this->link($target, array_keys($skills));
 
       $Alert->Type::Success->set();
       $Alert->message = 'Agent rules laid down in @#cyan:projects/@;';
@@ -553,6 +635,93 @@ class KitCommand extends Command
 
       // :
       return true;
+   }
+
+   /**
+    * Put a freshly mirrored tree in its place: the one there is moved aside
+    * first and put back when the move-in fails.
+    *
+    * @param string $fresh The new tree, in the staging directory.
+    * @param string $place Where it goes.
+    * @param string $retired Where the previous one waits, in the staging directory.
+    *
+    * @return bool
+    */
+   private function exchange (string $fresh, string $place, string $retired): bool
+   {
+      $present = file_exists($place) === true || is_link($place) === true;
+      // ?
+      if ($present === true && @rename($place, $retired) === false) {
+         return false;
+      }
+      if (@rename($fresh, $place) === true) {
+         return true;
+      }
+      if ($present === true) {
+         @rename($retired, $place);
+      }
+
+      // :
+      return false;
+   }
+
+   /**
+    * Link each skill into `projects/.claude/skills/` — the only place Claude
+    * Code reads project skills from — as `bootgly-*` links to
+    * `../../.agents/skills/<name>`. Best effort: a `.claude/` or
+    * `.claude/skills/` that is a link or a file, a real entry with a skill's
+    * name and a link pointing anywhere else are the user's and left alone; a
+    * link of ours whose skill is gone goes.
+    *
+    * @param string $target The kit's `projects/`.
+    * @param array<int,string> $skills The skills laid down.
+    */
+   private function link (string $target, array $skills): void
+   {
+      $claude = "{$target}/.claude";
+      $links = "{$claude}/skills";
+
+      // ? The user's .claude/ — never written through
+      foreach ([$claude, $links] as $path) {
+         if (is_link($path) === true || (file_exists($path) === true && is_dir($path) === false)) {
+            return;
+         }
+      }
+      // ? Nothing to link, and nothing linked before
+      if ($skills === [] && is_dir($links) === false) {
+         return;
+      }
+      $made = is_dir($claude) === false;
+      $placed = is_dir($links) === false;
+      if ($placed === true && @mkdir($links, 0755, true) === false) {
+         return;
+      }
+
+      // @@ A link of ours whose skill is gone goes — only one shaped like ours,
+      //    left dangling: a skill still there (the user's) keeps its link
+      foreach ((array) @scandir($links) as $name) {
+         $path = "{$links}/{$name}";
+         if (preg_match(self::SKILL, (string) $name) === 1 && in_array($name, $skills, true) === false
+            && is_link($path) === true && @readlink($path) === "../../.agents/skills/{$name}" && file_exists($path) === false) {
+            @unlink($path);
+         }
+      }
+      // @@ Each skill gets its own — unless that name holds a link or an entry already:
+      //    ours, or the user's (a link pointing elsewhere, a real entry)
+      foreach ($skills as $name) {
+         $path = "{$links}/{$name}";
+         if (is_link($path) === true || file_exists($path) === true) {
+            continue;
+         }
+         @symlink("../../.agents/skills/{$name}", $path);
+      }
+
+      if ($made === true) {
+         self::grant($claude);
+      }
+      else if ($placed === true) {
+         self::grant($links);
+      }
    }
 
    /**
@@ -603,6 +772,31 @@ class KitCommand extends Command
    }
 
    /**
+    * Tell whether a skill in `.agents/skills/` is Bootgly's to rewrite or
+    * remove: a real directory (never a link) whose `SKILL.md` — a regular
+    * file — carries the stamp as the first line after its frontmatter.
+    * Anything else under a `bootgly-*` name (one that predates the reserved
+    * prefix, one whose stamp was taken out) is the user's.
+    *
+    * @param string $skill The skill's directory.
+    *
+    * @return bool
+    */
+   private static function own (string $skill): bool
+   {
+      $file = "{$skill}/SKILL.md";
+      // ?
+      if (is_link($skill) === true || is_dir($skill) === false || is_link($file) === true || is_file($file) === false) {
+         return false;
+      }
+
+      $head = (string) @file_get_contents($file, false, null, 0, 4096);
+
+      // : Line endings as checked out — a CRLF checkout keeps its stamp
+      return preg_match('/\A---\r?\n(?:(?!---\r?\n)[^\r\n]*\r?\n)*---\r?\n' . preg_quote(self::STAMP, '/') . '/', $head) === 1;
+   }
+
+   /**
     * Sweep the staging directories an interrupted `lay()` left behind — only
     * this command's own name pattern, only once they are minutes old (a
     * concurrent boot's live staging is not a leftover), each removed without
@@ -626,44 +820,106 @@ class KitCommand extends Command
    }
 
    /**
-    * Sign the agent rules under a directory — `AGENTS.md` and every entry of
-    * `.agents/rules/`, by relative path and content — so two trees compare as
-    * one string. A link is signed by where it points, never followed.
+    * Gather the skills to lay down: the framework's own `bootgly-*` skills,
+    * then each platform package's. A platform package is a kit-root
+    * `<Platform>/` that is set up (its `autoboot.php` is there) and whose
+    * `<Platform>/templates/projects/.agents/skills/` holds skills named
+    * `bootgly-<action>-<platform>` — the framework names no platform (nor
+    * reads `.gitmodules`, which the kit image drops): a package that is set
+    * up brings its skills, one that is not (or was removed) leaves none. Two
+    * packages whose names differ only in case are ambiguous and bring none.
+    * A skill never replaces one already gathered, and only a stamped one is
+    * taken (`own()`): an unstamped source would be laid once and then never
+    * owned again, and a linked one would sign as a link but mirror as a
+    * copy. Any other name a package ships is ignored.
     *
-    * @param string $base The directory holding `AGENTS.md` and `.agents/`.
+    * @param string $source The framework's `templates/projects/`.
+    * @param string $kit The kit root.
+    *
+    * @return array<string,string> Each skill's name and the directory it comes from.
+    */
+   private function gather (string $source, string $kit): array
+   {
+      $skills = [];
+
+      // @@ The framework's
+      foreach ((array) @scandir("{$source}/.agents/skills") as $name) {
+         $from = "{$source}/.agents/skills/{$name}";
+         if (preg_match(self::SKILL, (string) $name) === 1 && self::own($from) === true) {
+            $skills[(string) $name] = $from;
+         }
+      }
+      // ! The platform packages set up in the kit, by lowercase name
+      $platforms = [];
+      foreach ((array) @scandir($kit) as $platform) {
+         $platform = (string) $platform;
+         if (preg_match('/^[A-Z][A-Za-z0-9]*$/', $platform) === 1 && $platform !== self::FRAMEWORK
+            && is_file("{$kit}/{$platform}/autoboot.php") === true) {
+            $platforms[strtolower($platform)][] = $platform;
+         }
+      }
+      // @@ Each one's skills, suffixed with its own name
+      foreach ($platforms as $suffix => $named) {
+         // ? `Web` and `WEB` — neither is the platform
+         if (count($named) !== 1) {
+            continue;
+         }
+         $shelf = "{$kit}/{$named[0]}/{$named[0]}/templates/projects/.agents/skills";
+         foreach ((array) @scandir($shelf) as $name) {
+            $name = (string) $name;
+            $from = "{$shelf}/{$name}";
+            if (preg_match("/^bootgly-[a-z0-9-]+-{$suffix}$/", $name) === 1 && isSet($skills[$name]) === false
+               && self::own($from) === true) {
+               $skills[$name] = $from;
+            }
+         }
+      }
+
+      // :
+      return $skills;
+   }
+
+   /**
+    * Sign trees — each entry under them by its path relative to the tree's
+    * key, and its content — so two sets compare as one string. A link is
+    * signed by where it points, never followed; a missing tree as absent.
+    *
+    * @param array<string,string> $trees Each tree's key (`AGENTS.md`, `.agents/rules`,
+    *                                    `.agents/skills/<name>`) and its path.
     *
     * @return string
     */
-   private function sign (string $base): string
+   private function sign (array $trees): string
    {
       $entries = [];
 
-      // @@ AGENTS.md, then .agents/rules/ and everything under it
-      $paths = ["{$base}/AGENTS.md", "{$base}/.agents/rules"];
-      if (is_dir("{$base}/.agents/rules") === true && is_link("{$base}/.agents/rules") === false) {
-         // ? An unreadable tree cannot be the templates — it is drift
-         try {
-            $Entries = new RecursiveIteratorIterator(
-               new RecursiveDirectoryIterator("{$base}/.agents/rules", FilesystemIterator::SKIP_DOTS),
-               RecursiveIteratorIterator::SELF_FIRST
-            );
-            /** @var SplFileInfo $Entry */
-            foreach ($Entries as $Entry) {
-               $paths[] = $Entry->getPathname();
+      // @@ Each tree, and everything under it
+      foreach ($trees as $key => $tree) {
+         $paths = [$key => $tree];
+         if (is_dir($tree) === true && is_link($tree) === false) {
+            // ? An unreadable tree cannot be the templates — it is drift
+            try {
+               $Entries = new RecursiveIteratorIterator(
+                  new RecursiveDirectoryIterator($tree, FilesystemIterator::SKIP_DOTS),
+                  RecursiveIteratorIterator::SELF_FIRST
+               );
+               /** @var SplFileInfo $Entry */
+               foreach ($Entries as $Entry) {
+                  $paths[$key . substr($Entry->getPathname(), strlen($tree))] = $Entry->getPathname();
+               }
+            }
+            catch (Throwable) {
+               return '';
             }
          }
-         catch (Throwable) {
-            return '';
+         foreach ($paths as $relative => $path) {
+            $entries[$relative] = match (true) {
+               is_link($path) => 'link:' . (string) @readlink($path),
+               is_file($path) => 'file:' . (string) @sha1_file($path),
+               is_dir($path)  => 'dir',
+               default        => 'none',
+            };
          }
-      }
-      foreach ($paths as $path) {
-         $relative = substr($path, strlen($base) + 1);
-         $entries[$relative] = match (true) {
-            is_link($path) => 'link:' . (string) @readlink($path),
-            is_file($path) => 'file:' . (string) @sha1_file($path),
-            is_dir($path)  => 'dir',
-            default        => 'none',
-         };
       }
       ksort($entries);
 
@@ -873,13 +1129,18 @@ class KitCommand extends Command
          return;
       }
 
-      $Entries = new RecursiveIteratorIterator(
-         new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS),
-         RecursiveIteratorIterator::CHILD_FIRST
-      );
-      foreach ($Entries as $Entry) {
-         /** @var SplFileInfo $Entry */
-         $Entry->isDir() === true && $Entry->isLink() === false ? @rmdir($Entry->getPathname()) : @unlink($Entry->getPathname());
+      try {
+         $Entries = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+         );
+         foreach ($Entries as $Entry) {
+            /** @var SplFileInfo $Entry */
+            $Entry->isDir() === true && $Entry->isLink() === false ? @rmdir($Entry->getPathname()) : @unlink($Entry->getPathname());
+         }
+      }
+      catch (Throwable) {
+         // ? Best effort: an unreadable directory inside stays, and so does this one — never thrown
       }
       @rmdir($directory);
    }
@@ -1107,8 +1368,9 @@ class KitCommand extends Command
     * just moved to. This process still runs the outgoing code, so the NEW
     * launcher re-lays them (`kit boot --agents`, its output discarded — it
     * never reaches the stream or the JSON document); a release that predates
-    * the rules takes the framework's away — a stamped `AGENTS.md` and
-    * `.agents/rules/` — and nothing else. Only built-ins and this class run
+    * the rules takes Bootgly's away — a stamped `AGENTS.md`, `.agents/rules/`,
+    * the stamped skills and the Claude links they leave dangling — and
+    * nothing else. Only built-ins and this class run
     * here — it is called after the swap — and nothing it does may throw.
     */
    private function refresh (): void
@@ -1136,8 +1398,41 @@ class KitCommand extends Command
             if (self::recognize("{$kit}/projects/AGENTS.md") === false) {
                return;
             }
-            @unlink("{$kit}/projects/AGENTS.md");
+            // ! The rules first: while one is left, the stamped entry point stays
+            //   and a later run can finish — what could not go is said
             $this->wipe("{$kit}/projects/.agents/rules");
+            if (file_exists("{$kit}/projects/.agents/rules") === true || is_link("{$kit}/projects/.agents/rules") === true) {
+               $this->document['agents'] = 'failed';
+               $this->say('   Agent rules could not be removed from @#cyan:projects/@; — remove @#cyan:projects/.agents/rules/@; by hand.');
+
+               return;
+            }
+            @unlink("{$kit}/projects/AGENTS.md");
+            // @@ The skills of Bootgly's — the stamped ones; a `bootgly-*` entry
+            //    of the user's stays …
+            $shelf = "{$kit}/projects/.agents/skills";
+            if (is_dir($shelf) === true && is_link($shelf) === false) {
+               foreach ((array) @scandir($shelf) as $name) {
+                  if (preg_match(self::SKILL, (string) $name) === 1 && self::own("{$shelf}/{$name}") === true) {
+                     $this->wipe("{$shelf}/{$name}");
+                  }
+               }
+               @rmdir($shelf);
+            }
+            // @@ … and only the Claude links of ours left dangling by that —
+            //    never through a linked .claude/, never a real entry
+            $links = "{$kit}/projects/.claude/skills";
+            if (is_link("{$kit}/projects/.claude") === false && is_dir($links) === true && is_link($links) === false) {
+               foreach ((array) @scandir($links) as $name) {
+                  $path = "{$links}/{$name}";
+                  if (preg_match(self::SKILL, (string) $name) === 1 && is_link($path) === true
+                     && @readlink($path) === "../../.agents/skills/{$name}" && file_exists($path) === false) {
+                     @unlink($path);
+                  }
+               }
+               @rmdir($links);
+               @rmdir("{$kit}/projects/.claude");
+            }
             @rmdir("{$kit}/projects/.agents");
             $this->document['agents'] = 'removed';
             $this->say('   Agent rules removed from @#cyan:projects/@; — this release predates them.');

@@ -8,10 +8,10 @@ These names are contracts: the framework finds each file by them, and a wrong on
 - **MUST** — The namespace equals the project path (`projects/Shop/Models/Item.php` → `namespace Shop\Models;`)
   and class directories are uppercase, mirroring it: the project autoloader maps one onto the other.
 - **MUST** — A `--from` copy keeps the namespaces of its source: rename them to the new path
-  (`Demo\Blog\…` → `MyBlog\…`) before editing, or the autoloader keeps loading the original example.
+  (`Demo\Notes\…` → `MyNotes\…`) before editing, or the autoloader keeps loading the original example.
 - **MUST** — The resource directories the framework reads keep their names: `configs/`, `database/`,
   `router/`, `tests/`, and `views/` with templates named `*.template.php`.
-- **SHOULD** — Keep the scaffold's `statics/` name too (the `Statics` path is configurable).
+- **SHOULD** — Keep the scaffold's `statics/` name too (a platform may let you configure it).
 - **MUST** — Configuration: `configs/<scope>/<scope>.Config.php` returns `new Config(scope: '<scope>')`
   (e.g. `configs/database/database.Config.php`).
 - **MUST** — Routes (WPI): `router/router.index.php` returns the list of route set names; each name is

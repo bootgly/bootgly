@@ -8,10 +8,9 @@
 - **SHOULD** — Every behaviour you add or change gets a test case: console commands, public model and
   service methods, controller logic.
 - **RECOMMEND** — Route (HTTP) tests return a `Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test`
-  (`request` / `response` / `test`) and need a suite that boots the server in test mode — the shipped
-  `Web/projects/Demo/Auth/tests/E2E/` suite (with `Web/` initialized) is a working reference. When that
-  is more than the change needs, test the logic behind the route and check the route itself with the
-  running-server step below.
+  (`request` / `response` / `test`) and need a suite that boots the server in test mode — copy the
+  reference the platform's build skill names. When that is more than the change needs, test the logic
+  behind the route and check the route itself with the running-server step below.
 
 ## Running tests
 

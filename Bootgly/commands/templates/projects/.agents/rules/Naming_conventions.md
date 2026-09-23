@@ -10,8 +10,8 @@
   `routing()`, `monitoring()`. One discrete action keeps the base form.
 - **SHOULD** — Put the specificity in the object, not in the name: `HTML->render()`, not `renderHTML()` —
   add a class when you need one.
-- **MUST** — A controller mapped with `Web\App\Controllers::map()` (the `Web/` platform package) names
-  its actions `list`, `show`, `create`, `edit`, `update` and `delete` — the router looks for exactly those.
+- **MUST** — A method a framework or platform mapper dispatches to by name keeps the name it expects —
+  a mapped controller's actions, for one: the platform's build skill lists them.
 - **RECOMMEND** — Specific over generic: `execute()`, not `process()`.
 
 ## Properties and variables

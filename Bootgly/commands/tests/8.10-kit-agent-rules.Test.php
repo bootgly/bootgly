@@ -25,15 +25,18 @@ use function posix_geteuid;
 use function preg_replace;
 use function proc_close;
 use function proc_open;
+use function readlink;
 use function rename;
 use function rewind;
 use function rmdir;
 use function str_contains;
+use function str_replace;
 use function str_starts_with;
 use function stream_get_contents;
 use function symlink;
 use function time;
 use function touch;
+use function unlink;
 use Closure;
 
 use const Bootgly\CLI;
@@ -44,13 +47,14 @@ use Bootgly\CLI\Terminal\Output;
 
 /**
  * The agent rules a kit keeps in `projects/`: `kit boot` lays down
- * `AGENTS.md` and `.agents/rules/` from the framework's templates and
- * REFRESHES them whenever they differ — but only while they are the
- * framework's (a stamped `AGENTS.md`): a user's own file in their place is
- * left alone and said, the rest of `.agents/` is never touched, a link is
- * never written through, and an interrupted run's staging is swept. After a
- * move the new release's launcher re-lays them, and a release that predates
- * them takes the framework's away.
+ * `AGENTS.md`, `.agents/rules/` and the `bootgly-*` skills (the framework's
+ * and each platform package's, linked for Claude Code) and REFRESHES them
+ * whenever they differ — but only while they are Bootgly's (stamped): a
+ * user's own file or skill in their place is left alone and said, the rest
+ * of `.agents/` is never touched, a link is never written through, a swap
+ * that fails is rolled back and an interrupted run's staging is swept. After
+ * a move the new release's launcher re-lays them, and a release that
+ * predates them takes Bootgly's away.
  */
 
 return new Test(
@@ -58,9 +62,12 @@ return new Test(
    test: function () {
       $base = Temporaries::reserve('kit-agent-rules');
       $stamp = KitCommand::STAMP . ": do not edit. -->\n";
+      // ! A skill of Bootgly's: the stamp is the first line after its frontmatter
+      $Skill = static fn (string $name, string $description): string
+         => "---\nname: {$name}\ndescription: \"{$description}\"\n---\n" . KitCommand::STAMP . ": do not edit. -->\n\n{$description}\n";
 
       // ! A miniature framework checkout as the template source
-      $Framework = static function (string $root, bool $rules) use ($stamp): string {
+      $Framework = static function (string $root, bool $rules) use ($stamp, $Skill): string {
          mkdir("{$root}/Bootgly/commands/stubs", 0775, true);
          copy(BOOTGLY_ROOT_BASE . '/Bootgly/commands/stubs/Bootgly.projects.php', "{$root}/Bootgly/commands/stubs/Bootgly.projects.php");
          mkdir("{$root}/scripts", 0775, true);
@@ -69,6 +76,8 @@ return new Test(
             mkdir("{$root}/Bootgly/commands/templates/projects/.agents/rules", 0775, true);
             file_put_contents("{$root}/Bootgly/commands/templates/projects/AGENTS.md", "{$stamp}\n# Rules\n\n@.agents/rules/Alpha.md\n");
             file_put_contents("{$root}/Bootgly/commands/templates/projects/.agents/rules/Alpha.md", "# Alpha\n\n- **MUST** — alpha.\n");
+            mkdir("{$root}/Bootgly/commands/templates/projects/.agents/skills/bootgly-alpha", 0775, true);
+            file_put_contents("{$root}/Bootgly/commands/templates/projects/.agents/skills/bootgly-alpha/SKILL.md", $Skill('bootgly-alpha', 'Alpha.'));
          }
 
          return $root;
@@ -116,6 +125,15 @@ return new Test(
          description: '`kit boot` lays down projects/AGENTS.md and projects/.agents/rules/ from the templates, got: ' . json_encode($output)
       );
 
+      // # The skills too — and a link per skill for Claude Code, which reads .claude/skills/ only
+      yield assert(
+         assertion: file_get_contents("{$kit}/projects/.agents/skills/bootgly-alpha/SKILL.md") === file_get_contents("{$rules}/.agents/skills/bootgly-alpha/SKILL.md")
+            && is_link("{$kit}/projects/.claude/skills/bootgly-alpha") === true
+            && readlink("{$kit}/projects/.claude/skills/bootgly-alpha") === '../../.agents/skills/bootgly-alpha'
+            && is_file("{$kit}/projects/.claude/skills/bootgly-alpha/SKILL.md") === true,
+         description: '`kit boot` lays down the bootgly-* skills and links each into projects/.claude/skills/'
+      );
+
       // # Up to date: nothing is written
       [$result, $output] = $Boot($Command);
       yield assert(
@@ -155,6 +173,182 @@ return new Test(
          description: 'a refresh never touches the user\'s own files elsewhere in .agents/'
       );
 
+      // # A skill the templates dropped goes (its link too); the user's own
+      //   skills and .claude/skills/ entries stay
+      mkdir("{$kit}/projects/.agents/skills/bootgly-old", 0775, true);
+      file_put_contents("{$kit}/projects/.agents/skills/bootgly-old/SKILL.md", $Skill('bootgly-old', 'Old.'));
+      symlink('../../.agents/skills/bootgly-old', "{$kit}/projects/.claude/skills/bootgly-old");
+      // ! Under the reserved prefix but unstamped — the user's, with a link shaped like ours
+      mkdir("{$kit}/projects/.agents/skills/bootgly-older", 0775, true);
+      file_put_contents("{$kit}/projects/.agents/skills/bootgly-older/SKILL.md", "mine\n");
+      symlink('../../.agents/skills/bootgly-older', "{$kit}/projects/.claude/skills/bootgly-older");
+      mkdir("{$kit}/projects/.claude/skills/own", 0775, true);
+      file_put_contents("{$kit}/projects/AGENTS.md", "{$stamp}\n# drift\n");
+      [$result] = $Boot($Command);
+      yield assert(
+         assertion: $result === true && file_exists("{$kit}/projects/.agents/skills/bootgly-old") === false
+            && is_link("{$kit}/projects/.claude/skills/bootgly-old") === false
+            && is_dir("{$kit}/projects/.claude/skills/own") === true
+            && is_dir("{$kit}/projects/.agents/skills/deploy") === true
+            && file_get_contents("{$kit}/projects/.agents/skills/bootgly-older/SKILL.md") === "mine\n"
+            && is_link("{$kit}/projects/.claude/skills/bootgly-older") === true,
+         description: 'a stamped skill no longer in the templates is removed with its link; the user\'s skills stay, an unstamped bootgly-* one and its link too'
+      );
+
+      // # A skill reworded in the templates — nothing else changed — reaches the kit
+      file_put_contents("{$rules}/.agents/skills/bootgly-alpha/SKILL.md", $Skill('bootgly-alpha', 'Alpha, reworded.'));
+      [$result] = $Boot($Command);
+      yield assert(
+         assertion: $result === true
+            && file_get_contents("{$kit}/projects/.agents/skills/bootgly-alpha/SKILL.md") === file_get_contents("{$rules}/.agents/skills/bootgly-alpha/SKILL.md"),
+         description: 'a reworded template skill reaches the kit on the next boot'
+      );
+
+      // # The Claude links: a deleted one comes back on an up-to-date boot; a
+      //   real entry under a skill's name and a link pointing elsewhere are the user's
+      unlink("{$kit}/projects/.claude/skills/bootgly-alpha");
+      [$result, $output] = $Boot($Command);
+      yield assert(
+         assertion: $result === true && is_link("{$kit}/projects/.claude/skills/bootgly-alpha") === true
+            && str_contains($output, 'Agent rules laid down') === false,
+         description: 'a deleted Claude link is restored by an up-to-date boot, which writes nothing else, got: ' . json_encode($output)
+      );
+      unlink("{$kit}/projects/.claude/skills/bootgly-alpha");
+      file_put_contents("{$kit}/projects/.claude/skills/bootgly-alpha", "mine\n");
+      mkdir("{$base}/elsewhere", 0775, true);
+      symlink("{$base}/elsewhere", "{$kit}/projects/.claude/skills/bootgly-mine");
+      [$result] = $Boot($Command);
+      yield assert(
+         assertion: $result === true && is_link("{$kit}/projects/.claude/skills/bootgly-alpha") === false
+            && file_get_contents("{$kit}/projects/.claude/skills/bootgly-alpha") === "mine\n"
+            && is_link("{$kit}/projects/.claude/skills/bootgly-mine") === true,
+         description: 'a real entry under a skill\'s name and a bootgly-* link pointing elsewhere are left alone'
+      );
+      unlink("{$kit}/projects/.claude/skills/bootgly-alpha");
+      unlink("{$kit}/projects/.claude/skills/bootgly-mine");
+      symlink("{$base}/elsewhere", "{$kit}/projects/.claude/skills/bootgly-alpha");
+      [$result] = $Boot($Command);
+      yield assert(
+         assertion: $result === true && readlink("{$kit}/projects/.claude/skills/bootgly-alpha") === "{$base}/elsewhere",
+         description: 'a link of the user\'s under a current skill\'s name is left pointing where they put it'
+      );
+      unlink("{$kit}/projects/.claude/skills/bootgly-alpha");
+      $Boot($Command);
+
+      // # A platform package set up in the kit brings its build skill — the
+      //   framework names no platform: any kit-root `<Platform>/` with its
+      //   `autoboot.php` whose `<Platform>/templates/projects/.agents/skills/`
+      //   holds skills named `bootgly-<action>-<platform>`. Any other name it
+      //   ships is ignored, a linked one too, and a framework skill wins
+      $platform = "{$kit}/Acme/Acme/templates/projects/.agents/skills";
+      mkdir("{$rules}/.agents/skills/bootgly-x-acme", 0775, true);
+      file_put_contents("{$rules}/.agents/skills/bootgly-x-acme/SKILL.md", $Skill('bootgly-x-acme', 'Framework.'));
+      foreach (['bootgly-build-acme' => 'Acme.', 'bootgly-deploy' => 'Unsuffixed.', 'bootgly-x-acme' => 'Platform.'] as $name => $description) {
+         mkdir("{$platform}/{$name}", 0775, true);
+         file_put_contents("{$platform}/{$name}/SKILL.md", $Skill($name, $description));
+      }
+      // ! Unstamped — laid once it would never be owned again; CRLF — a checkout's line endings keep the stamp
+      mkdir("{$platform}/bootgly-plain-acme", 0775, true);
+      file_put_contents("{$platform}/bootgly-plain-acme/SKILL.md", "---\nname: bootgly-plain-acme\ndescription: \"Plain.\"\n---\n\nPlain.\n");
+      mkdir("{$platform}/bootgly-crlf-acme", 0775, true);
+      file_put_contents("{$platform}/bootgly-crlf-acme/SKILL.md", str_replace("\n", "\r\n", $Skill('bootgly-crlf-acme', 'Windows.')));
+      mkdir("{$base}/acme-linked", 0775, true);
+      file_put_contents("{$base}/acme-linked/SKILL.md", $Skill('bootgly-link-acme', 'Linked.'));
+      symlink("{$base}/acme-linked", "{$platform}/bootgly-link-acme");
+      file_put_contents("{$kit}/Acme/autoboot.php", "<?php\n");
+      [$result] = $Boot($Command);
+      [, $again] = $Boot($Command);
+      yield assert(
+         assertion: $result === true
+            && file_get_contents("{$kit}/projects/.agents/skills/bootgly-build-acme/SKILL.md") === file_get_contents("{$platform}/bootgly-build-acme/SKILL.md")
+            && readlink("{$kit}/projects/.claude/skills/bootgly-build-acme") === '../../.agents/skills/bootgly-build-acme'
+            && file_exists("{$kit}/projects/.agents/skills/bootgly-deploy") === false
+            && file_exists("{$kit}/projects/.agents/skills/bootgly-link-acme") === false
+            && file_exists("{$kit}/projects/.agents/skills/bootgly-plain-acme") === false
+            && is_file("{$kit}/projects/.agents/skills/bootgly-crlf-acme/SKILL.md") === true
+            && str_contains($again, 'kept') === false
+            && file_get_contents("{$kit}/projects/.agents/skills/bootgly-x-acme/SKILL.md") === file_get_contents("{$rules}/.agents/skills/bootgly-x-acme/SKILL.md")
+            && str_contains($again, 'Agent rules laid down') === false,
+         description: 'a platform package\'s stamped bootgly-<action>-<platform> skill is laid down and linked (CRLF too); other names, unstamped and linked ones are ignored, the framework\'s wins; a second boot writes nothing and blocks nothing, got: ' . json_encode($again)
+      );
+      // @ Two packages whose names differ only in case: neither is the platform
+      mkdir("{$kit}/ACME/ACME/templates/projects/.agents/skills/bootgly-build-acme", 0775, true);
+      file_put_contents("{$kit}/ACME/autoboot.php", "<?php\n");
+      file_put_contents("{$kit}/ACME/ACME/templates/projects/.agents/skills/bootgly-build-acme/SKILL.md", $Skill('bootgly-build-acme', 'Shadow.'));
+      [$result] = $Boot($Command);
+      yield assert(
+         assertion: $result === true && file_exists("{$kit}/projects/.agents/skills/bootgly-build-acme") === false,
+         description: 'two platform packages whose names differ only in case bring no skill'
+      );
+      rename("{$kit}/ACME", "{$base}/acme-twin");
+      // @ Reworded by its package, it reaches the kit
+      file_put_contents("{$platform}/bootgly-build-acme/SKILL.md", $Skill('bootgly-build-acme', 'Acme, reworded.'));
+      [$result] = $Boot($Command);
+      yield assert(
+         assertion: $result === true
+            && file_get_contents("{$kit}/projects/.agents/skills/bootgly-build-acme/SKILL.md") === file_get_contents("{$platform}/bootgly-build-acme/SKILL.md"),
+         description: 'a platform skill reworded by its package reaches the kit on the next boot'
+      );
+      // @ A package removed from the kit (and a framework skill dropped) takes its skill and link away
+      rename("{$kit}/Acme", "{$base}/acme-removed");
+      rename("{$rules}/.agents/skills/bootgly-x-acme", "{$base}/x-acme-retired");
+      [$result] = $Boot($Command);
+      yield assert(
+         assertion: $result === true && file_exists("{$kit}/projects/.agents/skills/bootgly-build-acme") === false
+            && is_link("{$kit}/projects/.claude/skills/bootgly-build-acme") === false
+            && file_exists("{$kit}/projects/.agents/skills/bootgly-x-acme") === false
+            && is_file("{$kit}/projects/.agents/skills/bootgly-alpha/SKILL.md") === true,
+         description: 'a platform package removed from the kit takes its skill and link away; the framework\'s stay'
+      );
+
+      // # A kit whose .agents/skills/ already holds bootgly-* entries of the
+      //   user's before its first boot (they predate the reserved prefix):
+      //   nothing of theirs is replaced or removed, and the blocked skill is said
+      $prior = "{$base}/prior";
+      mkdir("{$prior}/projects/.agents/skills/bootgly-deploy", 0775, true);
+      mkdir("{$prior}/projects/.agents/skills/bootgly-alpha", 0775, true);
+      file_put_contents("{$prior}/projects/.agents/skills/bootgly-deploy/SKILL.md", "mine\n");
+      file_put_contents("{$prior}/projects/.agents/skills/bootgly-alpha/NOTES.md", "mine\n");
+      [$result, $output] = $Boot($Bind($prior, $templates));
+      [, $again] = $Boot($Bind($prior, $templates));
+      yield assert(
+         assertion: $result === true && is_file("{$prior}/projects/.agents/rules/Alpha.md") === true
+            && file_get_contents("{$prior}/projects/.agents/skills/bootgly-deploy/SKILL.md") === "mine\n"
+            && file_get_contents("{$prior}/projects/.agents/skills/bootgly-alpha/NOTES.md") === "mine\n"
+            && file_exists("{$prior}/projects/.agents/skills/bootgly-alpha/SKILL.md") === false
+            && file_exists("{$prior}/projects/.claude/skills/bootgly-alpha") === false
+            && str_contains($output, 'bootgly-alpha') && str_contains($again, 'Agent rules laid down') === false,
+         description: 'bootgly-* entries of the user\'s that predate the first boot are kept whole and the blocked skill is said; a second boot writes nothing, got: '
+            . json_encode([$output, $again])
+      );
+
+      // # A linked .claude/skills/ is the user's: no link is written through it
+      $claudeShelf = "{$base}/claude-shelf";
+      mkdir("{$claudeShelf}/projects/.claude", 0775, true);
+      mkdir("{$base}/their-skills", 0775, true);
+      symlink("{$base}/their-skills", "{$claudeShelf}/projects/.claude/skills");
+      [$result] = $Boot($Bind($claudeShelf, $templates));
+      yield assert(
+         assertion: $result === true && is_file("{$claudeShelf}/projects/AGENTS.md") === true
+            && is_link("{$base}/their-skills/bootgly-alpha") === false && file_exists("{$base}/their-skills/bootgly-alpha") === false,
+         description: 'no skill link is written through a linked .claude/skills/'
+      );
+
+      // # A linked .agents/skills/ is the user's: nothing is written through it,
+      //   and the boot converges (the rules alone are compared)
+      $agentShelf = "{$base}/agent-shelf";
+      mkdir("{$agentShelf}/projects/.agents", 0775, true);
+      mkdir("{$base}/their-agent-skills", 0775, true);
+      symlink("{$base}/their-agent-skills", "{$agentShelf}/projects/.agents/skills");
+      [$result] = $Boot($Bind($agentShelf, $templates));
+      [, $again] = $Boot($Bind($agentShelf, $templates));
+      yield assert(
+         assertion: $result === true && is_file("{$agentShelf}/projects/.agents/rules/Alpha.md") === true
+            && file_exists("{$base}/their-agent-skills/bootgly-alpha") === false
+            && str_contains($again, 'Agent rules laid down') === false,
+         description: 'no skill is written through a linked .agents/skills/, and a second boot writes nothing, got: ' . json_encode($again)
+      );
+
       // # A link in place of .agents/rules/ is replaced; what it pointed at is left alone
       $outside = "{$base}/outside";
       mkdir($outside, 0775, true);
@@ -167,6 +361,30 @@ return new Test(
             && file_get_contents("{$outside}/Alpha.md") === "outside\n",
          description: 'a link in place of .agents/rules/ is replaced by a real directory, and its target is left alone'
       );
+
+      // # A swap that fails midway is rolled back: the kit keeps its previous
+      //   set (root writes everywhere: skipped there)
+      if (function_exists('posix_geteuid') === false || posix_geteuid() !== 0) {
+         file_put_contents("{$kit}/projects/.agents/rules/Alpha.md", "drifted\n");
+         file_put_contents("{$kit}/projects/.agents/skills/bootgly-alpha/SKILL.md", $Skill('bootgly-alpha', 'Drifted.'));
+         chmod("{$kit}/projects/.agents/skills", 0555);
+         try {
+            [$result, $output] = $Boot($Command, ['agents' => true]);
+         }
+         finally {
+            chmod("{$kit}/projects/.agents/skills", 0775);
+         }
+         yield assert(
+            assertion: $result === false && str_contains($output, 'Could not lay down')
+               && file_get_contents("{$kit}/projects/.agents/rules/Alpha.md") === "drifted\n",
+            description: 'a skill swap that fails rolls back the rules swap before it — the kit keeps its previous set, got: ' . json_encode($output)
+         );
+         [$result] = $Boot($Command);
+         yield assert(
+            assertion: $result === true && $Same($kit) === true,
+            description: 'the next boot lays the whole set down'
+         );
+      }
 
       // # An interrupted run's staging is swept once it is old — a concurrent
       //   run's live staging (fresh) is not
@@ -226,6 +444,18 @@ return new Test(
          description: 'an AGENTS.md link is left alone, and what it points at is never written'
       );
 
+      // # A linked .claude/ is the user's: no skill link is written through it
+      $claudeLinked = "{$base}/claude-linked";
+      mkdir("{$claudeLinked}/projects", 0775, true);
+      mkdir("{$base}/their-claude", 0775, true);
+      symlink("{$base}/their-claude", "{$claudeLinked}/projects/.claude");
+      [$result] = $Boot($Bind($claudeLinked, $templates));
+      yield assert(
+         assertion: $result === true && is_file("{$claudeLinked}/projects/AGENTS.md") === true
+            && file_exists("{$base}/their-claude/skills") === false,
+         description: 'the rules are laid, but no link is written through a linked .claude/'
+      );
+
       // # The sets: --resources lays no rules, --agents lays nothing else
       $sets = "{$base}/sets";
       mkdir($sets, 0775, true);
@@ -275,9 +505,45 @@ return new Test(
       yield assert(
          assertion: ($document['agents'] ?? null) === 'removed'
             && file_exists("{$kit}/projects/AGENTS.md") === false && file_exists("{$kit}/projects/.agents/rules") === false
-            && file_get_contents("{$kit}/projects/.agents/skills/deploy/SKILL.md") === "mine\n",
-         description: 'moving to a release without the templates removes the framework\'s rules only, got: ' . json_encode($document)
+            && file_exists("{$kit}/projects/.agents/skills/bootgly-alpha") === false
+            && is_link("{$kit}/projects/.claude/skills/bootgly-alpha") === false
+            && is_dir("{$kit}/projects/.claude/skills/own") === true
+            && file_get_contents("{$kit}/projects/.agents/skills/deploy/SKILL.md") === "mine\n"
+            && file_get_contents("{$kit}/projects/.agents/skills/bootgly-older/SKILL.md") === "mine\n"
+            && is_link("{$kit}/projects/.claude/skills/bootgly-older") === true,
+         description: 'moving to a release without the templates removes Bootgly\'s rules and stamped skills only, got: ' . json_encode($document)
       );
+      // @ …and never through a linked .claude/, nor a real entry under a skill's name
+      $dotted = "{$base}/dotted";
+      mkdir("{$dotted}/Bootgly", 0775, true);
+      mkdir("{$dotted}/projects/.agents/rules", 0775, true);
+      mkdir("{$base}/dotfiles-claude/skills/bootgly-deploy", 0775, true);
+      file_put_contents("{$base}/dotfiles-claude/skills/bootgly-deploy/SKILL.md", "mine\n");
+      // ! A link there shaped like one of ours — still the user's, behind their .claude/
+      symlink('../../.agents/skills/bootgly-alpha', "{$base}/dotfiles-claude/skills/bootgly-alpha");
+      file_put_contents("{$dotted}/projects/Bootgly.projects.php", "<?php\n\nreturn [];\n");
+      file_put_contents("{$dotted}/projects/AGENTS.md", "{$stamp}\n");
+      symlink("{$base}/dotfiles-claude", "{$dotted}/projects/.claude");
+      [$document] = $Capture(static fn (): array => $Refresh($Bind($dotted, $old)));
+      yield assert(
+         assertion: ($document['agents'] ?? null) === 'removed'
+            && file_get_contents("{$base}/dotfiles-claude/skills/bootgly-deploy/SKILL.md") === "mine\n"
+            && is_link("{$base}/dotfiles-claude/skills/bootgly-alpha") === true,
+         description: 'a downgrade never deletes through a linked .claude/, got: ' . json_encode($document)
+      );
+      $real = "{$base}/real-claude";
+      mkdir("{$real}/Bootgly", 0775, true);
+      mkdir("{$real}/projects/.claude/skills/bootgly-notes", 0775, true);
+      file_put_contents("{$real}/projects/.claude/skills/bootgly-notes/SKILL.md", "mine\n");
+      file_put_contents("{$real}/projects/Bootgly.projects.php", "<?php\n\nreturn [];\n");
+      file_put_contents("{$real}/projects/AGENTS.md", "{$stamp}\n");
+      [$document] = $Capture(static fn (): array => $Refresh($Bind($real, $old)));
+      yield assert(
+         assertion: ($document['agents'] ?? null) === 'removed'
+            && file_get_contents("{$real}/projects/.claude/skills/bootgly-notes/SKILL.md") === "mine\n",
+         description: 'a downgrade never deletes a real .claude/skills/bootgly-* entry, got: ' . json_encode($document)
+      );
+
       // @ …never an AGENTS.md without the stamp, whatever it mentions
       file_put_contents("{$kit}/projects/AGENTS.md", "# ours — Machine-managed by our codegen\n");
       [$document] = $Capture(static fn (): array => $Refresh($Bind($kit, $old)));
@@ -349,8 +615,8 @@ return new Test(
             chmod("{$locked}/projects/.agents/rules/sub", 0775);
          }
          yield assert(
-            assertion: ($document['agents'] ?? null) === 'failed',
-            description: 'an error inside the refresh is reported as failed, never thrown into the move, got: ' . json_encode($document)
+            assertion: ($document['agents'] ?? null) === 'failed' && is_file("{$locked}/projects/AGENTS.md") === true,
+            description: 'rules the refresh cannot remove are reported as failed — never thrown into the move — and the stamped entry point stays, got: ' . json_encode($document)
          );
       }
 
@@ -379,6 +645,26 @@ return new Test(
             && str_starts_with((string) @file_get_contents("{$created}/projects/AGENTS.md"), KitCommand::STAMP)
             && is_dir("{$created}/projects/.agents/rules") === true,
          description: '`projects create` on a fresh kit lays projects/AGENTS.md and .agents/rules/, got status ' . $status
+      );
+
+      // # A platform set up on a prepared kit (`--platform=`) brings its build skill
+      file_put_contents("{$created}/.gitmodules", "[submodule \"Web\"]\n\tpath = Web\n");
+      mkdir("{$created}/Web/Web/templates/projects/.agents/skills/bootgly-build-web", 0775, true);
+      file_put_contents("{$created}/Web/autoboot.php", "<?php\n");
+      file_put_contents("{$created}/Web/Web/templates/projects/.agents/skills/bootgly-build-web/SKILL.md", $Skill('bootgly-build-web', 'Web.'));
+      $process = proc_open(
+         [PHP_BINARY, '-d', 'opcache.jit=0', "{$created}/bootgly", 'projects', 'create', 'Again', '--yes', '--platform=web', '--interfaces=CLI', '--no-git'],
+         [0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
+         $pipes,
+         $created,
+         $environment
+      );
+      $status = is_resource($process) === true ? proc_close($process) : -1;
+      yield assert(
+         assertion: $status === 0 && is_file("{$created}/projects/Again/Again.Project.php") === true
+            && is_file("{$created}/projects/.agents/skills/bootgly-build-web/SKILL.md") === true
+            && is_link("{$created}/projects/.claude/skills/bootgly-build-web") === true,
+         description: '`projects create --platform=web` on a prepared kit lays that platform\'s build skill, got status ' . $status
       );
 
       // # A real move calls it: a fixture kit whose releases predate the rules
