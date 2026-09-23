@@ -446,7 +446,7 @@ class Suite
          }
 
          $this->Logger->log(debug: 
-            "\e[30m\e[47m $case_index \e[0m\e[0;30;43m SKIP \e @; \e[90m$file\e[0m$info" . PHP_EOL
+            "\e[30m\e[47m $case_index \e[0m\e[0;30;43m SKIP  @; \e[90m$file\e[0m$info" . PHP_EOL
          );
       }
 

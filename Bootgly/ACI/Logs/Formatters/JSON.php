@@ -18,6 +18,7 @@ use const PHP_EOL;
 use function json_encode;
 use function preg_replace;
 
+use Bootgly\ABI\Code\__String\Controls;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\ACI\Logs\Data\Record;
 use Bootgly\ACI\Logs\Formatter;
@@ -59,6 +60,8 @@ class JSON implements Formatter
       ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
 
       // :
-      return ($json === false ? '{}' : $json) . PHP_EOL;
+      // ! json_encode() leaves DEL and C1 raw under JSON_UNESCAPED_UNICODE: escaped here the
+      //   document stays valid and lossless, and a file an operator tails cannot drive the terminal
+      return ($json === false ? '{}' : Controls::escape($json)) . PHP_EOL;
    }
 }

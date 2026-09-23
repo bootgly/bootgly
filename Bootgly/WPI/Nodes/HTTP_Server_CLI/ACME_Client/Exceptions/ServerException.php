@@ -11,11 +11,12 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\ACME_Client\Exceptions;
 
 
-use function preg_replace;
+use function mb_strcut;
 use function strlen;
-use function substr;
 use Exception;
 
+use Bootgly\ABI\Code\__String\Controls;
+use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\ACME_Client\Exceptioning;
 
 
@@ -51,26 +52,23 @@ final class ServerException extends Exception implements Exceptioning
     *
     * A problem document is attacker-influenced whenever the configured CA is
     * malicious or compromised. Its `type`/`detail` reach the log message, and
-    * the Line formatter renders Bootgly markup while passing raw terminal
-    * control bytes straight through — so an unscrubbed value can forge a log
-    * record boundary, drive the operator's terminal, or fake formatting.
+    * the log formatters render Bootgly markup — so an unscrubbed value can
+    * forge a log record boundary or fake formatting — and would carry its
+    * control bytes into every sink that does not escape them.
     */
    private static function scrub (string $value): string
    {
-      // ? Controls: no CA string needs them, and they are what forges a record
-      //   boundary or reaches the terminal.
-      $value = preg_replace('/[\x00-\x1F\x7F]+/', ' ', $value) ?? '';
-
-      // ? Markup introducer: a directive is always `@` followed by one of
-      //   `#\.:;@*~_-`, or one of `*~_-` followed by `@`. Dropping only those
-      //   occurrences leaves ordinary text — `user@example.com` included —
-      //   intact.
-      $value = preg_replace('/@(?=[#\\.:;@*~_-])|(?<=[*~_-])@/', '', $value) ?? '';
-
       // ? The transport caps a response near 1 MiB; a log line needs far less.
-      return strlen($value) > 512
-         ? substr($value, 0, 512) . '...'
-         : $value;
+      //   Capped first, on a character boundary: a cut made after the scrub
+      //   could part a kept `@` from the letter that keeps it inert.
+      if (strlen($value) > 512) {
+         $value = mb_strcut($value, 0, 512, 'UTF-8') . '...';
+      }
+
+      // : Controls escaped visibly — no CA string needs them, and they are what
+      //   forges a record boundary or reaches the terminal — then the markup
+      //   introducers dropped; ordinary text (`user@example.com`) stays intact.
+      return TemplateEscaped::scrub(Controls::escape($value));
    }
 
    public function __construct (

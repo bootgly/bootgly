@@ -20,13 +20,13 @@ use function max;
 use function preg_replace;
 use function rtrim;
 use function str_pad;
-use function str_replace;
 use function strlen;
 use function strtok;
 use Closure;
 
 use const Bootgly\CLI;
 use Bootgly\ABI\Code\__String\Path;
+use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\CLI\UI\Base\Fieldset;
 use Bootgly\CLI\UI\Components\Alert;
 use Bootgly\CLI\UI\Components\Textbox;
@@ -141,10 +141,10 @@ abstract class Command
     *
     * Control characters, C0 and C1 alike, would drive the terminal (title,
     * colours, erased lines); an `@` that could open or close Output markup —
-    * one not followed by a letter or a digit (`@#`, `@;`, `@.`, `@:`, `@@`,
-    * `@*`, `@\\`), or one right after `*`, `~`, `_`, `-` (the closers) — would
-    * drive it and goes; a plain `@` between word characters, legal in a path
-    * and in a ref, stays; a byte that is not UTF-8 would make the JSON
+    * one not followed by a letter, a digit or a non-ASCII character (`@#`,
+    * `@;`, `@.`, `@:`, `@@`, `@*`, `@\\`), or one right after `*`, `~`, `_`,
+    * `-` (the closers) — would drive it and goes (`Escaped::scrub()`); a plain
+    * `@` between word characters, legal in a path and in a ref, stays; a byte that is not UTF-8 would make the JSON
     * encoder throw.
     * Line breaks go too, unless the text is a multi-line note.
     *
@@ -166,19 +166,8 @@ abstract class Command
          $cleaned = preg_replace($breaks ? '/[^\x0A\x20-\x7E]/' : '/[^\x20-\x7E]/', '?', $text) ?? '';
       }
 
-      // @@ To a FIXED POINT: one pass is not closed under its own deletions —
-      //   in `*@@`, dropping the first `@` leaves the second one preceded by
-      //   `*`, which is the reset directive. Each pass shortens the text or
-      //   ends the loop.
-      do {
-         $previous = $cleaned;
-         $cleaned = preg_replace('/(?<=[*~_-])@|@(?![\p{L}\p{N}])/u', '', $cleaned)
-            ?? str_replace('@', '', $cleaned);
-      }
-      while ($cleaned !== $previous);
-
       // :
-      return $cleaned;
+      return TemplateEscaped::scrub($cleaned);
    }
 
 

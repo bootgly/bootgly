@@ -45,11 +45,11 @@ return new Test(
          );
          $probe['legs']['terminal'] = $Build(
             'urn:ietf:params:acme:error:malformed',
-            "title\x1b]0;pwned\x07 tail"
+            "title\x1b]0;pwned\x07 tail \xC2\x9B2J"
          );
          $probe['legs']['markup'] = $Build(
             '@\;urn@\;',
-            'looks @\;important@\; here'
+            'looks @\;important@\; here @!red:x'
          );
          $probe['legs']['control_plain'] = $Build(
             'urn:ietf:params:acme:error:rateLimited',
@@ -110,6 +110,12 @@ return new Test(
          }
          if (str_contains($rendered, "\x1b")) {
             $injected[] = "{$leg}: the rendered line carries an ESC sequence";
+         }
+         if (str_contains($rendered, "\n")) {
+            $injected[] = "{$leg}: the rendered line breaks into a second record";
+         }
+         if (preg_match('/\xC2[\x80-\x9F]/', $rendered) === 1) {
+            $injected[] = "{$leg}: the rendered line carries a C1 control";
          }
       }
 

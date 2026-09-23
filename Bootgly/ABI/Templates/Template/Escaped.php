@@ -13,6 +13,7 @@ namespace Bootgly\ABI\Templates\Template;
 
 use const PHP_EOL;
 use function is_string;
+use function preg_replace;
 use function preg_replace_callback_array;
 use function str_repeat;
 use function strlen;
@@ -168,6 +169,37 @@ class Escaped
       }
 
       return $message;
+   }
+
+   /**
+    * Defuse the markup in a text this program did not author, so `render()` shows it as is.
+    *
+    * Every directive is an `@` followed by one of `#!\.:;@*~_-`, or one of `*~_-` followed by
+    * `@` — never an `@` followed by a letter or a digit. So each `@` that is not followed by a
+    * letter, a digit or a non-ASCII byte goes, and so does each `@` right after `*`, `~`, `_`,
+    * `-`; `user@example.com` survives. Control characters are left to `Controls::escape()`.
+    *
+    * A scrubbed value stays inert only on its own: an `@` written right before it
+    * (`"{$user}@{$host}"` with a host of `.;`) rebuilds a directive.
+    *
+    * @param string $text The text to defuse.
+    *
+    * @return string The text without markup introducers.
+    */
+   public static function scrub (string $text): string
+   {
+      // @@ To a FIXED POINT: one pass is not closed under its own deletions —
+      //   in `-@@x`, dropping the first `@` leaves the second one after `-`,
+      //   which is the reset directive. Each pass shortens the text or ends
+      //   the loop.
+      do {
+         $previous = $text;
+         $text = preg_replace('/(?<=[*~_-])@|@(?![A-Za-z0-9\x80-\xFF])/', '', $text) ?? '';
+      }
+      while ($text !== $previous);
+
+      // :
+      return $text;
    }
 }
 

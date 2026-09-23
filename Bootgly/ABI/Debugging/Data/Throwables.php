@@ -20,10 +20,12 @@ use function array_slice;
 use function count;
 use function explode;
 use function file_get_contents;
-use function get_class;
+use function get_debug_type;
 use function htmlspecialchars;
 use function max;
 use function min;
+use function preg_match;
+use function preg_replace;
 use function str_pad;
 use function str_repeat;
 use function str_replace;
@@ -35,6 +37,7 @@ use Closure;
 use Throwable;
 use WeakMap;
 
+use Bootgly\ABI\Code\__String\Controls;
 use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Code\__String\Path;
 use Bootgly\ABI\Code\__String\Theme;
@@ -120,15 +123,24 @@ abstract class Throwables implements Debugging
          : self::TARGET_HTML;
 
       // * Data
-      $class = get_class($Throwable);
+      // ! No text the throwable carries can drive the terminal: control characters are escaped
+      //   visibly (the message keeps its tabs and line feeds), and an anonymous class is named
+      //   without the NUL byte `get_class()` embeds
+      $class = get_debug_type($Throwable);
       $code = $Throwable->getCode();
       $message = $Throwable->getMessage();
+      // ? Not UTF-8 (a message may quote a binary frame): printable ASCII only — a raw 0x9B is a
+      //   CSI on a terminal that is not in UTF-8 mode
+      if (preg_match('//u', $message) !== 1) {
+         $message = preg_replace('/[\x80-\xFF]/', '?', $message) ?? '';
+      }
+      $message = Controls::escape($message, "\t\n");
       // @ file
       $file = $Throwable->getFile();
       $line = $Throwable->getLine();
       // ? Degrade when the source is unreadable — the renderer must never throw
       $contents = @file_get_contents($file);
-      $file = Path::relativize($file, BOOTGLY_WORKING_DIR);
+      $file = Controls::escape(Path::relativize($file, BOOTGLY_WORKING_DIR));
 
       // # Theme
       switch ($target) {
@@ -138,7 +150,15 @@ abstract class Throwables implements Debugging
             $theme['CLI']['options'] = [
                'prepending' => [
                   'type'  => 'callback',
-                  'value' => self::wrap(...)
+                  'value' => static function (string ...$codes): string {
+                     // ? Layout markers (`@start`, `@double_break_line`, `@finish`) are
+                     //   literal line breaks — wrapped, they became `ESC [ LF m`
+                     if (($codes[0] ?? '') !== '' && $codes[0][0] === "\n") {
+                        return $codes[0];
+                     }
+                     // : Styled segment opening
+                     return self::wrap(...$codes);
+                  }
                ],
                'appending' => [
                   'type' => 'string',
@@ -244,15 +264,15 @@ abstract class Throwables implements Debugging
             $output .= $Theme->apply('trace_index', " {$trace['index']} ");
             // file
             $output .= $target === self::TARGET_HTML
-               ? htmlspecialchars($trace['file'])
-               : $trace['file'];
+               ? htmlspecialchars(Controls::escape($trace['file']))
+               : Controls::escape($trace['file']);
             // line
             $output .= ':';
             $output .= $Theme->apply('trace_line', $trace['line']);
             // call
             $output .= $Theme->apply(
                key: 'trace_call',
-               content: "\n " . str_repeat(' ', strlen((string) $trace['index']) + 1) . $trace['call']
+               content: "\n " . str_repeat(' ', strlen((string) $trace['index']) + 1) . Controls::escape($trace['call'])
             );
 
             $output .= "\n";

@@ -260,7 +260,7 @@ return new Test(
             description: 'the header carries the instance qualifier — and no empty token when there is none'
          );
 
-         // # L16: tabs and control bytes never reach the frame (a tab would carry the terminal past the width)
+         // # L16: tabs and control bytes never reach the frame raw (a tab would carry the terminal past the width)
          $resize(80, 12);
          $T = new Record(Levels::Info, "Demo\tApp", "\t\tX" . str_repeat('y', 60) . "\x07boom \ec after");
          [$raw, $rows] = $frame($open($T));
@@ -269,7 +269,7 @@ return new Test(
                && preg_match('/\e[^\[]/', $raw) === 0
                && str_starts_with($rows[3], str_repeat(' ', 16) . 'X') && $widest($rows) <= 80
                && str_contains($rows[1], 'Demo    App'),
-            description: 'tabs expand to the next 8-column stop and other control bytes are dropped before the fold'
+            description: 'tabs expand to the next 8-column stop and other control bytes are escaped before the fold'
          );
 
          // # L17: paging across three pages (PgDn steps by the pane height)

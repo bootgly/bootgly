@@ -83,5 +83,7 @@ return new Suite(
       '1.50-autotls_port_contradiction',
       // # 1.0.x: the live E2E harness runs and records every case
       '1.51-harness_every_case',
+      // # 1.0.x: the default exceptions reporter logs client bytes inert (M9)
+      '1.52-exceptions_reporter_inert',
    ]
 );

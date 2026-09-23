@@ -20,6 +20,7 @@ use function floor;
 use function json_encode;
 use function sprintf;
 
+use Bootgly\ABI\Code\__String\Controls;
 use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\ACI\Logs\Data\Display;
@@ -52,6 +53,11 @@ class Line implements Formatter
     * Each part is gated by its `Display` segment flag — the message is always the content,
     * timestamp / channel / severity / context wrap around it when their flag is enabled.
     *
+    * No part can drive a UTF-8 terminal: control characters are escaped visibly
+    * (`Controls::escape()`) before the message markup is rendered — the message keeps its tabs,
+    * line feeds and complete SGR sequences, the channel and the context keep none. Bytes that are
+    * not UTF-8 are written as they are.
+    *
     * @param Record $Record The record to format.
     * @return string The formatted line.
     */
@@ -75,7 +81,7 @@ class Line implements Formatter
       // @ Origin: channel and/or severity, each toggled on its own
       $origin = '';
       if (($segments & Display::CHANNEL) !== 0 && $Record->channel !== '') {
-         $origin = $Record->channel;
+         $origin = Controls::escape($Record->channel);
       }
       if (($segments & Display::SEVERITY) !== 0) {
          if ($origin !== '') {
@@ -91,7 +97,7 @@ class Line implements Formatter
       $message = '';
       if (($segments & Display::MESSAGE) !== 0) {
          $message = self::wrap($color)
-                  . TemplateEscaped::render($Record->message)
+                  . TemplateEscaped::render(Controls::escape($Record->message, "\t\n", SGR: true))
                   . self::_RESET_FORMAT;
       }
 
@@ -100,8 +106,9 @@ class Line implements Formatter
       if (($segments & Display::CONTEXT) !== 0 && $Record->context !== []) {
          $encoded = json_encode($Record->context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
          if ($encoded !== false) {
+            // ! json_encode() leaves DEL and C1 raw under JSON_UNESCAPED_UNICODE
             $context = ' '
-                     . self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . $encoded . self::_RESET_FORMAT;
+                     . self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . Controls::escape($encoded) . self::_RESET_FORMAT;
          }
       }
 

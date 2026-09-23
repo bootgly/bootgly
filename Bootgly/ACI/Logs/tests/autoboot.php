@@ -51,5 +51,8 @@ return new Suite(
       '10.1-backlog-scan',
       '10.2-backlog-merge',
       '10.3-backlog-follow',
+      // # Terminal control sequences never reach the operator (M9)
+      '3.3-formatter-controls',
+      '8.6-viewer-controls',
    ]
 );

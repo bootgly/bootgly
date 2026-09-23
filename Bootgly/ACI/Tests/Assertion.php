@@ -11,6 +11,7 @@
 namespace Bootgly\ACI\Tests;
 
 
+use function rtrim;
 use AssertionError;
 use Throwable;
 
@@ -365,7 +366,7 @@ class Assertion extends Expectations
       $message .= (string) $Fallback;
       $message .= "\033[0m\n";
       // additional
-      $additional = "\033[F\033[F"; // move the cursor up 2 lines
+      $additional = '';
       // + Fallback additional message
       if (self::$fallback) {
          $additional = <<<MESSAGE
@@ -393,6 +394,11 @@ class Assertion extends Expectations
       $assertion
       $additional
       MESSAGE;
+      // ? No additional message — no trailing blank lines either (the message goes
+      //   through a log formatter, which escapes cursor movement instead of running it)
+      if ($additional === '') {
+         self::$fallback = rtrim(self::$fallback, "\n");
+      }
 
       // ---
       throw new AssertionError(self::$fallback);

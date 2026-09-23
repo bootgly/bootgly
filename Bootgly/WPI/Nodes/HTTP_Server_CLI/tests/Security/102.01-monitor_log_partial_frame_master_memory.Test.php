@@ -43,10 +43,13 @@ if (! class_exists('HTTPServerCLIMonitorDrainProbe', false)) {
  * master viewer.
  *
  * The request body is the attacker-influenced Throwable message. Each isolated
- * child runs the exact production HTTP exception reporter installed by
- * HTTP_Server_CLI::boot(Production), the real Logger Tap, JSON formatter and
- * nonblocking IPC Pipe. The parent drains the same chunks through Logs::feed(),
- * matching the Monitor master. A small record is the positive control.
+ * child runs the real Logger Tap, JSON formatter and nonblocking IPC Pipe; the
+ * parent drains the same chunks through Logs::feed(), matching the Monitor
+ * master. A small record is the positive control. The exact production HTTP
+ * exception reporter installed by HTTP_Server_CLI::boot(Production) caps the
+ * message it logs (4 KiB, M9), so it is probed once for that bound; the
+ * oversized records come from an application logging the request value itself
+ * — the transport must still drop them as whole frames.
  */
 return new Test(
    description: 'Monitor log frames must be atomic and master-side retained bytes bounded',
@@ -104,7 +107,7 @@ return new Test(
             return $bytes;
          };
 
-         $Report = static function (string $message) use ($Pipe): array {
+         $Report = static function (string $message, bool $reporter = true) use ($Pipe): array {
             $PID = pcntl_fork();
             if ($PID === -1) {
                return ['pid' => -1, 'status' => -1, 'exited' => false];
@@ -113,6 +116,12 @@ return new Test(
                Display::show(Display::NONE);
                Logger::$Sinks = null;
                Logger::$Tap = new PipeHandler($Pipe);
+
+               if ($reporter === false) {
+                  // An application logging the request value itself.
+                  (new Logger(channel: 'M5.App'))->log(error: $message);
+                  exit(0);
+               }
 
                // Exact production reporter registration. This runs in the
                // disposable child so its function-local registration latch
@@ -176,6 +185,13 @@ return new Test(
          $controlRecords = count($Viewer->Records);
          $controlPartial = strlen((string) $Partial->getValue($Viewer));
 
+         // The production reporter bounds what it logs: the attacker-sized
+         // message arrives as one small, complete record.
+         $cappedProcess = $Report($message);
+         $cappedBytes = $Drain();
+         $cappedRecords = count($Viewer->Records);
+         $cappedPartial = strlen((string) $Partial->getValue($Viewer));
+
          // Repeated large, newline-terminated JSON records exceed the kernel
          // socket buffer. The vulnerable writer reports each positive short
          // fwrite as success; every newline is in the discarded suffix, so the
@@ -183,7 +199,7 @@ return new Test(
          $rounds = [];
          $processes = [];
          for ($round = 0; $round < 8; $round++) {
-            $processes[] = $Report($message);
+            $processes[] = $Report($message, reporter: false);
             $read = $Drain();
             $rounds[] = [
                'read' => $read,
@@ -240,6 +256,10 @@ return new Test(
             'control_bytes' => $controlBytes,
             'control_records' => $controlRecords,
             'control_partial' => $controlPartial,
+            'capped_process' => $cappedProcess,
+            'capped_bytes' => $cappedBytes,
+            'capped_records' => $cappedRecords,
+            'capped_partial' => $cappedPartial,
             'processes' => $processes,
             'rounds' => $rounds,
             'final_partial' => $finalPartial,
@@ -271,6 +291,16 @@ return new Test(
          return 'M5 positive control failed before the large-record probe: '
             . json_encode($evidence);
       }
+      if (
+         ($evidence['capped_process']['exited'] ?? null) !== true
+         || ($evidence['capped_bytes'] ?? 0) < 1
+         || ($evidence['capped_bytes'] ?? PHP_INT_MAX) > 8192
+         || ($evidence['capped_records'] ?? null) !== 2
+         || ($evidence['capped_partial'] ?? null) !== 0
+      ) {
+         return 'M5 the production exception reporter did not log the attacker-sized message as one '
+            . 'bounded record: ' . json_encode($evidence);
+      }
 
       $rounds = $evidence['rounds'] ?? null;
       $processes = $evidence['processes'] ?? null;
@@ -283,7 +313,7 @@ return new Test(
             ($process['exited'] ?? null) !== true
             || ($process['timed_out'] ?? null) !== false
          ) {
-            return 'M5 production reporter child did not exit cleanly: '
+            return 'M5 large-record child did not exit cleanly: '
                . json_encode($evidence);
          }
       }
@@ -313,7 +343,7 @@ return new Test(
             $read < 1
             || $read >= $bodyBytes
             || $partial - $previous !== $read
-            || $records !== 1
+            || $records !== 2
          ) {
             $growing = false;
          }
@@ -336,7 +366,7 @@ return new Test(
          if (
             ($round['read'] ?? null) !== 0
             || ($round['partial'] ?? null) !== 0
-            || ($round['records'] ?? null) !== 1
+            || ($round['records'] ?? null) !== 2
          ) {
             return 'M5 oversized record was not dropped as one atomic frame: '
                . json_encode($evidence);

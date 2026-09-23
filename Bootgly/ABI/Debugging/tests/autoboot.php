@@ -22,5 +22,6 @@ return new Suite(
       '2.1-notify-seam',
       '3.1-shutdown-collect',
       '4.1-page-render',
+      '5.1-render-controls',
    ]
 );

@@ -49,6 +49,7 @@ use function substr;
 use function trim;
 
 use Bootgly\ABI\Code\__String;
+use Bootgly\ABI\Code\__String\Controls;
 use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\ACI\Logs\Data\Levels;
@@ -587,12 +588,16 @@ class Logs
    }
 
    /**
-    * Make one row measurable: expand tabs to the next 8-column stop (the width metric
-    * counts a tab as one column while a terminal advances up to eight) and drop the other
-    * control bytes — nothing the fold cannot measure reaches the frame.
+    * Make one row safe and measurable: escape every other control character visibly
+    * (`Controls::escape()` — none can drive the terminal, and none is lost from sight), then
+    * expand tabs to the next 8-column stop (the width metric counts a tab as one column while
+    * a terminal advances up to eight) — nothing the fold cannot measure reaches the frame.
     */
    private function scrub (string $row): string
    {
+      // ! First, so the tab stops are laid out against the escapes' real width
+      $row = Controls::escape($row, "\t");
+
       // @@ Tabs — expanded against the columns already laid out on the row
       while (($at = strpos($row, "\t")) !== false) {
          $column = mb_strwidth(substr($row, 0, $at));
@@ -600,7 +605,7 @@ class Logs
       }
 
       // :
-      return (string) preg_replace('/[\x00-\x08\x0B-\x1F\x7F]/', '', $row);
+      return $row;
    }
 
    /**
@@ -639,7 +644,7 @@ class Logs
 
       $time = date('Y-m-d H:i:s', (int) $Record->timestamp);
       $severity = str_pad($Record->Level->render(), 9);
-      $channel = $this->shorten($Record->channel);
+      $channel = $this->scrub($this->shorten($Record->channel));
 
       // @ One plain line + count of collapsed lines
       [$message, $extra] = $this->flatten($Record->message);
@@ -763,7 +768,7 @@ class Logs
             break;
          }
          $mark = $this->channels[$channel] ? self::wrap(self::_GREEN_BOLD) : self::wrap(self::_BLACK_BRIGHT_FOREGROUND);
-         $legend[] = $mark . ($index + 1) . ':' . $this->shorten($channel) . self::_RESET_FORMAT;
+         $legend[] = $mark . ($index + 1) . ':' . $this->scrub($this->shorten($channel)) . self::_RESET_FORMAT;
       }
 
       $line = ' ' . implode('  ▏ ', $bits);
@@ -803,7 +808,9 @@ class Logs
    {
       $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
 
-      return $json === false ? '{}' : $json;
+      // ! json_encode() leaves DEL and C1 raw under JSON_UNESCAPED_UNICODE (the line feeds are
+      //   the pretty-print's own)
+      return $json === false ? '{}' : Controls::escape($json, "\n");
    }
 
    // # Translating

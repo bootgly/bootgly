@@ -70,6 +70,13 @@ class Logger extends Logs
     * in call order; `context` (when given) is shared by all of them. Positional calls are rejected.
     * Recognized levels: emergency, alert, critical, error, warning, notice, info, debug.
     *
+    * A message is Bootgly template markup (`@#red:…@;`, `@.;` for a line break), rendered by the
+    * formatters. Text this program did not author — a request value, an exception message — goes
+    * through `Escaped::scrub(Controls::escape($text))` first (after `mb_scrub()` when it may not be
+    * UTF-8), and never right after a literal `@`, `*`, `~`, `_` or `-`: an `@` and a scrubbed `.;`
+    * rebuild a line break, a `-` and a scrubbed `@x` rebuild a reset. Control characters are
+    * escaped visibly by the formatters themselves.
+    *
     * @param string|array<string,mixed> ...$args One or more `level: message` pairs, plus optional `context: [...]`.
     * @return bool True once the records are dispatched (or suppressed by display mode).
     * @throws InvalidArgumentException On positional args, unknown level, missing level, or invalid value types.

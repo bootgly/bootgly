@@ -21,5 +21,6 @@ return new Suite(
       '2.x-dynamic-methods-search',
       '2.x-dynamic-methods-wrap',
       '3.x-static-methods-mapping',
+      '4.1-controls-escape',
    ]
 );
