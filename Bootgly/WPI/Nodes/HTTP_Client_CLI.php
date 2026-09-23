@@ -91,6 +91,7 @@ use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Encoders\Encoder_;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response\Decoders\Decoder_;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response\Decoders\Decoder_Chunked;
+use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response\Decoders\Decoder_Waiting;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Session;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Tests\Suite\Test as E2ETest;
 
@@ -133,6 +134,13 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     * (`Decoder_::MAX_HEADER_BYTES`), whatever this allows.
     */
    public int $maxResponseBytes = 16_777_216;
+   /**
+    * Maximum interim (1xx) responses accepted before the final one, per HTTP/1.1 response leg
+    * (a redirect leg and a retry count from zero). RFC 9110 sets no maximum; past this one the
+    * request fails with code 0 and status `'Invalid Response'` (never retried), so an origin
+    * cannot stream interims forever. HTTP/2 interims are not counted.
+    */
+   public const int INTERIM_LIMIT = 64;
    // | Retry
    /** Maximum number of retries on connection/timeout failure (0 = disabled). */
    public int $maxRetries = 0;
@@ -527,11 +535,11 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          $parsed = $Request->Decoder->decode($buffer, $size, $Request->method);
 
          if ($parsed === null) {
-            // ? The chunked decoder owns every byte it was fed — clear the
-            //   pending buffer so the next read cannot re-feed bytes already
-            //   absorbed into its leftover (HCLI-1). Decoder_ is stateless
-            //   and re-parses its buffer, so only chunked clears.
-            if ($Request->Decoder instanceof Decoder_Chunked) {
+            // ? A body decoder (chunked, waiting) owns every byte it was fed —
+            //   clear the pending buffer so the next read cannot re-feed bytes
+            //   already absorbed into it (HCLI-1). Decoder_ is stateless and
+            //   re-parses its buffer (an incomplete head), so it keeps it.
+            if ($Request->Decoder instanceof Decoder_ === false) {
                $Request->pendingBuffer = '';
             }
 
@@ -540,6 +548,13 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
          // @ Handle 1xx informational: slice consumed bytes, wait for final response
          if ($parsed['interim'] ?? false) {
+            // ? Interims are bounded by count, not only by bytes: past the
+            //   limit the origin is streaming heads, never a final response
+            if (++$Request->interims > $HTTP_Client_CLI::INTERIM_LIMIT) {
+               $HTTP_Client_CLI->reject($Request, $Connection, $socketId, 'Invalid Response', $receivedNS);
+               return;
+            }
+
             $Request->pendingBuffer = substr($buffer, (int) $parsed['consumed']);
 
             // @ 100 Continue: server accepted Expect, now send deferred body
@@ -658,14 +673,25 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                   return;
                }
             }
+            else if ($parsed['bodyWaiting']) {
+               // @ Body not yet complete: hand it off to the collector with the
+               //   bytes already read — the head is never parsed again, and the
+               //   collector owns every body byte from here (H-HCLI-4). A
+               //   Content-Length body waits for its length; a close-delimited
+               //   one (length === downloaded) for the connection close.
+               $Request->pendingBuffer = '';
+               $Request->Decoder = new Decoder_Waiting(
+                  $Response->Body->length === $Response->Body->downloaded
+                     ? null
+                     : $Response->Body->length,
+                  $Response->Body->raw
+               );
+
+               return;
+            }
             else {
                // @ Slice consumed bytes; preserve any pipelined/leftover bytes
                $Request->pendingBuffer = $consumed >= $size ? '' : substr($buffer, $consumed);
-
-               // @ Body not yet complete: wait for more data before firing callback
-               if ($parsed['bodyWaiting']) {
-                  return;
-               }
             }
          }
 
@@ -732,6 +758,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                   $Request->connectionState = 'waiting';
                   // ! Each redirect leg gets its own maxResponseBytes budget
                   $Request->bytesReceived = 0;
+                  $Request->interims = 0;
 
                   $HTTP_Client_CLI->send($Request, $Connection);
                }
@@ -782,6 +809,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                   $Request->connectionState = 'waiting';
                   $Request->completed = false;
                   $Request->bytesReceived = 0;
+                  $Request->interims = 0;
                   // @ Skip Response->reset() — a memo hit skips repopulation,
                   // so Response retains correct data from previous cycle
                   // $Request stays in pendingRequests[$socketId]
@@ -911,6 +939,9 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          $Request = $HTTP_Client_CLI->pendingRequests[$Connection->id] ?? null;
          if ($Request !== null) {
             $Response = $Request->Response;
+            // @ A body still being collected reaches the Response first: the
+            //   close ends a close-delimited body, or truncates a sized one
+            $HTTP_Client_CLI->settle($Request);
             $closeDelimited =
                $Connection->peerEOF
                && $Response->code > 0
@@ -1272,6 +1303,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          // @ Timeout: mark request as timed out
          $Request->Response->code = 0;
          $Request->Response->status = 'Timeout';
+         $this->settle($Request);
          $Request->completed = true;
          $Request->connectionState = 'idle';
 
@@ -1838,6 +1870,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $Response = $Request->Response;
       $Response->code = 0;
       $Response->status = $status;
+      $this->settle($Request);
 
       $Request->completed = true;
       $this->unwatch($Request);
@@ -1853,6 +1886,35 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $Connection->close();
    }
    /**
+    * Move the bytes of a body still being collected into the Response body — the
+    * one hand-over of a body that never completed in its decoder (connection
+    * close, truncation, timeout, abort, refusal). The collector owns the bytes
+    * until here: mirroring them into `Body` on every read would share the
+    * string, and each later append would copy it whole (H-HCLI-4).
+    *
+    * @param Request $Request The request whose body is settled.
+    */
+   private function settle (Request $Request): void
+   {
+      $Decoder = $Request->Decoder;
+      // ? Only a waiting body has bytes outside the Response
+      if ($Decoder instanceof Decoder_Waiting === false) {
+         return;
+      }
+
+      // @
+      $drained = $Decoder->drain();
+      $Body = $Request->Response->Body;
+      $Body->raw = $drained['body'];
+      $Body->downloaded = strlen($drained['body']);
+      // ? A close-delimited body is as long as what arrived
+      if ($drained['length'] === null) {
+         $Body->length = $Body->downloaded;
+      }
+
+      $Request->Decoder = new Decoder_;
+   }
+   /**
     * Fail a request deterministically (code 0) outside any dispatch terminal.
     *
     * @param Request $Request The request to fail.
@@ -1860,6 +1922,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    private function fail (Request $Request): void
    {
       $this->unwatch($Request);
+      $this->settle($Request);
 
       // ! Abort terminal: a scrapped request must never surface a partial
       //   success — force code 0 with a named status, preserving only an
@@ -2002,6 +2065,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             $Request->connectionState = 'waiting';
             $Request->completed = false;
             $Request->bytesReceived = 0;
+            $Request->interims = 0;
             $Request->reused = false;
 
             // ! Only the peer name belongs to the new origin — every other option
@@ -2171,6 +2235,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $Request->connectionState = 'waiting';
       $Request->completed = false;
       $Request->bytesReceived = 0;
+      $Request->interims = 0;
       $Request->reused = false;
 
       // @ Schedule the re-dispatch on the event loop

@@ -52,6 +52,8 @@ return new Suite(
          // # 1.0.x (M2): strict response framing, head and chunk-line caps
          '6.5-decoder-response_framing',
          '6.6-decoder_chunked-line_limits',
+         // # 1.0.x (H-HCLI-4): a waiting body is collected, never re-parsed
+         '6.7-decoder_waiting-collect',
       ],
       // ! Client-level cases the E2E harness cannot host: event-driven mode is
       //   process-wide and its request() returns the client, not a Response.

@@ -72,6 +72,8 @@ class Request
    public string $connectionState;
    public bool $completed;
    public int $bytesReceived;
+   /** Interim (1xx) responses received for the current response leg (see `HTTP_Client_CLI::INTERIM_LIMIT`). */
+   public int $interims;
    // | Encoder
    /** Encoded wire bytes memoized for re-dispatch, or null when stale. */
    public null|string $encoded;
@@ -127,6 +129,7 @@ class Request
       $this->connectionState = 'idle';
       $this->completed = false;
       $this->bytesReceived = 0;
+      $this->interims = 0;
       // | Encoder
       $this->encoded = null;
       $this->encodedHost = null;
@@ -266,6 +269,7 @@ class Request
       $this->connectionState = 'idle';
       $this->completed = false;
       $this->bytesReceived = 0;
+      $this->interims = 0;
       // | Encoder
       $this->encoded = null;
       $this->encodedHost = null;

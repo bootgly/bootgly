@@ -33,6 +33,8 @@ return new Suite(
          '6.3-close_delimited',
          '6.4-truncated_content_length',
          '6.5-truncated_chunked',
+         // # 1.0.x (H-HCLI-4): a truncated body keeps every received byte
+         '6.6-truncated_multi_read',
       ],
       'Headers/' => [
          '8.1-ows_parsing',
@@ -48,6 +50,9 @@ return new Suite(
          '7.6-transfer_encoding_with_content_length',
          '7.7-interim_split_final_head',
          '7.8-connection_close_tokens',
+         // # 1.0.x (H-HCLI-4): interim responses are bounded by count
+         '7.9-interim_limit',
+         '7.10-interim_limit_keepalive_redirect',
       ],
       'CacheIsolation/' => [
          '12.1a-prime_cache_get_alpha',
@@ -77,6 +82,8 @@ return new Suite(
          '10.1-response_timeout',
          '10.2-keepalive_batch_windows',
          '10.3-redirect_leg_window',
+         // # 1.0.x (H-HCLI-4): a timeout mid-body keeps the received bytes
+         '10.4-timeout_mid_body',
       ],
       'Retries/' => [
          '11.1-retry_on_failure',
@@ -98,6 +105,8 @@ return new Suite(
          '14.1-content_length_split_reads',
          '14.2-content_length_multi_read',
          '14.3-content_length_keepalive_split',
+         // # 1.0.x (H-HCLI-4): large bodies decode in linear time
+         '14.4-linear_body_decode',
       ],
       'ChunkedStream/' => [
          '15.1-chunked_paced_writes',
@@ -119,6 +128,8 @@ return new Suite(
          // # 1.0.x (M2): the head cap and a declared Content-Length past the cap
          '17.10-unterminated_header_block',
          '17.11-declared_content_length_oversize',
+         // # 1.0.x (H-HCLI-4): a body refused mid-collection keeps its bytes
+         '17.12-wire_cap_mid_body',
       ],
       // ! Last on purpose: these build a second client, which replaces the
       //   process-wide reactor. Nothing after them may rely on the previous one.

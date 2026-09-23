@@ -15,4 +15,5 @@ enum Decoders
 {
    case Default;
    case Chunked;
+   case Waiting;
 }

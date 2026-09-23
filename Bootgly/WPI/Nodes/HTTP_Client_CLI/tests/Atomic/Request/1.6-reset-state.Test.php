@@ -21,7 +21,9 @@ return new Test(
          description: 'Before reset - body not empty'
       );
 
-      // @ Reset
+      // @ Reset (with transport counters dirtied)
+      $Request->bytesReceived = 128;
+      $Request->interims = 3;
       $Request->reset();
 
       yield assert(
@@ -42,6 +44,11 @@ return new Test(
       yield assert(
          assertion: $Request->body === '',
          description: 'After reset - body: empty'
+      );
+
+      yield assert(
+         assertion: $Request->bytesReceived === 0 && $Request->interims === 0,
+         description: "After reset - transport counters: {$Request->bytesReceived} bytes, {$Request->interims} interims"
       );
    }
 );

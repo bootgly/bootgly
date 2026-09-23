@@ -320,8 +320,8 @@ class Decoder_ extends Decoder
             $bodyDownloaded = strlen($bodyData);
             $bodyLength     = $bodyDownloaded;
          }
-         $consumed    = 0; // keep headers in $pendingBuffer for re-parse on next read
-         $bodyWaiting = true;  // finalized by disconnect handler (Phase 5)
+         $consumed    = 0; // body waits: the client hands it to Decoder_Waiting
+         $bodyWaiting = true;  // finalized by the connection close
       }
       else if ($contentLength !== null) {
          // --- Rule 4: Content-Length ---
@@ -340,21 +340,21 @@ class Decoder_ extends Decoder
          }
 
          // ? Charge header+body only once the body is fully buffered — a
-         //   partial body keeps everything in $pendingBuffer for re-parse
-         //   on the next read, like the close-delimited siblings (HCLI-10)
+         //   partial body charges nothing: the client hands it, seeded with
+         //   the bytes already read, to Decoder_Waiting (HCLI-10, H-HCLI-4)
          $consumed = $bodyWaiting ? 0 : $consumed + $contentLength;
       }
       else {
          // --- Rule 5: close-delimited (HTTP/1.0 style, no framing metadata) ---
-         // Accumulate in $pendingBuffer until connection closes (Phase 5 finalizes)
+         // The client collects it in Decoder_Waiting until the connection closes
          $bodyData = substr($buffer, $separator + 4);
          if ($bodyData !== '') {
             $bodyRaw        = $bodyData;
             $bodyDownloaded = strlen($bodyData);
             $bodyLength     = $bodyDownloaded;
          }
-         $consumed    = 0; // keep headers in $pendingBuffer for re-parse on next read
-         $bodyWaiting = true;  // finalized by disconnect handler (Phase 5)
+         $consumed    = 0; // body waits: the client hands it to Decoder_Waiting
+         $bodyWaiting = true;  // finalized by the connection close
       }
 
       $parsed = [

@@ -6,6 +6,7 @@ use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request;
+use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response\Decoders\Decoder_Waiting;
 
 
 return new Test(
@@ -135,6 +136,9 @@ return new Test(
       $Midbody->Response->code = 200;
       $Midbody->Response->status = 'OK';
       $Midbody->Response->Body->waiting = true;
+      // ! Its body is still being collected (H-HCLI-4)
+      $Midbody->Decoder = new Decoder_Waiting(20, 'partial');
+      $Midbody->Decoder->decode(' body', 5);
       $B->plant($Midbody, 999998);
       $Fiber = new Fiber(static function () use ($B): void {
          $B->drain();
@@ -160,6 +164,15 @@ return new Test(
             && $Midbody->Response->code === 0
             && $Midbody->Response->status === 'Truncated Response'
             && $Midbody->Response->Body->waiting === true)
+         ->to->be(true)
+         ->assert();
+
+      yield new Assertion(
+         description: 'A request scrapped mid-body keeps the body bytes collected so far',
+         fallback: 'The abort dropped the collected body bytes!'
+      )
+         ->expect($Midbody->Response->Body->raw === 'partial body'
+            && $Midbody->Response->Body->downloaded === 12)
          ->to->be(true)
          ->assert();
 
