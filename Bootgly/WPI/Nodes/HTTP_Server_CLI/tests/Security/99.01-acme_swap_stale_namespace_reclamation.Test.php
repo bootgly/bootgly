@@ -39,6 +39,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
  * result and not an unauthenticated remote attack claim.
  */
 $probe = [
+   'precondition' => '',
    'error' => '',
    'retired' => [],
    'live' => [],
@@ -52,6 +53,17 @@ return new Test(
    Separator: new Separator(line: true),
 
    request: static function (string $hostPort, int $testIndex) use (&$probe): string {
+      // ? Swaps refuses to publish as euid 0 — by design (ACME_Client\Swaps) —
+      //   so the live-owner leg needs a non-root run; a root run fails loudly
+      //   with that precondition
+      if (posix_geteuid() === 0) {
+         $probe['precondition'] = 'requires a non-root run: AutoTLS Swaps refuse to publish as euid 0 by design';
+
+         return "GET /l2-acme-swap-harness HTTP/1.1\r\n"
+            . "X-Bootgly-Test: {$testIndex}\r\n"
+            . "Host: localhost\r\nConnection: close\r\n\r\n";
+      }
+
       $storage = sys_get_temp_dir()
          . '/bootgly-security-l2-swaps-' . bin2hex(random_bytes(6));
       $swapsBase = "{$storage}/swaps/";
@@ -480,6 +492,9 @@ return new Test(
    },
 
    test: static function (string $response) use (&$probe): bool|string {
+      if ($probe['precondition'] !== '') {
+         return "PRECONDITION: {$probe['precondition']}";
+      }
       if (str_contains($response, 'L2-HARNESS-OK') === false) {
          return 'L2 fixture failed: the registered native Security harness route was not selected.';
       }

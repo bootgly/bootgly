@@ -14,7 +14,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
 
 
 /**
- * Security regression H1 (2026-08-01) — the default Shared Cache session
+ * Security regression H1 (2026-08-01) — the Shared Cache session
  * backend must not let a stale request recreate an invalidated authenticated
  * ID, overwrite an in-place logout, or restore old auth state during touch.
  *
@@ -84,10 +84,13 @@ return new Test(
          $NeedSaveProperty = $SessionReflection->getProperty('needSave');
 
          try {
-            // ! Omitting `driver` exercises Cache's production default
-            // selection (`shared`) while the explicit segment and secret keep
-            // this fixture isolated from the suite worker's normal sessions.
+            // ! `shared` is requested explicitly: the production default is
+            // `file` on purpose (Session/Handlers/Cache.php — ext-sysvshm
+            // deserializes a record before any allow-list can refuse it), and
+            // this regression pins the Shared backend. The explicit segment
+            // and secret keep it isolated from the worker's normal sessions.
             $Handler = new Cache([
+               'driver' => 'shared',
                'segment' => $segment,
                'size' => 262_144,
                'permissions' => 0600,
@@ -101,7 +104,7 @@ return new Test(
             Handler::$instance = $Handler;
 
             $Evidence['backend'] = [
-               'default_shared' => $Driver instanceof Shared,
+               'shared' => $Driver instanceof Shared,
                'segment' => $segment,
             ];
 
@@ -588,11 +591,11 @@ return new Test(
 
       $backend = $Evidence['backend'] ?? [];
       $cleanup = $Evidence['cleanup'] ?? [];
-      if (($backend['default_shared'] ?? false) !== true) {
+      if (($backend['shared'] ?? false) !== true) {
          Vars::$labels = ['H1 Cache backend evidence'];
          dump(json_encode($Evidence));
 
-         return 'H1 Cache fixture failed: the default session Cache did not select Shared.';
+         return 'H1 Cache fixture failed: the session Cache did not select the requested Shared driver.';
       }
       if (
          ($cleanup['shared_memory_removed'] ?? false) !== true

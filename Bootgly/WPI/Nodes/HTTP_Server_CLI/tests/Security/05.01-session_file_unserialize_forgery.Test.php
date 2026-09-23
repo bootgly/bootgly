@@ -45,9 +45,21 @@ return new Test(
 
    requests: [
       function (string $hostPort) use (&$forgedId, &$forgedFile): string {
-         // ! Simulate an attacker write primitive into the sessions dir.
+         // ! Simulate an attacker write primitive into the sessions dir —
+         //   created here like the File handler does (0700), since a fresh
+         //   storage (the official image ships none) has no sessions dir yet.
+         $directory = BOOTGLY_STORAGE_DIR . 'sessions/';
+         if (is_dir($directory) === false) {
+            $mask = umask(0077);
+            try {
+               @mkdir($directory, 0700, true);
+            }
+            finally {
+               umask($mask);
+            }
+         }
          $forgedId   = bin2hex(random_bytes(16));
-         $forgedFile = BOOTGLY_STORAGE_DIR . 'sessions/session_' . $forgedId;
+         $forgedFile = "{$directory}session_{$forgedId}";
 
          // @ Plain PHP-serialised array — no HMAC, no signature.
          file_put_contents($forgedFile, serialize(['role' => 'admin']));

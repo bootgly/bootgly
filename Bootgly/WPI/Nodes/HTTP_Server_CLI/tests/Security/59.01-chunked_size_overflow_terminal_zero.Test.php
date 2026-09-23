@@ -56,12 +56,14 @@ $probe = [
    'cast' => [],
 ];
 
-// ! Record the language-level primitive alongside the wire evidence.
+// ! Record the language-level primitive alongside the wire evidence. The
+//   overflow IS the evidence: since PHP 8.5 an unrepresentable float cast
+//   also raises a warning, silenced here so it records instead of aborting.
 foreach ($OVERFLOWS as $label => $token) {
    $probe['cast'][$label] = [
       'token' => $token,
       'xdigit' => ctype_xdigit($token),
-      'cast' => (int) hexdec($token),
+      'cast' => @(int) hexdec($token),
    ];
 }
 

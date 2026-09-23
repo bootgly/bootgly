@@ -45,6 +45,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
  * connect is not sufficient: the listener is intentionally preserved.
  */
 $probe = [
+   'precondition' => '',
    'error' => '',
    'result' => [],
 ];
@@ -149,6 +150,17 @@ return new Test(
    description: 'ACME HTTP-01 responses must remain available throughout daemon reload',
 
    request: static function (string $hostPort, int $testIndex) use (&$probe): string {
+      // ? Root launches Auto-TLS only with the server `user` option — refused
+      //   by design (HTTP_Server_CLI::configure) — so this fixture needs a
+      //   non-root run; a root run fails loudly with that precondition
+      if (posix_geteuid() === 0) {
+         $probe['precondition'] = 'requires a non-root run: a root Auto-TLS launch without the server `user` option is refused by design';
+
+         return "GET /l1-http01-reload-harness HTTP/1.1\r\n"
+            . "X-Bootgly-Test: {$testIndex}\r\n"
+            . "Host: localhost\r\nConnection: close\r\n\r\n";
+      }
+
       $storage = rtrim(sys_get_temp_dir(), '/')
          . '/bootgly-l1-http01-' . getmypid() . '-' . bin2hex(random_bytes(5));
       $journal = "{$storage}/reload.journal";
@@ -450,7 +462,11 @@ return new Test(
          $launcherStatus = proc_close($Launcher);
          $result['launcher'] = $launcherStatus === 0;
          if ($result['launcher'] === false) {
-            $detail = trim((string) @file_get_contents($stderr));
+            // ! The launcher's fatal may land on either stream (a thrown
+            //   configure() refusal is rendered to stdout)
+            $detail = trim(
+               trim((string) @file_get_contents($stderr)) . "\n" . trim((string) @file_get_contents($stdout))
+            );
             throw new RuntimeException("daemon launcher exited {$launcherStatus}: {$detail}");
          }
 
@@ -760,6 +776,9 @@ return new Test(
    },
 
    test: static function (string $response) use (&$probe): bool|string {
+      if ($probe['precondition'] !== '') {
+         return "PRECONDITION: {$probe['precondition']}";
+      }
       if (! str_contains($response, 'L1-HARNESS-OK')) {
          return 'L1 fixture failed: native Security harness route was not selected.';
       }
