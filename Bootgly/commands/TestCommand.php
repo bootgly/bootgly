@@ -737,7 +737,16 @@ class TestCommand extends Command
       $Suites->iterate(
          suite: $suite_index,
          case: $case_index,
-         iterator: fn (string $suite_dir, int $index, int $suite) => $this->test($suite_dir, $index, $suite)
+         iterator: function (string $suite_dir, int $index, int $suite): Suite {
+            try {
+               return $this->test($suite_dir, $index, $suite);
+            }
+            catch (Throwable $Throwable) {
+               $this->record($Throwable, $suite_dir);
+
+               throw $Throwable;
+            }
+         }
       );
       $Suites->summarize();
 
@@ -1164,6 +1173,10 @@ class TestCommand extends Command
          }
       }
 
+      // ! No suite is under the runner until this one loads — a crash before
+      //   the include must never be blamed on the previous suite
+      $this->Suite = null;
+
       // ! Entries already inside a tests folder load their own autoboot —
       //   including workspace-root suites (`tests/...`, e.g. the kit example)
       $hasTests = str_contains($suite_dir, '/tests/')
@@ -1269,6 +1282,12 @@ class TestCommand extends Command
       // ?!
       // * Config
       if ($index) {
+         // ? A case the suite does not register would run nothing and still
+         //   report green — refuse it before any runner narrows the list
+         if ($index > count($Suite->tests)) {
+            throw new LogicException("Test case index {$index} does not exist in the suite: {$suite_dir}");
+         }
+
          $Suite->target = $index;
       }
 
@@ -1351,6 +1370,37 @@ class TestCommand extends Command
    }
 
    /**
+    * Record a Throwable that escaped a suite as a failed case.
+    *
+    * A loaded suite blames the case that was running and settles the rest; a
+    * suite that never loaded is reported as a suite-level failure. Either way
+    * the report names the cause instead of a bare failed suite.
+    *
+    * @param Throwable $Throwable
+    * @param string $suite_dir
+    *
+    * @return void
+    */
+   private function record (Throwable $Throwable, string $suite_dir): void
+   {
+      // ? The suite loaded — it accounts for its own cases
+      if ($this->Suite instanceof Suite) {
+         $this->Suite->abort($Throwable);
+
+         return;
+      }
+
+      // @ The suite never loaded
+      $origin = $Throwable::class;
+      Results::record(
+         suite: $suite_dir,
+         case: 0,
+         file: '',
+         status: 'failed',
+         message: "{$origin}: {$Throwable->getMessage()} in {$Throwable->getFile()}:{$Throwable->getLine()}"
+      );
+   }
+   /**
     * Map Suite records into heatmap cells — one per assertion, in execution order.
     *
     * @param array<int,array{case:int,file:string,status:string,results:array<int,bool|null>,description:null|string,message:null|string,debug:null|string,elapsed:null|string}> $records
@@ -1406,7 +1456,15 @@ class TestCommand extends Command
       $duration = Benchmark::format($Suite->started, $Suite->finished);
       $dim = self::wrap(self::_DIM_STYLE);
       $reset = self::_RESET_FORMAT;
-      $left = self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . "Ran all test cases{$reset}";
+      $unreached = 0;
+      foreach ($Suite->records as $record) {
+         if ($record['status'] === 'skipped' && $record['message'] === Suite::UNREACHED) {
+            $unreached++;
+         }
+      }
+      $left = self::wrap(self::_BLACK_BRIGHT_FOREGROUND)
+         . ($unreached > 0 ? "Not reached: {$unreached} test cases" : 'Ran all test cases')
+         . $reset;
       $right = self::wrap(self::_WHITE_FOREGROUND) . "Total Duration:{$reset} "
          . self::wrap(self::_MAGENTA_BRIGHT_FOREGROUND) . "{$duration}s{$reset}";
 

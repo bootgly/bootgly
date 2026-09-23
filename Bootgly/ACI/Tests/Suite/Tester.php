@@ -279,7 +279,7 @@ class Tester
 
       // @ Skip without output (used to skip with command arguments)
       if ($this->Test->ignore ?? false) {
-         $this->Suite->skipped++;
+         $this->ignore('ignored');
          return false;
       }
 
@@ -421,6 +421,8 @@ class Tester
          // @ ignore — but still run postest() so the fixture lifecycle
          //   completes even when an assertion yielded null.
          $this->postest();
+
+         $this->ignore('ignored: an assertion yielded null');
       }
       catch (Throwable $Throwable) {
          @ob_end_clean();
@@ -562,6 +564,49 @@ class Tester
    }
 
    // @ Reporting
+   /**
+    * Record an ignored case as skipped, without output.
+    *
+    * Only when the Suite reports its own cases: a runner that reports them
+    * itself (the WPI harnesses) records the outcome of every case it runs.
+    *
+    * @param string $message
+    *
+    * @return void
+    */
+   private function ignore (string $message): void
+   {
+      // ?
+      if ($this->Suite->autoReport === false) {
+         return;
+      }
+
+      $this->Suite->skipped++;
+
+      // @ Record the case for runner views
+      $this->Suite->records[] = [
+         'case' => $this->Test->case ?? 0,
+         'file' => $this->filename,
+         'status' => 'skipped',
+         'results' => [],
+         'description' => null,
+         'message' => $message,
+         'debug' => null,
+         'elapsed' => null,
+      ];
+      if (Suite::$Observer !== null) {
+         (Suite::$Observer)($this->Suite);
+      }
+
+      // @ Record result for AI agent output
+      Results::record(
+         suite: $this->Suite->name,
+         case: $this->Test->case ?? 0,
+         file: $this->filename,
+         status: 'skipped',
+         message: $message
+      );
+   }
    public function fail (null|string $message = null): void
    {
       $this->Suite->failed++;

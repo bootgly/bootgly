@@ -122,5 +122,6 @@ return new Suite(
       '1.4.4-Advanced_API-expectations-finders-in',
       '7.2.12-Coverage-Native_label_state',
       '7.2.13-Coverage-Native_arrow_pending',
+      '9.4.1-Suite-unreached_and_abort',
    ]
 );

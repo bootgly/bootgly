@@ -61,19 +61,23 @@ return new Suite(
 
       $HTTP_Server_CLI->start();
 
-      // ! Silence only the test traffic, never the boot. Muting before
-      //   start() hid a listener refusal behind an empty exit(1) — the server
-      //   would not come up and the suite reported nothing at all.
-      Display::show(Display::NONE);
+      try {
+         // ! Silence only the test traffic, never the boot. Muting before
+         //   start() hid a listener refusal behind an empty exit(1) — the
+         //   server would not come up and the suite reported nothing at all.
+         Display::show(Display::NONE);
 
-      $HTTP_Server_CLI->Commands->command('test');
-
-      // @ Teardown: terminate workers and release state lock so the next
-      //   suite running in the same master PHP process can bind/lock cleanly.
-      $HTTP_Server_CLI->Process->stopping = true;
-      $HTTP_Server_CLI->Process->Children->terminate();
-      $HTTP_Server_CLI->Process->State->clean();
-      Request::$allowedHosts = [];
+         $HTTP_Server_CLI->Commands->command('test');
+      }
+      finally {
+         // @ Teardown: terminate workers and release state lock so the next
+         //   suite running in the same master PHP process can bind/lock
+         //   cleanly — also when a case escaped the harness.
+         $HTTP_Server_CLI->Process->stopping = true;
+         $HTTP_Server_CLI->Process->Children->terminate();
+         $HTTP_Server_CLI->Process->State->clean();
+         Request::$allowedHosts = [];
+      }
 
       return true;
    },

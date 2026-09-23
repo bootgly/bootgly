@@ -3026,6 +3026,9 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       $specs ??= BOOTGLY_ROOT_DIR . $classPath . '/tests/' . $testsDir;
 
       foreach ($selected as $index => $case) {
+         // ! The spec being loaded — a spec that fails to load is blamed on
+         //   itself (Suite::abort())
+         $Suite->case = $index + 1;
          $file = "{$specs}/{$case}.Test.php";
          $Test_Case_File = new File($file);
          // ? Fail closed like Suite::autoboot() — a missing or invalid spec
@@ -3044,7 +3047,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             throw new Exception("Test case must return a Test instance: \n {$file}");
          }
 
-         $test->index(case: $index + 1);
+         $test->index(case: $index + 1, file: $case);
          SAPI::$Tests[self::class][] = $test;
          SAPI::$tests[self::class][] = $case;
 
@@ -3058,6 +3061,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
 
       $Suite->tests = SAPI::$tests[self::class];
+      // ! No case runs until the harness starts one
+      $Suite->case = 0;
    }
    /** Load one Test in an isolated local variable scope. */
    private static function load (File $File): mixed
@@ -3085,11 +3090,16 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          },
          port: $TCP_Server_CLI->port ?? 80,
       ));
+      // ! Whether the harness ever reached the server — a connect failure never
+      //   runs the handler below, and would otherwise read as a green suite
+      $connected = false;
       $TCP_Client_CLI->on(
          TCP_Client_Events::ClientConnect,
          static function ($Socket, $Connection)
-         use ($TCP_Client_CLI) 
+         use ($TCP_Client_CLI, &$connected) 
          {
+            $connected = true;
+
             Display::show(Display::MESSAGE);
 
             // ! Suite
@@ -3171,7 +3181,21 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                return $input;
             };
 
+            // @ Describe a Throwable a request closure raised, like a crashed case
+            $describe = static function (Throwable $Throwable): string {
+               $origin = $Throwable::class;
+
+               return "{$origin}: {$Throwable->getMessage()} in {$Throwable->getFile()}:{$Throwable->getLine()}";
+            };
+
             // @@ Iterate Test Cases
+            // ! Every case runs and is recorded: the runner owns the stop
+            //   (`--fail-fast` exits inside `fail()`). Dispatch is index-based
+            //   (`X-Bootgly-Test`), so a failed case never shifts a later one —
+            //   but its connection may still carry a late response or a
+            //   half-written request, so every failure reconnects. Only a server
+            //   that cannot take a write ends the loop; the cases after it are
+            //   settled as not reached by `summarize()`.
             // !
             $testFiles = SAPI::$tests[self::class] ?? [];
             $specIndex = 0;
@@ -3196,14 +3220,22 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                $test = SAPI::$Tests[self::class][$specIndex] ?? null;
 
                if ($test instanceof Test) {
-                  $test->index(case: $test->case ?? ((int) $index + 1));
+                  $test->index(case: $test->case ?? ((int) $index + 1), file: $test->file ?? $value);
                }
                // @ Init Test
                $Suite->case = $test->case ?? ((int) $index + 1);
 
+               // ? Not a live spec, or declared skipped — recorded once, and the
+               //   dispatch slots stay aligned (a multi-request spec holds one
+               //   slot per request)
+               if (($test instanceof E2ETest) === false || $test->skip === true) {
+                  $Suite->skip(file: $value);
+                  $specIndex += $test instanceof E2ETest ? max(1, count($test->requests)) : 1;
+                  continue;
+               }
+
                $Test = $Suite->test($test);
-               if ($Test === null || !($test instanceof E2ETest)) {
-                  $Suite->skip();
+               if ($Test === null) {
                   $specIndex++;
                   continue;
                }
@@ -3216,9 +3248,11 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                // @ Multi-request test
                if ($test->requests !== []) {
                   $responses = [];
-                  $failed = false;
+                  $failure = null;
+                  $unreachable = false;
 
                   foreach ($test->requests as $reqIndex => $requestClosure) {
+                     $ordinal = $reqIndex + 1;
                      // ! Server
                      $responseLength = $test->responseLengths[$reqIndex] ?? null;
                      // ! Client
@@ -3230,9 +3264,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                         $requestData = $requestClosure(...$requestArguments);
                      }
                      catch (Throwable $Throwable) {
-                        $test->Fixture?->dispose();
-
-                        throw $Throwable;
+                        $failure = "request #{$ordinal}: {$describe($Throwable)}";
+                        break;
                      }
                      // @ Inject handler-dispatch header (index-based).
                      $requestData = $injectTestIndex($requestData, $specIndex + $reqIndex);
@@ -3243,7 +3276,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                         // @ Reconnect and retry
                         $reconnect();
                         if ( ! $Connection->writing($Socket, $requestLength) ) { // @phpstan-ignore booleanNot.alwaysTrue
-                           $failed = true;
+                           $failure = "server unreachable: request #{$ordinal} could not be written after a reconnect";
+                           $unreachable = true;
                            break;
                         }
                      }
@@ -3275,7 +3309,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                      }
 
                      if ($Connection->expired) { // @phpstan-ignore if.alwaysFalse
-                        $failed = true;
+                        $failure = "request #{$ordinal}: the connection expired before a complete response ({$timeout} s)";
                         break;
                      }
 
@@ -3284,11 +3318,17 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
                   $specIndex += count($test->requests);
 
-                  if ($failed) {
+                  if ($failure !== null) {
                      $test->Fixture?->dispose();
 
-                     $Test->fail();
-                     break;
+                     $Test->fail($failure);
+                     // ? A server that cannot take a write serves no later case
+                     if ($unreachable || Suite::$exitOnFailure) {
+                        break;
+                     }
+                     $reconnect();
+
+                     continue;
                   }
 
                   // @ Execute Test
@@ -3299,7 +3339,10 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   }
                   else {
                      $Test->fail();
-                     break;
+                     if (Suite::$exitOnFailure) {
+                        break;
+                     }
+                     $reconnect();
                   }
 
                   continue;
@@ -3327,12 +3370,20 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                catch (Throwable $Throwable) {
                   $test->Fixture?->dispose();
 
-                  throw $Throwable;
+                  $Test->fail("request: {$describe($Throwable)}");
+                  if (Suite::$exitOnFailure) {
+                     break;
+                  }
+                  $reconnect();
+
+                  continue;
                }
 
                // @ Generator: yield chunks with delay for server event loop
                if ($requestResult instanceof Generator) {
                   $injected = false;
+                  $failure = null;
+                  $unreachable = false;
                   try {
                      foreach ($requestResult as $chunk) {
                         /** @var string $chunk */
@@ -3345,18 +3396,28 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                         if ( ! $Connection->writing($Socket, $chunkLength) ) { // @phpstan-ignore booleanNot.alwaysTrue
                            $reconnect();
                            if ( ! $Connection->writing($Socket, $chunkLength) ) { // @phpstan-ignore booleanNot.alwaysTrue
-                              $test->Fixture?->dispose();
-
-                              break 2;
+                              $failure = 'server unreachable: a request chunk could not be written after a reconnect';
+                              $unreachable = true;
+                              break;
                            }
                         }
                         usleep(10000); // 10ms for server event loop to process
                      }
                   }
                   catch (Throwable $Throwable) {
+                     $failure = "request: {$describe($Throwable)}";
+                  }
+
+                  if ($failure !== null) {
                      $test->Fixture?->dispose();
 
-                     throw $Throwable;
+                     $Test->fail($failure);
+                     if ($unreachable || Suite::$exitOnFailure) {
+                        break;
+                     }
+                     $reconnect();
+
+                     continue;
                   }
 
                   // ? Response
@@ -3372,8 +3433,11 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                      $Test->pass();
                   }
                   else {
-                     $Test->fail();
-                     break;
+                     $Test->fail($Test->passed ? "the connection expired before a complete response ({$timeout} s)" : null);
+                     if (Suite::$exitOnFailure) {
+                        break;
+                     }
+                     $reconnect();
                   }
 
                   continue;
@@ -3393,7 +3457,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   if ( ! $Connection->writing($Socket, $requestLength) ) { // @phpstan-ignore booleanNot.alwaysTrue
                      $test->Fixture?->dispose();
 
-                     $Test->fail();
+                     // ? A server that cannot take a write serves no later case
+                     $Test->fail('server unreachable: the request could not be written after a reconnect');
                      break;
                   }
                }
@@ -3427,8 +3492,11 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   $Test->pass();
                }
                else {
-                  $Test->fail();
-                  break;
+                  $Test->fail($Test->passed ? "the connection expired before a complete response ({$timeout} s)" : null);
+                  if (Suite::$exitOnFailure) {
+                     break;
+                  }
+                  $reconnect();
                }
             }
 
@@ -3442,6 +3510,17 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          }
       );
       $TCP_Client_CLI->start();
+
+      // ? The harness never connected — no case ran; fail loudly
+      if ($connected === false) { // @phpstan-ignore identical.alwaysTrue
+         Display::show(Display::MESSAGE);
+
+         SAPI::$Suite->abort(new RuntimeException(
+            "E2E harness never connected to {$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}: no case ran."
+         ));
+
+         return false;
+      }
 
       return true;
    }

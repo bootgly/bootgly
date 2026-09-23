@@ -28,6 +28,7 @@ use function str_pad;
 use function strlen;
 use Closure;
 use Exception;
+use Throwable;
 
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Assertions;
@@ -40,6 +41,11 @@ use Bootgly\API\Environment;
 
 class Suite
 {
+   /**
+    * The message a registered case carries when the run never reached it.
+    */
+   public const string UNREACHED = 'not reached';
+
    // * Data
    public Logger $Logger {
       get {
@@ -206,7 +212,9 @@ class Suite
             continue;
          }
 
-         // !
+         // ! The case being loaded — set before the include, so a spec that
+         //   fails to load is blamed on itself, not on the one before it
+         $this->case = $case_index;
          $file = "{$dir}{$test}.Test.php";
          // ? Absent test case
          // Resolved here, not through a silenced include: silencing the include
@@ -241,8 +249,6 @@ class Suite
          }
 
          // * Metadata (Test Case)
-         // target
-         $this->case = $case_index;
          $Test->index(
             case: $case_index,
             last: $this->assertions === $case_index ? true : null,
@@ -441,14 +447,177 @@ class Suite
       );
    }
 
+   /**
+    * Abort the Test Suite on a Throwable that escaped its cases.
+    *
+    * The crash becomes a failed case — the case that was running when it has
+    * no record yet, the next case without one otherwise, or the suite itself
+    * (case 0) when no case had started — and the Suite is summarized, so every
+    * registered case is still accounted for.
+    *
+    * @param Throwable $Throwable
+    *
+    * @return void
+    */
+   public function abort (Throwable $Throwable): void
+   {
+      // !
+      $origin = $Throwable::class;
+      $message = "{$origin}: {$Throwable->getMessage()} in {$Throwable->getFile()}:{$Throwable->getLine()}";
+      $recorded = [];
+      foreach ($this->records as $record) {
+         $recorded[$record['file']] = true;
+      }
+
+      // @ Blame the running case, or the next one without a record
+      $case = 0;
+      $file = '';
+      if ($this->case > 0) {
+         foreach ($this->expect() as $index => $name) {
+            if ($index >= $this->case && isSet($recorded[$name]) === false) {
+               $case = $index;
+               $file = $name;
+               break;
+            }
+         }
+      }
+
+      $this->failed++;
+
+      // @ Record the case for runner views
+      $this->records[] = [
+         'case' => $case,
+         'file' => $file,
+         'status' => 'failed',
+         'results' => [],
+         'description' => null,
+         'message' => $message,
+         'debug' => null,
+         'elapsed' => null,
+      ];
+      if (self::$Observer !== null) {
+         (self::$Observer)($this);
+      }
+
+      if (Results::$enabled === false && self::$quiet === false) {
+         $case_index = sprintf('%03d', $case);
+
+         $this->Logger->log(debug:
+            "\033[30m\033[47m {$case_index} \033[0m\033[0;30;41m FAIL \033[0m {$file}" . PHP_EOL
+            . " ↪️\033[91m{$message}\033[0m" . PHP_EOL . PHP_EOL
+         );
+      }
+
+      // @ Record result for AI agent output
+      Results::record(
+         suite: $this->name,
+         case: $case,
+         file: $file,
+         status: 'failed',
+         message: $message
+      );
+
+      $this->summarize();
+   }
+   /**
+    * Expect the registered cases of this run.
+    *
+    * @return array<int,string> The case index => the case file.
+    */
+   private function expect (): array
+   {
+      $target = $this->target ?? 0;
+      $count = count($this->tests);
+
+      // ? Targeted run
+      if ($target > 0) {
+         // ? Narrowed list — the WPI runners keep only the targeted spec
+         if ($count < $target) {
+            return $count === 1 ? [$target => $this->tests[0]] : [];
+         }
+
+         return [$target => $this->tests[$target - 1]];
+      }
+
+      $expected = [];
+      foreach ($this->tests as $index => $file) {
+         $expected[$index + 1] = $file;
+      }
+
+      return $expected;
+   }
+   /**
+    * Settle the cases this run never reached as skipped.
+    *
+    * A runner that stops early (fail-fast, a crash, an unreachable server)
+    * would otherwise report a total that silently shrank to what ran. Matched
+    * by file, so it is idempotent and never re-reports a case that has a record.
+    *
+    * @return int How many registered cases were not reached.
+    */
+   private function settle (): int
+   {
+      // !
+      $recorded = [];
+      foreach ($this->records as $record) {
+         $recorded[$record['file']] = true;
+      }
+
+      // @@
+      $unreached = 0;
+      foreach ($this->expect() as $case => $file) {
+         if (isSet($recorded[$file])) {
+            continue;
+         }
+         $recorded[$file] = true;
+
+         $unreached++;
+         $this->skipped++;
+
+         // @ Record the case for runner views (never printed: a fail-fast
+         //   run must not name the cases it did not run)
+         $this->records[] = [
+            'case' => $case,
+            'file' => $file,
+            'status' => 'skipped',
+            'results' => [],
+            'description' => null,
+            'message' => self::UNREACHED,
+            'debug' => null,
+            'elapsed' => null,
+         ];
+         if (self::$Observer !== null) {
+            (self::$Observer)($this);
+         }
+
+         // @ Record result for AI agent output
+         Results::record(
+            suite: $this->name,
+            case: $case,
+            file: $file,
+            status: 'skipped',
+            message: self::UNREACHED
+         );
+      }
+
+      // :
+      return $unreached;
+   }
+
    // # Summary
    /**
     * Summarize the Test Suite.
+    *
+    * Registered cases the run never reached are settled as skipped first, so
+    * the counters always add up to the registered total.
     *
     * @return void
     */
    public function summarize (): void
    {
+      // !
+      $unreached = $this->settle();
+
       // # Time
       $started = $this->started;
       $finished = $this->finished = microtime(true);
@@ -490,7 +659,9 @@ class Suite
       $duration = Benchmark::format($started, $finished);
       $duration = "@#Magenta:{$duration}s @;";
 
-      $ran = "@#Black:Ran all tests cases. @;";
+      $ran = $unreached > 0
+         ? "@#Black:Not reached: {$unreached} test cases. @;"
+         : "@#Black:Ran all tests cases. @;";
 
       // TODO temp
       $this->Logger->log(debug: <<<TESTS

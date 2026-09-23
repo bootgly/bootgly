@@ -81,5 +81,7 @@ return new Suite(
       // # rc.1: every Request\Configs field owns one inbound limit
       '1.49-request_configs_limits',
       '1.50-autotls_port_contradiction',
+      // # 1.0.x: the live E2E harness runs and records every case
+      '1.51-harness_every_case',
    ]
 );

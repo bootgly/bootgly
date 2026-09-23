@@ -65,6 +65,7 @@ use Generator;
 use InvalidArgumentException;
 use LogicException;
 use RuntimeException;
+use Throwable;
 use WeakMap;
 
 use Bootgly\ABI\Configs as Configuring;
@@ -2682,6 +2683,9 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $classPath = str_replace('\\', '/', __CLASS__);
 
       foreach ($selected as $index => $case) {
+         // ! The spec being loaded — a spec that fails to load is blamed on
+         //   itself (Suite::abort())
+         $Suite->case = $index + 1;
          $file = BOOTGLY_ROOT_DIR . $classPath . '/tests/' . $testsDir . '/' . $case . '.Test.php';
          $Test_Case_File = new File($file);
          // ? Fail closed like Suite::autoboot() — a missing or invalid spec
@@ -2700,12 +2704,14 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             throw new Exception("Test case must return a Test instance: \n {$file}");
          }
 
-         $test->index(case: $index + 1);
+         $test->index(case: $index + 1, file: $case);
          CAPI::$Tests[self::class][] = $test;
          CAPI::$tests[self::class][] = $case;
       }
 
       $Suite->tests = CAPI::$tests[self::class];
+      // ! No case runs until the harness starts one
+      $Suite->case = 0;
    }
    /**
     * Run E2E tests using a mock TCP server.
@@ -2807,6 +2813,13 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                // @ Get response for this request
                /** @var E2ETest|null $spec */
                $spec = CAPI::$Tests[self::class][$specIndex] ?? null;
+               // ? A declared-skipped spec sends no request — step over it, as
+               //   the client cursor does
+               while ($spec instanceof E2ETest && $spec->skip === true) {
+                  $specIndex++;
+                  /** @var E2ETest|null $spec */
+                  $spec = CAPI::$Tests[self::class][$specIndex] ?? null;
+               }
 
                if ($spec === null) {
                   $response = "HTTP/1.1 500 Internal Server Error\r\n\r\n";
@@ -2915,11 +2928,35 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       // # Run each test synchronously (sequential mode)
       // Each request completes before the next starts, keeping
       // client and mock server in lock-step order.
+      // ! Lock-step also means a failed spec may leave the mock cursor off by
+      //   the requests it did or did not send, so the run stops at the first
+      //   failure; `summarize()` settles the specs after it as not reached.
       foreach ($testFiles as $index => $value) {
          /** @var E2ETest|null $spec */
          $spec = CAPI::$Tests[self::class][$specIndex] ?? null;
 
          if (!($spec instanceof E2ETest)) {
+            $specIndex++;
+            $Suite->skip(file: $value);
+            continue;
+         }
+
+         // @ Init Test — before the requests, so a throw is blamed on this case
+         if ($spec instanceof Test) { // @phpstan-ignore instanceof.alwaysTrue
+            $spec->index(case: $spec->case ?? ((int) $index + 1), file: $spec->file ?? $value);
+         }
+
+         $Suite->case = $spec->case ?? ((int) $index + 1);
+
+         // ? Declared skipped — the mock steps over it too
+         if ($spec->skip === true) {
+            $specIndex++;
+            $Suite->skip(file: $value);
+            continue;
+         }
+
+         $Test = $Suite->test($spec);
+         if ($Test === null) {
             $specIndex++;
             continue;
          }
@@ -2927,33 +2964,30 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          // @ Collect responses
          $responses = [];
 
-         if ($spec->requests !== []) {
-            // @ Multi-request test: send each sub-request synchronously
-            foreach ($spec->requests as $requestClosure) {
+         try {
+            if ($spec->requests !== []) {
+               // @ Multi-request test: send each sub-request synchronously
+               foreach ($spec->requests as $requestClosure) {
+                  $responses[] = $requestClosure($HTTP_Client_CLI);
+               }
+            }
+            else {
+               // @ Single-request test
+               $requestClosure = $spec->request;
                $responses[] = $requestClosure($HTTP_Client_CLI);
             }
          }
-         else {
-            // @ Single-request test
-            $requestClosure = $spec->request;
-            $responses[] = $requestClosure($HTTP_Client_CLI);
+         catch (Throwable $Throwable) {
+            $specIndex++;
+
+            $origin = $Throwable::class;
+            $Test->fail("request: {$origin}: {$Throwable->getMessage()} in {$Throwable->getFile()}:{$Throwable->getLine()}");
+            break;
          }
 
          $specIndex++;
 
          // @ Assert results
-         if ($spec instanceof Test) { // @phpstan-ignore instanceof.alwaysTrue
-            $spec->index(case: $spec->case ?? ((int) $index + 1));
-         }
-
-         $Suite->case = $spec->case ?? ((int) $index + 1);
-
-         $Test = $Suite->test($spec);
-         if ($Test === null) {
-            $Suite->skip();
-            continue;
-         }
-
          if (count($responses) > 1) {
             $Test->test(...$responses);
          }
