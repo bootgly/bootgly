@@ -205,6 +205,36 @@ return new Test(
             assertion: Suite::UNREACHED === 'not reached',
             description: 'Unreached cases carry the documented message'
          );
+
+         // @ A targeted case the suite does not register is refused as a
+         //   suite-level failure — never a list of cases "not reached"
+         $Process = proc_open(
+            [PHP_BINARY, $entry, 'test', '3', '9'],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            $app,
+            $environment
+         );
+         $output = '';
+         if (is_resource($Process)) {
+            /** @var array<int,resource> $pipes */
+            $output = (string) stream_get_contents($pipes[1]);
+            stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            proc_close($Process);
+         }
+         $position = strrpos($output, "\n{\"result\"");
+         $document = json_decode(trim($position === false ? $output : substr($output, $position)), true);
+         $targeted = is_array($document) ? $document : [];
+         $refusal = is_array($targeted['failures'][0] ?? null) ? $targeted['failures'][0] : [];
+
+         yield assert(
+            assertion: ($targeted['cases'] ?? null) === ['total' => 1, 'failed' => 1, 'skipped' => 0, 'passed' => 0]
+               && ($refusal['case'] ?? null) === 0
+               && str_contains((string) ($refusal['message'] ?? ''), 'Test case index 9 does not exist'),
+            description: 'An unknown targeted case is one suite-level failure naming the index'
+         );
       }
       finally {
          // @ Tear the tree down

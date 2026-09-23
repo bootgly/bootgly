@@ -1211,6 +1211,13 @@ class TestCommand extends Command
          throw new LogicException("Test suite index {$suite} did not load a valid Suite: {$suite_dir}");
       }
 
+      // ? A case the suite does not register would run nothing and still
+      //   report green — refuse it before the suite is under the runner (a
+      //   suite-level failure, never a list of cases "not reached")
+      if ($index && $index > count($Suite->tests)) {
+         throw new LogicException("Test case index {$index} does not exist in the suite: {$suite_dir}");
+      }
+
       $this->Suite = $Suite;
 
       // ! Title — the suite's tests directory path
@@ -1282,12 +1289,6 @@ class TestCommand extends Command
       // ?!
       // * Config
       if ($index) {
-         // ? A case the suite does not register would run nothing and still
-         //   report green — refuse it before any runner narrows the list
-         if ($index > count($Suite->tests)) {
-            throw new LogicException("Test case index {$index} does not exist in the suite: {$suite_dir}");
-         }
-
          $Suite->target = $index;
       }
 

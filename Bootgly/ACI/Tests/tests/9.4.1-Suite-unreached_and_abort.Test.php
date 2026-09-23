@@ -181,6 +181,28 @@ return new Test(
             ->to->be([2, 'u9-missing', 'failed', 3])
             ->assert();
 
+         // @@ A Suite that does not report its cases (no autoReport): the cases
+         //    that ran carry no record, yet they are never "not reached"
+         $Silent = new Suite(tests: ['u1-passing', 'u3-passing'], suiteName: 'unreached probe (silent)');
+         $Silent->autoboot($directory);
+         $run($Silent, 1);
+         $Silent->summarize();
+
+         yield (new Assertion(description: 'a case that ran unreported is never settled as not reached'))
+            ->expect($shape($Silent))
+            ->to->be([[2, 'u3-passing', 'skipped', Suite::UNREACHED]])
+            ->assert();
+
+         // @@ abort() after autoboot() loaded every spec, before any case ran
+         $Loaded = new Suite(tests: $tests, autoReport: true, suiteName: 'abort probe (loaded)');
+         $Loaded->autoboot($directory);
+         $Loaded->abort(new RuntimeException('after load'));
+
+         yield (new Assertion(description: 'a crash after loading, before any case, is the suite\'s own (case 0)'))
+            ->expect([$shape($Loaded)[0][0], $shape($Loaded)[0][1], $Loaded->skipped])
+            ->to->be([0, '', 4])
+            ->assert();
+
          // @@ abort() before any case started — a suite-level failure
          $Boot = new Suite(tests: $tests, autoReport: true, suiteName: 'abort probe (boot)');
          $Boot->abort(new RuntimeException('boot crash'));

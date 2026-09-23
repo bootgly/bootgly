@@ -3199,6 +3199,12 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             // !
             $testFiles = SAPI::$tests[self::class] ?? [];
             $specIndex = 0;
+            // ! Consecutive cases that timed out — a server that keeps timing
+            //   out has stopped answering, and every later case would wait
+            //   out the same timeout for a failure that is not its own
+            $timeouts = 0;
+            $limit = 3;
+            $unresponsive = "the server stopped answering ({$limit} consecutive timeouts): the remaining cases are not reached";
             foreach ($testFiles as $index => $value) {
                // @ Reset connection state from previous test — both signals a
                //   dead peer leaves behind: `expired` (the unsized fast lane read
@@ -3250,6 +3256,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   $responses = [];
                   $failure = null;
                   $unreachable = false;
+                  $expired = false;
 
                   foreach ($test->requests as $reqIndex => $requestClosure) {
                      $ordinal = $reqIndex + 1;
@@ -3310,6 +3317,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
                      if ($Connection->expired) { // @phpstan-ignore if.alwaysFalse
                         $failure = "request #{$ordinal}: the connection expired before a complete response ({$timeout} s)";
+                        $expired = true;
                         break;
                      }
 
@@ -3321,9 +3329,16 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   if ($failure !== null) {
                      $test->Fixture?->dispose();
 
+                     // ? PHPStan keeps the per-case reset across `reading()`
+                     $timeouts = $expired ? $timeouts + 1 : 0; // @phpstan-ignore ternary.alwaysFalse
+                     if ($timeouts >= $limit) { // @phpstan-ignore greaterOrEqual.alwaysFalse
+                        $failure .= "; {$unresponsive}";
+                     }
+
                      $Test->fail($failure);
-                     // ? A server that cannot take a write serves no later case
-                     if ($unreachable || Suite::$exitOnFailure) {
+                     // ? A server that cannot take a write — or that stopped
+                     //   answering — serves no later case
+                     if ($unreachable || $timeouts >= $limit || Suite::$exitOnFailure) { // @phpstan-ignore greaterOrEqual.alwaysFalse
                         break;
                      }
                      $reconnect();
@@ -3335,9 +3350,11 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   $Test->test($responses);
                   // @ Output Test result
                   if ($Test->passed) {
+                     $timeouts = 0;
                      $Test->pass();
                   }
                   else {
+                     $timeouts = 0;
                      $Test->fail();
                      if (Suite::$exitOnFailure) {
                         break;
@@ -3429,12 +3446,24 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
                   // @ Execute Test
                   $Test->test($input);
-                  if (! $Connection->expired && $Test->passed) { // @phpstan-ignore booleanNot.alwaysTrue
+                  /** @var bool $expired PHPStan keeps the per-case reset across `reading()` */
+                  $expired = $Connection->expired;
+                  if ($expired === false && $Test->passed) {
+                     $timeouts = 0;
                      $Test->pass();
                   }
                   else {
-                     $Test->fail($Test->passed ? "the connection expired before a complete response ({$timeout} s)" : null);
-                     if (Suite::$exitOnFailure) {
+                     $timeouts = $expired ? $timeouts + 1 : 0;
+                     $message = null;
+                     if ($expired) {
+                        $message = "the connection expired before a complete response ({$timeout} s)";
+                        if ($timeouts >= $limit) {
+                           $message .= "; {$unresponsive}";
+                        }
+                     }
+
+                     $Test->fail($message);
+                     if ($timeouts >= $limit || Suite::$exitOnFailure) {
                         break;
                      }
                      $reconnect();
@@ -3487,13 +3516,25 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
                // @ Execute Test
                $Test->test($input);
+               /** @var bool $expired PHPStan keeps the per-case reset across `reading()` */
+               $expired = $Connection->expired;
                // @ Output Test result
-               if (! $Connection->expired && $Test->passed) { // @phpstan-ignore booleanNot.alwaysTrue
+               if ($expired === false && $Test->passed) {
+                  $timeouts = 0;
                   $Test->pass();
                }
                else {
-                  $Test->fail($Test->passed ? "the connection expired before a complete response ({$timeout} s)" : null);
-                  if (Suite::$exitOnFailure) {
+                  $timeouts = $expired ? $timeouts + 1 : 0;
+                  $message = null;
+                  if ($expired) {
+                     $message = "the connection expired before a complete response ({$timeout} s)";
+                     if ($timeouts >= $limit) {
+                        $message .= "; {$unresponsive}";
+                     }
+                  }
+
+                  $Test->fail($message);
+                  if ($timeouts >= $limit || Suite::$exitOnFailure) {
                      break;
                   }
                   $reconnect();

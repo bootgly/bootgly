@@ -94,6 +94,12 @@ class Suite
    public int $passed;
    public int $skipped;
    /**
+    * Files of the cases handed to a Tester — a case that ran, even when its
+    * runner does not record it (a Suite without `autoReport`).
+    * @var array<string,true>
+    */
+   private array $reached = [];
+   /**
     * Ordered per-case records (status + per-assertion results) for runner views.
     * @var array<int,array{case:int,file:string,status:string,results:array<int,bool|null>,description:null|string,message:null|string,debug:null|string,elapsed:null|string}>
     */
@@ -257,6 +263,10 @@ class Suite
 
          $this->Tests[] = $Test;
       }
+
+      // ! Every spec is loaded — no case runs until one is started, so a
+      //   crash from here on is the suite's own (Suite::abort())
+      $this->case = 0;
    }
    /**
     * Autoinstance Test Suite.
@@ -386,6 +396,8 @@ class Suite
       $Test->Fixture ??= $this->Fixture;
 
       $this->Tester = new Tester($this, $Test);
+      // ! Reached — never settled as "not reached", recorded or not
+      $this->reached[$Test->file ?? (current($this->tests) ?: '')] = true;
 
       if (key($this->tests) < $this->assertions) {
          next($this->tests);
@@ -558,7 +570,7 @@ class Suite
    private function settle (): int
    {
       // !
-      $recorded = [];
+      $recorded = $this->reached;
       foreach ($this->records as $record) {
          $recorded[$record['file']] = true;
       }
@@ -616,7 +628,15 @@ class Suite
    public function summarize (): void
    {
       // !
-      $unreached = $this->settle();
+      $this->settle();
+      // ? Counted over every record — a second summarize() (a crash after the
+      //   first) must not claim that every case ran
+      $unreached = 0;
+      foreach ($this->records as $record) {
+         if ($record['status'] === 'skipped' && $record['message'] === self::UNREACHED) {
+            $unreached++;
+         }
+      }
 
       // # Time
       $started = $this->started;

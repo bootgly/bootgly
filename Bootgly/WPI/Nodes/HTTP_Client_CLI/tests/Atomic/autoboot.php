@@ -67,5 +67,7 @@ return new Suite(
       // # Security audit H3 — request-line injection must stop before wire.
       '9.1-request_line_injection',
       '9.2-event_driven_memo_integrity',
+      // # 1.0.x: the lock-step client harness accounts for every case
+      '9.3-harness_lock_step',
    ]
 );

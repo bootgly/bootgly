@@ -19,15 +19,26 @@ return new Test(
          return;
       }
 
-      // ! A free loopback port for the child's server
-      $Listener = stream_socket_server('tcp://127.0.0.1:0', $errno, $error);
-      if ($Listener === false) {
-         yield assert(assertion: false, description: "No free loopback port: {$error}");
+      // ! Two free loopback ports: one for the child's live server, one that
+      //   nothing listens on (the harness must fail loudly when it never
+      //   connects)
+      $free = static function (): int {
+         $Listener = stream_socket_server('tcp://127.0.0.1:0');
+         if ($Listener === false) {
+            return 0;
+         }
+         $name = (string) stream_socket_get_name($Listener, false);
+         fclose($Listener);
+
+         return (int) substr($name, strrpos($name, ':') + 1);
+      };
+      $port = $free();
+      $dead = $free();
+      $hung = $free();
+      if ($port === 0 || $dead === 0 || $hung === 0 || count(array_unique([$port, $dead, $hung])) !== 3) {
+         yield assert(assertion: false, description: 'No free loopback ports');
          return;
       }
-      $name = (string) stream_socket_get_name($Listener, false);
-      $port = (int) substr($name, strrpos($name, ':') + 1);
-      fclose($Listener);
 
       // ! Agent environment — the child prints the JSON report
       $environment = getenv();
@@ -49,6 +60,8 @@ return new Test(
       $entry = "{$directory}/bootgly";
       $app = "{$directory}/projects/App";
       $live = "{$app}/Live/tests";
+      $gone = "{$app}/Dead/tests";
+      $stuck = "{$app}/Hung/tests";
       $root = BOOTGLY_ROOT_DIR;
       $spec = static fn (string $body): string => "<?php\n\n"
          . "use Bootgly\\WPI\\Nodes\\HTTP_Server_CLI\\Request;\n"
@@ -64,17 +77,8 @@ return new Test(
             . "   },\n";
       $expect = static fn (string $body): string
          => "   test: fn (string \$response): bool|string => str_ends_with(\$response, '{$body}') ?: 'probe expected {$body}',\n";
-      $files = [
-         $entry => "<?php\n"
-            . "define('BOOTGLY_WORKING_BASE', __DIR__);\n"
-            . "define('BOOTGLY_WORKING_DIR', BOOTGLY_WORKING_BASE . DIRECTORY_SEPARATOR);\n"
-            . "(include '{$root}autoboot.php') || exit(1);\n",
-         "{$directory}/projects/Bootgly.projects.php" => "<?php\n\n"
-            . "return ['App' => ['interfaces' => ['CLI']]];\n",
-         "{$app}/tests/autoboot.php" => "<?php\n\n"
-            . "use Bootgly\\ACI\\Tests\\Suites;\n\n"
-            . "return new Suites(directories: ['Live/']);\n",
-         "{$live}/autoboot.php" => "<?php\n\n"
+      $wait = '$until = microtime(true) + 8.0; while (microtime(true) < $until) { usleep(50_000); }';
+      $liveAutoboot = "<?php\n\n"
             . "use Bootgly\\ACI\\Logs\\Data\\Display;\n"
             . "use Bootgly\\ACI\\Tests\\Suite;\n"
             . "use Bootgly\\API\\Endpoints\\Server\\Modes;\n"
@@ -100,7 +104,37 @@ return new Test(
             . "      return true;\n"
             . "   },\n"
             . "   suiteName: 'Live',\n"
-            . "   tests: ['1.1-pass', '1.2-assert', '1.3-throw', '1.4-multi', '1.5-slow', '1.6-skip', '1.7-after']\n"
+            . "   tests: ['1.1-pass', '1.2-assert', '1.3-throw', '1.4-multi', '1.5-slow', '1.6-skip', '1.7-after', '1.8-skip-multi', '1.9-after-skip']\n"
+            . ");\n";
+      $files = [
+         $entry => "<?php\n"
+            . "define('BOOTGLY_WORKING_BASE', __DIR__);\n"
+            . "define('BOOTGLY_WORKING_DIR', BOOTGLY_WORKING_BASE . DIRECTORY_SEPARATOR);\n"
+            . "(include '{$root}autoboot.php') || exit(1);\n",
+         "{$directory}/projects/Bootgly.projects.php" => "<?php\n\n"
+            . "return ['App' => ['interfaces' => ['CLI']]];\n",
+         "{$app}/tests/autoboot.php" => "<?php\n\n"
+            . "use Bootgly\\ACI\\Tests\\Suites;\n\n"
+            . "return new Suites(directories: ['Live/', 'Dead/', 'Hung/']);\n",
+         "{$live}/autoboot.php" => $liveAutoboot,
+         // # The harness pointed at a port nothing listens on: it never
+         //   connects, so no case can run
+         "{$gone}/autoboot.php" => "<?php\n\n"
+            . "use Bootgly\\ACI\\Logs\\Data\\Display;\n"
+            . "use Bootgly\\ACI\\Tests\\Suite;\n"
+            . "use Bootgly\\API\\Endpoints\\Server\\Modes;\n"
+            . "use Bootgly\\WPI\\Nodes\\HTTP_Server_CLI;\n\n"
+            . "return new Suite(\n"
+            . "   autoBoot: function (Suite \$Suite): true {\n"
+            . "      HTTP_Server_CLI::pretest(\$Suite, specs: __DIR__);\n"
+            . "      \$Server = new HTTP_Server_CLI(Mode: Modes::Test);\n"
+            . "      \$Server->configure(new HTTP_Server_CLI\\Configs(host: '127.0.0.1', port: {$dead}, workers: 1));\n"
+            . "      Display::show(Display::NONE);\n"
+            . "      (new ReflectionMethod(HTTP_Server_CLI::class, 'test'))->invoke(null, \$Server);\n"
+            . "      return true;\n"
+            . "   },\n"
+            . "   suiteName: 'Dead',\n"
+            . "   tests: ['2.1-first', '2.2-second']\n"
             . ");\n",
          "{$live}/1.1-pass.Test.php" => $spec($get('/a') . $answer('A') . $expect('A')),
          "{$live}/1.2-assert.Test.php" => $spec($get('/b') . $answer('B') . $expect('C')),
@@ -116,14 +150,43 @@ return new Test(
                . $answer('M')
                . "   test: fn (array \$responses): bool => true,\n"
          ),
-         "{$live}/1.5-slow.Test.php" => $spec($get('/s') . $answer('S', '$until = microtime(true) + 2.5; while (microtime(true) < $until) { usleep(50_000); }') . $expect('S')),
+         "{$live}/1.5-slow.Test.php" => $spec($get('/s') . $answer('S', '$until = microtime(true) + 2.2; while (microtime(true) < $until) { usleep(50_000); }') . $expect('S')),
          "{$live}/1.6-skip.Test.php" => $spec("   skip: true,\n" . $get('/k') . $answer('K') . $expect('K')),
          "{$live}/1.7-after.Test.php" => $spec($get('/z') . $answer('Z') . $expect('Z')),
+         // # A declared skip that holds two dispatch slots, then a pass that
+         //   must still reach its own handler
+         "{$live}/1.8-skip-multi.Test.php" => $spec(
+            "   skip: true,\n"
+               . "   requests: [\n"
+               . "      fn (): string => \"GET /x HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n\",\n"
+               . "      fn (): string => \"GET /x HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n\",\n"
+               . "   ],\n"
+               . $answer('X')
+               . "   test: fn (array \$responses): bool => true,\n"
+         ),
+         "{$live}/1.9-after-skip.Test.php" => $spec($get('/y') . $answer('Y') . $expect('Y')),
+         // # A server that stops answering: every request busy-waits past the
+         //   read timeout, so after three consecutive timeouts the harness
+         //   stops instead of making each later case wait out its own
+         "{$stuck}/autoboot.php" => str_replace(
+            ["port: {$port}", "suiteName: 'Live'", "tests: ['1.1-pass', '1.2-assert', '1.3-throw', '1.4-multi', '1.5-slow', '1.6-skip', '1.7-after', '1.8-skip-multi', '1.9-after-skip']"],
+            ["port: {$hung}", "suiteName: 'Hung'", "tests: ['3.1-hung', '3.2-hung', '3.3-hung', '3.4-hung', '3.5-hung']"],
+            $liveAutoboot
+         ),
+         "{$stuck}/3.1-hung.Test.php" => $spec($get('/h') . $answer('H', $wait) . $expect('H')),
+         "{$stuck}/3.2-hung.Test.php" => $spec($get('/h') . $answer('H', $wait) . $expect('H')),
+         "{$stuck}/3.3-hung.Test.php" => $spec($get('/h') . $answer('H', $wait) . $expect('H')),
+         "{$stuck}/3.4-hung.Test.php" => $spec($get('/h') . $answer('H', $wait) . $expect('H')),
+         "{$stuck}/3.5-hung.Test.php" => $spec($get('/h') . $answer('H', $wait) . $expect('H')),
+         "{$gone}/2.1-first.Test.php" => $spec($get('/d1') . $answer('D1') . $expect('D1')),
+         "{$gone}/2.2-second.Test.php" => $spec($get('/d2') . $answer('D2') . $expect('D2')),
       ];
 
       try {
          mkdir("{$app}/tests", 0o700, true);
          mkdir($live, 0o700, true);
+         mkdir($gone, 0o700, true);
+         mkdir($stuck, 0o700, true);
          foreach ($files as $file => $contents) {
             file_put_contents($file, $contents);
          }
@@ -152,18 +215,43 @@ return new Test(
          $document = json_decode(trim($position === false ? $output : substr($output, $position)), true);
          $report = is_array($document) ? $document : [];
          $failures = [];
+         $down = [];
+         $stalled = [];
          foreach (is_array($report['failures'] ?? null) ? $report['failures'] : [] as $failure) {
-            if (is_array($failure)) {
-               $failures[(int) ($failure['case'] ?? 0)] = [
-                  (string) ($failure['file'] ?? ''),
-                  (string) ($failure['message'] ?? ''),
-               ];
+            if (is_array($failure) === false) {
+               continue;
             }
+            $entry = [(string) ($failure['file'] ?? ''), (string) ($failure['message'] ?? '')];
+            if (($failure['suite'] ?? null) === 'Dead') {
+               $down[(int) ($failure['case'] ?? -1)] = $entry;
+               continue;
+            }
+            if (($failure['suite'] ?? null) === 'Hung') {
+               $stalled[(int) ($failure['case'] ?? -1)] = $entry;
+               continue;
+            }
+            $failures[(int) ($failure['case'] ?? 0)] = $entry;
          }
 
+         // ! Live: 9 cases — 3 passed, 4 failed, 2 declared skips; Dead: the
+         //   never-connected failure (case 0) plus its 2 cases not reached;
+         //   Hung: 3 timed-out cases, then 2 not reached
          yield assert(
-            assertion: ($report['cases'] ?? null) === ['total' => 7, 'failed' => 4, 'skipped' => 1, 'passed' => 2],
-            description: 'Every registered case is run and recorded: 2 passed, 4 failed, 1 skipped'
+            assertion: ($report['cases'] ?? null) === ['total' => 17, 'failed' => 8, 'skipped' => 6, 'passed' => 3],
+            description: 'Every registered case is run and recorded, and a harness that never connects still accounts for its cases'
+         );
+
+         yield assert(
+            assertion: array_keys($down) === [0]
+               && str_contains($down[0][1], 'RuntimeException: E2E harness never connected'),
+            description: 'A harness that never connected fails loudly as a suite-level failure (case 0)'
+         );
+
+         yield assert(
+            assertion: array_keys($stalled) === [1, 2, 3]
+               && str_contains($stalled[1][1], 'the connection expired before a complete response')
+               && str_contains($stalled[3][1], 'the server stopped answering (3 consecutive timeouts)'),
+            description: 'A server that stops answering: each timeout is named, and the harness stops after three'
          );
 
          yield assert(

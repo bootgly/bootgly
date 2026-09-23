@@ -2650,10 +2650,13 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     * Pre-test setup: load E2E test specifications.
     *
     * @param null|Suite $Suite The test suite.
+    * @param string $testsDir The spec directory under this node's `tests/`.
+    * @param null|string $specs Absolute spec-directory override — the same seam
+    *                           `HTTP_Server_CLI::pretest()` offers.
     *
     * @return void
     */
-   public static function pretest (null|Suite $Suite, string $testsDir = 'E2E'): void
+   public static function pretest (null|Suite $Suite, string $testsDir = 'E2E', null|string $specs = null): void
    {
       if ($Suite === null) {
          return;
@@ -2681,12 +2684,13 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       // @ Convert namespace to path (backslash -> forward slash)
       $classPath = str_replace('\\', '/', __CLASS__);
+      $specs ??= BOOTGLY_ROOT_DIR . $classPath . '/tests/' . $testsDir;
 
       foreach ($selected as $index => $case) {
          // ! The spec being loaded — a spec that fails to load is blamed on
          //   itself (Suite::abort())
          $Suite->case = $index + 1;
-         $file = BOOTGLY_ROOT_DIR . $classPath . '/tests/' . $testsDir . '/' . $case . '.Test.php';
+         $file = "{$specs}/{$case}.Test.php";
          $Test_Case_File = new File($file);
          // ? Fail closed like Suite::autoboot() — a missing or invalid spec
          //   must abort the run, never silently shrink it (`_` = private spec)
