@@ -25,6 +25,7 @@ use function array_keys;
 use function array_map;
 use function array_reverse;
 use function array_slice;
+use function basename;
 use function bin2hex;
 use function chown;
 use function clearstatcache;
@@ -463,12 +464,15 @@ class KitCommand extends Command
     * and the `bootgly-*` skills: the framework's and those of each platform
     * package set up in the kit (see `gather()`).
     *
-    * They are machine-managed, but only while they are the framework's: an
+    * They are machine-managed, but only while they are Bootgly's: an
     * `AGENTS.md` whose first line is the stamp, with `.agents/rules/` beside
-    * it (or neither there yet). Anything else in their place — an unstamped
-    * or linked `AGENTS.md`, a `.agents/rules/` with no stamped entry point, a
-    * linked `.agents/` — is the user's: left exactly as it is, and said. The
-    * rest of `.agents/` (a user's own skills) is never touched.
+    * it (or neither there yet), and each skill whose `SKILL.md` carries the
+    * stamp under its frontmatter (`own()`). Anything else in their place —
+    * an unstamped or linked `AGENTS.md`, a `.agents/rules/` with no stamped
+    * entry point, a linked `.agents/`, an unstamped entry under a skill's
+    * name — is the user's: left exactly as it is, and said. The rest of
+    * `.agents/` (a user's own skills) is never touched; a stamped skill is
+    * replaced whole, so nothing of the user's belongs inside one.
     *
     * When they are the framework's and differ from the pinned templates (a
     * release that moved, a hand edit) they are replaced whole, never merged;
@@ -501,8 +505,13 @@ class KitCommand extends Command
       // ? The user's, not the framework's — left as it is, and said (a skip,
       //   not a failure: a kit may keep its own entry point there)
       if (self::claim($target) === false) {
+         $owner = match (true) {
+            is_link("{$target}/.agents") === true => '.agents',
+            file_exists($entry) === true || is_link($entry) === true => 'AGENTS.md',
+            default => '.agents/rules',
+         };
          $Alert->Type::Attention->set();
-         $Alert->message = 'Agent rules skipped: @#cyan:projects/AGENTS.md@; is not Bootgly\'s.';
+         $Alert->message = "Agent rules skipped: @#cyan:projects/{$owner}@; is not Bootgly's.";
          $Alert->render();
 
          return true;
@@ -518,6 +527,9 @@ class KitCommand extends Command
       $shelved = is_link($shelf) === false && (is_dir($shelf) === true || file_exists($shelf) === false);
       if ($shelved === false) {
          $skills = [];
+         $Alert->Type::Attention->set();
+         $Alert->message = 'Skills skipped: @#cyan:projects/.agents/skills@; is not a directory.';
+         $Alert->render();
       }
       // ? A skill whose place holds something of the user's is not laid — said
       foreach (array_keys($skills) as $name) {
@@ -527,6 +539,8 @@ class KitCommand extends Command
             $Alert->Type::Attention->set();
             $Alert->message = "Skill @#cyan:{$name}@; kept: it is not Bootgly's.";
             $Alert->render();
+            // ! The way out, unclipped
+            $this->say("   Rename yours and the next boot lays Bootgly's {$name}.");
          }
       }
 
@@ -546,7 +560,7 @@ class KitCommand extends Command
 
       // ? Already the templates, file for file — only the Claude links to check
       if ($this->sign($sources) === $this->sign($targets)) {
-         $this->link($target, array_keys($skills));
+         $this->link($target, array_keys($skills), $Alert);
 
          return true;
       }
@@ -561,18 +575,21 @@ class KitCommand extends Command
       $laid = @mkdir($staging, 0700) === true
          && ($created === false || @mkdir("{$target}/.agents", 0755) === true)
          && ($stocked === false || @mkdir($shelf, 0755) === true)
-         && $this->mirror("{$source}/.agents/rules/", "{$staging}/rules/");
+         && $this->mirror("{$source}/.agents/rules/", "{$staging}/rules/")
+         && @copy("{$source}/AGENTS.md", "{$staging}/AGENTS.md") === true;
       $laid = $laid && ($skills === [] || @mkdir("{$staging}/skills", 0700) === true);
       foreach ($skills as $name => $from) {
          $laid = $laid && $this->mirror("{$from}/", "{$staging}/skills/{$name}/");
       }
 
-      // @ .agents/rules/ and each skill — swapped in whole; when one fails, every
-      //   swap already done is rolled back, so the kit keeps the previous set
+      // @ .agents/rules/, each skill and — last — AGENTS.md (a link there is
+      //   replaced), each swapped in whole; when one fails, every swap already
+      //   done is rolled back, so the kit keeps the previous set
       $swaps = ["{$staging}/rules" => [$rules, "{$staging}/retired"]];
       foreach (array_keys($skills) as $name) {
          $swaps["{$staging}/skills/{$name}"] = ["{$shelf}/{$name}", "{$staging}/retired-{$name}"];
       }
+      $swaps["{$staging}/AGENTS.md"] = [$entry, "{$staging}/retired-AGENTS.md"];
       $done = [];
       foreach ($swaps as $fresh => [$place, $retired]) {
          $laid = $laid && $this->exchange($fresh, $place, $retired);
@@ -588,19 +605,17 @@ class KitCommand extends Command
             }
          }
       }
-      // @ A skill of Bootgly's no longer carried (a platform removed, too) goes with the staging
+      // @ A skill of Bootgly's no longer carried (a platform removed, too) goes
+      //   with the staging once the new set is in — each one named, removed or
+      //   not, so a stamped copy is never lost unsaid
+      $stale = [];
       if ($laid === true && is_dir($shelf) === true && is_link($shelf) === false) {
          foreach ((array) @scandir($shelf) as $name) {
             if (preg_match(self::SKILL, (string) $name) === 1 && isSet($skills[$name]) === false
                && self::own("{$shelf}/{$name}") === true) {
-               @rename("{$shelf}/{$name}", "{$staging}/stale-{$name}");
+               $stale[(string) $name] = @rename("{$shelf}/{$name}", "{$staging}/stale-{$name}");
             }
          }
-      }
-      // @ AGENTS.md last — renamed over the entry point: a link is replaced
-      if ($laid === true) {
-         $laid = @copy("{$source}/AGENTS.md", "{$staging}/AGENTS.md") === true
-            && @rename("{$staging}/AGENTS.md", $entry) === true;
       }
       $this->wipe($staging);
       // ?
@@ -627,8 +642,15 @@ class KitCommand extends Command
          self::grant($shelf);
       }
       // @ Claude Code reads skills from .claude/skills/ only
-      $this->link($target, array_keys($skills));
+      $this->link($target, array_keys($skills), $Alert);
 
+      foreach ($stale as $name => $removed) {
+         $Alert->Type::Attention->set();
+         $Alert->message = $removed === true
+            ? "Skill @#cyan:{$name}@; removed: no longer shipped."
+            : "Skill @#cyan:{$name}@; could not be removed.";
+         $Alert->render();
+      }
       $Alert->Type::Success->set();
       $Alert->message = 'Agent rules laid down in @#cyan:projects/@;';
       $Alert->render();
@@ -675,15 +697,24 @@ class KitCommand extends Command
     *
     * @param string $target The kit's `projects/`.
     * @param array<int,string> $skills The skills laid down.
+    * @param Alert $Alert The alert a skipped `.claude/` is said through.
     */
-   private function link (string $target, array $skills): void
+   private function link (string $target, array $skills, Alert $Alert): void
    {
       $claude = "{$target}/.claude";
       $links = "{$claude}/skills";
 
-      // ? The user's .claude/ — never written through
-      foreach ([$claude, $links] as $path) {
+      // ? The user's .claude/ — never written through, and said (unless it
+      //   already leads Claude Code to .agents/skills/ itself)
+      foreach (['.claude' => $claude, '.claude/skills' => $links] as $relative => $path) {
          if (is_link($path) === true || (file_exists($path) === true && is_dir($path) === false)) {
+            $through = realpath($links) !== false && realpath($links) === realpath("{$target}/.agents/skills");
+            if ($skills !== [] && $through === false) {
+               $Alert->Type::Attention->set();
+               $Alert->message = "Claude links skipped: @#cyan:projects/{$relative}@; is not a directory.";
+               $Alert->render();
+            }
+
             return;
          }
       }
@@ -1130,9 +1161,11 @@ class KitCommand extends Command
       }
 
       try {
+         // ! An unreadable subtree is skipped, never the rest
          $Entries = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::CHILD_FIRST
+            RecursiveIteratorIterator::CHILD_FIRST,
+            RecursiveIteratorIterator::CATCH_GET_CHILD
          );
          foreach ($Entries as $Entry) {
             /** @var SplFileInfo $Entry */
@@ -1140,7 +1173,7 @@ class KitCommand extends Command
          }
       }
       catch (Throwable) {
-         // ? Best effort: an unreadable directory inside stays, and so does this one — never thrown
+         // ? Best effort: a directory that cannot be read at all stays — never thrown
       }
       @rmdir($directory);
    }
@@ -1398,27 +1431,53 @@ class KitCommand extends Command
             if (self::recognize("{$kit}/projects/AGENTS.md") === false) {
                return;
             }
-            // ! The rules first: while one is left, the stamped entry point stays
-            //   and a later run can finish — what could not go is said
-            $this->wipe("{$kit}/projects/.agents/rules");
-            if (file_exists("{$kit}/projects/.agents/rules") === true || is_link("{$kit}/projects/.agents/rules") === true) {
+            // ! Bootgly's leave their place whole, by rename into a private staging
+            //   directory, and only then are deleted — all or nothing: when one
+            //   cannot move (or the skills cannot be listed), what already moved
+            //   goes back, so the kit keeps the whole stamped set, entry point
+            //   included, and the way out is said
+            $projects = "{$kit}/projects";
+            $rules = "{$projects}/.agents/rules";
+            $shelf = "{$projects}/.agents/skills";
+            $staging = "{$projects}/.bootgly." . getmypid() . '.' . bin2hex(random_bytes(6));
+            $moved = [];
+            $whole = @mkdir($staging, 0700) === true;
+            if ($whole === true && (file_exists($rules) === true || is_link($rules) === true)) {
+               $whole = @rename($rules, "{$staging}/rules");
+               if ($whole === true) {
+                  $moved[$rules] = "{$staging}/rules";
+               }
+            }
+            // @@ The skills of Bootgly's — the stamped ones; a `bootgly-*` entry of the user's stays …
+            if ($whole === true && is_dir($shelf) === true && is_link($shelf) === false) {
+               $names = @scandir($shelf);
+               $whole = $names !== false;
+               foreach ($whole === true ? $names : [] as $name) {
+                  $place = "{$shelf}/{$name}";
+                  if (preg_match(self::SKILL, (string) $name) === 1 && self::own($place) === true) {
+                     $whole = @rename($place, "{$staging}/skill-{$name}");
+                     if ($whole === false) {
+                        break;
+                     }
+                     $moved[$place] = "{$staging}/skill-{$name}";
+                  }
+               }
+            }
+            // ? What could not go: the rest goes back, and the way out is said
+            if ($whole === false) {
+               foreach (array_reverse($moved, true) as $place => $staged) {
+                  @rename($staged, $place);
+               }
+               @rmdir($staging);
                $this->document['agents'] = 'failed';
-               $this->say('   Agent rules could not be removed from @#cyan:projects/@; — remove @#cyan:projects/.agents/rules/@; by hand.');
+               $this->say('   Agent rules could not be removed from @#cyan:projects/@; — delete @#cyan:AGENTS.md@;, '
+                  . '@#cyan:.agents/rules/@; and the stamped @#cyan:bootgly-*@; skills there by hand.');
 
                return;
             }
-            @unlink("{$kit}/projects/AGENTS.md");
-            // @@ The skills of Bootgly's — the stamped ones; a `bootgly-*` entry
-            //    of the user's stays …
-            $shelf = "{$kit}/projects/.agents/skills";
-            if (is_dir($shelf) === true && is_link($shelf) === false) {
-               foreach ((array) @scandir($shelf) as $name) {
-                  if (preg_match(self::SKILL, (string) $name) === 1 && self::own("{$shelf}/{$name}") === true) {
-                     $this->wipe("{$shelf}/{$name}");
-                  }
-               }
-               @rmdir($shelf);
-            }
+            $this->wipe($staging);
+            @unlink("{$projects}/AGENTS.md");
+            @rmdir($shelf);
             // @@ … and only the Claude links of ours left dangling by that —
             //    never through a linked .claude/, never a real entry
             $links = "{$kit}/projects/.claude/skills";
@@ -1436,6 +1495,11 @@ class KitCommand extends Command
             @rmdir("{$kit}/projects/.agents");
             $this->document['agents'] = 'removed';
             $this->say('   Agent rules removed from @#cyan:projects/@; — this release predates them.');
+            // ? What the staging kept (a tree it cannot read) is named — no release before the rules sweeps it
+            if (is_dir($staging) === true) {
+               $left = basename($staging);
+               $this->say("   Left @#cyan:projects/{$left}@; behind — remove it by hand.");
+            }
 
             return;
          }
