@@ -31,5 +31,9 @@ return new Suite(
       '1.13-http_resource_dial',
       // # 1.0.x (M2): the embedded client's response cap
       '1.14-http_resource_response_cap',
+      // # 1.0.x (RH-H3-residual): a wait that never comes back withdraws its operations
+      '1.15-database_resource_withdraw',
+      // # 1.0.x (RH-H3-residual): a KV wait that never comes back withdraws its commands
+      '1.16-kv_resource_withdraw',
    ]
 );

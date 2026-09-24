@@ -12,11 +12,13 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources;
 
 
 use function array_key_exists;
+use function array_values;
 use function http_build_query;
 use function implode;
 use function is_string;
 use function max;
 use function min;
+use function spl_object_id;
 use function strtok;
 use BackedEnum;
 use Closure;
@@ -82,8 +84,11 @@ class Database extends Resource implements Awaiting, Scheduling
    //   registry at all — and a surface without an owner would hand a stranger's
    //   request the transaction: uncommitted rows to read, and its own writes
    //   destroyed by a rollback it never asked for.
-   /** @var null|Fiber<mixed,mixed,mixed,mixed> */
-   private null|Fiber $Fiber = null;
+   //   Held weakly: a strong reference from this resource — which the Fiber's
+   //   own stack keeps alive — made a cycle, so a destroyed request Fiber was
+   //   only unwound by a later GC run, its transaction teardown with it.
+   /** @var null|WeakReference<Fiber<mixed,mixed,mixed,mixed>> */
+   private null|WeakReference $Fiber = null;
 
 
    public function __construct (SQL $Database)
@@ -240,7 +245,7 @@ class Database extends Resource implements Awaiting, Scheduling
       //   what they would have got before a transaction was ever open.
       $Querying = $this->Database;
 
-      if ($this->Transaction !== null && $this->Fiber === Fiber::getCurrent()) {
+      if ($this->Transaction !== null && $this->Fiber?->get() === Fiber::getCurrent()) {
          $Querying = $this->Transaction;
       }
 
@@ -339,7 +344,7 @@ class Database extends Resource implements Awaiting, Scheduling
       //   what they would have got before a transaction was ever open.
       $Querying = $this->Database;
 
-      if ($this->Transaction !== null && $this->Fiber === Fiber::getCurrent()) {
+      if ($this->Transaction !== null && $this->Fiber?->get() === Fiber::getCurrent()) {
          $Querying = $this->Transaction;
       }
 
@@ -373,39 +378,58 @@ class Database extends Resource implements Awaiting, Scheduling
    {
       // ! Hoisted out of the loop — the binding cannot change mid-await
       $Wait = null;
+      $returned = false;
+      $thrown = false;
 
-      while ($Operation->finished === false) {
-         $Operation = $this->Database->advance($Operation);
+      try {
+         while ($Operation->finished === false) {
+            $Operation = $this->Database->advance($Operation);
 
-         if ($Operation->finished) {
-            break;
+            if ($Operation->finished) {
+               break;
+            }
+
+            $Wait ??= $this->Wait
+               ?? throw new RuntimeException('Database response resource is not bound.');
+
+            // ! A readiness park waits on "socket readable" as a proxy for
+            //   "operation finished". A co-located sibling context resumed for
+            //   the same socket can consume that readability AND finish this
+            //   operation — arm the completion edge so whoever finishes it
+            //   reschedules this Fiber (see wake()).
+            $Readiness = $Operation->Readiness;
+            $Waker = $Readiness === null ? null : $this->wake();
+
+            if ($Waker !== null) {
+               $Operation->Waker = $Waker;
+            }
+
+            $Wait($Readiness);
+
+            // ! Disarmed before advancing: awake, this context observes its own
+            //   completions — a self-wake would only queue a spurious resume.
+            if ($Waker !== null) {
+               $Operation->Waker = null;
+            }
          }
 
-         $Wait ??= $this->Wait
-            ?? throw new RuntimeException('Database response resource is not bound.');
+         $returned = true;
 
-         // ! A readiness park waits on "socket readable" as a proxy for
-         //   "operation finished". A co-located sibling context resumed for
-         //   the same socket can consume that readability AND finish this
-         //   operation — arm the completion edge so whoever finishes it
-         //   reschedules this Fiber (see wake()).
-         $Readiness = $Operation->Readiness;
-         $Waker = $Readiness === null ? null : $this->wake();
+         return $Operation;
+      }
+      catch (Throwable $Throwable) {
+         $thrown = true;
 
-         if ($Waker !== null) {
-            $Operation->Waker = $Waker;
-         }
-
-         $Wait($Readiness);
-
-         // ! Disarmed before advancing: awake, this context observes its own
-         //   completions — a self-wake would only queue a spurious resume.
-         if ($Waker !== null) {
-            $Operation->Waker = null;
+         throw $Throwable;
+      }
+      finally {
+         // ? The wait never came back: refused, interrupted, or the Fiber is
+         //   being destroyed (only this block runs then) — nobody will advance
+         //   the operation again, so its connection is taken back here.
+         if ($returned === false) {
+            $this->withdraw([$Operation], $thrown);
          }
       }
-
-      return $Operation;
    }
 
    /**
@@ -418,67 +442,84 @@ class Database extends Resource implements Awaiting, Scheduling
    {
       // ! Hoisted out of the loop — the binding cannot change mid-drain
       $Wait = null;
+      $returned = false;
+      $thrown = false;
 
-      while (true) {
-         foreach ($Operations as $id => $Operation) {
-            if ($Operation->finished) {
-               continue;
+      try {
+         while (true) {
+            foreach ($Operations as $id => $Operation) {
+               if ($Operation->finished) {
+                  continue;
+               }
+
+               $Operations[$id] = $this->Database->advance($Operation);
             }
 
-            $Operations[$id] = $this->Database->advance($Operation);
-         }
+            // ! Re-scan AFTER all advances: co-located operations share a
+            //   connection, so advancing a later sibling may have finished
+            //   operations already counted as pending — parking on that stale
+            //   snapshot would suspend the Fiber with nothing left in flight.
+            $waiting = null;
+            $pending = false;
 
-         // ! Re-scan AFTER all advances: co-located operations share a
-         //   connection, so advancing a later sibling may have finished
-         //   operations already counted as pending — parking on that stale
-         //   snapshot would suspend the Fiber with nothing left in flight.
-         $waiting = null;
-         $pending = false;
-
-         foreach ($Operations as $Operation) {
-            if ($Operation->finished === false) {
-               $pending = true;
-               $waiting ??= $Operation->Readiness;
-            }
-         }
-
-         if ($pending === false) {
-            break;
-         }
-
-         $Wait ??= $this->Wait
-            ?? throw new RuntimeException('Database response resource is not bound.');
-
-         // ! A readiness park waits on "socket readable" as a proxy for
-         //   "operations finished". A co-located sibling context resumed for
-         //   the same socket can consume that readability AND finish the
-         //   operations parked here — the socket then never signals again.
-         //   Arm the completion edge so whoever finishes one of these
-         //   operations reschedules this Fiber (see wake()).
-         $Waker = $waiting === null ? null : $this->wake();
-
-         if ($Waker !== null) {
             foreach ($Operations as $Operation) {
                if ($Operation->finished === false) {
-                  $Operation->Waker = $Waker;
+                  $pending = true;
+                  $waiting ??= $Operation->Readiness;
+               }
+            }
+
+            if ($pending === false) {
+               break;
+            }
+
+            $Wait ??= $this->Wait
+               ?? throw new RuntimeException('Database response resource is not bound.');
+
+            // ! A readiness park waits on "socket readable" as a proxy for
+            //   "operations finished". A co-located sibling context resumed for
+            //   the same socket can consume that readability AND finish the
+            //   operations parked here — the socket then never signals again.
+            //   Arm the completion edge so whoever finishes one of these
+            //   operations reschedules this Fiber (see wake()).
+            $Waker = $waiting === null ? null : $this->wake();
+
+            if ($Waker !== null) {
+               foreach ($Operations as $Operation) {
+                  if ($Operation->finished === false) {
+                     $Operation->Waker = $Waker;
+                  }
+               }
+            }
+
+            $Wait($waiting);
+
+            // ! Disarmed before advancing: awake, this context observes its own
+            //   completions — a self-wake would only queue a spurious resume.
+            if ($Waker !== null) {
+               foreach ($Operations as $Operation) {
+                  if ($Operation->Waker !== null) {
+                     $Operation->Waker = null;
+                  }
                }
             }
          }
 
-         $Wait($waiting);
+         $returned = true;
 
-         // ! Disarmed before advancing: awake, this context observes its own
-         //   completions — a self-wake would only queue a spurious resume.
-         if ($Waker !== null) {
-            foreach ($Operations as $Operation) {
-               if ($Operation->Waker !== null) {
-                  $Operation->Waker = null;
-               }
-            }
+         return $Operations;
+      }
+      catch (Throwable $Throwable) {
+         $thrown = true;
+
+         throw $Throwable;
+      }
+      finally {
+         // ? Same as await(): whatever the group still has in flight is withdrawn.
+         if ($returned === false) {
+            $this->withdraw($Operations, $thrown);
          }
       }
-
-      return $Operations;
    }
 
    /**
@@ -494,8 +535,14 @@ class Database extends Resource implements Awaiting, Scheduling
       //   saturated pool its exclusive BEGIN parks waiting for the connection the
       //   outer one is holding. `$entry` is the depth this call found, so the
       //   unwind below gives back exactly the levels this call opened.
-      $Fiber = Fiber::getCurrent();
-      $Transaction = $this->Fiber === $Fiber ? $this->Transaction : null;
+      /** @var null|Fiber<mixed,mixed,mixed,mixed> $Current */
+      $Current = Fiber::getCurrent();
+      $Transaction = $this->Fiber?->get() === $Current ? $this->Transaction : null;
+      // ! Only a weak handle crosses into the work: a strong local kept on the
+      //   Fiber's own stack made it unreachable only through a GC run, and a
+      //   destroyed request left its transaction open until then.
+      $Context = $Current === null ? null : WeakReference::create($Current);
+      unset($Current);
 
       if ($Transaction === null) {
          $entry = 0;
@@ -522,11 +569,12 @@ class Database extends Resource implements Awaiting, Scheduling
       //   outer surface back.
       $Previous = $this->Transaction;
       $Owner = $this->Fiber;
+      $settled = false;
 
       try {
          try {
             $this->Transaction = $Transaction;
-            $this->Fiber = $Fiber;
+            $this->Fiber = $Context;
 
             $result = $work($Transaction, $this);
          }
@@ -561,11 +609,15 @@ class Database extends Resource implements Awaiting, Scheduling
          }
          while ($Transaction->depth > $entry);
 
+         $settled = true;
+
          $this->Database->touch($this->Scope);
 
          return $result;
       }
       catch (Throwable $Throwable) {
+         $settled = true;
+
          // @@ Same for the failure path — a single rollback() unwinds one
          //    savepoint and leaves the transaction open. Every level is
          //    attempted: only the outermost carries `unlock`, so stopping at
@@ -601,6 +653,67 @@ class Database extends Resource implements Awaiting, Scheduling
 
          throw $Throwable;
       }
+      finally {
+         // ? Neither committed nor rolled back: the Fiber is being destroyed
+         //   (only this block runs then — a client disconnect, an eviction), so
+         //   nothing will ever await a teardown. The outermost frame ends the
+         //   whole transaction locally, at any savepoint depth: its ROLLBACK is
+         //   withdrawn before it reaches the wire, which severs the session, so
+         //   the server rolls the work back and the pool reservation drops. (A
+         //   final COMMIT already in flight is await()'s to withdraw — whether
+         //   the server committed it is then unknown — and leaves nothing to
+         //   abort here.) A failed withdrawal has nobody to report to: the
+         //   dying Fiber must not unwind into handler code it cannot suspend in.
+         // @phpstan-ignore-next-line (a destroyed Fiber skips the try and the catch)
+         if ($settled === false && $entry === 0) {
+            try {
+               $this->Database->withdraw($Transaction->abort());
+            }
+            catch (Throwable) {
+               // ? Dropped with the Fiber
+            }
+         }
+      }
+   }
+
+   /**
+    * Withdraw what a wait that never came back leaves in flight.
+    *
+    * @param array<int,Operation> $Operations
+    */
+   private function withdraw (array $Operations, bool $thrown): void
+   {
+      // @ Unfinished ones only, each once. An armed completion edge may fire
+      //   as they fail: it only ever wakes this very context, which is running
+      //   now, so wake() leaves it alone.
+      $Unfinished = [];
+
+      foreach ($Operations as $Operation) {
+         if ($Operation->finished === false) {
+            $Unfinished[spl_object_id($Operation)] = $Operation;
+         }
+      }
+
+      if ($Unfinished === []) {
+         return;
+      }
+
+      // ? A destroyed Fiber has no exception in flight and nobody to report
+      //   to: a failed withdrawal must not turn its unwinding into an error
+      //   that runs handler code inside a Fiber that can no longer suspend.
+      //   Under an exception it propagates, chained to the one in flight.
+      if ($thrown === false) {
+         try {
+            $this->Database->withdraw(...array_values($Unfinished));
+         }
+         catch (Throwable) {
+            // ? Dropped with the Fiber
+         }
+
+         return;
+      }
+
+      $this->Database->withdraw(...array_values($Unfinished));
    }
 
    /**

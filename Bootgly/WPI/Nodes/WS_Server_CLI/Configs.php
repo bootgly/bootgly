@@ -52,6 +52,8 @@ class Configs extends TCPConfigs
    public private(set) null|int $maxConnections;
    /** Maximum established connections per client IP. */
    public private(set) null|int $maxConnectionsPerIP;
+   /** Selector entries each worker keeps free for its own dependency I/O (see `TCP_Server_CLI::$headroom`). */
+   public private(set) null|int $headroom;
    // # HTTP fallback
    /** Responder for plain (non-upgrade) requests — e.g. the client page. */
    public private(set) null|Closure $Fallback;
@@ -80,6 +82,7 @@ class Configs extends TCPConfigs
       array $Guards = [],
       null|int $maxConnections = null,
       null|int $maxConnectionsPerIP = null,
+      null|int $headroom = null,
       null|Closure $Fallback = null
    )
    {
@@ -105,6 +108,7 @@ class Configs extends TCPConfigs
       // # Connection-exhaustion caps
       $this->maxConnections = $maxConnections;
       $this->maxConnectionsPerIP = $maxConnectionsPerIP;
+      $this->headroom = $headroom;
       // # HTTP fallback
       $this->Fallback = $Fallback;
    }

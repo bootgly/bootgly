@@ -21,6 +21,13 @@ use Bootgly\ADI\Databases\KV\Operation;
 abstract class Driver extends DatabaseDriver
 {
    /**
+    * A key-value server drops a disconnected client's work at once (a
+    * command runs atomically, a blocked one is unblocked), so a withdrawn
+    * command never holds its slot past the dropped session.
+    */
+   public const bool LINGERING = false;
+
+   /**
     * Create a key-value command operation.
     *
     * @param array<int,mixed> $arguments

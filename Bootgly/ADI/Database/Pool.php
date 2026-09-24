@@ -13,6 +13,7 @@ namespace Bootgly\ADI\Database;
 
 use const E_WARNING;
 use function array_key_first;
+use function array_key_last;
 use function array_shift;
 use function count;
 use function is_callable;
@@ -82,6 +83,14 @@ class Pool
    private WeakMap $settled;
    /** @var array<int,true> */
    private array $locked = [];
+   // @ Slots still held by withdrawn statements the server may be running:
+   //   their session was dropped, but the server finishes what it was asked
+   //   before it notices. Each counts against `max` until the statement's own
+   //   deadline. Keyed by append order, never by the operation: an object id
+   //   is recycled once the withdrawn operation is freed, and a recycled key
+   //   would overwrite or erase a live entry.
+   /** @var array<int,float> */
+   private array $quarantine = [];
    // @ Round-robin cursor for co-locating pipelined operations across connections.
    private int $cursor = 0;
 
@@ -133,23 +142,7 @@ class Pool
       $sent = $Operation->state !== OperationStates::Queued;
 
       if ($Operation->expire()) {
-         // @ The driver still owns whatever the server is sending for this
-         //   operation: let it reconcile the wire before the connection is
-         //   handed to anyone else and before fallback() revives the object.
-         $Protocol = $Operation->Protocol;
-         $Protocol?->abandon($Operation);
-
-         // @ Reconciling may have torn the session down, which fails every
-         //   sibling on it and hands them back through the driver. They must be
-         //   collected here, while the connection they were on is still the one
-         //   being released: left for a later advance, their release lands on
-         //   whatever connection the pool has rebuilt since and drops that one.
-         if ($Protocol !== null) {
-            $this->drain($Protocol, $Operation);
-         }
-
-         $this->forget($Operation);
-         $this->settle($Operation, $sent);
+         $this->retire($Operation, $sent);
 
          $this->fallback($Operation);
 
@@ -467,6 +460,97 @@ class Pool
       }
 
       return $Operation;
+   }
+
+   /**
+    * Withdraw one unfinished operation locally, because its caller stopped
+    * waiting for it — a deferred response whose wait was refused, interrupted
+    * or whose Fiber was destroyed.
+    *
+    * Nothing is sent to the server: the operation fails, the driver reconciles
+    * the wire, and the pool takes the slot back (a connection still connecting
+    * or authenticating is discarded). The operation is marked `revoked`, so no
+    * fallback pool ever re-dispatches it. An already finished operation keeps
+    * its result and is only forgotten.
+    *
+    * Synchronous and never suspends: it runs inside the `finally` of Fibers
+    * being destroyed, where a suspension is a `FiberError`. Freeing a slot may
+    * still promote a parked operation, which can dial a new connection.
+    */
+   public function withdraw (Operation $Operation): Operation
+   {
+      $Pool = $Operation->Pool;
+
+      if ($Pool !== null && $Pool !== $this) {
+         return $Pool->withdraw($Operation);
+      }
+
+      // ! Recorded first, as cancel() records it: whatever happens below, a
+      //   later advance() must never reach fallback() and re-dispatch it.
+      $Operation->revoked = true;
+
+      // ? Whoever finished it settled its claim — only a parked entry may remain.
+      if ($Operation->finished) {
+         $this->forget($Operation);
+
+         return $Operation;
+      }
+
+      // ! A teardown always counts as never sent: the session it was ending is
+      //   severed instead of trusting an answer nobody will read, so an open
+      //   transaction is never lent to the next caller.
+      $sent = $Operation->unlock === false && $Operation->state !== OperationStates::Queued;
+
+      // ! A statement on the wire keeps running on the server after its session
+      //   drops (SQL — `Driver::LINGERING`), so its slot stays counted until
+      //   its own deadline: a client's disconnect rate cannot open sessions
+      //   past `max` while those statements run within it. Registered before
+      //   retire(), whose release may already promote into the freed slot.
+      $running = $Operation->state === OperationStates::Querying || $Operation->state === OperationStates::Reading;
+      $Connection = $Operation->Connection;
+      $Protocol = $Operation->Protocol;
+      $key = null;
+
+      if ($running && $Operation->deadline > 0.0 && $Protocol !== null && $Protocol::LINGERING) {
+         $this->quarantine[] = $Operation->deadline;
+         $key = array_key_last($this->quarantine);
+      }
+
+      $Operation->fail('Database operation was withdrawn: its caller stopped waiting.');
+
+      $this->retire($Operation, $sent);
+
+      // ? The session survived (a sibling still reads on it): the connection
+      //   itself still counts, so the slot is not held twice.
+      if ($key !== null && $Connection !== null && $Connection->Protocol === $Protocol) {
+         unset($this->quarantine[$key]);
+      }
+
+      return $Operation;
+   }
+
+   /**
+    * Retire one failed operation: reconcile the wire, then take its claim back.
+    */
+   private function retire (Operation $Operation, bool $sent): void
+   {
+      // @ The driver still owns whatever the server is sending for this
+      //   operation: let it reconcile the wire before the connection is
+      //   handed to anyone else and before fallback() revives the object.
+      $Protocol = $Operation->Protocol;
+      $Protocol?->abandon($Operation);
+
+      // @ Reconciling may have torn the session down, which fails every
+      //   sibling on it and hands them back through the driver. They must be
+      //   collected here, while the connection they were on is still the one
+      //   being released: left for a later advance, their release lands on
+      //   whatever connection the pool has rebuilt since and drops that one.
+      if ($Protocol !== null) {
+         $this->drain($Protocol, $Operation);
+      }
+
+      $this->forget($Operation);
+      $this->settle($Operation, $sent);
    }
 
    /**
@@ -833,7 +917,7 @@ class Pool
          return $Connection;
       }
 
-      if ($this->created >= $this->max) {
+      if ($this->tally() >= $this->max) {
          // @ Pool exhausted — co-locate this operation on a ready busy
          //   connection so the driver pipelines it instead of queueing it
          //   pending. Exclusive operations (transactions) never co-locate.
@@ -982,11 +1066,30 @@ class Pool
    }
 
    /**
+    * Count the slots in use: every pool-owned connection, plus every slot still
+    * quarantined for a withdrawn statement whose deadline has not passed.
+    */
+   private function tally (): int
+   {
+      if ($this->quarantine !== []) {
+         $now = microtime(true);
+
+         foreach ($this->quarantine as $key => $deadline) {
+            if ($deadline <= $now) {
+               unset($this->quarantine[$key]);
+            }
+         }
+      }
+
+      return $this->created + count($this->quarantine);
+   }
+
+   /**
     * Promote pending operations while capacity is available.
     */
    private function promote (): void
    {
-      while ($this->pending !== [] && ($this->idle !== [] || $this->created < $this->max)) {
+      while ($this->pending !== [] && ($this->idle !== [] || $this->tally() < $this->max)) {
          $Operation = array_shift($this->pending);
 
          if ($Operation->expire()) {

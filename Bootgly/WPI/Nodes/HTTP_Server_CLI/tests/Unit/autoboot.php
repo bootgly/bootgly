@@ -85,5 +85,10 @@ return new Suite(
       '1.51-harness_every_case',
       // # 1.0.x: the default exceptions reporter logs client bytes inert (M9)
       '1.52-exceptions_reporter_inert',
+      // # 1.0.x (RH-H3-residual): deferred dependency waits withdraw their operations; selector headroom
+      '1.53-deferred_dependency_withdrawal',
+      '1.54-accept_selector_headroom',
+      // # 1.0.x (RH-H3-residual): a deferred job releases its own resources when it ends
+      '1.55-deferred_resource_release',
    ]
 );

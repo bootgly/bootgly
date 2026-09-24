@@ -156,6 +156,9 @@ class WS_Server_CLI extends TCP_Server_CLI implements WS, Server
       if ($Config->maxConnectionsPerIP !== null) {
          self::$maxConnectionsPerIP = $Config->maxConnectionsPerIP;
       }
+      if ($Config->headroom !== null) {
+         self::$headroom = $Config->headroom;
+      }
    }
 
    /**

@@ -195,6 +195,8 @@ class UDP_Server_CLI implements Servers
    protected array $daemonStreams = [];
    /** @var resource|null Launcher readiness channel, daemon child only. */
    protected $daemonReady = null;
+   /** The re-admission retry a refused `resume()` armed (its deferred timer id), or null. */
+   private null|int $retry = null;
    // # Reload — launch command captured at start(), replayed by reload() via
    //   pcntl_exec so the master re-execs into a fresh image (same PID). UDP is
    //   connectionless, so reload has no in-flight connections to drain.
@@ -1767,11 +1769,51 @@ class UDP_Server_CLI implements Servers
       }
 
       $children = (string) count($this->Process->Children->PIDs);
-      match ($this->Process->level) {
-         'master' => $this->Logger->log(critical: "Resuming {$children} worker(s)... @\\;"),
-         'child' => self::$Event->add($this->Socket, self::$Event::EVENT_READ, $this->Connections->Router),
-         default => null
-      };
+      if ($this->Process->level === 'master') {
+         $this->Logger->log(critical: "Resuming {$children} worker(s)... @\\;");
+      }
+
+      // ? The TCP twin's rule: a refused re-registration never reports Running
+      //   — the worker stays Paused and retries every second.
+      if (
+         $this->Process->level === 'child'
+         && self::$Event->add($this->Socket, self::$Event::EVENT_READ, $this->Connections->Router) === false
+      ) {
+         $this->Logger->log(critical: 'Worker socket refused by the selector on resume; retrying every second...@\\;');
+
+         // ! One chain at a time: a later resume() or pause() takes it over
+         if ($this->retry !== null) {
+            self::$Event->cancel($this->retry);
+         }
+
+         $Retry = null;
+         $Retry = function () use (&$Retry): void {
+            // ? Stopped, or resumed by another route, meanwhile
+            if ($this->Status !== Status::Paused) {
+               $this->retry = null;
+
+               return;
+            }
+
+            if (self::$Event->add($this->Socket, self::$Event::EVENT_READ, $this->Connections->Router)) {
+               $this->retry = null;
+               $this->Status = Status::Running;
+
+               return;
+            }
+
+            $this->retry = self::$Event->defer(microtime(true) + 1.0, $Retry);
+         };
+         $this->retry = self::$Event->defer(microtime(true) + 1.0, $Retry);
+
+         return false;
+      }
+
+      // ! Back in: a retry a refused resume() left armed has nothing to do
+      if ($this->retry !== null) {
+         self::$Event->cancel($this->retry);
+         $this->retry = null;
+      }
 
       $this->Status = Status::Running;
 
@@ -1790,6 +1832,18 @@ class UDP_Server_CLI implements Servers
    }
    public function pause (): bool
    {
+      // ? A refused resume() left a retry armed (only ever while Paused, or
+      //   Stopping meanwhile): a pause cancels it, and a paused worker stays
+      //   paused — the pause stands.
+      if ($this->retry !== null) {
+         self::$Event->cancel($this->retry);
+         $this->retry = null;
+
+         if ($this->Status === Status::Paused) {
+            return true;
+         }
+      }
+
       if ($this->Status !== Status::Running) {
          match ($this->Process->level) {
             'master' => $this->Logger->log(error: "Server needs to be running to pause!@\\;"),

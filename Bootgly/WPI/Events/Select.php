@@ -44,6 +44,12 @@ use Bootgly\WPI\Events;
 
 class Select implements Events, Loops, Scheduler, Cancelling
 {
+   /**
+    * Entries each descriptor table admits (reads, writes, excepts) — shared by
+    * client sockets and the Fibers awaiting their dependencies.
+    */
+   public const int CAPACITY = 1000;
+
    public Connections $Connections;
 
    // * Config
@@ -111,7 +117,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
     * queue plus one entry per awaited descriptor.
     *
     * Deferred work competes with client connections for the same selector
-    * budget, so this is the share of the 1000-descriptor cap the application
+    * budget, so this is the share of the descriptor cap (CAPACITY) the application
     * takes, and the population every reactor-wide operation walks. An
     * instantaneous count says nothing (a sample almost always lands between
     * waits); only the peak states which regime a workload actually reached.
@@ -215,7 +221,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
             if (
                isset($this->reads[$id]) === false
                && (
-                  count($this->reads) >= 1000
+                  count($this->reads) >= self::CAPACITY
                   || $this->check($Socket, $flag) === false
                )
             ) {
@@ -235,7 +241,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
             if (
                isset($this->reads[$id]) === false
                && (
-                  count($this->reads) >= 1000
+                  count($this->reads) >= self::CAPACITY
                   || $this->check($Socket, $flag) === false
                )
             ) {
@@ -254,7 +260,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
             if (
                isset($this->writes[$id]) === false
                && (
-                  count($this->writes) >= 1000
+                  count($this->writes) >= self::CAPACITY
                   || $this->check($Socket, $flag) === false
                )
             ) {
@@ -273,7 +279,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
             if (
                isset($this->excepts[$id]) === false
                && (
-                  count($this->excepts) >= 1000
+                  count($this->excepts) >= self::CAPACITY
                   || $this->check($Socket, $flag) === false
                )
             ) {
@@ -552,6 +558,11 @@ class Select implements Events, Loops, Scheduler, Cancelling
             //   the same `false`, so dispatch the signal and immediately
             //   probe the current persistent sets without blocking.
             pcntl_signal_dispatch();
+            // ? A descriptor closed while still registered fails every select()
+            //   of the set — a dependency session torn down by one Fiber's
+            //   withdrawal while another still awaits its socket. Drop the
+            //   dead ones before probing instead of recycling the worker.
+            $this->sweep();
             // ! Same null-for-empty shape as the main call above, so both
             //   paths hand the dispatch below identically-typed sets.
             $read = $this->reads;
@@ -1121,7 +1132,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
          if (
             isset($this->writes[$id]) === false
             && (
-               count($this->writes) >= 1000
+               count($this->writes) >= self::CAPACITY
                || $this->check($Socket, self::EVENT_WRITE) === false
             )
          ) {
@@ -1145,7 +1156,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
       if (
          isset($this->reads[$id]) === false
          && (
-            count($this->reads) >= 1000
+            count($this->reads) >= self::CAPACITY
             || $this->check($Socket, self::EVENT_READ) === false
          )
       ) {
@@ -1326,6 +1337,45 @@ class Select implements Events, Loops, Scheduler, Cancelling
                $Generation['Token'],
             );
          }
+      }
+   }
+
+   /**
+    * Drop every registered descriptor that was closed without leaving the
+    * selector, and move the Fibers awaiting it back to tick scheduling — they
+    * resume and observe what closed it. A live descriptor is never touched: a
+    * valid one past FD_SETSIZE still fails the set.
+    */
+   private function sweep (): void
+   {
+      foreach ($this->reads as $id => $Socket) {
+         if (is_resource($Socket)) {
+            continue;
+         }
+
+         unset($this->reads[$id]);
+         unset($this->reading[$id]);
+         unset($this->connecting[$id]);
+         $this->release($this->awaitingReads, $this->awaitingReadDeadlines, $id);
+      }
+
+      foreach ($this->writes as $id => $Socket) {
+         if (is_resource($Socket)) {
+            continue;
+         }
+
+         unset($this->writes[$id]);
+         unset($this->writing[$id]);
+         $this->release($this->awaitingWrites, $this->awaitingWriteDeadlines, $id);
+      }
+
+      foreach ($this->excepts as $id => $Socket) {
+         if (is_resource($Socket)) {
+            continue;
+         }
+
+         unset($this->excepts[$id]);
+         unset($this->excepting[$id]);
       }
    }
 

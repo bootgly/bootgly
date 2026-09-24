@@ -331,6 +331,26 @@ class Resources
    }
 
    /**
+    * Clean every instance this registry built from a definition — a forked
+    * response's own, per-generation instances — when its deferred job ends,
+    * keeping them mounted (a stream the job opened, such as SSE, may still be
+    * reached through the response). User-mounted instances, which other
+    * contexts share, are left alone.
+    *
+    * A deferred job's forked response references itself, so its resources
+    * would only go at a garbage-collection run; a resource that holds work in
+    * flight (a KV command nobody awaited) hands it back here instead.
+    */
+   public function release (): void
+   {
+      foreach ($this->resources as $name => $Resource) {
+         if (isset($this->definitions[$name])) {
+            $Resource->clean();
+         }
+      }
+   }
+
+   /**
     * Stop tracking one resource after its final mounted name is removed.
     */
    private function detach (Resource $Resource, bool $clean): void

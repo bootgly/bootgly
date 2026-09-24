@@ -644,6 +644,9 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       if ($Config->maxConnectionsPerIP !== null) {
          self::$maxConnectionsPerIP = $Config->maxConnectionsPerIP;
       }
+      if ($Config->headroom !== null) {
+         self::$headroom = $Config->headroom;
+      }
       // @ Idle connections — retained deferred work counts as activity
       if ($Config->connectionIdleTimeout !== null) {
          self::$connectionIdleTimeout = $Config->connectionIdleTimeout;

@@ -326,6 +326,15 @@ class TCP_Server_CLI implements Servers
    //   client onto one source IP; enable it only when the peer IP is the real
    //   client. When > 0, accepts past it are shed.
    public static int $maxConnectionsPerIP = 0;
+   //   Selector entries each worker keeps free for its own dependency I/O — the
+   //   Fibers of deferred responses awaiting their DB/KV pools, the embedded
+   //   HTTP client, notifiers — by shedding clients earlier. The selector
+   //   admits 1000 entries per table (`Select::CAPACITY`) and client sockets
+   //   share them: without a reserve, an idle-connection flood leaves every
+   //   dependency wait refused. The listener takes one of these entries (a
+   //   WebSocket relay one more), so size it to at least the sum of the
+   //   `pool.max` of the worker's resources plus those; 0 disables it.
+   public static int $headroom = 32;
    // # Idle connections
    //   Seconds an established connection may stay silent — no completed write
    //   since the previous supervisor tick and no pending work retained on it
@@ -397,6 +406,8 @@ class TCP_Server_CLI implements Servers
     * reports the failure instead.
     */
    protected bool $starting = false;
+   /** The re-admission retry a refused `resume()` armed (its deferred timer id), or null. */
+   private null|int $retry = null;
    // # Reload — the launch command captured at start(), replayed verbatim by
    //   reload() via pcntl_exec so the master re-execs into a fresh PHP image
    //   (reloading all code) while keeping its PID. Absolute script path + saved
@@ -2553,11 +2564,54 @@ class TCP_Server_CLI implements Servers
       }
 
       $children = (string) count($this->Process->Children->PIDs);
-      match ($this->Process->level) {
-         'master' => $this->Logger->log(critical: "Resuming {$children} worker(s)... @\\;"),
-         'child' => self::$Event->add($this->Socket, self::$Event::EVENT_CONNECT, true),
-         default => null
-      };
+      if ($this->Process->level === 'master') {
+         $this->Logger->log(critical: "Resuming {$children} worker(s)... @\\;");
+      }
+
+      // ? A worker's listener re-enters its selector. pause() freed that entry,
+      //   and dependency waits may have taken it since: refused, the worker
+      //   would report Running while nobody accepts. It stays Paused and
+      //   retries every second — the waits end within their deadlines, and no
+      //   client arrives while it is paused.
+      if (
+         $this->Process->level === 'child'
+         && self::$Event->add($this->Socket, self::$Event::EVENT_CONNECT, true) === false
+      ) {
+         $this->Logger->log(critical: 'Worker listener refused by the selector on resume; retrying every second...@\\;');
+
+         // ! One chain at a time: a later resume() or pause() takes it over
+         if ($this->retry !== null) {
+            self::$Event->cancel($this->retry);
+         }
+
+         $Retry = null;
+         $Retry = function () use (&$Retry): void {
+            // ? Stopped, or resumed by another route, meanwhile
+            if ($this->Status !== Status::Paused) {
+               $this->retry = null;
+
+               return;
+            }
+
+            if (self::$Event->add($this->Socket, self::$Event::EVENT_CONNECT, true)) {
+               $this->retry = null;
+               $this->Status = Status::Running;
+
+               return;
+            }
+
+            $this->retry = self::$Event->defer(microtime(true) + 1.0, $Retry);
+         };
+         $this->retry = self::$Event->defer(microtime(true) + 1.0, $Retry);
+
+         return false;
+      }
+
+      // ! Back in: a retry a refused resume() left armed has nothing to do
+      if ($this->retry !== null) {
+         self::$Event->cancel($this->retry);
+         $this->retry = null;
+      }
 
       $this->Status = Status::Running;
 
@@ -2579,6 +2633,18 @@ class TCP_Server_CLI implements Servers
    }
    public function pause (): bool
    {
+      // ? A refused resume() left a retry armed (only ever while Paused, or
+      //   Stopping meanwhile): a pause cancels it, and a paused worker stays
+      //   paused — the pause stands.
+      if ($this->retry !== null) {
+         self::$Event->cancel($this->retry);
+         $this->retry = null;
+
+         if ($this->Status === Status::Paused) {
+            return true;
+         }
+      }
+
       if ($this->Status !== Status::Running) {
          match ($this->Process->level) {
             'master' => $this->Logger->log(error: "Server needs to be running to pause!@\\;"),

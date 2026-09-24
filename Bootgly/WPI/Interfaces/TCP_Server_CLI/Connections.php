@@ -18,6 +18,7 @@ use function explode;
 use function fclose;
 use function is_resource;
 use function max;
+use function min;
 use function str_starts_with;
 use function stream_set_blocking;
 use function stream_set_read_buffer;
@@ -32,6 +33,7 @@ use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI;
 use Bootgly\WPI\Connections\Packages;
 use Bootgly\WPI\Connections\Peer;
+use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 
@@ -157,9 +159,11 @@ class Connections implements WPI\Connections
     * concurrency ceilings? (audit F-2)
     *
     * Returns false when accepting it would reach the global ceiling
-    * (`Server::$maxConnections`) or this peer's per-IP ceiling
-    * (`Server::$maxConnectionsPerIP`, opt-in). Either ceiling is disabled by a
-    * 0 value. Mirrors `Connection::check()` (true = proceed) and is isolated so
+    * (`Server::$maxConnections`), the selector ceiling that keeps
+    * `Server::$headroom` entries free for the worker's own dependency waits
+    * (`Select::CAPACITY` minus the headroom), or this peer's per-IP ceiling
+    * (`Server::$maxConnectionsPerIP`, opt-in). The global and per-IP ceilings
+    * are disabled by a 0 value. Mirrors `Connection::check()` (true = proceed) and is isolated so
     * it is unit-testable without a live socket. Consulted once per accept —
     * never on the per-request hot path.
     */
@@ -170,6 +174,14 @@ class Connections implements WPI\Connections
          Server::$maxConnections > 0
          && count(self::$Connections) >= Server::$maxConnections
       ) {
+         return false;
+      }
+
+      // ? Selector headroom: a client holds at most one read and one write
+      //   entry, so capping the census keeps the reserve free in both tables
+      //   for the worker's own dependency waits (the listener and a WS relay
+      //   take theirs from it). Clamped so a worker always admits clients.
+      if (count(self::$Connections) >= Select::CAPACITY - min(max(0, Server::$headroom), Select::CAPACITY - 2)) {
          return false;
       }
 

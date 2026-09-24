@@ -27,5 +27,7 @@ return new Suite(
       '1.9-privilege-source-pins',
       // # The Daemon fallback sink yields to a sink registered before start() (LOGS-10)
       '1.10-fallback-yields',
+      // # 1.0.x (RH-H3-residual): a worker listener refused by the selector on resume() stays Paused and retries
+      '1.11-resume-listener-refusal',
    ]
 );

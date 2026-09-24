@@ -231,6 +231,24 @@ class Transaction implements Awaiting, Querying
       }
 
       // ---
+      return $this->abort();
+   }
+
+   /**
+    * Abort the whole transaction at any depth: discard the outstanding statement
+    * and compose the top-level `ROLLBACK`, which ends every savepoint with it
+    * and gives the pool reservation back.
+    *
+    * Emits no transaction event — it is the teardown a caller that can no
+    * longer wait uses (a deferred response whose Fiber is being destroyed),
+    * where a listener cannot suspend.
+    */
+   public function abort (): Operation
+   {
+      if ($this->active() === false) {
+         return $this->fail('ROLLBACK', [], 'SQL transaction is not active.');
+      }
+
       $this->discard();
 
       $Operation = $this->create('ROLLBACK', unlock: true);
@@ -356,6 +374,16 @@ class Transaction implements Awaiting, Querying
       //   started one — and everything the caller runs lands in autocommit and
       //   survives the rollback it asks for, with no error anywhere.
       if ($this->Begin !== null && $this->Begin->state === OperationStates::Failed) {
+         return false;
+      }
+
+      // ? The session BEGIN ran on must still be the one attached. A dropped
+      //   connection loses its driver, and the pool can hand the same object to
+      //   another caller with a new one — a statement composed now would run
+      //   inside that caller's session, and its teardown would end it.
+      $Protocol = $this->Begin?->Protocol;
+
+      if ($Protocol !== null && $this->Connection !== null && $this->Connection->Protocol !== $Protocol) {
          return false;
       }
 

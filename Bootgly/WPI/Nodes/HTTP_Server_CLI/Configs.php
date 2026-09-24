@@ -41,6 +41,8 @@ class Configs extends TCPConfigs
    public private(set) null|int $maxConnections;
    /** Maximum established connections per client IP. */
    public private(set) null|int $maxConnectionsPerIP;
+   /** Selector entries each worker keeps free for its own dependency I/O (see `TCP_Server_CLI::$headroom`). */
+   public private(set) null|int $headroom;
    /** Seconds of transport silence before a connection is closed (`0` disables). */
    public private(set) null|int $connectionIdleTimeout;
 
@@ -64,6 +66,7 @@ class Configs extends TCPConfigs
       null|string $health = null,
       null|int $maxConnections = null,
       null|int $maxConnectionsPerIP = null,
+      null|int $headroom = null,
       null|int $connectionIdleTimeout = null
    )
    {
@@ -93,6 +96,7 @@ class Configs extends TCPConfigs
 
       $this->maxConnections = $maxConnections;
       $this->maxConnectionsPerIP = $maxConnectionsPerIP;
+      $this->headroom = $headroom;
       $this->connectionIdleTimeout = $connectionIdleTimeout;
    }
 }

@@ -21,6 +21,7 @@ use function mt_rand;
 use function stream_select;
 use function stream_socket_recvfrom;
 
+use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
 
 
@@ -79,8 +80,8 @@ class Pool
    {
       // * Config
       $this->min = max(0, $pool['min'] ?? self::DEFAULT_MIN);
-      // ? The Select event backend caps at 1000 sockets
-      $this->max = min(1000, max(1, $pool['max'] ?? self::DEFAULT_MAX));
+      // ? The Select event backend caps each descriptor table
+      $this->max = min(Select::CAPACITY, max(1, $pool['max'] ?? self::DEFAULT_MAX));
       // ? Keep the floor within the ceiling
       if ($this->min > $this->max) {
          $this->min = $this->max;

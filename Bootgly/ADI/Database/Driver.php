@@ -24,6 +24,14 @@ use Bootgly\ADI\Database\Operation;
  */
 abstract class Driver
 {
+   /**
+    * Whether a statement already sent keeps running on the server after its
+    * session drops. SQL servers finish (or roll back) what they were asked
+    * before they notice the client left, so the pool keeps a withdrawn
+    * statement's slot counted until its deadline (see `Pool::withdraw()`).
+    */
+   public const bool LINGERING = true;
+
    // * Config
    public Config $Config;
    public Connection $Connection;

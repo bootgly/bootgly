@@ -1922,6 +1922,24 @@ class Response extends Server\Response
             $Request = $Response->Request;
             $Request?->clean();
 
+            // @ This generation's own resources end their request with it:
+            //   the clone is self-referencing, so they would otherwise wait
+            //   for a GC run — a KV resource hands back its unfinished
+            //   commands here (H-HSC-2). Guarded: the cleanup below must run.
+            try {
+               $Response->Resources->release();
+            }
+            catch (Throwable $Unreleased) {
+               $Snapshot = $Response->Request;
+               Throwables::notify($Unreleased, [
+                  'interface' => 'WPI',
+                  'phase' => 'Resources',
+                  'method' => $Snapshot->method ?? '',
+                  'URI' => strtok($Snapshot->URI ?? '', '?'),
+                  'peer' => $Snapshot->peer ?? '',
+               ]);
+            }
+
             // @ Drop this job's locale binding before the Fiber is pooled
             Language::unbind();
 

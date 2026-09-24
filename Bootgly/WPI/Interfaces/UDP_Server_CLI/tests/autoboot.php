@@ -39,6 +39,8 @@ return new Suite(
       // # Atomic admission commit under async reentry (H7)
       '1.9-admission_commit_race',
       // # Start claim and signal-mask release in master and worker (H7)
-      '1.10-start_claim_release'
+      '1.10-start_claim_release',
+      // # 1.0.x (RH-H3-residual): a worker socket refused by the selector on resume() stays Paused and retries
+      '1.11-resume-socket-refusal'
    ]
 );

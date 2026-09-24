@@ -155,5 +155,7 @@ return new Suite(
       //   waited on, never reported as refused.
       '3.6-connection-establish',
       '3.7-connection-dial_failures',
+      // # 1.0.x (RH-H3-residual): a withdrawn operation fails locally and gives its slot back
+      '4.18-pool-withdraw',
    ]
 );

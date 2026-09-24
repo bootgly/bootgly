@@ -696,5 +696,9 @@ return new Suite(
       // root-owned inside a tree an earlier boot already handed over; prime()
       // must name it, or the demoted workers cannot read the credential.
       '58.02-autotls_privileged_store_handoff',
+      // # 1.0.x (RH-H3-residual): deferred dependency withdrawal and selector headroom
+      // A client leaving a KV wait frees the pool slot; an idle flood leaves
+      // the dependency waits their selector reserve.
+      '88.02-deferred_dependency_selector_admission_lifecycle',
    ],
 );

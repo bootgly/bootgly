@@ -11,9 +11,13 @@
 namespace Bootgly\ADI;
 
 
+use Throwable;
+
 use Bootgly\ADI\Database\Config;
 use Bootgly\ADI\Database\Connection;
 use Bootgly\ADI\Database\Drivers;
+use Bootgly\ADI\Database\Operation;
+use Bootgly\ADI\Database\Operation\OperationStates;
 use Bootgly\ADI\Database\Pool;
 use Bootgly\ADI\Database\Pools;
 
@@ -59,5 +63,47 @@ abstract class Database
       $this->Connection = new Connection($this->Config);
       $this->Pools = new Pools($this->Config, $this->Connection, $drivers);
       $this->Pool = $this->Pools->fetch($this->Config->driver);
+   }
+
+   /**
+    * Withdraw operations locally because their caller stopped waiting for them —
+    * nothing is sent to the server (see `Pool::withdraw()`).
+    *
+    * Parked operations go first, then the ones that are not reading yet, then
+    * the pipelined readers: a slot freed early would promote a parked operation
+    * onto the wire, and a reader withdrawn before the writer queued behind it
+    * would leave nobody to take its answer. Every operation is attempted; the
+    * first failure is rethrown once all of them ran.
+    */
+   public function withdraw (Operation ...$Operations): void
+   {
+      // !
+      $Ordered = [[], [], []];
+
+      foreach ($Operations as $Operation) {
+         $Ordered[match ($Operation->state) {
+            OperationStates::Pending => 0,
+            OperationStates::Reading => 2,
+            default => 1
+         }][] = $Operation;
+      }
+
+      // @@
+      $Failure = null;
+
+      foreach ($Ordered as $Group) {
+         foreach ($Group as $Operation) {
+            try {
+               ($Operation->Pool ?? $this->Pool)->withdraw($Operation);
+            }
+            catch (Throwable $Throwable) {
+               $Failure ??= $Throwable;
+            }
+         }
+      }
+
+      if ($Failure !== null) {
+         throw $Failure;
+      }
    }
 }
