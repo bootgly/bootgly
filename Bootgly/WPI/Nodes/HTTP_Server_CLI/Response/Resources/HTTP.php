@@ -39,6 +39,15 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource\Scheduling;
  * the connection is up. Every deferral dials afresh — no upstream connection
  * is reused across requests.
  *
+ * Redirects are pinned to the configured upstream: a hop that changes the
+ * scheme, host or port fails with code 0 `'Redirect Refused'` — an upstream
+ * cannot bounce the worker's requests (and their API keys) to an internal
+ * service. A factory that trusts other destinations replaces the policy:
+ * `$HTTP->Client->Redirection = null` (follow any http(s) target) or its own
+ * `Closure(string $host, int $port, bool $secure): bool`. Inside `batch()` a
+ * same-origin hop that needs another connection comes back as the final 3xx:
+ * batches never re-dial.
+ *
  * Register it once and call it from `defer()`:
  *
  * ```php
@@ -62,9 +71,10 @@ class HTTP extends Resource implements Scheduling
     * The embedded client — knob surface only.
     *
     * Every knob not covered by the constructor (`retryOn`, `retryDelay`,
-    * `allowInsecureRedirect`, ...) is set here. Never send through it: only
-    * `request()`, `batch()` and `drain()` claim the deferred context, and
-    * only that claim releases the client when the deferral settles.
+    * `allowInsecureRedirect`, `Redirection`, `crossOriginHeaders`, ...) is set
+    * here — `Redirection` comes pinned to the upstream origin. Never send
+    * through it: only `request()`, `batch()` and `drain()` claim the deferred
+    * context, and only that claim releases the client when the deferral settles.
     */
    public private(set) HTTP_Client_CLI $Client;
 
@@ -87,7 +97,7 @@ class HTTP extends Resource implements Scheduling
     * @param array<string,int>|null $pool Connection pool bounds inside one deferral: `['min' => N, 'max' => N]`.
     * @param int|float $timeout Response timeout in seconds (0 = no timeout).
     * @param int|float $connectTimeout Connection timeout in seconds, per dial attempt — it alone bounds the dial AND the TLS handshake (0 = no timeout: a peer that accepts TCP but never negotiates keeps the deferred Fiber and its socket parked until the deferral's own generation is cancelled).
-    * @param int $maxRedirects Maximum redirects to follow (0 = disabled).
+    * @param int $maxRedirects Maximum redirects to follow, within the upstream origin (0 = disabled).
     * @param int $maxRetries Maximum retries on connection/timeout failure (0 = disabled).
     * @param null|bool $enableHTTP2 HTTP/2 negotiation (null = ALPN when secure; true = also h2c; false = never).
     * @param null|int $maxResponseBytes Maximum raw response bytes per request (null = the client's default, 16 MiB;
@@ -136,6 +146,10 @@ class HTTP extends Resource implements Scheduling
       if ($maxResponseBytes !== null) {
          $Client->maxResponseBytes = $maxResponseBytes;
       }
+      // ! Redirects stay on the upstream this resource was built for: a hop
+      //   anywhere else is refused (code 0, 'Redirect Refused') unless the
+      //   factory sets `$Client->Redirection` to another policy, or null
+      $Client->pin();
 
       $this->Client = $Client;
    }

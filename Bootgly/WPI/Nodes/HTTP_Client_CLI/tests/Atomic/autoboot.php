@@ -76,5 +76,21 @@ return new Suite(
       '9.3-harness_lock_step',
       // # 1.0.x (M2): a refused response still reaches the event-driven callback
       '9.4-event_driven-failure_callback',
+      // # 1.0.x (M3): redirect destination policy — each case forks its own
+      //   origins from `fixtures/origin.php`
+      '10.1-redirect-destination_policy',
+      '10.2-redirect-cross_origin_headers',
+      '10.3-redirect-location_targets',
+      '10.4-redirect-same_origin_legs',
+      '10.5-redirect-hop_cap',
+      '10.6-redirect-tls_across_origins',
+      '10.7-redirect-event_driven_and_batch',
+      // # 1.0.x (M3): payload-only clear, anchored default headers
+      //   (appended last to keep every case index above stable)
+      'Request/1.9-clear-payload_only',
+      'Request/1.10-encode-anchored_defaults',
+      '10.8-redirect-pin',
+      '10.9-redirect-event_driven_hop_count',
+      '10.10-redirect-target_limit',
    ]
 );

@@ -35,6 +35,7 @@ use function substr;
 use ReflectionMethod;
 use Throwable;
 
+use Bootgly\ABI\Data\URI;
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\API\Security\JWT\KeySet;
 use Bootgly\API\Security\JWT\Remote;
@@ -201,7 +202,8 @@ return new Test(
       //   the headline path while regressing another RFC form.
       $base = 'https://a/b/c/d;p?q';
       $Resolver = new Remote($base, static fn (): string => $first['body']);
-      $Follow = new ReflectionMethod(Remote::class, 'follow');
+      // ! Remote follows through the shared RFC 3986 resolver (ABI `URI`)
+      $Base = new URI($base);
       $Locate = new ReflectionMethod(Remote::class, 'locate');
       $references = [
          'https://g/a/../keys' => 'https://g/keys',
@@ -212,7 +214,10 @@ return new Test(
          '?y' => 'https://a/b/c/d;p?y',
          '#s' => 'https://a/b/c/d;p?q',
          'g#s' => 'https://a/b/c/g',
-         'g:h' => 'g:h',
+         // ! Opaque and authority-less targets end the fetch: PHP's wrappers
+         //   would read `https:g` as a local file
+         'g:h' => null,
+         'https:g' => null,
          './g' => 'https://a/b/c/g',
          '/g' => 'https://a/g',
          '../../../g' => 'https://a/g',
@@ -222,7 +227,8 @@ return new Test(
       $mismatches = [];
 
       foreach ($references as $location => $expected) {
-         $actual = $Follow->invoke($Resolver, $base, $location);
+         $Target = $Base->resolve($location);
+         $actual = $Target === null ? null : (string) $Target;
          if ($actual !== $expected) {
             $mismatches[$location] = [
                'expected' => $expected,
@@ -235,7 +241,7 @@ return new Test(
          'HTTP/1.1 302 Found',
          'Location:',
       ]);
-      $emptyReference = $Follow->invoke($Resolver, $base, '');
+      $emptyReference = (string) $Base->resolve('');
       $emptyPassed = $emptyLocation === '' && $emptyReference === $base;
 
       $childClean = $waited === $PID

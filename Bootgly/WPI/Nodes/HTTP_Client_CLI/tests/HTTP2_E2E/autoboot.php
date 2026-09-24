@@ -51,6 +51,44 @@ return new Suite(
             if ($Request->URI === '/landing') {
                return $Response->send('landed');
             }
+            // @ Redirect policy (M3): a self-loop, a refused scheme, a hop to
+            //   another origin, and a 303 whose GET reports the headers it kept
+            if ($Request->URI === '/loop') {
+               $Response->code(302);
+               $Response->Header->set('Location', '/loop');
+
+               return $Response->send('');
+            }
+            if ($Request->URI === '/gopher') {
+               $Response->code(307);
+               $Response->Header->set('Location', 'gopher://127.0.0.1/x');
+
+               return $Response->send('');
+            }
+            if ($Request->URI === '/cross') {
+               $Response->code(307);
+               $Response->Header->set('Location', 'http://127.0.0.2:8087/landing');
+
+               return $Response->send('');
+            }
+            if ($Request->URI === '/cross-kept') {
+               $Response->code(307);
+               $Response->Header->set('Location', 'http://127.0.0.2:8087/kept');
+
+               return $Response->send('');
+            }
+            if ($Request->URI === '/see-other') {
+               $Response->code(303);
+               $Response->Header->set('Location', '/kept');
+
+               return $Response->send('');
+            }
+            if ($Request->URI === '/kept') {
+               $authorization = $Request->Header->get('Authorization') ?? 'absent';
+               $type = $Request->Header->get('Content-Type') ?? 'absent';
+
+               return $Response->send("method={$Request->method};authorization={$authorization};content-type={$type};body={$Request->input}");
+            }
 
             // @ Large body — forces client-side recv WINDOW_UPDATE replenishes
             if ($Request->URI === '/large') {
@@ -97,6 +135,9 @@ return new Suite(
       '2.2-large_download',
       '3.1-redirect',
       // # 1.0.x (M2): the default cap reaches HTTP/2 — named, never retried
-      '2.3-over_cap_status'
+      '2.3-over_cap_status',
+      // # 1.0.x (M3): the HTTP/2 path takes the same redirect decision point
+      '3.2-redirect_policy',
+      '3.3-redirect_cross_origin',
    ]
 );

@@ -46,20 +46,25 @@ class Encoder_ extends Encoder
 
       // @ Add default headers if not present
       $defaultHeaders = '';
+      // ! Field names are matched at line starts: `X-Forwarded-Host:`,
+      //   `Proxy-Connection:` or a value quoting `Host:` never stand in for the
+      //   field itself (a redirect leg that dropped the caller's `Host` would
+      //   otherwise go out with none)
+      $lines = "\r\n{$headerRaw}";
 
       // Host
-      if (stripos($headerRaw, 'Host:') === false) {
+      if (stripos($lines, "\r\nHost:") === false) {
          $hostValue = ($port === 80 || $port === 443) ? $host : "{$host}:{$port}";
          $defaultHeaders .= "Host: {$hostValue}\r\n";
       }
 
       // Connection
-      if (stripos($headerRaw, 'Connection:') === false) {
+      if (stripos($lines, "\r\nConnection:") === false) {
          $defaultHeaders .= "Connection: keep-alive\r\n";
       }
 
       // User-Agent
-      if (stripos($headerRaw, 'User-Agent:') === false) {
+      if (stripos($lines, "\r\nUser-Agent:") === false) {
          $defaultHeaders .= "User-Agent: Bootgly/HTTP_Client_CLI\r\n";
       }
 

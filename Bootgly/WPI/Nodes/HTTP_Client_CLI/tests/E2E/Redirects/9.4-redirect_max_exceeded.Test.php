@@ -5,7 +5,7 @@ use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Tests\Suite\Test;
 
 return new Test(
-   description: 'It should stop redirecting when maxRedirects is exceeded',
+   description: 'It should fail loudly when a redirect chain goes past maxRedirects',
 
    response: function () { return ''; },
    request: function () { return new Response; },
@@ -44,15 +44,17 @@ return new Test(
    ],
 
    test: function (Response $Response1, Response $Response2, Response $Response3) {
-      // @ After exceeding maxRedirects, the last redirect response should be returned
+      // @ Past maxRedirects the request fails with its own status — a 3xx
+      //   returned as if it were the answer hides the cut-off chain (M3)
       yield assert(
-         assertion: $Response1->code === 302,
-         description: "Returns last redirect response (302) when max exceeded: {$Response1->code}"
+         assertion: $Response1->code === 0 && $Response1->status === 'Too Many Redirects',
+         description: "Fails with 'Too Many Redirects' past the cap: {$Response1->code} "
+            . var_export($Response1->status, true)
       );
 
       yield assert(
          assertion: $Response1->Header->get('Location') === '/redir-3',
-         description: "Location header from last redirect: " . ($Response1->Header->get('Location') ?? 'null')
+         description: "The refused hop's head stays readable — Location: " . ($Response1->Header->get('Location') ?? 'null')
       );
    }
 );

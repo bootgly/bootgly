@@ -11,11 +11,13 @@
 namespace Bootgly\WPI\Nodes\HTTP_Client_CLI;
 
 
+use function in_array;
 use function is_array;
 use function is_string;
 use function strcspn;
 use function strlen;
 use function strspn;
+use function strtolower;
 
 use InvalidArgumentException;
 
@@ -61,6 +63,25 @@ class Request
       . '0123456789'
       . 'abcdefghijklmnopqrstuvwxyz'
       . 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+   /**
+    * Representation fields that describe a body: they leave with it when a
+    * redirect changes the method (RFC 9110 §15.4, Fetch "request-body-header
+    * names"), plus the framing and `Expect` that only a body can have.
+    *
+    * @var array<int,string>
+    */
+   private const array PAYLOAD = [
+      'content-digest',
+      'content-encoding',
+      'content-language',
+      'content-length',
+      'content-location',
+      'content-type',
+      'digest',
+      'expect',
+      'repr-digest',
+      'transfer-encoding',
+   ];
    /** C0, SP, DEL, backslash and fragment marker never enter a request-target. */
    private const string TARGET_INVALID =
       "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F"
@@ -85,7 +106,7 @@ class Request
    public int $redirectCount;
    public string $originalMethod;
    public string $originalBody;
-   /** @var array{host:string,port:int,path:string,secure:bool}|null */
+   /** @var array{host:string,name:string,port:int,path:string,secure:bool,same:bool}|null */
    public null|array $redirectTarget;
    // | Timeout
    public float $sentAt;
@@ -291,7 +312,10 @@ class Request
    }
 
    /**
-    * Clear request headers and body (used for redirect method change).
+    * Drop the payload: the body and every field that describes it (`PAYLOAD`,
+    * under any spelling) — used when a redirect changes the method to GET.
+    * Every other header stays: a 303 back to the same origin keeps the
+    * caller's `Authorization`, `Accept` and custom fields (HCLI-13).
     *
     * @return void
     */
@@ -299,7 +323,13 @@ class Request
    {
       $this->encoded = null;
 
-      $this->Header = new Header;
+      // ! `Header::remove()` matches the stored name verbatim, so the field set
+      //   is walked instead of removing fixed spellings
+      foreach ($this->Header->fields as $name => $value) {
+         if (in_array(strtolower($name), self::PAYLOAD, true)) {
+            $this->Header->remove($name);
+         }
+      }
       $this->Body = new Body;
    }
 }

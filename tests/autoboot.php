@@ -238,5 +238,8 @@ return new Suites(
       'Bootgly/ABI/Syntax/Nullables/',
       'Bootgly/ABI/Syntax/Promotions/',
       'Bootgly/ABI/Syntax/Methods/',
+      // # ABI/Data/URI — RFC 3986 URI value + §5 reference resolution (redirect followers)
+      //   (appended last to keep every suite index above stable)
+      'Bootgly/ABI/Data/URI/',
    ]
 );

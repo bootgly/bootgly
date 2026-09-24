@@ -35,5 +35,7 @@ return new Suite(
       '1.15-database_resource_withdraw',
       // # 1.0.x (RH-H3-residual): a KV wait that never comes back withdraws its commands
       '1.16-kv_resource_withdraw',
+      // # 1.0.x (M3): redirects stay on the upstream origin by default
+      '1.17-http_resource_redirect_pin',
    ]
 );

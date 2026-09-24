@@ -56,5 +56,7 @@ return new Suite(
       '1.40-jwt_vault_fleet_atomicity_live',
       '1.41-users_store_failure_distinction',
       '1.42-users_enroll_transaction_pgsql_live',
+      // # 1.0.x (M3): the shared URI resolver refuses an opaque redirect target
+      '1.43-jwt_remote_redirect_opaque_target',
    ]
 );

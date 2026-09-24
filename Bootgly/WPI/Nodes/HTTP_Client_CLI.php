@@ -30,11 +30,11 @@ use function fwrite;
 use function hrtime;
 use function in_array;
 use function is_resource;
+use function is_string;
 use function max;
 use function microtime;
 use function min;
 use function mt_rand;
-use function parse_url;
 use function pcntl_fork;
 use function pcntl_waitpid;
 use function posix_kill;
@@ -50,7 +50,6 @@ use function stream_socket_server;
 use function stripos;
 use function strlen;
 use function strpos;
-use function strrpos;
 use function strtolower;
 use function strtotime;
 use function strtoupper;
@@ -69,6 +68,7 @@ use Throwable;
 use WeakMap;
 
 use Bootgly\ABI\Configs as Configuring;
+use Bootgly\ABI\Data\URI;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Logs\Data\Display;
@@ -105,7 +105,11 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
    // * Config
    // | Redirect
-   /** Maximum number of redirects to follow (0 = disabled). */
+   /**
+    * Maximum number of redirects to follow per request. `0` disables redirects: every 3xx is
+    * returned as the final Response. Past the limit the request fails with code 0 and status
+    * `'Too Many Redirects'` (never retried).
+    */
    public int $maxRedirects = 10;
    /**
     * Follow a redirect that steps down from `https` to `http`.
@@ -115,12 +119,61 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     */
    public bool $allowInsecureRedirect = false;
    /**
-    * Request headers scoped to the origin that issued them — dropped as soon
-    * as a redirect leaves it.
+    * Destination policy for redirects.
+    *
+    * Called on every hop — the same origin included — with the target's host
+    * (lowercased; an IPv6 literal without brackets, no trailing dot), port and
+    * scheme (`true` = https), before anything is sent there. Anything but
+    * `true`, or a throw, refuses the hop: the request fails with code 0 and
+    * status `'Redirect Refused'` (never retried). `null` follows every http(s)
+    * target; `pin()` installs a policy that keeps the client on its origin.
+    * In batch and event-driven modes, a hop the policy allows but that needs
+    * another connection is delivered as the final 3xx — those modes never
+    * re-dial.
+    *
+    * It runs on the event loop: it must neither block nor call this client.
+    *
+    * @var null|Closure(string,int,bool):bool
+    */
+   public null|Closure $Redirection = null;
+   /**
+    * Request headers a redirect carries to another origin — names compared
+    * case-insensitively. Every other header the caller set (credentials, API
+    * keys, a `Host`) stays with the origin that received it; a 307/308 that
+    * replays the body also carries the fields describing it (`Content-Type`,
+    * `Content-Length`, `Content-Encoding`, `Content-Language`).
     *
     * @var array<int,string>
     */
-   private const array CREDENTIAL_HEADERS = ['authorization', 'cookie', 'proxy-authorization'];
+   public array $crossOriginHeaders = ['accept', 'accept-encoding', 'accept-language', 'user-agent'];
+   /**
+    * Longest request-target a redirect may produce, in bytes. A longer one —
+    * a hostile `Location`, or relative references compounding hop after hop —
+    * fails the request with code 0 and status `'Redirect Refused'`.
+    */
+   public const int TARGET_LIMIT = 8192;
+   /**
+    * Fields describing a replayed (307/308) body — they follow it to another origin.
+    *
+    * @var array<int,string>
+    */
+   private const array REPRESENTATION = ['content-encoding', 'content-language', 'content-length', 'content-type'];
+   /**
+    * TLS options scoped to the origin they were configured for — dropped on a
+    * hop to another origin: its client identity is never presented elsewhere
+    * and a loosened verification falls back to PHP's secure defaults.
+    *
+    * @var array<int,string>
+    */
+   private const array ORIGIN_OPTIONS = [
+      'allow_self_signed',
+      'local_cert',
+      'local_pk',
+      'passphrase',
+      'SNI_server_name',
+      'verify_peer',
+      'verify_peer_name',
+   ];
    // | Timeout
    /** Connection timeout in seconds (0 = no timeout). */
    public int|float $connectTimeout = 30;
@@ -330,6 +383,38 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       $this->Pool = new Pool($pool);
       $this->warmed = false;
+   }
+
+   /**
+    * Pin redirects to the origin this client is configured for now.
+    *
+    * Installs a `Redirection` policy that follows a hop only when it keeps the
+    * exact scheme, host and port — the policy the embedded HTTP response
+    * resource applies by default. The pin does not move when the client is
+    * reconfigured later: call `pin()` again. `$Redirection = null` removes it.
+    *
+    * @return static
+    * @throws LogicException When the client has no origin configured yet.
+    */
+   public function pin (): static
+   {
+      // ? An unconfigured client has no origin to pin — never the loopback default
+      if ($this->host === null || $this->port === null) {
+         throw new LogicException('pin() needs a configured origin — call configure() first.');
+      }
+
+      // ! Captured now: every hop re-targets this client, the pin must not follow it
+      $Origin = $this->anchor('');
+      $pinned = $Origin === null
+         ? null
+         : [$Origin->hostname, $Origin->port, $this->secure !== null];
+
+      // ? An origin that is not a valid URI host pins nothing: every hop is refused
+      $this->Redirection = static fn (string $host, int $port, bool $secure): bool =>
+         [$host, $port, $secure] === $pinned;
+
+      // :
+      return $this;
    }
 
    /**
@@ -695,84 +780,42 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             }
          }
 
-         // @ Response complete — handle redirect if applicable
-         $Response = $Request->Response;
-         $redirectCode = $Response->code;
-         if (
-            $HTTP_Client_CLI->maxRedirects > 0
-            && $Request->redirectCount < $HTTP_Client_CLI->maxRedirects
-            && ($redirectCode === 301 || $redirectCode === 302 || $redirectCode === 303
-               || $redirectCode === 307 || $redirectCode === 308)
-         ) {
-            $location = $Response->Header->get('Location');
-            $redirectMethod = in_array($redirectCode, [301, 302, 303], true)
-               && $Request->method !== 'HEAD'
-               ? 'GET'
-               : $Request->method;
-            $resolved = $location !== null && $location !== ''
-               ? $HTTP_Client_CLI->resolve(
-                  $location,
-                  $Request->URI,
-                  $redirectMethod,
-                  $Request->protocol
-               )
-               : null;
-            if ($resolved !== null) {
-               $Request->redirectCount++;
+         // @ Response complete — a redirect is decided once, before anything
+         //   about the Request moves (M3)
+         $target = $HTTP_Client_CLI->redirect($Request, $Request->Response->closeConnection);
 
-               // @ Save original method/body on first redirect
-               if ($Request->originalMethod === '') {
-                  $Request->originalMethod = $Request->method;
-                  $Request->originalBody = $Request->Body->raw;
-               }
+         // ? Refused, past the hop cap or a downgrade: the request fails loudly
+         if (is_string($target)) {
+            $HTTP_Client_CLI->reject($Request, $Connection, $socketId, $target, $receivedNS);
+            return;
+         }
 
-               // @ Determine new method per RFC 7231
-               // 301/302/303: change to GET (except HEAD stays HEAD), clear body
-               // 307/308: preserve original method and body
-               if ($redirectCode === 301 || $redirectCode === 302 || $redirectCode === 303) {
-                  if ($Request->method !== 'HEAD') {
-                     $Request->method = 'GET';
-                  }
-                  $Request->clear();
-               }
+         if ($target !== null) {
+            $Request->pendingBuffer = '';
+            $Request->Decoder = new Decoder_;
 
-               // ! The URI changes in place here, bypassing __invoke()/clear(),
-               //   so the memoized encoding must be dropped by hand (HCLI-5)
-               $Request->URI = $resolved['path'];
-               $Request->encoded = null;
-               $Request->pendingBuffer = '';
-               $Request->Decoder = new Decoder_;
-               $Request->connectionState = 'redirect';
+            if ($target['same'] && $Request->Response->closeConnection === false) {
+               // @ Same origin + keep-alive: reuse the connection
+               $Request->Response->reset();
+               $Request->connectionState = 'waiting';
+               // ! Each redirect leg gets its own maxResponseBytes budget
+               $Request->bytesReceived = 0;
+               $Request->interims = 0;
 
-               // @ Store resolved target for reconnection in request()
-               $Request->redirectTarget = $resolved;
-
-               // @ Check if redirect target is same host/port/scheme
-               $sameHost = ($resolved['host'] === ($HTTP_Client_CLI->host ?? '127.0.0.1'))
-                  && ($resolved['port'] === ($HTTP_Client_CLI->port ?? 80))
-                  && ($resolved['secure'] === ($HTTP_Client_CLI->secure !== null));
-
-               if ($sameHost && !$Response->closeConnection) {
-                  // @ Same host + keep-alive: reuse connection
-                  $Request->Response->reset();
-                  $Request->connectionState = 'waiting';
-                  // ! Each redirect leg gets its own maxResponseBytes budget
-                  $Request->bytesReceived = 0;
-                  $Request->interims = 0;
-
-                  $HTTP_Client_CLI->send($Request, $Connection);
-               }
-               else {
-                  // @ Close current connection; cross-origin reconnection is
-                  //   handled by the sync follow() loop. halt() (not a bare
-                  //   destroy) keeps batch siblings and scheduled retries alive.
-                  unset($HTTP_Client_CLI->pendingRequests[$socketId]);
-                  $Connection->close();
-                  $HTTP_Client_CLI->halt();
-               }
-
-               return;
+               $HTTP_Client_CLI->send($Request, $Connection);
             }
+            else {
+               // @ Another connection: the sync follow() loop re-dials. halt()
+               //   (not a bare destroy) keeps batch siblings and scheduled
+               //   retries alive.
+               $Request->connectionState = 'redirect';
+               $Request->redirectTarget = $target;
+               unset($HTTP_Client_CLI->pendingRequests[$socketId]);
+               $Connection->close();
+               $HTTP_Client_CLI->halt();
+            }
+
+            return;
          }
 
          // @ Response complete — branch by mode
@@ -810,6 +853,9 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                   $Request->completed = false;
                   $Request->bytesReceived = 0;
                   $Request->interims = 0;
+                  // ! A new logical request on the same object: its redirect
+                  //   budget starts over
+                  $Request->redirectCount = 0;
                   // @ Skip Response->reset() — a memo hit skips repopulation,
                   // so Response retains correct data from previous cycle
                   // $Request stays in pendingRequests[$socketId]
@@ -1046,14 +1092,35 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    }
 
    /**
-   * Resolve a redirect Location header value to host/port/path/secure.
+    * Build the current leg's origin, with a path, as a URI.
+    *
+    * @param string $path Origin-form path (and query), or `''`.
+    *
+    * @return null|URI null when the configured host is not a valid URI host.
+    */
+   private function anchor (string $path): null|URI
+   {
+      $host = $this->host ?? '127.0.0.1';
+      $scheme = $this->secure !== null ? 'https' : 'http';
+      $port = $this->port ?? 80;
+
+      // :
+      return URI::parse("{$scheme}://{$host}:{$port}{$path}");
+   }
+
+   /**
+    * Resolve a redirect `Location` against the current leg — RFC 3986 §5,
+    * through the shared ABI `URI` resolver.
     *
     * @param string $location The Location header value.
-    * @param string $currentURI The current request URI (for relative resolution).
+    * @param string $currentURI The current request-target (origin-form, or `*`).
     * @param string $method Effective method of the redirected request.
     * @param string $protocol Textual protocol bound to the Request state.
     *
-    * @return null|array{host: string, port: int, path: string, secure: bool}
+    * @return null|array{host: string, name: string, port: int, path: string, secure: bool, same: bool}
+    *         The target — `host` as dialed, `name` in comparison form, `same`
+    *         when scheme, host and port all match the current leg — or null
+    *         when it is not an http(s) URI this client may request.
     */
    private function resolve (
       string $location,
@@ -1062,59 +1129,166 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       string $protocol
    ): null|array
    {
-      $host = $this->host ?? '127.0.0.1';
-      $port = $this->port ?? 80;
-      $secure = $this->secure !== null;
+      // ! The current leg is the base — the asterisk-form targets the origin itself
+      $Base = $this->anchor($currentURI === '*' ? '' : $currentURI);
+      $Target = $Base?->resolve($location);
 
-      // # Fragments never travel in an HTTP request-target.
-      $fragment = strpos($location, '#');
-      if ($fragment !== false) {
-         $location = substr($location, 0, $fragment);
-      }
-      if ($location === '') {
-         return Request::check($method, $currentURI, $protocol)
-            ? ['host' => $host, 'port' => $port, 'path' => $currentURI, 'secure' => $secure]
-            : null;
-      }
-
-      $parsed = parse_url($location);
-
-      if ($parsed === false) {
+      // ? Only http(s) is requested as HTTP, never with credentials in the
+      //   authority (RFC 9110 §4.2.4) — anything else is not a target
+      if (
+         $Base === null
+         || $Target === null
+         || ($Target->scheme !== 'http' && $Target->scheme !== 'https')
+         || $Target->userinfo !== null
+      ) {
          return null;
       }
 
-      // @ Absolute URL (has scheme + host)
-      if (isset($parsed['scheme']) && isset($parsed['host'])) {
-         $host = $parsed['host'];
-         $secure = ($parsed['scheme'] === 'https');
-         $port = $parsed['port'] ?? ($secure ? 443 : 80);
-         $path = ($parsed['path'] ?? '/') . (isset($parsed['query']) ? '?' . $parsed['query'] : '');
-
-         return Request::check($method, $path, $protocol)
-            ? ['host' => $host, 'port' => $port, 'path' => $path, 'secure' => $secure]
-            : null;
+      // ! Request-target: an empty path is `*` for OPTIONS (RFC 9112 §3.2.4),
+      //   `/` otherwise (§3.2.1)
+      $path = match (true) {
+         $Target->path !== '' => $Target->path,
+         $method === 'OPTIONS' && $Target->query === null => '*',
+         default => '/',
+      };
+      if ($Target->query !== null) {
+         $path = "{$path}?{$Target->query}";
+      }
+      // ? Relative references compound hop after hop: the target is bounded
+      if (strlen($path) > self::TARGET_LIMIT || Request::check($method, $path, $protocol) === false) {
+         return null;
       }
 
-      // @ Absolute path
-      if (isset($parsed['path']) && ($parsed['path'][0] ?? '') === '/') {
-         $path = $parsed['path'] . (isset($parsed['query']) ? '?' . $parsed['query'] : '');
+      $secure = $Target->scheme === 'https';
+      $port = $Target->port ?? ($secure ? 443 : 80);
 
-         return Request::check($method, $path, $protocol)
-            ? ['host' => $host, 'port' => $port, 'path' => $path, 'secure' => $secure]
-            : null;
+      // :
+      return [
+         'host' => $Target->host,
+         'name' => $Target->hostname,
+         'port' => $port,
+         'path' => $path,
+         'secure' => $secure,
+         'same' => $Target->hostname === $Base->hostname
+            && $port === $Base->port
+            && $secure === ($this->secure !== null),
+      ];
+   }
+
+   /**
+    * Decide one redirect — the single decision point of HTTP/1.1 and HTTP/2,
+    * run on a complete response before anything about its Request moves.
+    *
+    * @param Request $Request The request whose Response is complete.
+    * @param bool $closing Whether its connection closes after this response.
+    *
+    * @return null|string|array{host: string, name: string, port: int, path: string, secure: bool, same: bool}
+    *         null: not followed, the Response is final; a string: the request
+    *         fails with code 0 and this status; the target: followed — the
+    *         Request is already rewritten for it.
+    */
+   private function redirect (Request $Request, bool $closing): null|string|array
+   {
+      // !
+      $Response = $Request->Response;
+      $code = $Response->code;
+
+      // ? Redirects disabled, or not a redirect: the 3xx is the answer
+      if (
+         $this->maxRedirects <= 0
+         || ($code !== 301 && $code !== 302 && $code !== 303 && $code !== 307 && $code !== 308)
+      ) {
+         return null;
       }
 
-      // @ Relative path: resolve against current URI's directory
-      $currentDir = '/';
-      $lastSlash = strrpos($currentURI, '/');
-      if ($lastSlash !== false) {
-         $currentDir = substr($currentURI, 0, $lastSlash + 1);
+      // ? No target named: the 3xx is the answer
+      $location = $Response->Header->get('Location');
+      if ($location === null || $location === '') {
+         return null;
       }
-      $path = $currentDir . $location;
 
-      return Request::check($method, $path, $protocol)
-         ? ['host' => $host, 'port' => $port, 'path' => $path, 'secure' => $secure]
-         : null;
+      // ! 301/302/303 turn into GET (HEAD stays HEAD); 307/308 keep the
+      //   method and the body (RFC 9110 §15.4)
+      $changing = $code === 301 || $code === 302 || $code === 303;
+      $method = $changing && $Request->method !== 'HEAD' ? 'GET' : $Request->method;
+
+      // ? A Location this client may not request is never a silent final 3xx
+      $target = $this->resolve($location, $Request->URI, $method, $Request->protocol);
+      if ($target === null) {
+         return 'Redirect Refused';
+      }
+
+      // ? The hop cap fails loudly
+      if ($Request->redirectCount >= $this->maxRedirects) {
+         return 'Too Many Redirects';
+      }
+
+      // ? A step down from https to http would put the headers and body a
+      //   307/308 replays on the wire in the clear — refused by default, per hop
+      if ($this->secure !== null && $target['secure'] === false && $this->allowInsecureRedirect === false) {
+         return 'Insecure Redirect';
+      }
+
+      // ? The caller's destination policy — a throw refuses too
+      if ($this->Redirection !== null) {
+         try {
+            $allowed = ($this->Redirection)($target['name'], $target['port'], $target['secure']);
+         }
+         catch (Throwable) {
+            $allowed = false;
+         }
+
+         if ($allowed !== true) {
+            return 'Redirect Refused';
+         }
+      }
+
+      // ? Event-driven and batch modes cannot re-dial: a hop the verdicts above
+      //   allow but that needs another connection is delivered as the final 3xx
+      if (($target['same'] === false || $closing) && ($this->eventDriven || $this->batching)) {
+         return null;
+      }
+
+      // @ Followed — only now does the Request change
+      $Request->redirectCount++;
+      if ($Request->originalMethod === '') {
+         $Request->originalMethod = $Request->method;
+         $Request->originalBody = $Request->Body->raw;
+      }
+      if ($changing) {
+         $Request->method = $method;
+         $Request->clear();
+      }
+
+      // ! Headers belong to the origin that received them (compared with the
+      //   previous leg, so a return trip never gets them back): another origin
+      //   receives only the allowlist, plus the fields of a replayed body
+      if ($target['same'] === false) {
+         $portable = [];
+         foreach ($this->crossOriginHeaders as $name) {
+            $portable[] = strtolower($name);
+         }
+         $replayed = $Request->Body->raw !== '';
+
+         foreach ($Request->Header->fields as $name => $value) {
+            $field = strtolower($name);
+
+            if (
+               in_array($field, $portable, true) === false
+               && ($replayed === false || in_array($field, self::REPRESENTATION, true) === false)
+            ) {
+               $Request->Header->remove($name);
+            }
+         }
+      }
+
+      // ! The URI changes in place, bypassing __invoke(), so the memoized
+      //   encoding must be dropped by hand (HCLI-5)
+      $Request->URI = $target['path'];
+      $Request->encoded = null;
+
+      // :
+      return $target;
    }
 
    /**
@@ -1663,66 +1837,29 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $Response->Body->downloaded = strlen($record['body']);
       $Response->Body->waiting = false;
 
-      // # Redirect (same RFC 7231 rules as the h1 path)
-      $code = $Response->code;
-      if (
-         $this->maxRedirects > 0
-         && $Request->redirectCount < $this->maxRedirects
-         && ($code === 301 || $code === 302 || $code === 303
-            || $code === 307 || $code === 308)
-      ) {
-         $location = $Response->Header->get('Location');
-         $redirectMethod = in_array($code, [301, 302, 303], true)
-            && $Request->method !== 'HEAD'
-            ? 'GET'
-            : $Request->method;
-         $resolved = $location !== null && $location !== ''
-            ? $this->resolve(
-               $location,
-               $Request->URI,
-               $redirectMethod,
-               $Request->protocol
-            )
-            : null;
-         if ($resolved !== null) {
-            $Request->redirectCount++;
+      // # Redirect — the same decision point as the HTTP/1.1 path
+      $target = $this->redirect($Request, closing: false);
+      if (is_string($target)) {
+         // ? Refused, past the hop cap or a downgrade: the request fails loudly
+         $Response->code = 0;
+         $Response->status = $target;
+      }
+      else if ($target !== null) {
+         if ($target['same']) {
+            // @ Same origin: a NEW stream on the same Session (the finished
+            //   stream and the new one cancel out in the pool accounting)
+            $Response->reset();
+            $Request->connectionState = 'waiting';
 
-            if ($Request->originalMethod === '') {
-               $Request->originalMethod = $Request->method;
-               $Request->originalBody = $Request->Body->raw;
+            if ($this->submit($Session, $socketId, $Request) !== 0) {
+               return;
             }
-
-            if ($code === 301 || $code === 302 || $code === 303) {
-               if ($Request->method !== 'HEAD') {
-                  $Request->method = 'GET';
-               }
-               $Request->clear();
-            }
-
-            // ! In-place URI change — drop the memoized encoding (HCLI-5)
-            $Request->URI = $resolved['path'];
-            $Request->encoded = null;
-
-            $sameHost = $resolved['host'] === ($this->host ?? '127.0.0.1')
-               && $resolved['port'] === ($this->port ?? 80)
-               && $resolved['secure'] === ($this->secure !== null);
-
-            if ($sameHost) {
-               // @ Same origin: a NEW stream on the same Session (the finished
-               //   stream and the new one cancel out in the pool accounting)
-               $Response->reset();
-               $Request->connectionState = 'waiting';
-
-               if ($this->submit($Session, $socketId, $Request) !== 0) {
-                  return;
-               }
-            }
-
-            // @ Cross-origin (or no capacity): finish here — the sync
-            //   follow() loop reconfigures and re-dials
-            $Request->connectionState = 'redirect';
-            $Request->redirectTarget = $resolved;
          }
+
+         // @ Cross-origin (or no capacity): finish here — the sync
+         //   follow() loop reconfigures and re-dials
+         $Request->connectionState = 'redirect';
+         $Request->redirectTarget = $target;
       }
 
       // # Completion
@@ -2019,47 +2156,10 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          // @@ Each leg clears `redirectTarget`; a further hop re-populates it
          /** @phpstan-ignore notIdentical.alwaysTrue */
          while ($Request->connectionState === 'redirect' && $Request->redirectTarget !== null) {
+            // ! The hop was decided — policy, downgrade, headers — by redirect()
+            //   before it got here; this loop only re-dials
             $resolved = $Request->redirectTarget;
             $Request->redirectTarget = null;
-
-            // ? A step down from https to http would put the headers and body a
-            //   307/308 replays on the wire in the clear — refuse it by default.
-            //   Tested per hop, so a downgrade mid-chain is caught too.
-            if (
-               $this->secure !== null
-               && $resolved['secure'] === false
-               && $this->allowInsecureRedirect === false
-            ) {
-               $Request->Response->code = 0;
-               $Request->Response->status = 'Insecure Redirect';
-               $Request->connectionState = 'idle';
-               $Request->completed = true;
-               $this->unwatch($Request);
-
-               return;
-            }
-
-            // ! Credentials belong to the origin that issued them, so they survive
-            //   only a hop that stays on the same host without weakening the
-            //   transport. An http -> https upgrade counts as staying: it is the
-            //   most common redirect there is and it necessarily moves 80 -> 443,
-            //   so the port and scheme comparisons are waived for it alone.
-            //   Compared before `configure()` re-targets the client.
-            $upgrade = $this->secure === null && $resolved['secure'];
-            $sameOrigin = $resolved['host'] === ($this->host ?? '127.0.0.1')
-               && ($upgrade || $resolved['port'] === ($this->port ?? 80))
-               && ($upgrade || $resolved['secure'] === ($this->secure !== null));
-
-            // @ Drop them as curl, Python requests and Go net/http do
-            if ($sameOrigin === false) {
-               // ! `Header::remove()` matches the stored name verbatim, so the
-               //   field set is walked instead of removing three fixed spellings
-               foreach ($Request->Header->fields as $name => $value) {
-                  if (in_array(strtolower($name), self::CREDENTIAL_HEADERS, true)) {
-                     $Request->Header->remove($name);
-                  }
-               }
-            }
 
             $Request->Response->reset();
             $Request->connectionState = 'waiting';
@@ -2068,12 +2168,20 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             $Request->interims = 0;
             $Request->reused = false;
 
-            // ! Only the peer name belongs to the new origin — every other option
-            //   is the caller's and survives the hop
+            // ! The same origin keeps the leg's TLS context. Another one gets the
+            //   caller's options minus those scoped to the origin they were
+            //   configured for (client identity, loosened verification, SNI):
+            //   a CA bundle or a pinned fingerprint still apply there
             $secure = null;
-            if ($resolved['secure']) {
+            if ($resolved['same']) {
+               $secure = $this->secure;
+            }
+            else if ($resolved['secure']) {
                $secure = $configured ?? [];
-               $secure['peer_name'] = $resolved['host'];
+               foreach (self::ORIGIN_OPTIONS as $option) {
+                  unset($secure[$option]);
+               }
+               $secure['peer_name'] = $resolved['name'];
             }
 
             // @ Reconfigure for the new target (retires the previous origin's pool)
@@ -2207,6 +2315,8 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          || $Request->Response->status === 'Request Header Fields Too Large'
          || $Request->Response->status === 'Insecure Redirect'
          || $Request->Response->status === 'Redirect Failed'
+         || $Request->Response->status === 'Redirect Refused'
+         || $Request->Response->status === 'Too Many Redirects'
       ) {
          return false;
       }

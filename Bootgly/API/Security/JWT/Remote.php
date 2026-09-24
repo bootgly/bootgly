@@ -28,14 +28,10 @@ use function min;
 use function parse_url;
 use function preg_match;
 use function preg_match_all;
-use function str_starts_with;
 use function strcasecmp;
 use function stream_context_create;
 use function strlen;
-use function strpos;
-use function strrpos;
 use function strtolower;
-use function substr;
 use function time;
 use function trim;
 use Closure;
@@ -43,6 +39,7 @@ use InvalidArgumentException;
 use JsonException;
 use Throwable;
 
+use Bootgly\ABI\Data\URI;
 use Bootgly\API\Security\JWT\Remote\Response;
 
 
@@ -566,10 +563,14 @@ class Remote implements KeyResolver
             return Failures::Network;
          }
 
-         $URI = $this->follow($URI, $location);
-         if ($URI === null) {
+         // ! RFC 3986 §5 against the hop that answered; a target that is not an
+         //   absolute hierarchical URI with a host (`g:h`, `https:x`) ends the
+         //   fetch — PHP's wrappers would read `https:x` as a local file
+         $Target = URI::parse($URI)?->resolve($location);
+         if ($Target === null) {
             return Failures::Network;
          }
+         $URI = (string) $Target;
 
          $redirected++;
       }
@@ -593,130 +594,6 @@ class Remote implements KeyResolver
       }
 
       return null;
-   }
-
-   /**
-    * Resolve an HTTP Location URI-reference against its current request URI.
-    */
-   private function follow (string $base, string $location): null|string
-   {
-      $location = trim($location);
-      if (preg_match('/[\x00-\x20\x7f]/', $location) === 1) {
-         return null;
-      }
-
-      // # Fragments never travel in an HTTP request target.
-      $fragment = strpos($location, '#');
-      if ($fragment !== false) {
-         $location = substr($location, 0, $fragment);
-      }
-      if ($location === '') {
-         $fragment = strpos($base, '#');
-
-         return $fragment === false ? $base : substr($base, 0, $fragment);
-      }
-
-      $parts = parse_url($base);
-      if (
-         is_array($parts) === false
-         || is_string($parts['scheme'] ?? null) === false
-         || preg_match('/^([a-z][a-z0-9+.-]*):\/\/([^\/?#]*)/i', $base, $matches) !== 1
-      ) {
-         return null;
-      }
-
-      $scheme = strtolower($matches[1]);
-      $origin = "{$scheme}://{$matches[2]}";
-      $basePath = is_string($parts['path'] ?? null) && $parts['path'] !== ''
-         ? $parts['path']
-         : '/';
-
-      // # Hierarchical absolute and network-path references replace the
-      //   authority, but their paths still require RFC dot-segment removal.
-      if (
-         preg_match(
-            '/^([a-z][a-z0-9+.-]*):\/\/([^\/?#]*)([^?#]*)(\?[^#]*)?$/i',
-            $location,
-            $reference
-         ) === 1
-      ) {
-         $origin = "{$reference[1]}://{$reference[2]}";
-         $path = $reference[3];
-         $query = $reference[4] ?? '';
-      }
-      elseif (preg_match('/^[a-z][a-z0-9+.-]*:/i', $location) === 1) {
-         // # Opaque absolute URI (`g:h`) has no hierarchical path to merge.
-         return $location;
-      }
-      elseif (
-         preg_match('/^\/\/([^\/?#]*)([^?#]*)(\?[^#]*)?$/', $location, $reference) === 1
-      ) {
-         $origin = "{$scheme}://{$reference[1]}";
-         $path = $reference[2];
-         $query = $reference[3] ?? '';
-      }
-      else {
-         // # Query-only reference keeps the current path exactly.
-         if (str_starts_with($location, '?')) {
-            return "{$origin}{$basePath}{$location}";
-         }
-
-         $question = strpos($location, '?');
-         $path = $question === false ? $location : substr($location, 0, $question);
-         $query = $question === false ? '' : substr($location, $question);
-
-         if (str_starts_with($path, '/') === false) {
-            $slash = strrpos($basePath, '/');
-            $directory = $slash === false ? '/' : substr($basePath, 0, $slash + 1);
-            $path = $directory . $path;
-         }
-      }
-
-      // # RFC 3986 §5.2.4 remove_dot_segments. Moving path segments as raw
-      //   substrings preserves meaningful consecutive empty segments (`//`).
-      $input = $path;
-      $path = '';
-      while ($input !== '') {
-         if (str_starts_with($input, '../')) {
-            $input = substr($input, 3);
-         }
-         elseif (str_starts_with($input, './')) {
-            $input = substr($input, 2);
-         }
-         elseif (str_starts_with($input, '/./')) {
-            $input = '/' . substr($input, 3);
-         }
-         elseif ($input === '/.') {
-            $input = '/';
-         }
-         elseif (str_starts_with($input, '/../')) {
-            $input = '/' . substr($input, 4);
-            $slash = strrpos($path, '/');
-            $path = $slash === false ? '' : substr($path, 0, $slash);
-         }
-         elseif ($input === '/..') {
-            $input = '/';
-            $slash = strrpos($path, '/');
-            $path = $slash === false ? '' : substr($path, 0, $slash);
-         }
-         elseif ($input === '.' || $input === '..') {
-            $input = '';
-         }
-         else {
-            $offset = str_starts_with($input, '/') ? 1 : 0;
-            $slash = strpos($input, '/', $offset);
-            if ($slash === false) {
-               $path .= $input;
-               $input = '';
-            }
-            else {
-               $path .= substr($input, 0, $slash);
-               $input = substr($input, $slash);
-            }
-         }
-      }
-
-      return "{$origin}{$path}{$query}";
    }
 
    /**
