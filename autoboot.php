@@ -26,6 +26,13 @@ if (defined('BOOTGLY_STORAGE_BASE') === false) {
 if (defined('BOOTGLY_STORAGE_DIR') === false) {
    define('BOOTGLY_STORAGE_DIR', BOOTGLY_STORAGE_BASE . DIRECTORY_SEPARATOR);
 }
+// ? Where the HTTP server streams multipart uploads (`tmp_name`) — one source for the decoder
+//   and the validators. Derived, never pre-defined: the server owns this folder and deletes its
+//   files at every start and worker spawn (move it with `BOOTGLY_STORAGE_DIR`)
+if (defined('BOOTGLY_UPLOADS_DIR') === true) {
+   throw new LogicException('BOOTGLY_UPLOADS_DIR cannot be pre-defined: it derives from BOOTGLY_STORAGE_DIR, and the server deletes the files in it.');
+}
+define('BOOTGLY_UPLOADS_DIR', BOOTGLY_STORAGE_DIR . 'temp/files/downloaded/');
 
 define('BOOTGLY_VERSION', '1.1.0-dev');
 

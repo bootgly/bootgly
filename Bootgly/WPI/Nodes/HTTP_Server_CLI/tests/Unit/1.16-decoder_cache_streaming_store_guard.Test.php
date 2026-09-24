@@ -71,6 +71,8 @@ return new Test(
       //   miss path (`$WPI->Request = ...`) land in one observable cell.
       HTTP_Server_CLI::$Request = new Request;
       $WPI->Request = &HTTP_Server_CLI::$Request;
+      // ! The temp files each decode streams its upload into — removed below
+      $temps = [];
 
       try {
          $Connection = new U116Connection($Socket);
@@ -100,6 +102,7 @@ return new Test(
          $state1 = $Decoder->decode($Package, $wire, $size);
          /** @var Request $First */
          $First = $WPI->Request;
+         $temps[] = $First->files['f']['tmp_name'] ?? '';
 
          yield new Assertion(
             description: 'The first multipart decode completes with its upload',
@@ -114,6 +117,7 @@ return new Test(
          $state2 = $Decoder->decode($Package, $wire, $size);
          /** @var Request $Second */
          $Second = $WPI->Request;
+         $temps[] = $Second->files['f']['tmp_name'] ?? '';
 
          yield new Assertion(
             description: 'The byte-identical repeat still decodes its upload (no template adoption)',
@@ -123,6 +127,11 @@ return new Test(
             ->assert();
       }
       finally {
+         foreach ($temps as $temp) {
+            if (is_string($temp) && $temp !== '') {
+               @unlink($temp);
+            }
+         }
          unset($WPI->Request); // break the static alias installed above
          if ($OldRequest !== null) {
             $WPI->Request = $OldRequest;

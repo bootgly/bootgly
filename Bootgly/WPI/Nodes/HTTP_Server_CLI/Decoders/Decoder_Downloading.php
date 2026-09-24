@@ -11,7 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
 
-use const BOOTGLY_STORAGE_DIR;
+use const BOOTGLY_UPLOADS_DIR;
 use const PHP_MAXPATHLEN;
 use const UPLOAD_ERR_CANT_WRITE;
 use const UPLOAD_ERR_FORM_SIZE;
@@ -37,10 +37,10 @@ use function ltrim;
 use function min;
 use function mkdir;
 use function parse_str;
-use function preg_match;
 use function preg_replace;
 use function random_bytes;
 use function str_starts_with;
+use function strcasecmp;
 use function strcspn;
 use function strlen;
 use function strpos;
@@ -214,6 +214,20 @@ class Decoder_Downloading extends Decoders implements Disconnecting
    private const int DELIMITER_INCOMPLETE = -2;
    private const int DELIMITER_CLOSED     = -3;
    private const string DELIMITER_PADDING = " \t";
+   // # Part headers (RFC 9110 §5.6, RFC 7578 §4.2)
+   /** `tchar` — field names, parameter names and unquoted parameter values. */
+   private const string TCHAR =
+      '!#$%&\'*+-.^_`|~'
+      . '0123456789'
+      . 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+      . 'abcdefghijklmnopqrstuvwxyz';
+   /** Control octets a field value never carries (HTAB aside). */
+   private const string CTL =
+      "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x0A\x0B\x0C\x0D\x0E\x0F"
+      . "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F"
+      . "\x7F";
+   /** `OWS` — optional whitespace around field values and parameter delimiters. */
+   private const string OWS = " \t";
 
 
    public function init (string $boundary): void
@@ -627,6 +641,165 @@ class Decoder_Downloading extends Decoders implements Disconnecting
    }
 
    /**
+    * Parse one multipart part's header block — RFC 7578 §4.2 over the
+    * RFC 9110 field-line grammar.
+    *
+    * Every line must be a field (`token ":" OWS value OWS`, no control octets
+    * but HTAB). `Content-Disposition` must be `form-data` with a non-empty
+    * `name`; its parameters come in any order, as tokens or quoted strings,
+    * and `filename*` or any other parameter is ignored. A repeated
+    * `Content-Disposition`, `Content-Type`, `name` or `filename` is refused:
+    * parsers disagree on which copy wins.
+    *
+    * @return null|array{name:string,filename:null|string,type:string}
+    *         null when the block does not describe a valid form-data part.
+    */
+   private static function parse (string $block): null|array
+   {
+      // !
+      $disposition = null;
+      $type = null;
+
+      // @@ One field line at a time
+      foreach (explode("\r\n", $block) as $line) {
+         $colon = strpos($line, ':');
+
+         // ? A field name is a non-empty token — a folded, empty or
+         //   colon-less line is not a field
+         if ($colon === false || $colon === 0 || strspn($line, self::TCHAR) !== $colon) {
+            return null;
+         }
+
+         $value = trim(substr($line, $colon + 1), self::OWS);
+         if (strcspn($value, self::CTL) !== strlen($value)) {
+            return null;
+         }
+
+         switch (strtolower(substr($line, 0, $colon))) {
+            case 'content-disposition':
+               if ($disposition !== null) {
+                  return null;
+               }
+               $disposition = $value;
+               break;
+            case 'content-type':
+               if ($type !== null) {
+                  return null;
+               }
+               $type = $value;
+               break;
+         }
+      }
+
+      // ? Every part carries a form-data disposition
+      if ($disposition === null) {
+         return null;
+      }
+      $length = strlen($disposition);
+      $offset = strspn($disposition, self::TCHAR);
+      if (strcasecmp(substr($disposition, 0, $offset), 'form-data') !== 0) {
+         return null;
+      }
+
+      $name = null;
+      $filename = null;
+
+      // @@ One `;`-introduced parameter per iteration
+      while (true) {
+         $offset += strspn($disposition, self::OWS, $offset);
+         if ($offset >= $length) {
+            break;
+         }
+         if ($disposition[$offset] !== ';') {
+            return null;
+         }
+         $offset++;
+         $offset += strspn($disposition, self::OWS, $offset);
+
+         // ? An empty parameter — `;;` or a trailing `;`
+         if ($offset >= $length || $disposition[$offset] === ';') {
+            continue;
+         }
+
+         // ! parameter-name = token, then `=` with no whitespace around it
+         $size = strspn($disposition, self::TCHAR, $offset);
+         if ($size === 0 || ($disposition[$offset + $size] ?? '') !== '=') {
+            return null;
+         }
+         $parameter = strtolower(substr($disposition, $offset, $size));
+         $offset += $size + 1;
+
+         // # quoted-string
+         if (($disposition[$offset] ?? '') === '"') {
+            $offset++;
+            $content = '';
+            $closed = false;
+
+            while ($offset < $length) {
+               $run = strcspn($disposition, '"\\', $offset);
+               $content .= substr($disposition, $offset, $run);
+               $offset += $run;
+
+               $octet = $disposition[$offset] ?? '';
+               if ($octet === '"') {
+                  $closed = true;
+                  $offset++;
+                  break;
+               }
+               if ($octet === '\\') {
+                  // ! Only `\"` and `\\` are unescaped: a Windows path keeps its
+                  //   backslashes for the filename sanitizer
+                  $next = $disposition[$offset + 1] ?? '';
+                  if ($next === '"' || $next === '\\') {
+                     $content .= $next;
+                     $offset += 2;
+                     continue;
+                  }
+                  $content .= $octet;
+                  $offset++;
+               }
+            }
+
+            // ? An unterminated quoted-string
+            if ($closed === false) {
+               return null;
+            }
+         }
+         // # token
+         else {
+            $size = strspn($disposition, self::TCHAR, $offset);
+            if ($size === 0) {
+               return null;
+            }
+            $content = substr($disposition, $offset, $size);
+            $offset += $size;
+         }
+
+         // @ Keep what the part needs — a repeat is ambiguous
+         if ($parameter === 'name') {
+            if ($name !== null) {
+               return null;
+            }
+            $name = $content;
+         }
+         else if ($parameter === 'filename') {
+            if ($filename !== null) {
+               return null;
+            }
+            $filename = $content;
+         }
+      }
+
+      // ? ... and a non-empty `name`
+      if ($name === null || $name === '') {
+         return null;
+      }
+
+      // :
+      return ['name' => $name, 'filename' => $filename, 'type' => $type ?? ''];
+   }
+
+   /**
     * Re-price this decoder against the worker-wide budget. False means the
     * current footprint does not fit and the caller must reject the request.
     */
@@ -891,78 +1064,68 @@ class Decoder_Downloading extends Decoders implements Disconnecting
                $remainder = substr($this->headerBuffer, $headerEnd + 4);
                $this->headerBuffer = '';
 
-               // @ Parse headers
-               $contentLines = explode("\r\n", trim($headersRaw));
+               // @ Parse the part's header block by its grammar (RFC 7578 §4.2)
+               $part = self::parse($headersRaw);
+
+               // ? A malformed, unnamed or ambiguous part is refused before
+               //   any temp file exists for it
+               if ($part === null) {
+                  $reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+                  $data = '';
+                  break;
+               }
 
                $uploadKey = false;
                $file = [];
                $isFile = false;
                $fieldName = '';
 
-               foreach ($contentLines as $contentLine) {
-                  if (! strpos($contentLine, ': ')) {
-                     continue;
+               // @ File
+               if ($part['filename'] !== null) {
+                  $isFile = true;
+                  $uploadKey = $part['name'];
+
+                  // ? An empty RAW filename is a browser's "no file
+                  //   chosen" part — commit the no-file record PHP's
+                  //   rfc1867 parser produces for the same bytes. The
+                  //   pre-set error keeps every filesystem step below
+                  //   behind its `error === 0` guard, so no temp
+                  //   inode is ever created for it. Only the raw
+                  //   value discriminates: a non-empty filename that
+                  //   SANITIZES down to empty still takes the
+                  //   `'upload'` placeholder path.
+                  if ($part['filename'] === '') {
+                     $file = [
+                        'name' => '',
+                        'tmp_name' => '',
+                        'size' => 0,
+                        'error' => UPLOAD_ERR_NO_FILE,
+                        'type' => '',
+                     ];
                   }
-
-                  @[$key, $value] = explode(': ', $contentLine, 2);
-
-                  switch (strtolower($key)) {
-                     case 'content-disposition':
-                        // @ File
-                        if (preg_match('/name="(.*?)"; filename="(.*?)"/i', $value, $match)) {
-                           $isFile = true;
-                           $uploadKey = $match[1];
-
-                           // ? An empty RAW filename is a browser's "no file
-                           //   chosen" part — commit the no-file record PHP's
-                           //   rfc1867 parser produces for the same bytes. The
-                           //   pre-set error keeps every filesystem step below
-                           //   behind its `error === 0` guard, so no temp
-                           //   inode is ever created for it. Only the raw
-                           //   value discriminates: a non-empty filename that
-                           //   SANITIZES down to empty still takes the
-                           //   `'upload'` placeholder path.
-                           if ($match[2] === '') {
-                              $file = [
-                                 'name' => '',
-                                 'tmp_name' => '',
-                                 'size' => 0,
-                                 'error' => UPLOAD_ERR_NO_FILE,
-                                 'type' => '',
-                              ];
-                              break;
-                           }
-
-                           // ! Sanitize filename: strip directory traversal and restrict to safe characters
-                           $rawFilename = basename($match[2]);
-                           $safeFilename = (string) preg_replace('/[^\w.\- ]/', '_', $rawFilename);
-                           // ! Hidden-dot hardening: reject leading dots like `.htaccess`
-                           $safeFilename = ltrim($safeFilename, ". \t");
-                           if ($safeFilename === '') {
-                              $safeFilename = 'upload';
-                           }
-                           $file = [
-                              'name' => $safeFilename,
-                              'tmp_name' => '',
-                              'size' => 0,
-                              'error' => 0,
-                              'type' => '',
-                           ];
-                        }
-                        // @ Text field
-                        else if (preg_match('/name="(.*?)"$/', $value, $match)) {
-                           $fieldName = $match[1];
-                        }
-
-                        break;
-                     case 'content-type':
-                        // ? A record already carrying an error keeps `type`
-                        //   empty — $_FILES parity for the no-file part.
-                        if (($file['error'] ?? 0) === 0) {
-                           $file['type'] = trim($value);
-                        }
-                        break;
+                  else {
+                     // ! Sanitize filename: strip directory traversal and restrict to safe characters
+                     $rawFilename = basename($part['filename']);
+                     $safeFilename = (string) preg_replace('/[^\w.\- ]/', '_', $rawFilename);
+                     // ! Hidden-dot hardening: reject leading dots like `.htaccess`
+                     $safeFilename = ltrim($safeFilename, ". \t");
+                     if ($safeFilename === '') {
+                        $safeFilename = 'upload';
+                     }
+                     $file = [
+                        'name' => $safeFilename,
+                        'tmp_name' => '',
+                        'size' => 0,
+                        'error' => 0,
+                        // ! The part's own Content-Type, whatever the order
+                        //   its header lines came in (DEC-4) — a client hint
+                        'type' => $part['type'],
+                     ];
                   }
+               }
+               // @ Text field
+               else {
+                  $fieldName = $part['name'];
                }
 
                if ($isFile && $uploadKey !== false) {
@@ -982,8 +1145,6 @@ class Decoder_Downloading extends Decoders implements Disconnecting
                      $data = '';
                      break;
                   }
-
-                  $tempUploadedDir = BOOTGLY_STORAGE_DIR . 'temp/files/downloaded/';
 
                   // ? Price the record BEFORE retaining it: the key, the
                   //   client-supplied strings, every name component
@@ -1036,22 +1197,22 @@ class Decoder_Downloading extends Decoders implements Disconnecting
                      //   guards below already read the same condition.
                      if (
                         ($file['error'] ?? 0) === 0
-                        && ! is_dir($tempUploadedDir)
-                        && ! mkdir($tempUploadedDir, 0700, true)
-                        && ! is_dir($tempUploadedDir)
+                        && ! is_dir(BOOTGLY_UPLOADS_DIR)
+                        && ! mkdir(BOOTGLY_UPLOADS_DIR, 0700, true)
+                        && ! is_dir(BOOTGLY_UPLOADS_DIR)
                      ) {
                         $file['error'] = UPLOAD_ERR_CANT_WRITE;
                      }
 
                      if (($file['error'] ?? 0) === 0) {
-                        $freeSpace = disk_free_space($tempUploadedDir);
+                        $freeSpace = disk_free_space(BOOTGLY_UPLOADS_DIR);
                         if ($freeSpace !== false && $freeSpace < 1048576) {
                            $file['error'] = UPLOAD_ERR_CANT_WRITE;
                         }
                      }
 
                      if (($file['error'] ?? 0) === 0) {
-                        $tempFile = $tempUploadedDir
+                        $tempFile = BOOTGLY_UPLOADS_DIR
                            . bin2hex(random_bytes(16));
 
                         $handle = fopen($tempFile, 'x+b');
@@ -1125,7 +1286,10 @@ class Decoder_Downloading extends Decoders implements Disconnecting
 
                   $this->state = self::STATE_PART_BODY_FILE;
                }
-               else if ($fieldName !== '') {
+               // ! `parse()` names every part it returns: a part is a file or a
+               //   field — never skipped, which would read its value as the
+               //   next part's headers
+               else {
                   if ($this->fieldsCount >= Server\Request::$maxMultipartFields) {
                      $reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
                      $data = '';
@@ -1548,7 +1712,7 @@ class Decoder_Downloading extends Decoders implements Disconnecting
       $this->bytesSinceDiskCheck += $chunkLength;
       if ($this->bytesSinceDiskCheck >= 1048576) {
          try {
-            $freeSpace = disk_free_space(BOOTGLY_STORAGE_DIR . 'temp/files/downloaded/');
+            $freeSpace = disk_free_space(BOOTGLY_UPLOADS_DIR);
             if ($freeSpace !== false && $freeSpace < 1048576) {
                $file['error'] = UPLOAD_ERR_CANT_WRITE;
                $this->close();

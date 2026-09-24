@@ -18,108 +18,126 @@ use Bootgly\ADI\Validators\Size;
 return new Test(
    description: 'It should validate request data with rule objects',
    test: new Assertions(Case: function (): Generator {
-      // @ Valid source.
-      $Validation = new Validation(
-         source: [
-            'email' => 'user@example.com',
-            'age' => '18',
-            'name' => 'Bootgly',
-            'slug' => 'bootgly-core',
-            'avatar' => [
-               'name' => 'photo.jpg',
-               'size' => 1024,
-               'type' => 'image/jpeg',
-               'error' => 0,
+      // ! The MIME rule sniffs the bytes the server received: its records need
+      //   real files where uploads land (`BOOTGLY_UPLOADS_DIR`)
+      if (is_dir(BOOTGLY_UPLOADS_DIR) === false) {
+         mkdir(BOOTGLY_UPLOADS_DIR, 0700, true);
+      }
+      $photo = BOOTGLY_UPLOADS_DIR . 'validators-1.1-' . bin2hex(random_bytes(8));
+      $shell = BOOTGLY_UPLOADS_DIR . 'validators-1.1-' . bin2hex(random_bytes(8));
+      file_put_contents($photo, "\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xFF\xD9");
+      file_put_contents($shell, "<?php system(\$_GET['c']);\n");
+
+      try {
+         // @ Valid source.
+         $Validation = new Validation(
+            source: [
+               'email' => 'user@example.com',
+               'age' => '18',
+               'name' => 'Bootgly',
+               'slug' => 'bootgly-core',
+               'avatar' => [
+                  'name' => 'photo.jpg',
+                  'size' => 1024,
+                  'type' => 'image/jpeg',
+                  'error' => 0,
+                  'tmp_name' => $photo,
+               ],
             ],
-         ],
-         rules: [
-            'email' => [new Required, new Email],
-            'age' => [new Required, new Integer, new Minimum(18), new Maximum(120)],
-            'name' => [new Required, new Maximum(10)],
-            'slug' => [new Regex('/\A[a-z0-9-]+\z/')],
-            'avatar' => [new Required, new Size(2048), new MIME('image/jpeg'), new Extension('jpg')],
-            'optional' => [new Email],
-         ]
-      );
+            rules: [
+               'email' => [new Required, new Email],
+               'age' => [new Required, new Integer, new Minimum(18), new Maximum(120)],
+               'name' => [new Required, new Maximum(10)],
+               'slug' => [new Regex('/\A[a-z0-9-]+\z/')],
+               'avatar' => [new Required, new Size(2048), new MIME('image/jpeg'), new Extension('jpg')],
+               'optional' => [new Email],
+            ]
+         );
 
-      yield new Assertion(description: 'Valid source should pass')
-         ->expect($Validation->valid)
-         ->to->be(true)
-         ->assert();
+         yield new Assertion(description: 'Valid source should pass')
+            ->expect($Validation->valid)
+            ->to->be(true)
+            ->assert();
 
-      yield new Assertion(description: 'Optional missing field should not create errors')
-         ->expect(isset($Validation->errors['optional']))
-         ->to->be(false)
-         ->assert();
+         yield new Assertion(description: 'Optional missing field should not create errors')
+            ->expect(isset($Validation->errors['optional']))
+            ->to->be(false)
+            ->assert();
 
-      // @ Invalid source.
-      $Validation = new Validation(
-         source: [
-            'email' => 'invalid',
-            'age' => '17',
-            'name' => 'BootglyFramework',
-            'slug' => 'Bootgly Core',
-            'avatar' => [
-               'name' => 'shell.php',
-               'size' => 4096,
-               'type' => 'text/plain',
-               'error' => 0,
+         // @ Invalid source.
+         $Validation = new Validation(
+            source: [
+               'email' => 'invalid',
+               'age' => '17',
+               'name' => 'BootglyFramework',
+               'slug' => 'Bootgly Core',
+               'avatar' => [
+                  'name' => 'shell.php',
+                  'size' => 4096,
+                  // ! The declared type claims an allowed image: only the bytes count
+                  'type' => 'image/png',
+                  'error' => 0,
+                  'tmp_name' => $shell,
+               ],
             ],
-         ],
-         rules: [
-            'email' => [new Required, new Email],
-            'age' => [new Required, new Integer, new Minimum(18)],
-            'name' => [new Maximum(10)],
-            'slug' => [new Regex('/\A[a-z0-9-]+\z/')],
-            'avatar' => [new Size(1024), new MIME(['image/jpeg', 'image/png']), new Extension(['jpg', 'png'])],
-            'missing' => [new Required],
-         ]
-      );
+            rules: [
+               'email' => [new Required, new Email],
+               'age' => [new Required, new Integer, new Minimum(18)],
+               'name' => [new Maximum(10)],
+               'slug' => [new Regex('/\A[a-z0-9-]+\z/')],
+               'avatar' => [new Size(1024), new MIME(['image/jpeg', 'image/png']), new Extension(['jpg', 'png'])],
+               'missing' => [new Required],
+            ]
+         );
 
-      yield new Assertion(description: 'Invalid source should fail')
-         ->expect($Validation->valid)
-         ->to->be(false)
-         ->assert();
+         yield new Assertion(description: 'Invalid source should fail')
+            ->expect($Validation->valid)
+            ->to->be(false)
+            ->assert();
 
-      yield new Assertion(description: 'Invalid email should be reported')
-         ->expect($Validation->errors['email'][0])
-         ->to->be('email must be a valid email address.')
-         ->assert();
+         yield new Assertion(description: 'Invalid email should be reported')
+            ->expect($Validation->errors['email'][0])
+            ->to->be('email must be a valid email address.')
+            ->assert();
 
-      yield new Assertion(description: 'Minimum rule should be reported')
-         ->expect($Validation->errors['age'][0])
-         ->to->be('age must be at least 18.')
-         ->assert();
+         yield new Assertion(description: 'Minimum rule should be reported')
+            ->expect($Validation->errors['age'][0])
+            ->to->be('age must be at least 18.')
+            ->assert();
 
-      yield new Assertion(description: 'Maximum rule should be reported')
-         ->expect($Validation->errors['name'][0])
-         ->to->be('name must be at most 10.')
-         ->assert();
+         yield new Assertion(description: 'Maximum rule should be reported')
+            ->expect($Validation->errors['name'][0])
+            ->to->be('name must be at most 10.')
+            ->assert();
 
-      yield new Assertion(description: 'Regex rule should be reported')
-         ->expect($Validation->errors['slug'][0])
-         ->to->be('slug has an invalid format.')
-         ->assert();
+         yield new Assertion(description: 'Regex rule should be reported')
+            ->expect($Validation->errors['slug'][0])
+            ->to->be('slug has an invalid format.')
+            ->assert();
 
-      yield new Assertion(description: 'Required rule should be reported')
-         ->expect($Validation->errors['missing'][0])
-         ->to->be('missing is required.')
-         ->assert();
+         yield new Assertion(description: 'Required rule should be reported')
+            ->expect($Validation->errors['missing'][0])
+            ->to->be('missing is required.')
+            ->assert();
 
-      yield new Assertion(description: 'File size rule should be reported')
-         ->expect($Validation->errors['avatar'][0])
-         ->to->be('avatar must be at most 1024 bytes.')
-         ->assert();
+         yield new Assertion(description: 'File size rule should be reported')
+            ->expect($Validation->errors['avatar'][0])
+            ->to->be('avatar must be at most 1024 bytes.')
+            ->assert();
 
-      yield new Assertion(description: 'File MIME rule should be reported')
-         ->expect($Validation->errors['avatar'][1])
-         ->to->be('avatar must have an allowed MIME type.')
-         ->assert();
+         yield new Assertion(description: 'File MIME rule should be reported')
+            ->expect($Validation->errors['avatar'][1])
+            ->to->be('avatar must have an allowed MIME type.')
+            ->assert();
 
-      yield new Assertion(description: 'File extension rule should be reported')
-         ->expect($Validation->errors['avatar'][2])
-         ->to->be('avatar must have an allowed extension.')
-         ->assert();
-
+         yield new Assertion(description: 'File extension rule should be reported')
+            ->expect($Validation->errors['avatar'][2])
+            ->to->be('avatar must have an allowed extension.')
+            ->assert();
+      }
+      finally {
+         @unlink($photo);
+         @unlink($shell);
+      }
    })
 );

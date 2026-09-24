@@ -89,16 +89,22 @@ CLI tooling runs natively — use Docker for everything else.
 
 #### PHP Packages
 
-- `php-cli` ⚠️
-- `php-openssl` ⚠️
-- `php-readline` ⚠️
-- `php-mbstring` 👍
+- `php-cli` ⚠️ — runs everything: the `bootgly` command, the servers (WPI) and the Console platform (CLI)
+- `php-openssl` ⚠️ — TLS in the servers and clients, JWT, the Encrypter and ACME certificates
+- `php-readline` ⚠️ — interactive terminal input: Console prompts and the servers' interactive mode
+- `php-pcntl` ⚠️ (Linux) — workers, forks and signals of the servers and the Console platform
+- `php-posix` ⚠️ (Linux) — process control and privileges: worker processes, user/group switching
+- `php-mbstring` 👍 — multibyte text in the CLI UI components (a built-in fallback covers the basics)
+- `php-fileinfo` 🧩 — the MIME upload validator (`ADI/Validators/MIME`), which sniffs the uploaded bytes
+- `php-sqlite3` 🧩 — the SQLite database driver (`ADI/Databases/SQL/Drivers/SQLite`)
 
 --
 
 ⚠️ = Required
 
 👍 = Recommended
+
+🧩 = Required only by the feature that uses it
 
 ---
 

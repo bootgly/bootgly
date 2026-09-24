@@ -422,6 +422,8 @@ return new Suite(
          '1.15.3-request_as_response-header-accept_language-ranges',
          '1.15.4-request_as_response-header-accept_language-long_range',
          '1.15.5-request_as_response-header-accept_language-exclusions',
+         // Uploads validated by content; part headers in any order (M6 + DEC-4 — appended last)
+         '1.20.10-request_as_response-content-streaming-part_headers_mime',
       ],
       'Response/' => [
          '1.1-respond_with_a_simple_hello_world',

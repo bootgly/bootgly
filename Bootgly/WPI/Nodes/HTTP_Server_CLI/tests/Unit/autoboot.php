@@ -90,5 +90,7 @@ return new Suite(
       '1.54-accept_selector_headroom',
       // # 1.0.x (RH-H3-residual): a deferred job releases its own resources when it ends
       '1.55-deferred_resource_release',
+      // # 1.0.x (DEC-2/3/4): multipart part headers parsed by their grammar
+      '1.56-decoder_part_headers',
    ]
 );

@@ -29,6 +29,7 @@
       "ext-openssl": "*"
    },
    "suggest": {
+      "ext-fileinfo": "Required by the MIME upload validator (ADI/Validators/MIME), which sniffs the uploaded bytes",
       "ext-pcntl": "Required by the Console platform on Linux (workers, forks and signals)",
       "ext-posix": "Required by the Console platform on Linux (process control and privileges)",
       "ext-sqlite3": "Required by the SQLite database driver (ADI/Databases/SQL/Drivers/SQLite)"

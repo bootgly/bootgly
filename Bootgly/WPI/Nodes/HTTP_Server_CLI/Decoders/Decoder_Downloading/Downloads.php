@@ -11,7 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading;
 
 
-use const BOOTGLY_STORAGE_DIR;
+use const BOOTGLY_UPLOADS_DIR;
 use const LOCK_EX;
 use const LOCK_SH;
 use const LOCK_UN;
@@ -58,7 +58,7 @@ use Throwable;
 
 /**
  * Cross-worker aggregate counter of bytes currently held in the
- *   download temp directory (`storage/temp/files/downloaded/`).
+ *   download temp directory (`BOOTGLY_UPLOADS_DIR`).
  *   Closes the per-file × N-workers blowup that lets a coordinated
  *   client fill the disk while every individual download still
  *   respects `$maxFileSize`.
@@ -747,7 +747,7 @@ final class Downloads
     */
    public static function sweep (int $minAge = 0): void
    {
-      $dir = BOOTGLY_STORAGE_DIR . 'temp/files/downloaded/';
+      $dir = BOOTGLY_UPLOADS_DIR;
 
       // ?:
       if (! is_dir($dir)) {
@@ -787,7 +787,7 @@ final class Downloads
     */
    private static function measure (): int
    {
-      $dir = BOOTGLY_STORAGE_DIR . 'temp/files/downloaded/';
+      $dir = BOOTGLY_UPLOADS_DIR;
 
       // ?:
       if (! is_dir($dir)) {
