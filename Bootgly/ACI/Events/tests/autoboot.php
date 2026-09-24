@@ -24,5 +24,7 @@ return new Suite(
    tests: [
       '1.1-timer-rearm-collision',
       '1.2-timer-status',
+      // # 1.0.x (BG-H7-4, BG-H7-9, EVENTS-3): tick() cancels, contains and reports
+      '1.3-timer-dispatch',
    ]
 );

@@ -27,6 +27,7 @@ use function time;
 use SplQueue;
 use Throwable;
 
+use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ACI\Events\Timer\Reset as TimerReset;
 
 
@@ -45,6 +46,14 @@ class Timer
 
    // * Metadata
    protected static int $id = 0;
+   /** Last arm stamp handed out: every add() and every re-arm takes the next one. */
+   private static int $sequence = 0;
+   /**
+    * Arm stamp of each live task: a tick skips any task armed after it began.
+    *
+    * @var array<int,int>
+    */
+   private static array $stamps = [];
    /** @var SplQueue<array<mixed>> Detached callback graphs awaiting release. */
    private static SplQueue $ReleaseQueue;
    /** Number of process-local deletion drains currently executing. */
@@ -55,6 +64,19 @@ class Timer
    private static bool $resetNotifying = false;
    /** Maximum detached callback generations released by one outer touch. */
    private const int RELEASE_BUDGET = 256;
+   /** Maximum generations of release failures one release() call re-releases. */
+   private const int GENERATION_BUDGET = 64;
+   /**
+    * Release failures of a chain deeper than the budget, parked instead of
+    * released: an endless chain of throwing destructors leaks one Throwable per
+    * release call and never crashes the worker. They stay until the process
+    * exits — where PHP destroys them, and a throwing destructor then makes the
+    * exit status 255.
+    *
+    * @var array<int,Throwable>
+    */
+   // @phpstan-ignore property.onlyWritten (held, never read: keeping them alive is the point)
+   private static array $Parked = [];
 
 
    /**
@@ -103,6 +125,7 @@ class Timer
       self::$id = (self::$id === PHP_INT_MAX) ? 1 : ++self::$id;
 
       self::$status[self::$id] = true;
+      self::$stamps[self::$id] = ++self::$sequence;
       self::$tasks[$runtime][self::$id] = [
          $interval, $handler, $args, $persistent
       ];
@@ -113,67 +136,104 @@ class Timer
    /**
     * Tick the timer, executing due tasks.
     *
+    * Each due task runs at most once per tick, and a task deleted by an earlier
+    * handler of the same tick never runs. A task added or re-armed during the
+    * tick first runs on a later one. A handler failure is reported through
+    * `Throwables::notify()` with `['origin' => 'timer', 'id' => $id]` (once per
+    * Throwable instance): a persistent task keeps its schedule, a one-shot is
+    * released. Values a handler leaves behind are released contained — a
+    * throwing destructor, even one whose exception's own destructor throws,
+    * never escapes into the SIGALRM handler.
+    *
     * @return void
     */
    public static function tick (): void
    {
       self::drain();
       if ( empty(self::$tasks) ) {
-         pcntl_alarm(0);
+         // ? A task is out of the wheel while its handler runs: a tick nested
+         //   in that handler must not disarm the alarm the task re-arms under
+         if (self::$status === []) {
+            pcntl_alarm(0);
+         }
 
          return;
       }
 
       pcntl_alarm(1);
 
-      foreach (self::$tasks as $runtime => $tasks) {
-         if (time() >= $runtime) {
-            foreach ($tasks as $index => $task) {
-               $interval   = $task[0];
-               $handler    = $task[1];
-               $args       = $task[2];
-               $persistent = $task[3];
+      // ! The runtimes of this tick, and the last arm stamp handed out before it:
+      //   a task armed after it — added by a handler, or re-armed by this tick
+      //   or a nested one into a later bucket a blocking handler made due — is
+      //   never a candidate of this tick (it could otherwise run twice). Ids are
+      //   read from each bucket only when the loop reaches it: integers, never
+      //   task or callback references, and no cost for buckets not yet due
+      $runtimes = array_keys(self::$tasks);
+      $mark = self::$sequence;
+      // ! One release generation per tick: every value a handler leaves behind
+      //   (a finished task, a failure) is released together by `drain()`
+      $Detached = [];
 
-               // @ Detach the executed task from the LIVE bucket instead of
-               //   dropping the whole bucket below: `$tasks` is a by-value
-               //   snapshot, while a persistent task re-arms into the live map
-               //   — possibly into a bucket still AHEAD in this same snapshot,
-               //   which a blocking handler can make due before it is reached.
-               //   Dropping that bucket wholesale destroys the re-armed task
-               //   (its `$status` entry stays `true`, so it never fires again
-               //   and is never re-added). Same idiom as `del()` below.
-               unset(self::$tasks[$runtime][$index]);
+      // @@ Run each due task that is still live, read from the live wheel
+      foreach ($runtimes as $runtime) {
+         if (time() < $runtime) {
+            continue;
+         }
 
-               try {
-                  call_user_func_array($handler, $args);
-               }
-               catch (Throwable) {
-                  // ...
-               }
-
-               if ($persistent && ! empty(self::$status[$index])) {
-                  $_runtime_ = time() + $interval;
-
-                  if ( ! isSet(self::$tasks[$_runtime_]) ) {
-                     self::$tasks[$_runtime_] = [];
-                  }
-
-                  self::$tasks[$_runtime_][$index] = [
-                     $interval, $handler, $args, $persistent
-                  ];
-               }
-               else if ($persistent === false) {
-                  unset(self::$status[$index]);
-               }
+         foreach (array_keys(self::$tasks[$runtime] ?? []) as $index) {
+            // ? Armed after this tick began, or deleted by an earlier handler
+            //   (`del($id)` or `del()`)
+            if (
+               (self::$stamps[$index] ?? 0) > $mark
+               || isSet(self::$tasks[$runtime][$index]) === false
+            ) {
+               continue;
             }
 
-            // ? The bucket is empty only when nothing re-armed into it — a
-            //   handler may also have cleared the whole map (`Timer::del()`).
-            if ( isSet(self::$tasks[$runtime]) && self::$tasks[$runtime] === [] ) {
+            // @ Detach from the live wheel before the handler runs
+            $Task = self::$tasks[$runtime][$index];
+            unset(self::$tasks[$runtime][$index]);
+            if (self::$tasks[$runtime] === []) {
                unset(self::$tasks[$runtime]);
+            }
+
+            try {
+               call_user_func_array($Task[1], $Task[2]);
+            }
+            catch (Throwable $Throwable) {
+               // @ Report the failure — never echo inside the SIGALRM handler —
+               //   and keep a failing reporter from escaping the tick
+               try {
+                  Throwables::notify($Throwable, ['origin' => 'timer', 'id' => $index]);
+               }
+               catch (Throwable $Failure) {
+                  $Detached[] = $Failure;
+                  $Failure = null;
+               }
+               // ! Its trace may own captures: released with the rest
+               $Detached[] = $Throwable;
+               $Throwable = null;
+            }
+            finally {
+               // @ Commit: re-arm a persistent task still live, else release it
+               if ($Task[3] && ! empty(self::$status[$index])) {
+                  self::$tasks[time() + $Task[0]][$index] = $Task;
+                  self::$stamps[$index] = ++self::$sequence;
+               }
+               else {
+                  if ($Task[3] === false) {
+                     unset(self::$status[$index], self::$stamps[$index]);
+                  }
+                  $Detached[] = $Task;
+               }
+               $Task = null;
             }
          }
       }
+
+      // : User destructors run inside `drain()`'s containment, never on this frame
+      self::defer($Detached);
+      self::drain();
    }
 
    /**
@@ -190,6 +250,7 @@ class Timer
          $Detached = self::$tasks;
          self::$tasks = [];
          self::$status = [];
+         self::$stamps = [];
          self::$resetPending = true;
 
          pcntl_alarm(0);
@@ -223,7 +284,7 @@ class Timer
 
       // @ Delete status
       if ( array_key_exists($id, self::$status) ) {
-         unset(self::$status[$id]);
+         unset(self::$status[$id], self::$stamps[$id]);
       }
 
       // @ Reset timer alarm if no status
@@ -264,6 +325,12 @@ class Timer
       self::$deletionDepth++;
       try {
          $remaining = self::RELEASE_BUDGET;
+         // ! A failed owner notification is retried by a LATER timer touch,
+         //   never again inside this drain (a failing owner would spin it)
+         $failed = false;
+         // ! Rounds are bounded apart from the release budget: no failure mode
+         //   of an owner can keep this drain from returning
+         $rounds = self::RELEASE_BUDGET;
          do {
             while (
                isSet(self::$ReleaseQueue)
@@ -281,30 +348,38 @@ class Timer
                }
             }
 
-            if (self::$resetPending) {
+            if (self::$resetPending && $failed === false) {
                self::$resetPending = false;
                self::$resetNotifying = true;
                $notified = false;
+               $Failures = [];
                try {
                   TimerReset::notify();
                   $notified = true;
                }
-               catch (Throwable) {
-                  // A later timer touch retries the owner notification.
+               catch (Throwable $Failure) {
+                  // A later timer touch retries the owner notification
+                  $Failures[] = $Failure;
+                  $Failure = null;
                }
                finally {
                   // Nested full resets notified Reset directly while it was
                   // dispatching, so a successful pass already coalesced them.
                   self::$resetPending = $notified === false;
                   self::$resetNotifying = false;
+                  $failed = $notified === false;
                }
+               // @ Released contained once the dispatch is over: a destructor
+               //   asking for another reset only marks it pending
+               self::release($Failures);
             }
          }
          while (
             $remaining > 0
+            && --$rounds > 0
             && (
                (isSet(self::$ReleaseQueue) && self::$ReleaseQueue->isEmpty() === false)
-               || self::$resetPending
+               || (self::$resetPending && $failed === false)
             )
          );
       }
@@ -316,30 +391,54 @@ class Timer
    /**
     * Release detached task/callback values without leaking destructor failures.
     *
+    * The failures one generation of releases raises are released as the next
+    * generation — never on their catch frame, where their own throwing
+    * destructors would escape. Past `GENERATION_BUDGET` generations the chain
+    * is parked instead: only an endless chain leaks, never a wide one.
+    *
     * @param array<mixed> $Values
     */
    private static function release (array &$Values, int $depth = 0): void
    {
+      $generation = 0;
       while ($Values !== []) {
-         $Value = array_pop($Values);
-         if (is_array($Value) && $depth < 8) {
-            self::release($Value, $depth + 1);
+         $Failures = [];
+         while ($Values !== []) {
+            $Value = array_pop($Values);
+            try {
+               if (is_array($Value) && $depth < 8) {
+                  self::release($Value, $depth + 1);
+               }
+               unset($Value);
+            }
+            // @phpstan-ignore-next-line Detached captures may own throwing destructors.
+            catch (Throwable $Failure) {
+               // Core timer state is already committed before user destruction.
+               $Failures[] = $Failure;
+               $Failure = null;
+            }
          }
-         try {
-            unset($Value);
+         if ($depth === 0) {
+            try {
+               gc_collect_cycles();
+            }
+            catch (Throwable $Failure) { // @phpstan-ignore catch.neverThrown
+               // A deferred capture destructor cannot escape Timer::del().
+               $Failures[] = $Failure;
+               $Failure = null;
+            }
          }
-         // @phpstan-ignore-next-line Detached captures may own throwing destructors.
-         catch (Throwable) {
-            // Core timer state is already committed before user destruction.
+
+         // @ The next generation: this one's failures — parked past the budget
+         if (++$generation > self::GENERATION_BUDGET) {
+            foreach ($Failures as $Failure) {
+               self::$Parked[] = $Failure;
+            }
+            $Failure = null;
+            $Failures = [];
          }
-      }
-      if ($depth === 0) {
-         try {
-            gc_collect_cycles();
-         }
-         catch (Throwable) { // @phpstan-ignore catch.neverThrown
-            // A deferred capture destructor cannot escape Timer::del().
-         }
+         $Values = $Failures;
+         $Failures = [];
       }
    }
 }

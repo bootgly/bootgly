@@ -547,9 +547,9 @@ class SSE extends Resource implements Disconnecting
          return;
       }
 
-      // @ User tick — contained: the Timer loop swallows Throwables
-      //   silently, which would leave a broken producer as a zombie stream
-      //   (no heartbeat, reaper-exempt, rescheduled forever)
+      // @ User tick — contained: the Timer loop only reports a failure and
+      //   reschedules this persistent supervisor, which would leave a broken
+      //   producer as a zombie stream (no heartbeat, reaper-exempt)
       if ($this->Tick !== null && (time() - $this->ticked) >= $this->interval) {
          $this->ticked = time();
          try {
