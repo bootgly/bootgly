@@ -13,9 +13,11 @@ namespace Bootgly\API\Security\JWT;
 
 use const JSON_BIGINT_AS_STRING;
 use const JSON_THROW_ON_ERROR;
+use const PHP_INT_MAX;
 use const PREG_SET_ORDER;
 use function array_slice;
 use function file_get_contents;
+use function hrtime;
 use function http_get_last_response_headers;
 use function in_array;
 use function is_array;
@@ -45,6 +47,15 @@ use Bootgly\API\Security\JWT\Remote\Response;
 
 /**
  * Remote JWKS resolver with process-local/shared cache and refresh-on-miss.
+ *
+ * Each process bounds how often it asks the origin, whatever the IdP's cache
+ * headers say: a key set the origin confirmed is held — served — for one window
+ * (`cooldown`, or `$TTL` when positive and shorter), even under `no-store` or
+ * `ttl: 0`; a failed fetch is replayed — fail closed — for one `cooldown`. Key
+ * resolution runs before signature verification, so without this floor every
+ * unauthenticated token could force one blocking fetch inside the worker. Only
+ * `refresh()` and the refresh on an unknown `kid` (at most one per `cooldown`)
+ * bypass it.
  */
 class Remote implements KeyResolver
 {
@@ -53,7 +64,11 @@ class Remote implements KeyResolver
    // * Config
    public private(set) string $URI;
    public private(set) null|string $algorithm;
-   /** Maximum local lifetime allowed for a fetched JWKS. */
+   /**
+    * Ceiling on a fetched set's freshness (`expires`) and shared-cache lifetime.
+    * A positive value shorter than `cooldown` also shortens how long a set the
+    * origin confirmed is held; `0` still holds it for one `cooldown`.
+    */
    public int $TTL {
       get => $this->ttl;
       set {
@@ -67,7 +82,25 @@ class Remote implements KeyResolver
          $this->ttl = $value;
       }
    }
-   public int $cooldown;
+   /**
+    * The origin floor, in seconds, per process: a failed fetch is replayed for
+    * one cooldown, and a set the origin confirmed is held for one — or for
+    * `$TTL`, when that is positive and shorter. It also spaces the refresh on an
+    * unknown `kid`. `0` disables both (every zero-TTL verification then fetches:
+    * for tests only).
+    */
+   public int $cooldown {
+      set {
+         if ($value < 0) {
+            throw new InvalidArgumentException('JWKS refresh cooldown must not be negative.');
+         }
+         if ($value > self::MAX_TTL) {
+            throw new InvalidArgumentException('JWKS refresh cooldown is too large.');
+         }
+
+         $this->cooldown = $value;
+      }
+   }
    public int $size;
    public int|float $timeout = 10;
    public int $redirects = 3;
@@ -89,6 +122,14 @@ class Remote implements KeyResolver
    public private(set) int $fetched = 0;
    public private(set) int $expires = 0;
    private int $missed = 0;
+   // ! Origin floor deadlines, on the monotonic clock (ns), fixed when an attempt
+   //   ends: a wall-clock step back never stretches them, and a later `cooldown`
+   //   or `$TTL` assignment only shapes the next attempt
+   // ? Until when the set the origin last confirmed is served
+   private int $hold = 0;
+   // ? Until when the origin is not asked again (forced loads excepted)
+   private int $pause = 0;
+   private null|Failures $Fault = null;
 
 
    /**
@@ -144,7 +185,9 @@ class Remote implements KeyResolver
    }
 
    /**
-    * Fetch the JWKS, returning the cached key set while it is fresh.
+    * Fetch the JWKS, returning the cached key set while it is fresh — or while
+    * the origin confirmed it within the last window — and replaying the last
+    * origin failure until the window ends.
     */
    public function fetch (): KeySet|Failures
    {
@@ -174,6 +217,13 @@ class Remote implements KeyResolver
     */
    public function resolve (null|string $id, string $algorithm): null|Key
    {
+      // ? A set pinned to one algorithm never holds a key for another — no fetch
+      if ($this->algorithm !== null && $algorithm !== $this->algorithm) {
+         $this->mark(Failures::Key, 'JWT key could not be resolved.', $this->status);
+         return null;
+      }
+
+      $pause = $this->pause;
       $Keys = $this->fetch();
       if ($Keys instanceof Failures) {
          return null;
@@ -185,7 +235,8 @@ class Remote implements KeyResolver
          return $Key;
       }
 
-      if ($id === null) {
+      // ? This very call just asked the origin: a refresh would fetch the same set
+      if ($id === null || $this->pause !== $pause) {
          $this->mark(Failures::Key, 'JWT key could not be resolved.', $this->status);
          return null;
       }
@@ -226,8 +277,18 @@ class Remote implements KeyResolver
    private function load (bool $force): KeySet|Failures
    {
       $now = time();
+      // ! The origin floor, on the monotonic clock: a confirmed set is held for
+      //   one window — `cooldown`, or a shorter positive `$TTL` (the operator's
+      //   bound wins); a failure pauses the origin for a whole `cooldown`
+      $clock = hrtime(true);
+      $window = ($this->ttl > 0 ? min($this->cooldown, $this->ttl) : $this->cooldown) * 1_000_000_000;
+
+      // ? A set the ORIGIN confirmed is served for its whole window even when its
+      //   TTL is 0 — nor does a failed forced refresh (an unknown `kid` any client
+      //   can send) turn valid tokens into rejections inside that window
+      $held = $clock < $this->hold;
       $Keys = $this->Keys;
-      if ($force === false && $Keys !== null && $this->expires > $now) {
+      if ($force === false && $Keys !== null && ($this->expires > $now || $held)) {
          $this->clear($this->status);
          return $Keys;
       }
@@ -252,20 +313,45 @@ class Remote implements KeyResolver
          }
       }
 
-      $Response = $this->request();
+      // ? The origin was asked within the window and gave no set to hold: replay
+      //   its failure (fail closed) instead of asking again — `Network` for a
+      //   failed request, or for a call while that attempt is still in flight
+      if ($force === false && $clock < $this->pause) {
+         return $this->mark($this->Fault ?? Failures::Network, 'Remote JWKS origin is cooling down.', $this->status);
+      }
+
+      // @ Ask the origin — paused for as long as the attempt is in flight, then
+      //   for one `cooldown` from its end (a failure keeps that pause)
+      $this->Fault = null;
+      $this->pause = PHP_INT_MAX;
+      try {
+         $Response = $this->request();
+      }
+      finally {
+         // ? Runs even when a suspended Fiber fetcher is destroyed mid-attempt
+         $ended = hrtime(true);
+         $this->pause = $ended + $this->cooldown * 1_000_000_000;
+      }
       if ($Response instanceof Failures) {
          return $this->mark($Response, 'Remote JWKS fetch failed.');
       }
 
       if ($Response->status < 200 || $Response->status > 299) {
+         $this->Fault = Failures::Status;
          return $this->mark(Failures::Status, 'Remote JWKS returned a non-success status.', $Response->status);
       }
 
       $ttl = $this->limit($Response);
       $Keys = $this->parse($Response->body, $Response->status, $now, $ttl);
       if ($Keys instanceof Failures) {
+         $this->Fault = $Keys;
          return $Keys;
       }
+
+      // ! Only an origin answer confirms a set — never a shared-cache read — and
+      //   it reopens the origin when its hold ends
+      $this->hold = $ended + $window;
+      $this->pause = $this->hold;
 
       $remaining = $this->expires - time();
       if ($this->Cache !== null && $remaining > 0) {
@@ -441,11 +527,17 @@ class Remote implements KeyResolver
          return false;
       }
 
-      if ($this->Cache !== null) {
-         return $this->Cache->claim($this->index('miss'), (string) $now, $this->cooldown) === false;
-      }
-
+      // ? One refresh per cooldown per worker, always
       if ($this->missed > 0 && $now - $this->missed < $this->cooldown) {
+         return true;
+      }
+      // ? ... and one per fleet while the worker's set is still fresh: its answer
+      //   then reaches the fleet through the Vault — a zero-TTL set never does
+      if (
+         $this->Cache !== null
+         && $this->expires > $now
+         && $this->Cache->claim($this->index('miss'), (string) $now, $this->cooldown) === false
+      ) {
          return true;
       }
 

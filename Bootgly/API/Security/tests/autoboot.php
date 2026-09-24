@@ -58,5 +58,7 @@ return new Suite(
       '1.42-users_enroll_transaction_pgsql_live',
       // # 1.0.x (M3): the shared URI resolver refuses an opaque redirect target
       '1.43-jwt_remote_redirect_opaque_target',
+      // # 1.0.x (API-SEC-1): the remote JWKS resolver bounds its origin fetches per process
+      '1.44-jwt_remote_origin_floor',
    ]
 );

@@ -126,34 +126,39 @@ return new Test(
          }
          rmdir($path);
       };
-      $sharedCalls = 0;
-      $SharedA = new Remote(
-         'https://issuer.example/shared',
-         static function () use (&$sharedCalls, $documents, $encode): string {
-            $sharedCalls++;
-            return $encode($documents[0]);
-         }
-      );
-      $SharedA->cache(new Vault($path));
-      $SharedB = new Remote(
-         'https://issuer.example/shared',
-         static function () use (&$sharedCalls): string {
-            $sharedCalls++;
-            return '{"keys":[]}';
-         }
-      );
-      $SharedB->cache(new Vault($path));
-      $SharedFetch = $SharedA->fetch();
-      $SharedCached = $SharedB->fetch();
+      try {
+         $sharedCalls = 0;
+         $SharedA = new Remote(
+            'https://issuer.example/shared',
+            static function () use (&$sharedCalls, $documents, $encode): string {
+               $sharedCalls++;
+               return $encode($documents[0]);
+            }
+         );
+         $SharedA->cache(new Vault($path));
+         $SharedB = new Remote(
+            'https://issuer.example/shared',
+            static function () use (&$sharedCalls): string {
+               $sharedCalls++;
+               return '{"keys":[]}';
+            }
+         );
+         $SharedB->cache(new Vault($path));
+         $SharedFetch = $SharedA->fetch();
+         $SharedCached = $SharedB->fetch();
+         $sharedPassed = $SharedFetch instanceof KeySet
+            && $SharedCached instanceof KeySet
+            && $sharedCalls === 1;
+      }
+      finally {
+         // ! Clean the Vault even when a probe throws, before any yield
+         $clean($path);
+      }
 
       yield assert(
-         assertion: $SharedFetch instanceof KeySet
-            && $SharedCached instanceof KeySet
-            && $sharedCalls === 1,
+         assertion: $sharedPassed,
          description: 'remote JWKS shared cache avoids a cross-worker refetch'
       );
-
-      $clean($path);
 
       $Rotated = new JWT($private2, 'RS256');
       $Rotated->select(new Key($private2, 'RS256', 'rsa2'));
@@ -193,36 +198,44 @@ return new Test(
       );
 
       $coolPath = sys_get_temp_dir() . '/bootgly-jwks-cooldown-' . bin2hex(random_bytes(4));
-      $coolCalls = 0;
-      $CoolA = new Remote(
-         'https://issuer.example/cooldown',
-         static function () use (&$coolCalls, $documents, $encode): string {
-            $coolCalls++;
-            return $encode($documents[0]);
-         },
-         cooldown: 60
-      );
-      $CoolA->cache(new Vault($coolPath));
-      $CoolAVerifier = new JWT($CoolA, 'RS256');
-      $CoolAVerifier->inspect($rotatedToken);
-      $CoolB = new Remote(
-         'https://issuer.example/cooldown',
-         static function () use (&$coolCalls, $documents, $encode): string {
-            $coolCalls++;
-            return $encode($documents[1]);
-         },
-         cooldown: 60
-      );
-      $CoolB->cache(new Vault($coolPath));
-      $CoolBVerifier = new JWT($CoolB, 'RS256');
-      $CoolBResult = $CoolBVerifier->inspect($rotatedToken);
+      try {
+         $coolCalls = 0;
+         $CoolA = new Remote(
+            'https://issuer.example/cooldown',
+            static function () use (&$coolCalls, $documents, $encode): string {
+               $coolCalls++;
+               return $encode($documents[0]);
+            },
+            cooldown: 60
+         );
+         $CoolA->cache(new Vault($coolPath));
+         // ! Warm first: a cold call that has just asked the origin never refreshes
+         //   on its unknown kid, so it would not claim the shared refresh slot
+         $CoolA->fetch();
+         $CoolAVerifier = new JWT($CoolA, 'RS256');
+         $CoolAVerifier->inspect($rotatedToken);
+         $CoolB = new Remote(
+            'https://issuer.example/cooldown',
+            static function () use (&$coolCalls, $documents, $encode): string {
+               $coolCalls++;
+               return $encode($documents[1]);
+            },
+            cooldown: 60
+         );
+         $CoolB->cache(new Vault($coolPath));
+         $CoolBVerifier = new JWT($CoolB, 'RS256');
+         $CoolBResult = $CoolBVerifier->inspect($rotatedToken);
+         $coolPassed = $CoolBResult->valid === false && $coolCalls === 2;
+      }
+      finally {
+         // ! Clean the Vault even when a probe throws, before any yield
+         $clean($coolPath);
+      }
 
       yield assert(
-         assertion: $CoolBResult->valid === false && $coolCalls === 2,
+         assertion: $coolPassed,
          description: 'remote JWKS refresh-on-miss cooldown is shared across workers'
       );
-
-      $clean($coolPath);
 
       $Status = new Remote(
          'https://issuer.example/status',
