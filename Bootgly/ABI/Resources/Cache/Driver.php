@@ -21,6 +21,7 @@ use function strpos;
 use function unserialize;
 use __PHP_Incomplete_Class;
 use ErrorException;
+use RuntimeException;
 use TypeError;
 
 use Bootgly\ABI\Resources\Cache\Config;
@@ -147,9 +148,13 @@ abstract class Driver
    /**
     * Atomically increase an integer counter, creating it at 0 when absent.
     *
-    * A positive $TTL sets the entry's expiry only when the counter is first
-    * created; existing counters keep their expiry (fixed-window friendly,
-    * matching Redis INCR + one-time EXPIRE).
+    * A positive $TTL sets the entry's expiry in the same atomic step that
+    * creates the counter; existing counters keep their expiry — including
+    * having none (fixed-window friendly: a live window is never re-armed).
+    *
+    * @throws RuntimeException When the backend refuses the increment (a value
+    *   that is not a counter, a TTL it cannot store, a command it does not
+    *   allow) — on the drivers that can tell.
     */
    abstract public function increment (string $key, int $by = 1, int $TTL = 0): int;
    /**

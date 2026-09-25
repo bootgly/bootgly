@@ -55,6 +55,11 @@ use Bootgly\ABI\Resources\Cache\Driver;
  * ext-redis is loaded it is used as a faster C-path transport behind the same
  * command() interface (via Redis::rawCommand), so command semantics stay
  * identical. TTL and expiry are native (SET ... EX, TTL); tags use Redis sets.
+ * A counter with a TTL, like swap/evict/renew, runs as one EVAL script, so the
+ * server must allow scripting — and Redis checks every command inside a script
+ * against the ACL too: counters need EVAL plus SET, INCRBY and GET (for
+ * example `+eval +set +incrby +get`, or `+@scripting +@string`); EXPIRE is no
+ * longer used by them. A TTL Redis cannot store raises.
  *
  * Blocking by design: inside the async HTTP worker use APCu/Shared-memory, or
  * the event-loop Redis driver under ADI/Databases/KV, to avoid stalling the
@@ -88,6 +93,11 @@ if tonumber(ARGV[1]) > 0 then
 end
 redis.call('PERSIST', KEYS[1])
 return 1
+LUA;
+   private const string INCREMENT_SCRIPT = <<<'LUA'
+redis.call('SET', KEYS[1], '0', 'EX', ARGV[2], 'NX')
+redis.call('INCRBY', KEYS[1], ARGV[1])
+return redis.call('GET', KEYS[1])
 LUA;
 
    // * Metadata
@@ -273,18 +283,35 @@ LUA;
 
    public function increment (string $key, int $by = 1, int $TTL = 0): int
    {
-      $value = $this->command(['INCRBY', $key, $by]);
-      // ?
-      if (is_int($value) === false) {
-         return 0;
+      // @ Create the counter WITH its expiry, then count — one script, one atomic step.
+      //   `SET … EX … NX` acts only on an absent key: a live window is never re-armed and
+      //   a counter without expiry keeps none (contract parity). The expiry is written
+      //   before the count, so no failure leaves a counted key without it. Answers GET:
+      //   Lua numbers are doubles (exact only up to 2^53). TTL <= 0: plain INCRBY
+      //   (`EX 0` would be refused, and nothing needs arming).
+      $reply = $TTL > 0
+         ? $this->command(['EVAL', self::INCREMENT_SCRIPT, 1, $key, $by, $TTL])
+         : $this->command(['INCRBY', $key, $by]);
+
+      // ?: INCRBY answers an integer, the script the counter's decimal bytes
+      if (is_int($reply) === true) {
+         return $reply;
+      }
+      if (is_string($reply) === true) {
+         return (int) $reply;
       }
 
-      // @ Set expiry only when the counter was just created
-      if ($TTL > 0 && $value === $by) {
-         $this->command(['EXPIRE', $key, $TTL]);
+      // ? Anything else is an error reply ext-redis handed back as `false` (the
+      //   native transport already raises it): answering 0 would read as "under
+      //   every limit" and fail a rate limiter open
+      $error = null;
+      if ($this->ext === true) {
+         $error = $this->Client->getLastError();
+         $this->Client->clearLastError();
       }
+      $error ??= 'unexpected reply.';
 
-      return $value;
+      throw new RuntimeException("Redis increment failed: {$error}");
    }
 
    public function remain (string $key): int

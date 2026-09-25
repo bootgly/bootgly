@@ -46,5 +46,7 @@ return new Suite(
       '7.4-security-extension-drivers',
       '5.8-redis-tls-connect',
       '1.9-config-keys',
+      // # 1.0.x (H6C-6): a counter with a TTL is created with its expiry in one step
+      '5.9-redis-counter-expiry',
    ]
 );
