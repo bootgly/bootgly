@@ -34,7 +34,7 @@ if (defined('BOOTGLY_UPLOADS_DIR') === true) {
 }
 define('BOOTGLY_UPLOADS_DIR', BOOTGLY_STORAGE_DIR . 'temp/files/downloaded/');
 
-define('BOOTGLY_VERSION', '1.0.6');
+define('BOOTGLY_VERSION', '1.1.0-dev');
 
 // ? Platform interface override for embedded runtimes (e.g. WASM) that behave as a console.
 // BOOTGLY_SAPI answers "which platform interface"; PHP_SAPI stays for "what can this process actually do".
