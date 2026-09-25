@@ -54,5 +54,8 @@ return new Suite(
       // # Terminal control sequences never reach the operator (M9)
       '3.3-formatter-controls',
       '8.6-viewer-controls',
+      // # 1.0.x (LOGS-1, LOGS-9, LOGS-14, LOGS-15): rotation under the append lock
+      '7.2-file-rotation-lock',
+      '7.3-file-rotation-policy',
    ]
 );

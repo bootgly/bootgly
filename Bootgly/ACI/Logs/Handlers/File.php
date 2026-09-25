@@ -13,6 +13,7 @@ namespace Bootgly\ACI\Logs\Handlers;
 
 use const BOOTGLY_ENVIRONMENT;
 use const LOCK_EX;
+use const LOCK_NB;
 use const LOCK_UN;
 use const LOG_PID;
 use const LOG_USER;
@@ -21,6 +22,7 @@ use const PREG_SET_ORDER;
 use const SEEK_END;
 use function basename;
 use function bin2hex;
+use function clearstatcache;
 use function defined;
 use function dirname;
 use function fclose;
@@ -33,8 +35,10 @@ use function fstat;
 use function function_exists;
 use function fwrite;
 use function getcwd;
+use function hrtime;
 use function is_dir;
 use function is_link;
+use function is_string;
 use function link;
 use function lstat;
 use function mkdir;
@@ -46,12 +50,16 @@ use function preg_replace;
 use function random_bytes;
 use function readlink;
 use function realpath;
+use function scandir;
 use function str_contains;
 use function str_replace;
+use function str_starts_with;
 use function strlen;
+use function substr;
 use function syslog;
 use function trim;
 use function unlink;
+use function usleep;
 use Throwable;
 
 use Bootgly\ACI\Logs\Data\Levels;
@@ -64,23 +72,34 @@ use Bootgly\ACI\Logs\Handlers\File\Rotation;
 
 class File extends Handler
 {
+   /** Lock attempts per record: a wait cut short by a signal, or a privileged writer's patience run out. */
+   private const int ATTEMPTS = 4;
+   /** Seconds a privileged writer polls the lock of an inode with a second name before giving up. */
+   private const float PATIENCE = 0.2;
+   /** Opens per record: how often other writers' rotations may move the name under this one. */
+   private const int MOVES = 64;
+
    // * Config
    public string $path;
    public Rotation $Rotation;
 
    // * Data
-   /** Whether refusals stay out of the system logger — see mute(). */
+   /** Whether the sink's reports (refusals, failed rotations) stay out of the system logger — see mute(). */
    private static bool $quiet = false;
    /** The runtime identity a privileged writer guards against — see guard(). */
    private static null|int $guarded = null;
 
    // * Metadata
-   /** @var array<string,true> Refusals already reported — once per path and reason, per process. */
-   private static array $refused = [];
+   /** @var array<string,true> Failures already reported — once per path and reason, per process. */
+   private static array $reported = [];
    /** Whether ext-posix is loaded — a privileged writer is only known where it is. */
    private static null|bool $posix = null;
    /** The uid of an owner outside this user namespace, -1 outside one — see trust(). */
    private static null|int $overflow = null;
+   /** @var array<string,true> Directories where link() worked — see open(). */
+   private static array $linkable = [];
+   /** Link races this writer lost on the current record — see open(). */
+   private int $races = 0;
 
 
    /**
@@ -151,32 +170,103 @@ class File extends Handler
          return false;
       }
 
-      // @ Rotate when due
-      $this->Rotation->rotate($path);
+      // @@ Append under the lock on the inode the name holds — the same lock
+      //    every writer and every rotation of this file takes. Nothing here
+      //    may raise: a sink that cannot write must never take the process
+      //    that logs down with it.
+      $privileged = (self::$posix ??= function_exists('posix_getuid')) && posix_getuid() === 0;
+      $attempts = 0;
+      $moves = 0;
+      $this->races = 0;
+      $rotated = false;
+      while (true) {
+         // @ Open — deciding on the inode opened, never on the pathname alone
+         $handle = $this->open($path, $moves + 1 >= self::MOVES);
+         if ($handle === false) {
+            return false;
+         }
+         if ($handle === null) {
+            $moves++;
+            continue;
+         }
 
-      // @ Open — deciding on the inode opened, never on the pathname alone
-      $handle = $this->open($path);
-      if ($handle === false) {
-         return false;
+         // ? A wait cut short by a signal — or a privileged writer's patience —
+         //   is waited again, on a fresh open (see lock())
+         if ($this->lock($handle, $privileged) === false) {
+            @fclose($handle);
+            if (++$attempts >= self::ATTEMPTS) {
+               return $this->refuse($path, 'the file could not be locked');
+            }
+            continue;
+         }
+
+         // ? Under the lock the name must still hold the inode locked: whoever
+         //   held it before may have rotated it away — then the new file is opened
+         if ($this->verify($path, $handle) === false) {
+            @flock($handle, LOCK_UN);
+            @fclose($handle);
+            if (++$moves >= self::MOVES) {
+               return $this->refuse($path, 'the file kept moving');
+            }
+            continue;
+         }
+
+         // ? A second name that is a creator's own temporary is an orphan: a
+         //   live creator keeps the lock until it has removed it (see open())
+         $opened = @fstat($handle);
+         if ($opened !== false && (int) $opened['nlink'] > 1) {
+            $this->clean($path, $opened);
+            $opened = @fstat($handle);
+         }
+
+         // ? A privileged writer touches no inode with any other second name —
+         //   not even to rotate it: that name may be anybody's
+         if ($privileged && ($opened === false || (int) $opened['nlink'] !== 1)) {
+            @flock($handle, LOCK_UN);
+            @fclose($handle);
+            return $this->refuse($path, 'the inode opened is not the regular file the pathname names');
+         }
+
+         // @ Rotate when due — once per record: every other writer waits on
+         //   this lock and finds the name moved when its turn comes. An
+         //   unprivileged writer rotates a due file with a second name too (a
+         //   creator killed in its link window): rotating only moves names, and
+         //   leaves the next write a new file.
+         if ($rotated === false && $this->Rotation->check($path) === true) {
+            $rotated = true;
+            $this->Rotation->rotate($path);
+            if ($this->verify($path, $handle) === false) {
+               @flock($handle, LOCK_UN);
+               @fclose($handle);
+               continue;
+            }
+            // ? Still here: the rotation failed — keep writing the active file
+            $this->report($path, 'the file could not be rotated');
+         }
+
+         // ? One name only: an inode with a second name is somebody else's — a
+         //   creator lets nobody in before its temporary name is gone (see open())
+         $opened = @fstat($handle);
+         if ($opened === false || (int) $opened['nlink'] !== 1) {
+            @flock($handle, LOCK_UN);
+            @fclose($handle);
+            return $this->refuse($path, 'the inode opened is not the regular file the pathname names');
+         }
+         // @ Append: the handle carries no O_APPEND (see open()), so the end is
+         //   sought here, once the lock serialises the writers
+         $written = @fseek($handle, 0, SEEK_END) === 0
+            && @fwrite($handle, $formatted) === strlen($formatted);
+         @flock($handle, LOCK_UN);
+         @fclose($handle);
+
+         // ?: A write that fell short is reported like a refusal — once per path
+         if ($written === false) {
+            return $this->refuse($path, 'the write failed — disk full or read-only?');
+         }
+
+         // :
+         return true;
       }
-
-      // @ Append under the lock: the handle carries no O_APPEND (see open()),
-      //   so the end is sought here, once the lock serialises the writers.
-      //   Nothing here may raise: a sink that cannot write must never take
-      //   the process that logs down with it.
-      $written = @flock($handle, LOCK_EX)
-         && @fseek($handle, 0, SEEK_END) === 0
-         && @fwrite($handle, $formatted) === strlen($formatted);
-      @flock($handle, LOCK_UN);
-      @fclose($handle);
-
-      // ?: A write that fell short is reported like a refusal — once per path
-      if ($written === false) {
-         return $this->refuse($path, 'the write failed — disk full or read-only?');
-      }
-
-      // :
-      return true;
    }
 
    /**
@@ -277,26 +367,32 @@ class File extends Handler
     * `fopen()` FOLLOWS a symbolic link, and a check on the pathname before the
     * open is a window: a link swapped in between the two hands the write to
     * a path somebody else chose — by whoever runs this handler. So the checks
-    * are made on the handle: the inode opened must be a regular file with a
-    * single name, and the same inode the pathname resolves to after the open.
-    * The file is opened without `O_CREAT`, so a dangling link can never make
-    * it create the target either; a missing file is created beside the
-    * destination under an unguessable name and `link()`ed into place —
-    * `link()` fails on any entry already there instead of following it.
+    * are made on the handle: the inode opened must be a regular file, and the
+    * same inode the pathname resolves to after the open (its single name is
+    * checked under the lock — see write()). The file is opened without
+    * `O_CREAT`, so a dangling link can never make it create the target
+    * either; a missing file is created beside the destination under an
+    * unguessable name, locked, and `link()`ed into place — `link()` fails on
+    * any entry already there instead of following it, and the lock keeps
+    * every other writer out until the temporary name is gone.
     *
     * @param string $path The destination pathname.
-    * @return false|resource The handle positioned anywhere (the caller seeks), or false when refused.
+    * @param bool $last Whether this is the last open allowed: a race then refuses instead of opening again.
+    * @return false|null|resource The handle positioned anywhere (the caller seeks and locks),
+    *                             null when a rotation or a creation moved the name (open again),
+    *                             or false when refused.
     */
-   private function open (string $path)
+   private function open (string $path, bool $last)
    {
       $directory = dirname($path);
       $privileged = (self::$posix ??= function_exists('posix_getuid')) && posix_getuid() === 0;
+      clearstatcache();
       $named = @lstat($path);
       if ($named === false) {
          // ! Absent: create beside under a name nobody can guess, with the
          //   mode the umask gives at creation — never a chmod on a pathname,
-         //   which would follow a link — then link into place: `link()` fails
-         //   on any entry already there instead of following it.
+         //   which would follow a link — lock it, then link into place:
+         //   `link()` fails on any entry already there instead of following it.
          try {
             $temporary = "$directory/." . basename($path) . '.' . bin2hex(random_bytes(8));
          }
@@ -307,28 +403,52 @@ class File extends Handler
          if ($made === false) {
             return $this->refuse($path, 'its directory does not accept a new file');
          }
-         @fclose($made);
+         if (@flock($made, LOCK_EX) === false) {
+            @fclose($made);
+            @unlink($temporary);
+            return $this->refuse($path, 'the file could not be locked');
+         }
          $linked = @link($temporary, $path);
          @unlink($temporary);
-         if ($linked === false && @lstat($path) === false) {
-            // ? No hard links on this filesystem: an unprivileged writer may
-            //   create in place — `O_EXCL` still follows a dangling link, so
-            //   a privileged one may not
+         // ?: Linked: the new file, locked, under its one name
+         if ($linked === true) {
+            self::$linkable[$directory] = true;
+            return $made;
+         }
+         @fclose($made);
+
+         clearstatcache();
+         $named = @lstat($path);
+         if ($named === false) {
+            // ? No hard links on this filesystem — or, where link() has worked,
+            //   another creator's file linked first and already rotated away:
+            //   an unprivileged writer may create in place — `O_EXCL` still
+            //   follows a dangling link, so a privileged one may not: it opens
+            //   again after a lost race — once per record until link() has
+            //   worked there, since a second failure in a row means it never does
             if ($privileged) {
-               return $this->refuse($path, 'the file could not be created');
+               return $last === false && (isset(self::$linkable[$directory]) || $this->races++ < 1)
+                  ? null
+                  : $this->refuse($path, 'the file could not be created');
             }
             $created = @fopen($path, 'x');
             if ($created === false) {
-               return $this->refuse($path, 'the file could not be created');
+               clearstatcache();
+               return $last === false && @lstat($path) !== false
+                  ? null
+                  : $this->refuse($path, 'the file could not be created');
             }
-            @fclose($created);
+
+            // :
+            return $created;
          }
+         // # Another writer created it first: open theirs
       }
-      else if (((int) $named['mode'] & 0170000) !== 0100000) {
+      if (((int) $named['mode'] & 0170000) !== 0100000) {
          // ? Anything but a regular file at the destination is refused, never followed
          return $this->refuse($path, 'the destination is not a regular file');
       }
-      else if ($privileged && (int) $named['uid'] !== 0 && (int) $named['uid'] !== (self::$overflow ?? -1)) {
+      if ($privileged && (int) $named['uid'] !== 0 && (int) $named['uid'] !== (self::$overflow ?? -1)) {
          // ? A privileged writer appends to nobody else's file: in a sticky
          //   directory of root's anybody may have created one under this name
          return $this->refuse($path, 'the destination belongs to another identity');
@@ -337,24 +457,127 @@ class File extends Handler
       // @ Open without O_CREAT, then verify the inode that came out
       $handle = @fopen($path, 'r+');
       if ($handle === false) {
-         return $this->refuse($path, 'the file could not be opened');
+         clearstatcache();
+         $now = @lstat($path);
+         // ? Rotated away — or replaced — between the check and the open: open again
+         return $last === false && ($now === false || $now['dev'] !== $named['dev'] || $now['ino'] !== $named['ino'])
+            ? null
+            : $this->refuse($path, 'the file could not be opened');
       }
       $opened = @fstat($handle);
+      clearstatcache();
       $named = @lstat($path);
       if (
-         $opened === false || $named === false
+         $opened === false
          || ((int) $opened['mode'] & 0170000) !== 0100000
-         || (int) $opened['nlink'] !== 1
-         || $opened['dev'] !== $named['dev']
-         || $opened['ino'] !== $named['ino']
          || ($privileged && (int) $opened['uid'] !== 0 && (int) $opened['uid'] !== (self::$overflow ?? -1))
       ) {
          @fclose($handle);
          return $this->refuse($path, 'the inode opened is not the regular file the pathname names');
       }
+      if ($named === false || $opened['dev'] !== $named['dev'] || $opened['ino'] !== $named['ino']) {
+         @fclose($handle);
+         // ? A regular file the name no longer holds, or no name at all: a
+         //   rotation moved it — open again; anything else there is refused
+         return $last === false && ($named === false || ((int) $named['mode'] & 0170000) === 0100000)
+            ? null
+            : $this->refuse($path, 'the inode opened is not the regular file the pathname names');
+      }
 
       // :
       return $handle;
+   }
+
+   /**
+    * Lock the handle for writing.
+    *
+    * A writer waits for the lock — except a privileged one on an inode with
+    * a second name: whoever holds that name could hold its lock for ever. A
+    * creator's own second name lasts until it unlinks its temporary (see
+    * open()), so a privileged writer polls for at most PATIENCE seconds and
+    * waits as anyone would once the inode has one name again.
+    *
+    * @param resource $handle The handle to lock.
+    * @param bool $privileged Whether this writer runs as root.
+    * @return bool False when the wait was cut short or the patience ran out.
+    */
+   private function lock ($handle, bool $privileged): bool
+   {
+      if ($privileged === false) {
+         return @flock($handle, LOCK_EX);
+      }
+
+      // @@ Poll while the inode has a second name, then wait
+      $until = hrtime(true) + (int) (self::PATIENCE * 1_000_000_000);
+      while (true) {
+         $opened = @fstat($handle);
+         if ($opened !== false && (int) $opened['nlink'] === 1) {
+            return @flock($handle, LOCK_EX);
+         }
+         if (@flock($handle, LOCK_EX | LOCK_NB) === true) {
+            return true;
+         }
+         if (hrtime(true) >= $until) {
+            return false;
+         }
+         usleep(1_000);
+      }
+   }
+
+   /**
+    * Remove the orphaned temporary name a creator left on the inode.
+    *
+    * A creator links its temporary into place and unlinks it before it
+    * releases the lock (see open()); one killed in between leaves the file
+    * with a second name, and no writer would accept it again. Holding the
+    * lock, a name beside the destination in the creator's own pattern that
+    * names the same inode can only be such an orphan.
+    *
+    * @param string $path The destination pathname.
+    * @param array<int|string,int> $opened The locked handle's fstat.
+    */
+   private function clean (string $path, array $opened): void
+   {
+      $directory = dirname($path);
+      $prefix = '.' . basename($path) . '.';
+      foreach ((array) @scandir($directory) as $name) {
+         if (
+            is_string($name) === false
+            || str_starts_with($name, $prefix) === false
+            || preg_match('/^[0-9a-f]{16}$/', substr($name, strlen($prefix))) !== 1
+         ) {
+            continue;
+         }
+         $named = @lstat("$directory/$name");
+         if (
+            $named !== false
+            && ((int) $named['mode'] & 0170000) === 0100000
+            && $named['dev'] === $opened['dev']
+            && $named['ino'] === $opened['ino']
+         ) {
+            @unlink("$directory/$name");
+         }
+      }
+   }
+
+   /**
+    * Verify, under the lock, that the name still holds the inode locked.
+    *
+    * @param string $path The destination pathname.
+    * @param resource $handle The handle locked.
+    * @return bool False when a rotation moved the name away meanwhile.
+    * @phpstan-impure
+    */
+   private function verify (string $path, $handle): bool
+   {
+      clearstatcache();
+      $named = @lstat($path);
+      $opened = @fstat($handle);
+
+      // :
+      return $named !== false && $opened !== false
+         && $named['dev'] === $opened['dev']
+         && $named['ino'] === $opened['ino'];
    }
 
    /**
@@ -403,7 +626,8 @@ class File extends Handler
    }
 
    /**
-    * Keep refusals out of the system logger — the test runner refuses on purpose.
+    * Keep the sink's reports out of the system logger: refusals, and rotations
+    * that failed while the write went through — the test runner refuses on purpose.
     *
     * @param bool $quiet
     */
@@ -417,8 +641,7 @@ class File extends Handler
     *
     * A refused sink must not be a silent one: whoever plants a link at the
     * destination would otherwise switch the audit trail off with no signal
-    * anywhere. The system logger is the one channel that needs no file — where
-    * one listens.
+    * anywhere.
     *
     * @param string $path The destination pathname.
     * @param string $reason Why it was refused.
@@ -426,15 +649,31 @@ class File extends Handler
     */
    private function refuse (string $path, string $reason): false
    {
-      if (isset(self::$refused["$path|$reason"]) === false) {
-         self::$refused["$path|$reason"] = true;
-         // ? The suites refuse on purpose — keep their noise out of the host's journal
-         if (self::$quiet === false && (defined('BOOTGLY_ENVIRONMENT') === false || BOOTGLY_ENVIRONMENT !== 'test')) {
-            @openlog('bootgly', LOG_PID, LOG_USER);
-            @syslog(LOG_WARNING, "Bootgly log sink refused {$path}: {$reason}.");
-         }
-      }
+      $this->report($path, $reason, refused: true);
 
       return false;
+   }
+
+   /**
+    * Report a sink failure once per path and reason, out of band.
+    *
+    * The system logger is the one channel that needs no file — where one
+    * listens.
+    *
+    * @param string $path The destination pathname.
+    * @param string $reason What failed.
+    * @param bool $refused Whether the destination was refused (nothing written).
+    */
+   private function report (string $path, string $reason, bool $refused = false): void
+   {
+      if (isset(self::$reported["$path|$reason"]) === false) {
+         self::$reported["$path|$reason"] = true;
+         // ? The suites fail on purpose — keep their noise out of the host's journal
+         if (self::$quiet === false && (defined('BOOTGLY_ENVIRONMENT') === false || BOOTGLY_ENVIRONMENT !== 'test')) {
+            $verb = $refused ? ' refused' : '';
+            @openlog('bootgly', LOG_PID, LOG_USER);
+            @syslog(LOG_WARNING, "Bootgly log sink{$verb} {$path}: {$reason}.");
+         }
+      }
    }
 }
