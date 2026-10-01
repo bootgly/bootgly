@@ -22,6 +22,7 @@ return new Test(
       || function_exists('posix_getrlimit') === false
       || function_exists('posix_setrlimit') === false
       || function_exists('proc_open') === false
+      || is_executable('/bin/bash') === false
       // ! The server raises its own soft limit: only the hard one must allow it
       || ((posix_getrlimit()['hard openfiles'] ?? 0) !== 'unlimited'
          && (int) (posix_getrlimit()['hard openfiles'] ?? 0) < 2048),
@@ -110,8 +111,15 @@ PHP;
          $Environment['UDP_REFUSAL_PORT'] = (string) $port;
          $Environment['UDP_REFUSAL_PAD'] = (string) $pad;
          $Environment['UDP_REFUSAL_PADW'] = (string) $padw;
+         // ! The boundary legs place the worker socket at an exact descriptor:
+         //   the server must not inherit the runner's open descriptors (PHP
+         //   opens them without close-on-exec), which would sit anywhere in
+         //   the table — bash closes every one above stderr, then execs PHP.
          $Process = proc_open(
-            [PHP_BINARY, '-d', 'display_errors=stderr', '-r', $Script],
+            [
+               '/bin/bash', '-c', 'for d in /proc/$$/fd/*; do d=${d##*/}; [ "$d" -gt 2 ] && eval "exec $d<&-"; done; exec "$@"', 'bash',
+               PHP_BINARY, '-d', 'display_errors=stderr', '-r', $Script,
+            ],
             [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $Pipes,
             BOOTGLY_ROOT_BASE,
