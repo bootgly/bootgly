@@ -43,7 +43,15 @@ if (
    require "{$root}/autoboot.php";
    Display::show(Display::NONE);
 
-   $Server = new UDP_Server_CLI(Modes::Foreground);
+   // ! A spec-only class: its state inodes are this spec's alone to remove
+   final class ReloadProbe extends UDP_Server_CLI
+   {
+      public static function boot (mixed $Environment): void
+      {
+      }
+   }
+
+   $Server = new ReloadProbe(Modes::Foreground);
    $Server->configure(new Configs(host: '127.0.0.1', port: $port, workers: 1));
    $Server->on(Events::DatagramReceive, static function (string $input): string {
       $Mask = [];
@@ -166,10 +174,18 @@ return new Test(
             posix_kill($master, SIGUSR2);
          }
          $After = $Poll($port, static fn (array $Data): bool => $Data['pid'] !== ($Before['pid'] ?? 0), 6.0);
+         // ! The reloaded master may still be inside its start transaction
+         //   (every signal blocked) on a loaded host: read until it settles
+         $settled = hrtime(true) + 1_000_000_000;
+         $Mask = $Blocked($master);
+         while ($Mask !== [SIGWINCH] && hrtime(true) < $settled) {
+            usleep(10_000);
+            $Mask = $Blocked($master);
+         }
          $Observed = [
             'worker mask before' => $Before['mask'] ?? null,
             'reloaded worker mask' => $After['mask'] ?? null,
-            'reloaded master mask' => $Blocked($master),
+            'reloaded master mask' => $Mask,
          ];
          // @ The reloaded master still answers SIGTERM.
          if ($master > 0) {
@@ -179,6 +195,13 @@ return new Test(
       }
       finally {
          $Observed['group clean'] = $Teardown($Process, $master);
+         // @ This run's state inodes, by their literal prefix (the master never
+         //   reached its teardown)
+         foreach ((array) @scandir(BOOTGLY_STORAGE_DIR . 'pids') as $file) {
+            if (str_starts_with((string) $file, "ReloadProbe.{$port}.")) {
+               @unlink(BOOTGLY_STORAGE_DIR . "pids/{$file}");
+            }
+         }
       }
 
       // @ A stop that arrives while reload() runs is honoured — never consumed
@@ -196,6 +219,13 @@ return new Test(
       }
       finally {
          $Observed['second group clean'] = $Teardown($Process, $master);
+         // @ This run's state inodes, by their literal prefix (the master never
+         //   reached its teardown)
+         foreach ((array) @scandir(BOOTGLY_STORAGE_DIR . 'pids') as $file) {
+            if (str_starts_with((string) $file, "ReloadProbe.{$port}.")) {
+               @unlink(BOOTGLY_STORAGE_DIR . "pids/{$file}");
+            }
+         }
          fclose($Client);
       }
 

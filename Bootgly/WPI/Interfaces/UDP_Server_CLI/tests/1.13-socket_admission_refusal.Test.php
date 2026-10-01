@@ -164,6 +164,13 @@ PHP;
          while ($master > 0 && posix_kill(-$master, 0) && hrtime(true) < $cleanup) {
             usleep(10_000);
          }
+         // @ This run's state inodes, by their literal prefix (the master never
+         //   reached its teardown)
+         foreach ((array) @scandir(BOOTGLY_STORAGE_DIR . 'pids') as $file) {
+            if (str_starts_with((string) $file, "RefusalProbe.{$port}.")) {
+               @unlink(BOOTGLY_STORAGE_DIR . "pids/{$file}");
+            }
+         }
 
          return [
             'exit' => $exit,

@@ -193,6 +193,19 @@ PHP;
          $Second = $Poll('d', 'state', static fn (array $Data): bool => $Data['pid'] !== $revived, 4.0);
          $Observed['second revive mask'] = $Second['mask'] ?? null;
 
+         // @ The master publishes the revived topology — and is never killed
+         //   halfway through that write (it would orphan the temporary file)
+         $published = false;
+         $deadline = hrtime(true) + 2_000_000_000;
+         while ($published === false && hrtime(true) < $deadline) {
+            $State = json_decode((string) @file_get_contents(BOOTGLY_STORAGE_DIR . "pids/ReforkProbe.{$port}.json"), true);
+            $published = in_array((int) ($Second['pid'] ?? 0), (array) ($State['workers'] ?? []), true);
+            if ($published === false) {
+               usleep(20_000);
+            }
+         }
+         $Observed['revived topology published'] = $published;
+
          // @ A hard-killed master leaves no orphan: the worker watchdog fires.
          if ($master > 0) {
             posix_kill($master, SIGKILL);
@@ -216,6 +229,14 @@ PHP;
             usleep(10_000);
          }
          $Observed['group clean'] = $master > 0 && posix_kill(-$master, 0) === false;
+
+         // @ This run's state inodes, by their literal prefix (the master never
+         //   reached its teardown)
+         foreach ((array) @scandir(BOOTGLY_STORAGE_DIR . 'pids') as $file) {
+            if (str_starts_with((string) $file, "ReforkProbe.{$port}.")) {
+               @unlink(BOOTGLY_STORAGE_DIR . "pids/{$file}");
+            }
+         }
       }
 
       yield new Assertion(description: 'reforked worker serves under the launcher mask, ticks, sweeps, stops and never orphans')
@@ -230,6 +251,7 @@ PHP;
                'third peer served after sweep' => true,
                'revived exits on SIGTERM' => true,
                'second revive mask' => [SIGUSR2],
+               'revived topology published' => true,
                'worker exits after master SIGKILL' => true,
                'group clean' => true,
             ],

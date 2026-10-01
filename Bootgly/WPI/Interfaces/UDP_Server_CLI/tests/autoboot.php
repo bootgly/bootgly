@@ -52,11 +52,13 @@ return new Suite(
       '1.15-zero_length_datagram',
       // # 1.0.x (UDP-10): stats reset restores the declared error shape
       '1.16-stats_reset_shape',
-      // # 1.0.x (UDP-19): only revive() forks a worker; the loops reap only through a PID 1 reap()
+      // # 1.0.x (UDP-19, UDP-21): only revive() forks a worker; every loop reaps only through a PID 1 reap()
       '1.17-master_loop_pins',
       // # 1.0.x (UDP-19): a reloaded master and its workers keep the launcher's mask
       '1.18-reload_signal_state',
       // # 1.0.x (UDP-19): a master running as PID 1 reaps the orphans it inherits
       '1.19-pid1_orphan_reap',
+      // # 1.0.x (UDP-21): the console modes refork every worker exit and keep the master
+      '1.20-console_mode_refork',
    ]
 );

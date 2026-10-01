@@ -16,7 +16,7 @@ use Bootgly\ACI\Tests\Suite\Test;
 
 
 return new Test(
-   description: 'UDP-19: only revive() forks a worker and the master loops reap only through the PID 1 guard of reap()',
+   description: 'UDP-19/UDP-21: only revive() forks a worker and every master loop reaps only through the PID 1 guard of reap()',
    test: new Assertions(Case: function (): Generator {
       // ! Token-based: comments and strings never satisfy or break the pin.
       $Tokens = token_get_all((string) file_get_contents(BOOTGLY_ROOT_DIR . 'Bootgly/WPI/Interfaces/UDP_Server_CLI.php'));
@@ -89,6 +89,32 @@ return new Test(
          return $one !== false && $other !== false && $one < $other;
       };
 
+      /** The first $count significant tokens of $method's body, as text. */
+      $Opening = static function (string $method, int $count) use ($Tokens, $Step, $Is): array {
+         foreach ($Tokens as $index => $Token) {
+            if ($Is($index, T_FUNCTION) === false) {
+               continue;
+            }
+            $name = $Step($index, 1);
+            if ($Is($name, T_STRING) === false || $Tokens[$name][1] !== $method) {
+               continue;
+            }
+            // @ Skip the signature up to the body's opening brace
+            $cursor = $name;
+            while (isSet($Tokens[$cursor]) && $Tokens[$cursor] !== '{') {
+               $cursor++;
+            }
+            $Texts = [];
+            for ($cursor = $Step($cursor, 1); count($Texts) < $count && isSet($Tokens[$cursor]); $cursor = $Step($cursor, 1)) {
+               $Texts[] = is_array($Tokens[$cursor]) ? $Tokens[$cursor][1] : $Tokens[$cursor];
+            }
+
+            return $Texts;
+         }
+
+         return [];
+      };
+
       // @ Forking and reaping
       yield new Assertion(description: 'workers are forked by revive() (the daemon by detach()); the loops reap only through reap(), guarded to PID 1')
          ->expect(
@@ -96,15 +122,16 @@ return new Test(
                'forks' => $Callers(['pcntl_fork']),
                'reapers' => $Callers(['pcntl_wait', 'pcntl_waitpid']),
                'reap called by' => $Callers(['reap']),
-               'reap guarded by PID 1' => $Before('reap', 'posix_getpid', 'pcntl_waitpid'),
+               // ! The guard's exact shape: anything else lets a master that is
+               //   not PID 1 steal an application's proc_open() exit status
+               'reap guarded by PID 1' => $Opening('reap', 12) === ['if', '(', 'posix_getpid', '(', ')', '!==', '1', ')', '{', 'return', ';', '}'],
                'revive called by' => $Callers(['revive']),
             ],
             Op::Identical,
             [
                'forks' => ['revive', 'detach'],
-               // ! interacting()/monitoring() console reaping: UDP-21
-               'reapers' => ['reap', 'detach', 'interacting', 'monitoring'],
-               'reap called by' => ['daemonize', 'serve'],
+               'reapers' => ['reap', 'detach'],
+               'reap called by' => ['daemonize', 'serve', 'interacting', 'monitoring'],
                'reap guarded by PID 1' => true,
                'revive called by' => ['daemonize', 'serve', 'interacting', 'monitoring'],
             ],

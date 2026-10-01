@@ -24,7 +24,19 @@ return new Test(
    description: 'A UDP master running as PID 1 reaps the orphans it inherits and still reforks a dead worker',
    skip: function_exists('posix_kill') === false
       || function_exists('proc_open') === false
-      || is_executable('/usr/bin/unshare') === false,
+      || is_executable('/usr/bin/unshare') === false
+      // ! The capability on its own (AppArmor or a zero user.max_user_namespaces
+      //   denies it): only its absence may skip — a server that fails inside
+      //   a usable namespace must fail the case
+      || (static function (): bool {
+         $Probe = proc_open(
+            ['/usr/bin/unshare', '-Urpf', '--mount-proc', '--kill-child', 'true'],
+            [0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
+            $Pipes,
+         );
+
+         return is_resource($Probe) === false || proc_close($Probe) !== 0;
+      })(),
    test: new Assertions(Case: function (): Generator {
       $Script = <<<'PHP'
 require getenv('UDP_PID1_AUTOBOOT');
@@ -34,7 +46,15 @@ use Bootgly\WPI\Interfaces\UDP_Server_CLI;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI\Configs;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI\Events;
 
-$Server = new UDP_Server_CLI(Modes::Foreground);
+// ! A spec-only class: its state inodes are this spec's alone to remove
+final class Pid1Probe extends UDP_Server_CLI
+{
+   public static function boot (mixed $Environment): void
+   {
+   }
+}
+
+$Server = new Pid1Probe(Modes::Foreground);
 $Server->configure(new Configs(host: '127.0.0.1', port: (int) getenv('UDP_PID1_PORT'), workers: 1));
 $Server->on(Events::DatagramReceive, static function (string $input): string {
    if ($input === 'orphan') {
@@ -110,43 +130,44 @@ PHP;
             $First = $Ask('state', 0.2);
          }
          $master = $Children($unshare)[0] ?? 0;
-         $Observed['namespace usable'] = $First !== null && $master > 0;
-         if ($Observed['namespace usable'] === false) {
-            yield (new Assertion(description: 'user + PID namespaces are not available here: the PID 1 legs did not run'))->skip();
-
-            return;
+         // ? The capability was probed: a master that never served is a failure
+         $Observed['PID 1 master serving'] = $First !== null && $master > 0;
+         if ($Observed['PID 1 master serving'] === false) {
+            $Observed['orphans reaped'] = null;
+            $Observed['dead worker reforked'] = null;
          }
-
-         // @ 20 orphaned grandchildren, each gone 0.2 s later
-         for ($index = 0; $index < 20; $index++) {
-            $Ask('orphan');
-         }
-         usleep(2_000_000);
-         $zombies = 0;
-         $strays = 0;
-         $worker = (int) ($First['pid'] ?? 0);
-         foreach ($Children($master) as $child) {
-            $state = preg_match('/^State:\s+(\S)/m', (string) @file_get_contents("/proc/{$child}/status"), $Match) === 1 ? $Match[1] : '';
-            if ($state === 'Z') {
-               $zombies++;
+         else {
+            // @ 20 orphaned grandchildren, each gone 0.2 s later
+            for ($index = 0; $index < 20; $index++) {
+               $Ask('orphan');
             }
-            if (preg_match('/^NSpid:\s+\d+\s+(\d+)/m', (string) @file_get_contents("/proc/{$child}/status"), $Match) === 1 && (int) $Match[1] !== $worker) {
-               $strays++;
+            usleep(2_000_000);
+            $zombies = 0;
+            $strays = 0;
+            $worker = (int) ($First['pid'] ?? 0);
+            foreach ($Children($master) as $child) {
+               $state = preg_match('/^State:\s+(\S)/m', (string) @file_get_contents("/proc/{$child}/status"), $Match) === 1 ? $Match[1] : '';
+               if ($state === 'Z') {
+                  $zombies++;
+               }
+               if (preg_match('/^NSpid:\s+\d+\s+(\d+)/m', (string) @file_get_contents("/proc/{$child}/status"), $Match) === 1 && (int) $Match[1] !== $worker) {
+                  $strays++;
+               }
             }
-         }
-         $Observed['orphans reaped'] = $zombies === 0 && $strays === 0;
+            $Observed['orphans reaped'] = $zombies === 0 && $strays === 0;
 
-         // @ A worker death is still reforked from the loop
-         $Ask('crash');
-         $Revived = null;
-         $deadline = hrtime(true) + 5_000_000_000;
-         while ($Revived === null && hrtime(true) < $deadline) {
-            $Data = $Ask('state', 0.2);
-            if ($Data !== null && ($Data['pid'] ?? 0) !== $worker) {
-               $Revived = $Data;
+            // @ A worker death is still reforked from the loop
+            $Ask('crash');
+            $Revived = null;
+            $deadline = hrtime(true) + 5_000_000_000;
+            while ($Revived === null && hrtime(true) < $deadline) {
+               $Data = $Ask('state', 0.2);
+               if ($Data !== null && ($Data['pid'] ?? 0) !== $worker) {
+                  $Revived = $Data;
+               }
             }
+            $Observed['dead worker reforked'] = $Revived !== null;
          }
-         $Observed['dead worker reforked'] = $Revived !== null;
       }
       finally {
          if ($unshare > 0) {
@@ -156,11 +177,19 @@ PHP;
             proc_close($Process);
          }
          fclose($Client);
+
+         // @ This run's state inodes, by their literal prefix (the master never
+         //   reached its teardown)
+         foreach ((array) @scandir(BOOTGLY_STORAGE_DIR . 'pids') as $file) {
+            if (str_starts_with((string) $file, "Pid1Probe.{$port}.")) {
+               @unlink(BOOTGLY_STORAGE_DIR . "pids/{$file}");
+            }
+         }
       }
 
       yield new Assertion(description: 'as PID 1 the master reaps what it inherits and keeps reforking')
          ->expect($Observed, Op::Identical, [
-            'namespace usable' => true,
+            'PID 1 master serving' => true,
             'orphans reaped' => true,
             'dead worker reforked' => true,
          ])

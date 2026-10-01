@@ -42,7 +42,6 @@ use const STREAM_PF_UNIX;
 use const STREAM_SERVER_BIND;
 use const STREAM_SOCK_STREAM;
 use const WNOHANG;
-use const WUNTRACED;
 use function array_diff;
 use function array_merge;
 use function array_search;
@@ -63,10 +62,12 @@ use function fwrite;
 use function get_included_files;
 use function getcwd;
 use function getenv;
+use function hrtime;
 use function in_array;
 use function is_file;
 use function is_int;
 use function is_resource;
+use function max;
 use function method_exists;
 use function microtime;
 use function pcntl_exec;
@@ -75,7 +76,6 @@ use function pcntl_signal;
 use function pcntl_signal_dispatch;
 use function pcntl_sigprocmask;
 use function pcntl_sigtimedwait;
-use function pcntl_wait;
 use function pcntl_waitpid;
 use function posix_getgrnam;
 use function posix_getpid;
@@ -1759,34 +1759,28 @@ class UDP_Server_CLI implements Servers
       $this->Logger->log(debug: '>_ Type `@#Green:monitor@;` to enter in Monitor mode.@\;');
       $this->Logger->log(notice: '>_ Autocompletation and history enabled.@\\\;');
 
+      // @ Worker exits are reaped only by the SIGCHLD dispatch (`recover()`)
+      //   — or by reap() as PID 1 — and reforked by revive(): a raw wait here
+      //   would steal them, stopping the server on a crash and losing a worker
+      //   that exits 0. A SIGCHLD that arrives while readline() waits
+      //   normally interrupts it (no SA_RESTART); one that lands before
+      //   readline() blocks is dispatched only after the next keystroke.
       while ($this->Mode === Modes::Interactive) {
          // @ Calls signal handlers for pending signals
          pcntl_signal_dispatch();
 
-         // @ Refork the workers the SIGCHLD dispatch reaped
+         // @ Reap the orphans a container's init must (PID 1 only), then
+         //   refork the workers the SIGCHLD dispatch — or reap() — found dead
+         $this->reap();
          $this->revive();
 
-         // @ Suspends execution of the current process until a child has exited, or until a signal is delivered
-         pcntl_wait($status, WNOHANG | WUNTRACED);
+         $interact = $this->Commands->interact();
 
-         // If child is running?
-         if ($status === 0) {
-            $interact = $this->Commands->interact();
+         $this->Logger->log(debug: '@\;');
 
-            $this->Logger->log(debug: '@\;');
-
-            // @ Wait for command output before looping
-            if ($interact === false) {
-               usleep(100000 * $this->workers); // @ wait 0.1 s * qt workers
-            }
-         }
-         else if ($status > 0) { // If a child has already exited?
-            $this->Logger->log(error: '@\;Process child exited!@\;');
-            $this->Process->Signals->send(SIGINT);
-            break;
-         }
-         else if ($status === -1) { // If error
-            break;
+         // @ Wait for command output before looping
+         if ($interact === false) {
+            usleep(100000 * $this->workers); // @ wait 0.1 s * qt workers
          }
       }
 
@@ -1813,37 +1807,32 @@ class UDP_Server_CLI implements Servers
       $Output->clear();
       $this->__get('@status');
 
-      // @ Loop
+      // @ Loop — worker exits are left to the SIGCHLD dispatch and revive(),
+      //   as in interacting(): a raw wait would steal them
+      $drawn = hrtime(true);
       while ($this->Mode === Modes::Monitor) {
+         // @ Reap the orphans a container's init must (PID 1 only), then
+         //   refork the workers the SIGCHLD dispatch — or reap() — found dead
+         $this->reap();
+         $this->revive();
+
+         // @ Redraw once a second, never per wake-up: a crash must not wipe
+         //   its own log lines at once, nor a crash loop flood the terminal
+         $elapsed = hrtime(true) - $drawn;
+         if ($elapsed >= 1_000_000_000) {
+            $this->__get('@status');
+
+            $drawn = hrtime(true);
+            $elapsed = 0;
+         }
+
+         // @ Sleep until the next redraw; any signal (a SIGCHLD, a stop, a
+         //   SIGTSTP switching to Interactive) cuts it short and is
+         //   dispatched before the loop condition is checked again
+         usleep(max(1, (int) ((1_000_000_000 - $elapsed) / 1_000)));
+
          // @ Calls signal handlers for pending signals
          pcntl_signal_dispatch();
-
-         // @ Refork the workers the SIGCHLD dispatch reaped
-         $this->revive();
-
-         // @ Suspends execution of the current process until a child has exited, or until a signal is delivered
-         pcntl_wait($status, WUNTRACED);
-
-         // @ Calls signal handlers for pending signals again
-         pcntl_signal_dispatch();
-
-         // @ Refork the workers the SIGCHLD dispatch reaped
-         $this->revive();
-
-         // If child is running?
-         if ($status === 0) {
-            // ...
-         }
-         else if ($status > 0) { // If a child has already exited?
-            $this->Logger->log(error: '@\;Process child exited!@\;');
-            $this->Process->Signals->send(SIGINT);
-            break;
-         }
-         else if ($status === -1) { // If error ignore
-            // ...
-         }
-
-         $this->__get('@status');
       }
 
       $Output->Cursor->show();
