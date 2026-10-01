@@ -524,7 +524,14 @@ class Connections implements WPI\Connections
          $Reference = $Peer[1] ?? null;
          $Connection = $Reference?->get();
          if ($Connection instanceof Connection && $Peer !== null) {
-            if (ConnectionAuthority::check($Connection) === false) {
+            // ? An admitted peer whose source IP was blacklisted since is
+            //   retired on its next datagram — keyed on the ledger IP, never
+            //   on the public `$ip` an application may rewrite. The next pass
+            //   refuses and counts this datagram as a new peer.
+            if (
+               ConnectionAuthority::check($Connection) === false
+               || isSet(self::$blacklist[$Peer[0]])
+            ) {
                $Connection->close();
                unset($Connection);
                self::collect();

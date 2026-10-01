@@ -216,8 +216,10 @@ class Connection extends Packages
          return false;
       }
 
-      // @ Check blacklist
-      if ( isSet(Connections::$blacklist[$this->ip]) ) {
+      // @ Check blacklist — keyed on the immutable admission key, never on
+      //   the writable `$ip`
+      [$IP] = Peer::parse($this->id);
+      if ( isSet(Connections::$blacklist[$IP]) ) {
          return false;
       }
 
@@ -265,7 +267,10 @@ class Connection extends Packages
       // ! Per-instance window baseline (was a per-method `static` shared by
       //   every Connection — the delta measured one peer against another).
       if (($this->writes - $this->limitedWrites) >= $packages) {
-         Connections::$blacklist[$this->ip] = true;
+         // ! The immutable admission key, never the writable `$ip`: the entry
+         //   must name the source IP the admission ledger charged
+         [$IP] = Peer::parse($this->id);
+         Connections::$blacklist[$IP] = true;
          return $this->close();
       }
 

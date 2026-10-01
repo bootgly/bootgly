@@ -31,7 +31,8 @@ use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections\Connection\Lease;
  * EVENT_READ payload of `Server->Socket`. When `stream_select()` marks the
  * socket readable, the loop calls `reading()` here; one bounded turn drains
  * at most its configured batch, resolving each datagram to its per-peer
- * Connection and handing it to the Decoder (or SAPI handler directly).
+ * Connection and handing it to the Decoder (or SAPI handler directly). A
+ * zero-length datagram is counted as a read error and skipped.
  */
 class Router implements WPI\Connections\Packages
 {
@@ -60,7 +61,8 @@ class Router implements WPI\Connections\Packages
 
    /**
     * Drain one bounded batch from the shared socket and route each datagram
-    * to its per-peer Connection.
+    * to its per-peer Connection. A zero-length datagram is counted in
+    * `Connections::$errors['read']` and skipped without ending the batch.
     *
     * @param resource $Socket
     * @param null|int $length
@@ -87,8 +89,15 @@ class Router implements WPI\Connections\Packages
             $buffer = false;
          }
 
-         if ($buffer === false || $buffer === '') {
+         // ? The listener is nonblocking: only `false` means drained
+         if ($buffer === false) {
             break;
+         }
+         // ? A legal zero-length datagram is consumed and counted, never
+         //   delivered — and it must not end the drain of the ones behind it
+         if ($buffer === '') {
+            Connections::$errors['read']++;
+            continue;
          }
 
          $received = strlen($buffer);

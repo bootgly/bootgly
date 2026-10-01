@@ -45,6 +45,8 @@ use const WNOHANG;
 use const WUNTRACED;
 use function array_diff;
 use function array_merge;
+use function array_search;
+use function array_shift;
 use function array_slice;
 use function array_values;
 use function chdir;
@@ -63,6 +65,7 @@ use function getcwd;
 use function getenv;
 use function in_array;
 use function is_file;
+use function is_int;
 use function is_resource;
 use function method_exists;
 use function microtime;
@@ -71,9 +74,11 @@ use function pcntl_fork;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
 use function pcntl_sigprocmask;
+use function pcntl_sigtimedwait;
 use function pcntl_wait;
 use function pcntl_waitpid;
 use function posix_getgrnam;
+use function posix_getpid;
 use function posix_getppid;
 use function posix_getpwnam;
 use function posix_getuid;
@@ -197,6 +202,8 @@ class UDP_Server_CLI implements Servers
    protected $daemonReady = null;
    /** The re-admission retry a refused `resume()` armed (its deferred timer id), or null. */
    private null|int $retry = null;
+   /** @var array<int,int> Worker indexes reaped by the SIGCHLD dispatch, awaiting refork. */
+   private array $casualties = [];
    // # Reload — launch command captured at start(), replayed by reload() via
    //   pcntl_exec so the master re-execs into a fresh image (same PID). UDP is
    //   connectionless, so reload has no in-flight connections to drain.
@@ -204,6 +211,8 @@ class UDP_Server_CLI implements Servers
    /** @var array<int,string> */
    protected static array $argv = [];
    protected static string $directory = '';
+   /** @var array<int> The signal mask the launcher held: every worker — forked, revived or reloaded — serves under it. */
+   protected static array $mask = [];
    // # Socket
    protected null|string $socket;
    /** @var array<array<bool|int|string>|string> */
@@ -862,41 +871,13 @@ class UDP_Server_CLI implements Servers
 
                   $this->Logger->log(warning: "Worker #{$deadIndex} (PID: {$deadPID}) crashed, reforking...@.;");
 
-                  $newPID = pcntl_fork();
-
-                  // # Child process (new worker)
-                  if ($newPID === 0) {
-                     $this->watch();
-
-                     if ($this->Process->descend($deadIndex) === false) {
-                        exit(1);
-                     }
-
-                     $this->Process->title = 'Bootgly_UDP_Server_CLI: child process (Worker #' . Process::$index . ')';
-
-                     Display::show(Display::MESSAGE, Display::TIMESTAMP, Display::CHANNEL, Display::SEVERITY);
-
-                     $this->instance();
-
-                     self::$Event->add(
-                        $this->Socket,
-                        Select::EVENT_READ,
-                        $this->Connections->Router
-                     );
-                     self::$Event->loop();
-
-                     $this->stop();
-
-                     exit(0);
-                  }
-                  // # Master process
-                  else if ($newPID > 0) {
-                     $this->Process->Children->push($newPID, $deadIndex);
-
-                     $this->Logger->log(notice: "Worker #{$deadIndex} recovered (new PID: {$newPID})@.;");
-
-                     $this->Process->State->save($this->describe());
-                  }
+                  // ! Never fork inside this dispatch: pcntl flags its
+                  //   dispatcher busy while a user handler runs, and a child
+                  //   forked in that window inherits the flag and the block
+                  //   mask — its own signal handlers and timers would never
+                  //   fire again. The master loops refork from plain loop
+                  //   context via revive().
+                  $this->casualties[] = $deadIndex;
                }
             }
             break;
@@ -1143,6 +1124,7 @@ class UDP_Server_CLI implements Servers
          array_slice($argv, 1)
       );
       self::$directory = getcwd() ?: '';
+      self::$mask = $PreviousSignals;
       Record::$qualifier = (string) ($this->port ?? 0);
 
       // ! Process
@@ -1217,42 +1199,50 @@ class UDP_Server_CLI implements Servers
          return false;
       }
 
-      // @ Fork process workers...
+      // ? Every worker binds its own socket from this descriptor table, right
+      //   after the fork: prove the event backend retains one bound here
+      //   (FD_SETSIZE), or refuse loudly now instead of reforking workers
+      //   that can never read.
+      $probeSocket = false;
+      try {
+         $probeSocket = @stream_socket_server(
+            'udp://' . ($this->host ?? '0.0.0.0') . ':0',
+            $probeCode,
+            $probeMessage,
+            STREAM_SERVER_BIND
+         );
+      }
+      catch (Throwable) {
+         $probeSocket = false;
+      }
+      if (
+         $probeSocket === false
+         || self::$Event->add($probeSocket, Select::EVENT_READ, null) === false
+         || self::$Event->del($probeSocket, Select::EVENT_READ) === false
+      ) {
+         if ($probeSocket !== false) {
+            fclose($probeSocket);
+         }
+         $this->Logger->log(error: '@\;Listener rejected by the event backend during startup.@\;');
+         exit(1);
+      }
+      fclose($probeSocket);
+
+      // @ Fork process workers — each runs the work() boot body
       $this->Process->fork($this->workers, instance: function (
          Process $Process,
          int $index,
       ) use (
          &$Claimed,
          &$Launched,
-         &$Masked,
-         $PreviousSignals,
          $Release,
          $Starting,
       ): void {
-         $this->watch();
-
-         $Process->title = 'Bootgly_UDP_Server_CLI: child process (Worker #' . Process::$index . ')';
-
-         Display::show(Display::MESSAGE, Display::TIMESTAMP, Display::CHANNEL, Display::SEVERITY);
-
-         // @ Create stream socket server
-         $this->instance();
-
-         // Event Loop
-         self::$Event->add(
-            $this->Socket,
-            Select::EVENT_READ,
-            $this->Connections->Router
-         );
-         $Launched = true;
-         $Release($Starting);
-         $Claimed = false;
-         self::unmask($PreviousSignals);
-         $Masked = false;
-         self::$Event->loop();
-
-         // @ Close stream socket server
-         $this->stop();
+         $this->work($Process, $index, function () use (&$Claimed, &$Launched, $Release, $Starting): void {
+            $Launched = true;
+            $Release($Starting);
+            $Claimed = false;
+         });
       });
 
       // @ Set master process title
@@ -1460,6 +1450,126 @@ class UDP_Server_CLI implements Servers
       );
    }
 
+   /**
+    * The per-worker boot body: watchdog and fork hygiene, process title, log
+    * display, socket instance, event registration and the event loop. Called
+    * by both the initial fork and revive(), so a recovered worker is
+    * indistinguishable from an originally-forked one.
+    *
+    * @param Process $Process The worker process, already descended.
+    * @param int $index Zero-based worker index.
+    * @param null|Closure $Publish Run once the worker serves (the initial
+    *   fork releases its start claim there), before the launcher's mask is
+    *   restored.
+    */
+   protected function work (Process $Process, int $index, null|Closure $Publish = null): void
+   {
+      // ! A worker revived while the server is paused stays paused: the
+      //   master's state at the fork is inherited here, before instance()
+      //   marks this process Running
+      $paused = $this->Status === Status::Paused;
+
+      $this->watch();
+
+      $Process->title = 'Bootgly_UDP_Server_CLI: child process (Worker #' . Process::$index . ')';
+
+      Display::show(Display::MESSAGE, Display::TIMESTAMP, Display::CHANNEL, Display::SEVERITY);
+
+      // @ Create stream socket server
+      $this->instance();
+
+      // ? A socket the event backend refuses (FD_SETSIZE) is a worker that
+      //   would never read: refuse service, as the TCP worker boot does
+      if ($paused) {
+         // @ Registered by the master's next resume (SIGCONT), which retries
+         //   a refusal itself
+         $this->Status = Status::Paused;
+      }
+      else if (self::$Event->add($this->Socket, Select::EVENT_READ, $this->Connections->Router) === false) {
+         $this->Logger->log(critical: '@\;Worker socket rejected by the event backend; refusing to enter the event loop.@\;');
+         exit(1);
+      }
+
+      if ($Publish !== null) {
+         $Publish();
+      }
+
+      // ! Serve under the launcher's mask — the start transaction blocked
+      //   every signal, and a revived worker must never inherit more
+      self::unmask(self::$mask);
+
+      // Event Loop
+      self::$Event->loop();
+
+      // @ Close stream socket server
+      $this->stop();
+   }
+
+   /**
+    * Reap the orphans a container hands its init. As PID 1 this master is the
+    * reaper of every process reparented to it — the children a worker leaves
+    * behind among them — and no SIGCHLD dispatch reaps those. Outside PID 1
+    * nothing is reaped here: `recover()` reaps per known PID, so an
+    * application's `proc_open()` status is never stolen. A tracked worker
+    * found here is reforked like one `recover()` reaped.
+    */
+   protected function reap (): void
+   {
+      if (posix_getpid() !== 1) {
+         return;
+      }
+
+      // @@ Drain every reapable child, tracked or not
+      while (($PID = pcntl_waitpid(-1, $status, WNOHANG)) > 0) {
+         $index = array_search($PID, $this->Process->Children->PIDs, true);
+         if ($index === false) {
+            continue;
+         }
+
+         $this->Process->Children->remove($PID);
+         if ($this->Process->stopping || $this->Process->reloading) {
+            continue;
+         }
+
+         $this->Logger->log(warning: "Worker #{$index} (PID: {$PID}) crashed, reforking...@.;");
+         $this->casualties[] = (int) $index;
+      }
+   }
+
+   /**
+    * Refork the workers reaped by the SIGCHLD dispatch. Runs from the master
+    * loops — plain execution context — because a child forked inside
+    * `pcntl_signal_dispatch()` inherits its busy flag and goes signal-deaf.
+    */
+   protected function revive (): void
+   {
+      while ($this->casualties !== []) {
+         $deadIndex = array_shift($this->casualties);
+
+         $newPID = pcntl_fork();
+
+         // # Child process (new worker)
+         if ($newPID === 0) {
+            if ($this->Process->descend($deadIndex) === false) {
+               exit(1);
+            }
+
+            // @ Run the SAME boot body as the initial fork
+            $this->work($this->Process, $deadIndex);
+
+            exit(0);
+         }
+         // # Master process
+         else if ($newPID > 0) {
+            $this->Process->Children->push($newPID, $deadIndex);
+
+            $this->Logger->log(notice: "Worker #{$deadIndex} recovered (new PID: {$newPID})@.;");
+
+            $this->Process->State->save($this->describe());
+         }
+      }
+   }
+
    /** Fork the final daemon master before any serving worker exists. */
    protected function detach (): void
    {
@@ -1600,12 +1710,17 @@ class UDP_Server_CLI implements Servers
 
       $this->Logger->log(info: 'Running in Daemon mode (no UI)...');
 
-      // @ Daemon master loop (Status changes via signal handlers)
+      // @ Daemon master loop (Status changes via signal handlers).
+      //   Child exits are reaped exclusively by the SIGCHLD handler
+      //   (`recover()` drains every reapable worker) — a raw waitpid here
+      //   would RACE it and could steal a worker exit, losing the refork.
       while ($this->Status === Status::Running) { // @phpstan-ignore identical.alwaysTrue
          pcntl_signal_dispatch();
 
-         // @ Reap any zombie children
-         pcntl_waitpid(-1, $status, WNOHANG);
+         // @ Reap the orphans a container's init must (PID 1 only), then
+         //   refork the workers the SIGCHLD dispatch — or reap() — found dead
+         $this->reap();
+         $this->revive();
 
          usleep(500000); // 0.5s
       }
@@ -1619,11 +1734,16 @@ class UDP_Server_CLI implements Servers
       // @ Master loop (no fork): stay in the foreground as the container/service
       //   process. Logs go to stdout and SIGTERM/SIGINT stop via signal handlers.
       //   Master PID is already this process and was saved before the dispatch.
+      //   Child exits are reaped exclusively by the SIGCHLD handler
+      //   (`recover()` drains every reapable worker) — a raw waitpid here
+      //   would RACE it and could steal a worker exit, losing the refork.
       while ($this->Status === Status::Running) { // @phpstan-ignore identical.alwaysTrue
          pcntl_signal_dispatch();
 
-         // @ Reap any zombie children
-         pcntl_waitpid(-1, $status, WNOHANG);
+         // @ Reap the orphans a container's init must (PID 1 only), then
+         //   refork the workers the SIGCHLD dispatch — or reap() — found dead
+         $this->reap();
+         $this->revive();
 
          usleep(500000); // 0.5s
       }
@@ -1642,6 +1762,9 @@ class UDP_Server_CLI implements Servers
       while ($this->Mode === Modes::Interactive) {
          // @ Calls signal handlers for pending signals
          pcntl_signal_dispatch();
+
+         // @ Refork the workers the SIGCHLD dispatch reaped
+         $this->revive();
 
          // @ Suspends execution of the current process until a child has exited, or until a signal is delivered
          pcntl_wait($status, WNOHANG | WUNTRACED);
@@ -1695,11 +1818,17 @@ class UDP_Server_CLI implements Servers
          // @ Calls signal handlers for pending signals
          pcntl_signal_dispatch();
 
+         // @ Refork the workers the SIGCHLD dispatch reaped
+         $this->revive();
+
          // @ Suspends execution of the current process until a child has exited, or until a signal is delivered
          pcntl_wait($status, WUNTRACED);
 
          // @ Calls signal handlers for pending signals again
          pcntl_signal_dispatch();
+
+         // @ Refork the workers the SIGCHLD dispatch reaped
+         $this->revive();
 
          // If child is running?
          if ($status === 0) {
@@ -1956,6 +2085,20 @@ class UDP_Server_CLI implements Servers
       if (self::$directory !== '') {
          @chdir(self::$directory);
       }
+      // ? A stop that arrived while this dispatch held every signal blocked
+      //   is still pending: unblocking it below would hand it to this image,
+      //   and the exec would discard it — honour it instead of re-executing.
+      $Info = [];
+      $pending = @pcntl_sigtimedwait([SIGHUP, SIGINT, SIGQUIT, SIGTERM], $Info, 0, 1);
+      if (is_int($pending) && $pending > 0) {
+         $this->stop();
+         return;
+      }
+      // ! reload() runs inside the SIGUSR2 dispatch, whose full block mask
+      //   SURVIVES execve — without a reset the fresh master (and every
+      //   worker it forks) would be born deaf to its lifecycle signals.
+      //   Restored to the launcher's mask, raw: nothing may throw here.
+      pcntl_sigprocmask(SIG_SETMASK, self::$mask);
       pcntl_exec(self::$binary, self::$argv, getenv());
 
       // ? exec only returns on failure.

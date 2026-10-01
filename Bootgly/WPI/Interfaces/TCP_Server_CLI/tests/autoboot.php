@@ -29,5 +29,7 @@ return new Suite(
       '1.10-fallback-yields',
       // # 1.0.x (RH-H3-residual): a worker listener refused by the selector on resume() stays Paused and retries
       '1.11-resume-listener-refusal',
+      // # 1.0.x (TCP-14): stats reset restores the declared error shape
+      '1.12-stats-reset-shape',
    ]
 );

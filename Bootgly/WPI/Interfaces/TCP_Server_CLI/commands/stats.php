@@ -53,9 +53,9 @@ return new class extends Command
             Connections::$read = 0;
             Connections::$written = 0;
       
-            Connections::$errors['connections'] = 0;
-            Connections::$errors['read'] = 0;
-            Connections::$errors['write'] = 0;
+            // ! The declared shape, spelled once as the constructor does — a
+            //   reset can neither miss a key nor leave a stray one behind
+            Connections::$errors = ['connection' => 0, 'read' => 0, 'write' => 0];
             return true;
          }
 
