@@ -47,7 +47,7 @@ opinionated extras on top.
 - **SHOULD** — No trivial wrappers: a method that only returns a property should not exist. Expose
   stored state as a property.
 - **RECOMMEND** — Expose state in this order: an asymmetric-visibility property
-  (`public private(set)`), then asymmetric visibility with a property hook (computed, aliased or lazy
-  state), then a method — only when real behaviour exists.
+  (`public private(set)`), then a property hook for computed, aliased or lazy state (a get-only hook
+  is already read-only: declare it plain `public`), then a method — only when real behaviour exists.
 - **RECOMMEND** — Prefer the simplest, lowest-overhead design at equal clarity. Never trade clarity,
   security or a framework contract for speed.

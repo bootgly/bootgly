@@ -24,6 +24,7 @@
 
 ## Entities
 
-- **RECOMMEND** — Classes are nouns (abstract classes and collections plural); interfaces end in `-ing`
-  (`Logging`); traits in `-able` or `-ed` (`Loggable`); enums are plural nouns (`Modes`). Controllers
-  are plural (`Posts`), models singular (`Post`).
+- **RECOMMEND** — Classes are nouns (abstract classes and collections plural); traits end in `-able` or
+  `-ed` (`Loggable`); enums are plural nouns (`Modes`). Interfaces are nouns too, and take the `-ing`
+  form only to avoid a clash with a same-named class in the same directory (class `Template` →
+  interface `Templating`). Controllers are plural (`Posts`), models singular (`Post`).
