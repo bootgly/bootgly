@@ -45,7 +45,6 @@ use const WNOHANG;
 use function array_diff;
 use function array_merge;
 use function array_search;
-use function array_shift;
 use function array_slice;
 use function array_values;
 use function chdir;
@@ -64,18 +63,22 @@ use function getcwd;
 use function getenv;
 use function hrtime;
 use function in_array;
+use function intdiv;
 use function is_file;
 use function is_int;
 use function is_resource;
 use function max;
 use function method_exists;
 use function microtime;
+use function min;
 use function pcntl_exec;
 use function pcntl_fork;
+use function pcntl_get_last_error;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
 use function pcntl_sigprocmask;
 use function pcntl_sigtimedwait;
+use function pcntl_strerror;
 use function pcntl_waitpid;
 use function posix_getgrnam;
 use function posix_getpid;
@@ -92,6 +95,7 @@ use function register_shutdown_function;
 use function rtrim;
 use function str_contains;
 use function stream_context_create;
+use function stream_isatty;
 use function stream_select;
 use function stream_set_blocking;
 use function stream_socket_pair;
@@ -152,6 +156,13 @@ class UDP_Server_CLI implements Servers
    protected const string TRANSPORT = Configs::class;
    /** @var array<int,class-string<Configuring>> Every Configs this node applies. */
    protected const array CONFIGS = [Configs::class];
+   // A slot whose workers die before entering their event loop REVIVE_BURST
+   // times in a row is a crash loop (a boot that always fails): it is
+   // reforked after REVIVE_DELAY, doubled per further death, capped at
+   // REVIVE_CAP — not once per boot time. Delays in nanoseconds.
+   private const int REVIVE_BURST = 3;
+   private const int REVIVE_DELAY = 500_000_000;
+   private const int REVIVE_CAP = 5_000_000_000;
 
    public Logger $Logger {
       get {
@@ -202,8 +213,16 @@ class UDP_Server_CLI implements Servers
    protected $daemonReady = null;
    /** The re-admission retry a refused `resume()` armed (its deferred timer id), or null. */
    private null|int $retry = null;
-   /** @var array<int,int> Worker indexes reaped by the SIGCHLD dispatch, awaiting refork. */
+   /** @var array<int,int> Worker index reaped by the SIGCHLD dispatch (or reap()) => hrtime (ns) from which revive() may refork it. */
    private array $casualties = [];
+   /** @var array<int,resource> Worker index => master end of the pair its current worker writes one byte to on entering its event loop. */
+   private array $Beacons = [];
+   /** @var resource|null A worker's own end of its beacon pair, until it enters its event loop. */
+   private $Beacon = null;
+   /** @var array<int,int> Worker index => consecutive worker deaths before the event loop. */
+   private array $streaks = [];
+   /** Consecutive `pcntl_fork()` refusals in revive(); 0 once a fork succeeds. */
+   private int $refusals = 0;
    // # Reload — launch command captured at start(), replayed by reload() via
    //   pcntl_exec so the master re-execs into a fresh image (same PID). UDP is
    //   connectionless, so reload has no in-flight connections to drain.
@@ -869,15 +888,13 @@ class UDP_Server_CLI implements Servers
                while ($dead = $this->Process->recover()) {
                   [$deadIndex, $deadPID] = $dead;
 
-                  $this->Logger->log(warning: "Worker #{$deadIndex} (PID: {$deadPID}) crashed, reforking...@.;");
-
                   // ! Never fork inside this dispatch: pcntl flags its
                   //   dispatcher busy while a user handler runs, and a child
                   //   forked in that window inherits the flag and the block
                   //   mask — its own signal handlers and timers would never
                   //   fire again. The master loops refork from plain loop
                   //   context via revive().
-                  $this->casualties[] = $deadIndex;
+                  $this->schedule($deadIndex, $deadPID);
                }
             }
             break;
@@ -1228,6 +1245,14 @@ class UDP_Server_CLI implements Servers
       }
       fclose($probeSocket);
 
+      // ! One beacon pair per slot, before the fork: schedule() tells a
+      //   worker that died at boot from one that served by its byte. Test
+      //   mode never reforks, so it never pays for them.
+      $Pairs = [];
+      for ($index = 0; $this->Mode !== Modes::Test && $index < $this->workers; $index++) {
+         $Pairs[$index] = @stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+      }
+
       // @ Fork process workers — each runs the work() boot body
       $this->Process->fork($this->workers, instance: function (
          Process $Process,
@@ -1237,13 +1262,34 @@ class UDP_Server_CLI implements Servers
          &$Launched,
          $Release,
          $Starting,
+         $Pairs,
       ): void {
+         foreach ($Pairs as $slot => $Pair) {
+            if ($Pair === false) {
+               continue;
+            }
+            fclose($Pair[0]);
+            if ($slot === $index) {
+               $this->Beacon = $Pair[1];
+               continue;
+            }
+            fclose($Pair[1]);
+         }
+
          $this->work($Process, $index, function () use (&$Claimed, &$Launched, $Release, $Starting): void {
             $Launched = true;
             $Release($Starting);
             $Claimed = false;
          });
       });
+      foreach ($Pairs as $index => $Pair) {
+         if ($Pair === false) {
+            continue;
+         }
+         fclose($Pair[1]);
+         stream_set_blocking($Pair[0], false);
+         $this->Beacons[$index] = $Pair[0];
+      }
 
       // @ Set master process title
       $this->Process->title = 'Bootgly_UDP_Server_CLI: master process';
@@ -1498,6 +1544,14 @@ class UDP_Server_CLI implements Servers
       //   every signal, and a revived worker must never inherit more
       self::unmask(self::$mask);
 
+      // @ Booted: tell the master through the beacon, so a later death of
+      //   this worker is never taken for a boot that fails
+      if ($this->Beacon !== null) {
+         @fwrite($this->Beacon, '!');
+         fclose($this->Beacon);
+         $this->Beacon = null;
+      }
+
       // Event Loop
       self::$Event->loop();
 
@@ -1531,8 +1585,7 @@ class UDP_Server_CLI implements Servers
             continue;
          }
 
-         $this->Logger->log(warning: "Worker #{$index} (PID: {$PID}) crashed, reforking...@.;");
-         $this->casualties[] = (int) $index;
+         $this->schedule((int) $index, $PID);
       }
    }
 
@@ -1543,10 +1596,45 @@ class UDP_Server_CLI implements Servers
     */
    protected function revive (): void
    {
-      while ($this->casualties !== []) {
-         $deadIndex = array_shift($this->casualties);
+      // ? A stop owns the workers: nothing is reforked behind it
+      if ($this->Process->stopping) {
+         return;
+      }
 
-         $newPID = pcntl_fork();
+      $now = (int) hrtime(true);
+
+      // @@ Refork every slot whose time has come
+      foreach ($this->casualties as $deadIndex => $due) {
+         // ? Backing off a crash loop or a refused fork
+         if ($due > $now) {
+            continue;
+         }
+
+         $Pair = @stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+
+         // ! `@`: a refused fork (EAGAIN under RLIMIT_NPROC or a cgroup
+         //   pids.max, ENOMEM) must reach the -1 branch below, not become an
+         //   ErrorException that ends the master and every serving worker
+         $newPID = @pcntl_fork();
+
+         // ? Refused: the slot stays queued and is retried in a second
+         if ($newPID === -1) {
+            if ($Pair !== false) {
+               fclose($Pair[0]);
+               fclose($Pair[1]);
+            }
+            $this->refusals++;
+            if ($this->refusals === 1) {
+               $errno = pcntl_get_last_error();
+               $error = pcntl_strerror($errno);
+               $this->Logger->log(
+                  error: "Worker #{$deadIndex} could not be reforked: pcntl_fork() failed ({$errno}: {$error}); retrying every second...@.;"
+               );
+            }
+            $this->casualties[$deadIndex] = $now + 1_000_000_000;
+
+            return;
+         }
 
          // # Child process (new worker)
          if ($newPID === 0) {
@@ -1554,20 +1642,85 @@ class UDP_Server_CLI implements Servers
                exit(1);
             }
 
+            // @ Keep only its own beacon end
+            foreach ($this->Beacons as $End) {
+               fclose($End);
+            }
+            $this->Beacons = [];
+            if ($Pair !== false) {
+               fclose($Pair[0]);
+               $this->Beacon = $Pair[1];
+            }
+
+            // ! Off the console: a child forked under the armed prompt inherits
+            //   readline's state, and its PHP exit would put the operator's
+            //   terminal back in cooked mode beneath the master's prompt
+            //   (a Daemon master closed STDIN at detach(): nothing to drop)
+            $Console = null;
+            if (is_resource(STDIN) && stream_isatty(STDIN)) {
+               fclose(STDIN);
+               $Console = fopen('/dev/null', 'r');
+            }
+
             // @ Run the SAME boot body as the initial fork
             $this->work($this->Process, $deadIndex);
 
             exit(0);
          }
+
          // # Master process
-         else if ($newPID > 0) {
-            $this->Process->Children->push($newPID, $deadIndex);
-
-            $this->Logger->log(notice: "Worker #{$deadIndex} recovered (new PID: {$newPID})@.;");
-
-            $this->Process->State->save($this->describe());
+         unset($this->casualties[$deadIndex]);
+         if ($Pair !== false) {
+            fclose($Pair[1]);
+            stream_set_blocking($Pair[0], false);
+            $this->Beacons[$deadIndex] = $Pair[0];
          }
+         $this->refusals = 0;
+         $this->Process->Children->push($newPID, $deadIndex);
+
+         $this->Logger->log(notice: "Worker #{$deadIndex} recovered (new PID: {$newPID})@.;");
+
+         $this->Process->State->save($this->describe());
       }
+   }
+   /**
+    * Queue a worker slot the SIGCHLD dispatch (or reap()) found dead for
+    * revive(). Its first deaths are reforked on the next loop turn; a slot
+    * whose workers keep dying before their event loop — a boot that always
+    * fails — is reforked after a delay that doubles per death, up to
+    * `REVIVE_CAP`. Runs inside the dispatch, so it never forks.
+    */
+   private function schedule (int $index, int $PID): void
+   {
+      $now = (int) hrtime(true);
+
+      // @ A worker that died before its event loop (no byte on its beacon)
+      //   extends the slot's streak; one that served resets it — a worker
+      //   killed by a request is reforked at once, however young
+      $served = true;
+      $End = $this->Beacons[$index] ?? null;
+      if ($End !== null) {
+         $served = @fread($End, 1) === '!';
+         fclose($End);
+         unset($this->Beacons[$index]);
+      }
+      $streak = $served ? 0 : ($this->streaks[$index] ?? 0) + 1;
+      $this->streaks[$index] = $streak;
+
+      // ?: Not a crash loop: refork on the next loop turn
+      if ($streak < self::REVIVE_BURST) {
+         $this->Logger->log(warning: "Worker #{$index} (PID: {$PID}) crashed, reforking...@.;");
+         $this->casualties[$index] = $now;
+
+         return;
+      }
+
+      $delay = min(self::REVIVE_CAP, self::REVIVE_DELAY << min($streak - self::REVIVE_BURST, 8));
+      $seconds = $delay / 1_000_000_000;
+      $this->Logger->log(
+         error: "Worker #{$index} (PID: {$PID}) died before serving {$streak} times in a row, reforking in {$seconds}s...@.;"
+      );
+      $this->casualties[$index] = $now + $delay;
    }
 
    /** Fork the final daemon master before any serving worker exists. */
@@ -1762,19 +1915,41 @@ class UDP_Server_CLI implements Servers
       // @ Worker exits are reaped only by the SIGCHLD dispatch (`recover()`)
       //   — or by reap() as PID 1 — and reforked by revive(): a raw wait here
       //   would steal them, stopping the server on a crash and losing a worker
-      //   that exits 0. A SIGCHLD that arrives while readline() waits
-      //   normally interrupts it (no SA_RESTART); one that lands before
-      //   readline() blocks is dispatched only after the next keystroke.
-      while ($this->Mode === Modes::Interactive) {
+      //   that exits 0. The prompt never blocks this supervision: it waits for
+      //   input at most 0.5 s, and any signal cuts the wait short.
+      $Supervise = function (): int|false {
          // @ Calls signal handlers for pending signals
          pcntl_signal_dispatch();
 
          // @ Reap the orphans a container's init must (PID 1 only), then
          //   refork the workers the SIGCHLD dispatch — or reap() — found dead
          $this->reap();
+         $PIDs = $this->Process->Children->PIDs;
          $this->revive();
 
-         $interact = $this->Commands->interact();
+         // @ A signal that landed while revive() forked — a SIGCHLD, a stop —
+         //   is handled now, not one wait later
+         pcntl_signal_dispatch();
+
+         // ?: Monitor, or stopping
+         if ($this->Mode !== Modes::Interactive || $this->Status === Status::Stopping) {
+            return false;
+         }
+
+         // : Wait 0.5 s at most, never past the next queued refork (0 polls
+         //   one already due); after the workers changed, re-check soon — a
+         //   SIGCHLD can still land between that dispatch and the wait,
+         //   which it would not cut short
+         $wait = $this->Process->Children->PIDs === $PIDs ? 500_000 : 50_000;
+         $now = (int) hrtime(true);
+         foreach ($this->casualties as $due) {
+            $wait = min($wait, max(0, intdiv($due - $now, 1_000)));
+         }
+
+         return $wait;
+      };
+      foreach ($this->Commands->prompting($Supervise) as $input) {
+         $interact = $this->Commands->execute($input);
 
          $this->Logger->log(debug: '@\;');
 
@@ -1782,6 +1957,14 @@ class UDP_Server_CLI implements Servers
          if ($interact === false) {
             usleep(100000 * $this->workers); // @ wait 0.1 s * qt workers
          }
+      }
+
+      // ? The terminal ended (Ctrl-D, a hangup) while nothing else ends the
+      //   console: stop, as a typed `stop` would
+      if ($this->Mode === Modes::Interactive && $this->Status !== Status::Stopping) {
+         $this->stop();
+
+         return;
       }
 
       if ($this->Mode === Modes::Monitor) {
@@ -1826,10 +2009,16 @@ class UDP_Server_CLI implements Servers
             $elapsed = 0;
          }
 
-         // @ Sleep until the next redraw; any signal (a SIGCHLD, a stop, a
-         //   SIGTSTP switching to Interactive) cuts it short and is
-         //   dispatched before the loop condition is checked again
-         usleep(max(1, (int) ((1_000_000_000 - $elapsed) / 1_000)));
+         // @ Sleep until the next redraw or the next due refork, whichever
+         //   comes first; any signal (a SIGCHLD, a stop, a SIGTSTP switching
+         //   to Interactive) cuts it short and is dispatched before the loop
+         //   condition is checked again
+         $wait = intdiv(1_000_000_000 - $elapsed, 1_000);
+         $now = (int) hrtime(true);
+         foreach ($this->casualties as $due) {
+            $wait = min($wait, intdiv($due - $now, 1_000));
+         }
+         usleep(max(1, $wait));
 
          // @ Calls signal handlers for pending signals
          pcntl_signal_dispatch();
@@ -2009,6 +2198,12 @@ class UDP_Server_CLI implements Servers
 
             $this->Process->Children->terminate();
 
+            // @ The beacons of the stopped workers (a Test-mode master lives on)
+            foreach ($this->Beacons as $End) {
+               fclose($End);
+            }
+            $this->Beacons = [];
+
             $this->Logger->log(critical: "{$children} worker(s) stopped!@\\;");
 
             // @ Clean all per-project state files
@@ -2029,6 +2224,11 @@ class UDP_Server_CLI implements Servers
             if ($this->Mode === Modes::Foreground && $CI_CD) {
                break;
             }
+
+            // ? `exit()` skips the prompt's `finally`: a stop dispatched while
+            //   the console waits must remove the readline handler itself, or
+            //   the terminal is left raw (a no-op when none is installed)
+            $this->Commands->disarm();
 
             exit(0);
          case 'child':
@@ -2058,6 +2258,12 @@ class UDP_Server_CLI implements Servers
          return;
       }
 
+      // ? Point of no return for the console: every path from here ends in
+      //   `pcntl_exec` or `exit()`. Remove the prompt now, or the fresh image
+      //   snapshots a readline-raw terminal as the operator's own mode (a
+      //   no-op when no prompt is installed)
+      $this->Commands->disarm();
+
       $this->Logger->log(notice: '@\;Reloading (graceful re-exec)...@.;');
 
       // ! Mark reloading so recover() does not refork the workers we stop.
@@ -2065,6 +2271,11 @@ class UDP_Server_CLI implements Servers
 
       // @ Stop the workers (connectionless — no drain), then reap.
       $this->Process->Children->terminate();
+      // @ The beacons never cross exec
+      foreach ($this->Beacons as $End) {
+         fclose($End);
+      }
+      $this->Beacons = [];
 
       // @ Clear per-project state files; the fresh master rewrites them on start.
       $this->Process->State->clean();

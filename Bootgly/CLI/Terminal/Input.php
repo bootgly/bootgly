@@ -26,7 +26,9 @@ use function fread;
 use function function_exists;
 use function fwrite;
 use function getenv;
+use function getmypid;
 use function intdiv;
+use function is_resource;
 use function ord;
 use function pcntl_alarm;
 use function pcntl_async_signals;
@@ -181,17 +183,18 @@ class Input
       $this->armed = true;
 
       // @ Restore the terminal modes, the mouse reporting and the cursor on any exit
+      //   of THIS process: a child forked later inherits the hook, and its exit
+      //   must never reset the terminal its parent still drives
       $output = $this->output;
       $stream = $this->stream;
-      register_shutdown_function(static function () use ($output, $stream): void {
-         stream_set_blocking($stream, true);
-         system('stty icanon echo isig 2>/dev/null');
+      $owner = getmypid();
+      register_shutdown_function(static function () use ($output, $stream, $owner): void {
+         // ?
+         if (getmypid() !== $owner) {
+            return;
+         }
 
-         // Disable mouse reporting (a leaked tracking floods the shell with escapes),
-         // pop the extended keyboard protocol (unconditional — popping an empty
-         // stack and resetting modifyOtherKeys to its default are both no-ops)
-         // and show the cursor — components may die between hide() and show()
-         fwrite($output, "\e[?1003l\e[?1002l\e[?1000l\e[?1006l\e[<u\e[>4;0m\e[?25h");
+         self::restore($output, $stream);
       });
 
       // ? Signal handling requires process control
@@ -207,6 +210,28 @@ class Input
       pcntl_signal(SIGTERM, static function (): void {
          exit(143);
       });
+   }
+   /**
+    * Restore the terminal modes, the mouse reporting and the cursor.
+    *
+    * @param resource $output
+    * @param resource $stream
+    */
+   private static function restore ($output, $stream): void
+   {
+      // ?
+      if (is_resource($stream) === false) {
+         return;
+      }
+
+      stream_set_blocking($stream, true);
+      system('stty icanon echo isig 2>/dev/null');
+
+      // Disable mouse reporting (a leaked tracking floods the shell with escapes),
+      // pop the extended keyboard protocol (unconditional — popping an empty
+      // stack and resetting modifyOtherKeys to its default are both no-ops)
+      // and show the cursor — components may die between hide() and show()
+      fwrite($output, "\e[?1003l\e[?1002l\e[?1000l\e[?1006l\e[<u\e[>4;0m\e[?25h");
    }
 
    /**
@@ -503,6 +528,17 @@ class Input
 
       if ($PID === 0) { // @ Child (Client)
          cli_set_process_title("BootglyCLI: Client");
+
+         // @ This child switches the terminal to raw below, so it restores it
+         //   on its own exit (the parent's restore net is bound to the parent)
+         $output = $this->output;
+         $stream = $this->stream;
+         $owner = getmypid();
+         register_shutdown_function(static function () use ($output, $stream, $owner): void {
+            if (getmypid() === $owner) {
+               self::restore($output, $stream);
+            }
+         });
 
          // Watch for a signal from the parent process to terminate
          pcntl_signal(SIGTERM, function () {

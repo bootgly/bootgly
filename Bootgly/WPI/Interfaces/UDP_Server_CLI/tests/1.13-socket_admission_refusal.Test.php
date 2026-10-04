@@ -64,12 +64,14 @@ final class RefusalProbe extends UDP_Server_CLI
 
       $Socket = parent::instance();
 
-      // ! Report the descriptor the worker socket took (the highest socket
-      //   descriptor open right after the bind) for the boundary legs
+      // ! Report the descriptor the worker socket took (the one whose inode
+      //   is the bound socket's — the worker holds other sockets while it
+      //   boots) for the boundary legs
       $highest = -1;
+      $inode = is_resource($Socket) ? (fstat($Socket)['ino'] ?? -1) : -1;
       foreach ((array) scandir('/proc/self/fd') as $entry) {
-         if (ctype_digit((string) $entry) && str_starts_with((string) @readlink("/proc/self/fd/{$entry}"), 'socket:')) {
-            $highest = max($highest, (int) $entry);
+         if (ctype_digit((string) $entry) && (@stat("/proc/self/fd/{$entry}")['ino'] ?? -2) === $inode) {
+            $highest = (int) $entry;
          }
       }
       fwrite(STDOUT, "WORKER-FD={$highest}\n");

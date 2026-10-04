@@ -18,7 +18,7 @@ use Bootgly\ACI\Tests\Suite\Test;
 /**
  * The console modes supervise like Daemon and Foreground: a flood of worker
  * crashes and a worker that exits 0 are reforked, and the master survives —
- * also while an idle Interactive console waits in readline() on a terminal.
+ * also while an idle Interactive console waits at its prompt on a terminal.
  */
 return new Test(
    description: 'UDP-21: Interactive and Monitor masters refork crashed and exited workers instead of stopping or losing them',
@@ -68,8 +68,8 @@ PHP;
       /**
        * Run one session-isolated console server and drive it.
        *
-       * $terminal: the master's stdio is a pseudo-terminal (readline() blocks)
-       * instead of /dev/null (readline() returns at once).
+       * $terminal: the master's stdio is a pseudo-terminal (the prompt waits
+       * for keys) instead of /dev/null (stdin at EOF from the start).
        * $flood: a crash flood, then an exit 0; otherwise one crash and one
        * exit 0, each after an idle second and bounded in time.
        *
@@ -282,20 +282,17 @@ PHP;
          ->expect($Run('Interactive', false, true), Op::Identical, $Flooded)
          ->assert();
 
-      // ? A pseudo-terminal, and libedit: GNU readline retries its read on a
-      //   SIGCHLD, so a refork there waits for a keystroke (filed, open)
+      // ? A pseudo-terminal (any line editor: the prompt never blocks the loop)
       $terminal = false;
-      if (defined('READLINE_LIB') && READLINE_LIB === 'libedit') {
-         try {
-            $Probe = proc_open(['true'], [0 => ['pty'], 1 => ['pty'], 2 => ['pty']], $Ends);
-            $terminal = is_resource($Probe) && proc_close($Probe) === 0;
-         }
-         catch (Throwable) {
-            $terminal = false;
-         }
+      try {
+         $Probe = proc_open(['true'], [0 => ['pty'], 1 => ['pty'], 2 => ['pty']], $Ends);
+         $terminal = is_resource($Probe) && proc_close($Probe) === 0;
+      }
+      catch (Throwable) {
+         $terminal = false;
       }
       if ($terminal === false) {
-         yield (new Assertion(description: 'Interactive terminal leg: no pseudo-terminal or no libedit here'))->skip();
+         yield (new Assertion(description: 'Interactive terminal leg: no pseudo-terminal here'))->skip();
 
          return;
       }

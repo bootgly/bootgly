@@ -31,5 +31,13 @@ return new Suite(
       '1.11-resume-listener-refusal',
       // # 1.0.x (TCP-14): stats reset restores the declared error shape
       '1.12-stats-reset-shape',
+      // # 1.0.x (TCP-24): a refused refork keeps the master and its slot
+      '1.13-revive-fork-refusal',
+      // # 1.0.x (TCP-24): a slot that keeps dying at boot is reforked after a capped backoff
+      '1.14-revive-crash-backoff',
+      // # 1.0.x (TCP-29, TCP-30): the Interactive prompt never spins on a non-terminal stdin and survives TAB
+      '1.15-console-prompt',
+      // # 1.0.x (TCP-24): a Daemon master — STDIN closed at detach — reforks a dead worker
+      '1.16-daemon-refork',
    ]
 );

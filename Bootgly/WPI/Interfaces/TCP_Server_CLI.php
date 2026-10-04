@@ -59,7 +59,6 @@ use function array_key_exists;
 use function array_keys;
 use function array_merge;
 use function array_pad;
-use function array_shift;
 use function array_slice;
 use function array_values;
 use function basename;
@@ -81,9 +80,12 @@ use function fwrite;
 use function get_included_files;
 use function getcwd;
 use function getenv;
+use function getmypid;
 use function glob;
 use function hash;
+use function hrtime;
 use function implode;
+use function intdiv;
 use function is_array;
 use function is_dir;
 use function is_file;
@@ -104,11 +106,14 @@ use function mkdir;
 use function net_get_interfaces;
 use function openssl_x509_check_private_key;
 use function openssl_x509_fingerprint;
+use function pcntl_async_signals;
 use function pcntl_exec;
 use function pcntl_fork;
+use function pcntl_get_last_error;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
 use function pcntl_sigprocmask;
+use function pcntl_strerror;
 use function pcntl_waitpid;
 use function posix_getgrnam;
 use function posix_getpid;
@@ -124,9 +129,6 @@ use function preg_match;
 use function putenv;
 use function random_bytes;
 use function range;
-use function readline_callback_handler_install;
-use function readline_callback_handler_remove;
-use function readline_callback_read_char;
 use function register_shutdown_function;
 use function restore_error_handler;
 use function rmdir;
@@ -143,6 +145,7 @@ use function str_contains;
 use function stream_context_create;
 use function stream_context_get_options;
 use function stream_context_set_options;
+use function stream_isatty;
 use function stream_select;
 use function stream_set_blocking;
 use function stream_set_timeout;
@@ -228,8 +231,15 @@ class TCP_Server_CLI implements Servers
    // Bound each Monitor turn so continuous logging cannot starve signals,
    // worker supervision, input handling or redraws.
    private const int LOG_DRAIN_FRAMES = 16;
+   // A slot whose workers die before entering their event loop REVIVE_BURST
+   // times in a row is a crash loop (a boot that always fails): it is
+   // reforked after REVIVE_DELAY, doubled per further death, capped at
+   // REVIVE_CAP — not once per boot time. Delays in nanoseconds.
+   private const int REVIVE_BURST = 3;
+   private const int REVIVE_DELAY = 500_000_000;
+   private const int REVIVE_CAP = 5_000_000_000;
    // Every signal the master handles. One list: `start()` installs it and
-   // `disarm()` re-installs it after each readline prompt cycle.
+   // `interacting()` re-installs it (Monitor's raw Input replaces some).
    private const array SIGNALS = [
       SIGALRM,  // Timer
       SIGUSR1,  // Custom command
@@ -262,8 +272,16 @@ class TCP_Server_CLI implements Servers
    protected $Socket;
    /** @var array<int,resource> Master-owned SO_REUSEPORT listener pool. */
    protected array $Listeners = [];
-   /** @var array<int,int> Worker indexes reaped by the SIGCHLD dispatch, awaiting refork. */
+   /** @var array<int,int> Worker index reaped by the SIGCHLD dispatch => hrtime (ns) from which revive() may refork it. */
    private array $casualties = [];
+   /** @var array<int,resource> Worker index => master end of the pair its current worker writes one byte to on entering its event loop. */
+   private array $Beacons = [];
+   /** @var resource|null A worker's own end of its beacon pair, until it enters its event loop. */
+   private $Beacon = null;
+   /** @var array<int,int> Worker index => consecutive worker deaths before the event loop. */
+   private array $streaks = [];
+   /** Consecutive `pcntl_fork()` refusals in revive(); 0 once a fork succeeds. */
+   private int $refusals = 0;
 
    public static Events & Loops & Scheduler $Event;
 
@@ -818,14 +836,12 @@ class TCP_Server_CLI implements Servers
                      continue;
                   }
 
-                  $this->Logger->log(warning: "Worker #{$deadIndex} (PID: {$deadPID}) crashed, reforking...@.;");
-
                   // ! Never fork inside this dispatch: pcntl flags its
                   //   dispatcher busy while a user handler runs, and a child
                   //   forked in that window inherits the flag — its own
                   //   signal handlers would never fire again. tick() reforks
                   //   from plain loop context via revive().
-                  $this->casualties[] = $deadIndex;
+                  $this->schedule($deadIndex, $deadPID);
                }
             }
             break;
@@ -984,9 +1000,36 @@ class TCP_Server_CLI implements Servers
 
       // @ Fork process workers — each runs the overridable worker() boot body.
       $this->Logger->log(notice: "Forking {$this->workers} workers... @.;");
-      $this->Process->fork($this->workers, instance: function (Process $Process, int $index): void {
+      // ! One beacon pair per slot, before the fork: schedule() tells a
+      //   worker that died at boot from one that served by its byte. Test
+      //   mode never reforks, so it never pays for them.
+      $Pairs = [];
+      for ($index = 0; $this->Mode !== Modes::Test && $index < $this->workers; $index++) {
+         $Pairs[$index] = @stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+      }
+      $this->Process->fork($this->workers, instance: function (Process $Process, int $index) use ($Pairs): void {
+         foreach ($Pairs as $slot => $Pair) {
+            if ($Pair === false) {
+               continue;
+            }
+            fclose($Pair[0]);
+            if ($slot === $index) {
+               $this->Beacon = $Pair[1];
+               continue;
+            }
+            fclose($Pair[1]);
+         }
+
          $this->work($Process, $index);
       });
+      foreach ($Pairs as $index => $Pair) {
+         if ($Pair === false) {
+            continue;
+         }
+         fclose($Pair[1]);
+         stream_set_blocking($Pair[0], false);
+         $this->Beacons[$index] = $Pair[0];
+      }
 
       // ? Test mode keeps the master inside the shared test-runner process and
       //   never hot-reloads. Retaining the pre-bound pool there would pin the
@@ -1233,6 +1276,14 @@ class TCP_Server_CLI implements Servers
 
       // @ Per-worker wiring hook (e.g. WS cross-worker relay). Default: nothing.
       $this->wire($index);
+
+      // @ Booted: tell the master through the beacon, so a later death of
+      //   this worker is never taken for a boot that fails
+      if ($this->Beacon !== null) {
+         @fwrite($this->Beacon, '!');
+         fclose($this->Beacon);
+         $this->Beacon = null;
+      }
 
       // @ Event loop.
       self::$Event->loop();
@@ -1521,15 +1572,70 @@ class TCP_Server_CLI implements Servers
     */
    protected function revive (): void
    {
-      while ($this->casualties !== []) {
-         $deadIndex = array_shift($this->casualties);
+      // ? A stop owns the workers: nothing is reforked behind it
+      if ($this->Process->stopping) {
+         return;
+      }
 
-         $newPID = pcntl_fork();
+      $now = (int) hrtime(true);
+
+      // @@ Refork every slot whose time has come
+      foreach ($this->casualties as $deadIndex => $due) {
+         // ? Backing off a crash loop or a refused fork
+         if ($due > $now) {
+            continue;
+         }
+
+         $Pair = @stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+
+         // ! `@`: a refused fork (EAGAIN under RLIMIT_NPROC or a cgroup
+         //   pids.max, ENOMEM) must reach the -1 branch below, not become an
+         //   ErrorException that ends the master and every serving worker
+         $newPID = @pcntl_fork();
+
+         // ? Refused: the slot stays queued and is retried in a second
+         if ($newPID === -1) {
+            if ($Pair !== false) {
+               fclose($Pair[0]);
+               fclose($Pair[1]);
+            }
+            $this->refusals++;
+            if ($this->refusals === 1) {
+               $errno = pcntl_get_last_error();
+               $error = pcntl_strerror($errno);
+               $this->Logger->log(
+                  error: "Worker #{$deadIndex} could not be reforked: pcntl_fork() failed ({$errno}: {$error}); retrying every second...@.;"
+               );
+            }
+            $this->casualties[$deadIndex] = $now + 1_000_000_000;
+
+            return;
+         }
 
          // # Child process (new worker)
          if ($newPID === 0) {
             if ($this->Process->descend($deadIndex) === false) {
                exit(1);
+            }
+
+            // @ Keep only its own beacon end
+            foreach ($this->Beacons as $End) {
+               fclose($End);
+            }
+            $this->Beacons = [];
+            if ($Pair !== false) {
+               fclose($Pair[0]);
+               $this->Beacon = $Pair[1];
+            }
+
+            // ! Off the console: a child forked under the armed prompt inherits
+            //   readline's state, and its PHP exit would put the operator's
+            //   terminal back in cooked mode beneath the master's prompt
+            //   (a Daemon master closed STDIN at detach(): nothing to drop)
+            $Console = null;
+            if (is_resource(STDIN) && stream_isatty(STDIN)) {
+               fclose(STDIN);
+               $Console = fopen('/dev/null', 'r');
             }
 
             // @ Run the SAME boot body as the initial fork, so a recovered
@@ -1540,15 +1646,60 @@ class TCP_Server_CLI implements Servers
 
             exit(0);
          }
+
          // # Master process
-         else if ($newPID > 0) {
-            $this->Process->Children->push($newPID, $deadIndex);
-
-            $this->Logger->log(notice: "Worker #{$deadIndex} recovered (new PID: {$newPID})@.;");
-
-            $this->Process->State->save($this->describe());
+         unset($this->casualties[$deadIndex]);
+         if ($Pair !== false) {
+            fclose($Pair[1]);
+            stream_set_blocking($Pair[0], false);
+            $this->Beacons[$deadIndex] = $Pair[0];
          }
+         $this->refusals = 0;
+         $this->Process->Children->push($newPID, $deadIndex);
+
+         $this->Logger->log(notice: "Worker #{$deadIndex} recovered (new PID: {$newPID})@.;");
+
+         $this->Process->State->save($this->describe());
       }
+   }
+   /**
+    * Queue a worker slot the SIGCHLD dispatch reaped for revive(). Its first
+    * deaths are reforked on the next loop turn; a slot whose workers keep
+    * dying before their event loop — a boot that always fails — is
+    * reforked after a delay that doubles per death, up to `REVIVE_CAP`.
+    * Runs inside the dispatch, so it never forks.
+    */
+   private function schedule (int $index, int $PID): void
+   {
+      $now = (int) hrtime(true);
+
+      // @ A worker that died before its event loop (no byte on its beacon)
+      //   extends the slot's streak; one that served resets it — a worker
+      //   killed by a request is reforked at once, however young
+      $served = true;
+      $End = $this->Beacons[$index] ?? null;
+      if ($End !== null) {
+         $served = @fread($End, 1) === '!';
+         fclose($End);
+         unset($this->Beacons[$index]);
+      }
+      $streak = $served ? 0 : ($this->streaks[$index] ?? 0) + 1;
+      $this->streaks[$index] = $streak;
+
+      // ?: Not a crash loop: refork on the next loop turn
+      if ($streak < self::REVIVE_BURST) {
+         $this->Logger->log(warning: "Worker #{$index} (PID: {$PID}) crashed, reforking...@.;");
+         $this->casualties[$index] = $now;
+
+         return;
+      }
+
+      $delay = min(self::REVIVE_CAP, self::REVIVE_DELAY << min($streak - self::REVIVE_BURST, 8));
+      $seconds = $delay / 1_000_000_000;
+      $this->Logger->log(
+         error: "Worker #{$index} (PID: {$PID}) died before serving {$streak} times in a row, reforking in {$seconds}s...@.;"
+      );
+      $this->casualties[$index] = $now + $delay;
    }
 
    /**
@@ -1797,25 +1948,6 @@ class TCP_Server_CLI implements Servers
          usleep(500000); // 0.5s
       }
    }
-   /**
-    * Detach the readline callback handler and re-arm the process signals
-    * behind it.
-    *
-    * Accepting a line and removing the callback handler make libreadline
-    * restore the sigaction slots it saved when the prompt was armed — raw
-    * `sigaction`, beneath zend_signals' bookkeeping — and on PHP 8.4 that
-    * restore leaves slots pointing at `SIG_ERR` (-1): the next delivered
-    * signal makes the kernel jump to address -1 and the master dies with
-    * SIGSEGV inside `stream_select` (measured by core dump; an idle prompt
-    * and mid-line keystrokes are unaffected). Re-registering every handler
-    * immediately rewrites each slot with a valid zend trampoline.
-    */
-   private function disarm (): void
-   {
-      readline_callback_handler_remove();
-
-      $this->Process->Signals->install(self::SIGNALS);
-   }
    protected function interacting (): void
    {
       $this->Status = Status::Running;
@@ -1827,74 +1959,62 @@ class TCP_Server_CLI implements Servers
       $this->Logger->log(debug: '>_ Type `@#Green:monitor@;` to enter in Monitor mode.@\;');
       $this->Logger->log(notice: '>_ Autocompletation and history enabled.@\\\;');
 
-      // ! readline() blocks the master and used to suspend Auto-TLS renewal
-      //   indefinitely while the operator was idle. Its callback API keeps
-      //   line editing/history while letting this loop dispatch signals and
-      //   run tick() every 500ms.
-      $this->Commands->prepare();
-      $input = null;
-      $available = false;
-      $installed = false;
-      $Install = static function () use (&$input, &$available, &$installed): void {
-         readline_callback_handler_install(
-            '>_: ',
-            static function (null|string $line) use (&$input, &$available): void {
-               $input = $line;
-               $available = true;
-            }
-         );
-         $installed = true;
+      // ! Back from Monitor, the raw-mode Input left its own SIGINT/SIGTERM
+      //   exits (exit 130/143, never stop()) and async signals behind: the
+      //   master's handlers and manual dispatch come back first
+      pcntl_async_signals(false);
+      $this->Process->Signals->install(self::SIGNALS);
+
+      // ! The prompt never blocks the master: it waits for input at most
+      //   0.5 s and any signal cuts the wait short, so signals are dispatched
+      //   and tick() runs (worker reforks, Auto-TLS renewal) while the
+      //   operator is idle.
+      //   `Stopping` is the only terminal status. `Paused` must NOT end the
+      //   prompt: the master is the control channel, so it keeps dispatching
+      //   signals, keeps supervising (a worker that dies while paused is
+      //   still reforked) and keeps the prompt alive — which is the only way
+      //   `resume` can ever be typed. Pausing acts on the workers, which
+      //   drop their accept registration in `pause()`.
+      $Supervise = function (): int|false {
+         pcntl_signal_dispatch();
+         $PIDs = $this->Process->Children->PIDs;
+         $this->tick();
+
+         // @ A signal that landed during tick() — a SIGCHLD, a stop — is
+         //   handled now, not one wait later
+         pcntl_signal_dispatch();
+
+         // ?: Monitor, or stopping
+         if ($this->Mode !== Modes::Interactive || $this->Status === Status::Stopping) {
+            return false;
+         }
+
+         // : Wait 0.5 s at most, never past the next queued refork (0 polls
+         //   one already due); after the workers changed, re-check soon — a
+         //   SIGCHLD can still land between that dispatch and the wait,
+         //   which it would not cut short
+         $wait = $this->Process->Children->PIDs === $PIDs ? 500_000 : 50_000;
+         $now = (int) hrtime(true);
+         foreach ($this->casualties as $due) {
+            $wait = min($wait, max(0, intdiv($due - $now, 1_000)));
+         }
+
+         return $wait;
       };
-      $Install();
-
-      try {
-         // ? `Stopping` is the only terminal status. `Paused` must NOT end this
-         //   loop: the master is the control channel, so it keeps dispatching
-         //   signals, keeps supervising (a worker that dies while paused is
-         //   still reforked) and keeps the prompt alive — which is the only way
-         //   `resume` can ever be typed. Pausing acts on the workers, which
-         //   drop their accept registration in `pause()`.
-         while ($this->Mode === Modes::Interactive && $this->Status !== Status::Stopping) {
-            pcntl_signal_dispatch();
-            $this->tick();
-
-            $read = [STDIN];
-            $write = null;
-            $except = null;
-            $selected = @stream_select($read, $write, $except, 0, 500000);
-            if ($selected > 0) {
-               readline_callback_read_char();
-            }
-            if ($available === false) {
-               continue;
-            }
-
-            $this->disarm();
-            $installed = false;
-            $available = false;
-
-            // Ctrl-D/EOF means stop, rather than spinning forever on EOF.
-            if ($input === null) {
-               $this->stop();
-               break;
-            }
-
-            $interact = $this->Commands->execute($input);
-            $input = null;
-            $this->Logger->log(debug: '@\;');
-            if ($interact === false) {
-               usleep(100000 * $this->workers);
-            }
-
-            if ($this->Mode === Modes::Interactive && $this->Status !== Status::Stopping) {
-               $Install();
-            }
+      foreach ($this->Commands->prompting($Supervise) as $input) {
+         $interact = $this->Commands->execute($input);
+         $this->Logger->log(debug: '@\;');
+         if ($interact === false) {
+            usleep(100000 * $this->workers);
          }
       }
-      finally {
-         if ($installed) {
-            $this->disarm();
-         }
+
+      // ? The terminal ended (Ctrl-D, a hangup) while nothing else ends the
+      //   console: stop, as a typed `stop` would
+      if ($this->Mode === Modes::Interactive && $this->Status !== Status::Stopping) {
+         $this->stop();
+
+         return;
       }
 
       if ($this->Mode === Modes::Monitor) {
@@ -2049,7 +2169,15 @@ class TCP_Server_CLI implements Servers
       // @ Always restore the terminal on exit — covers SIGINT/SIGTERM/`project stop` paths
       //   that terminate from the signal handler and never reach the teardown below.
       //   Without this the TTY stays in raw mode (no echo) after the server stops.
-      register_shutdown_function(static function () use ($Input, $Output): void {
+      //   Only in this process: a worker forked meanwhile inherits the hook,
+      //   and its exit must not reset the terminal the master still drives.
+      $owner = getmypid();
+      register_shutdown_function(static function () use ($Input, $Output, $owner): void {
+         // ?
+         if (getmypid() !== $owner) {
+            return;
+         }
+
          $Input->configure(blocking: true, canonical: true, echo: true);
          $Output->Cursor->show();
          $Output->write("\e[?1049l");
@@ -2707,6 +2835,12 @@ class TCP_Server_CLI implements Servers
 
             $this->Process->Children->terminate();
 
+            // @ The beacons of the stopped workers (a Test-mode master lives on)
+            foreach ($this->Beacons as $End) {
+               fclose($End);
+            }
+            $this->Beacons = [];
+
             $this->Logger->log(critical: "{$children} worker(s) stopped!@\\;");
 
             foreach ($this->Listeners as $Listener) {
@@ -2743,9 +2877,7 @@ class TCP_Server_CLI implements Servers
             //   shuts down with the callback handler live and stale sigaction
             //   slots. Covers Ctrl+C/SIGTERM, whose dispatch runs with the
             //   prompt installed.
-            if ($this->Mode === Modes::Interactive) {
-               $this->disarm();
-            }
+            $this->Commands->disarm();
 
             exit(0);
          case 'child':
@@ -2917,7 +3049,9 @@ class TCP_Server_CLI implements Servers
          return false;
       }
 
-      $PID = pcntl_fork();
+      // ! `@`: a refused fork must abort the reload (the service stays
+      //   intact), not become an ErrorException that ends the master
+      $PID = @pcntl_fork();
       if ($PID < 0) {
          fclose($Relay);
          @unlink($path);
@@ -3344,8 +3478,13 @@ class TCP_Server_CLI implements Servers
       //   readline-prepped (raw) termios: the fresh master would snapshot RAW
       //   as the terminal's "original" state and leave the operator tty raw
       //   after its final shutdown.
-      if ($this->Mode === Modes::Interactive) {
-         $this->disarm();
+      $this->Commands->disarm();
+      // ! The same for the Monitor's TUI: the exec drops its restore hook, so
+      //   leave the alternate screen and the raw input mode before it
+      if ($this->Mode === Modes::Monitor) {
+         CLI->Terminal->Input->configure(blocking: true, canonical: true, echo: true);
+         CLI->Terminal->Output->Cursor->show();
+         CLI->Terminal->Output->write("\e[?1049l");
       }
 
       // @ Drain every worker gracefully (SIGQUIT → worker drain()), then reap.
@@ -3358,6 +3497,10 @@ class TCP_Server_CLI implements Servers
          fclose($Listener);
       }
       $this->Listeners = [];
+      foreach ($this->Beacons as $End) {
+         fclose($End);
+      }
+      $this->Beacons = [];
       foreach ($this->export() as $Resource) {
          fclose($Resource);
       }

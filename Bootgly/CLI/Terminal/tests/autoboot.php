@@ -39,5 +39,8 @@ return new Suite(
 
       // @ Appended to preserve every existing selected-case index.
       '2.2-cursor-position-pty',
+      // # 1.0.x (UDP-24): the supervised prompt behind the server consoles
+      '15.1-terminal-prompting',
+      '6.3-input-reading-restore',
    ]
 );

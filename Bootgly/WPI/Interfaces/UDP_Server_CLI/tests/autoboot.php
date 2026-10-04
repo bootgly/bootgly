@@ -60,5 +60,13 @@ return new Suite(
       '1.19-pid1_orphan_reap',
       // # 1.0.x (UDP-21): the console modes refork every worker exit and keep the master
       '1.20-console_mode_refork',
+      // # 1.0.x (TCP-24): a refused refork keeps the master and its slot
+      '1.21-revive_fork_refusal',
+      // # 1.0.x (TCP-24): a slot that keeps dying at boot is reforked after a capped backoff
+      '1.22-revive_crash_backoff',
+      // # 1.0.x (UDP-24): the Interactive prompt never blocks supervision
+      '1.23-console_prompt',
+      // # 1.0.x (TCP-24): a Daemon master — STDIN closed at detach — reforks a dead worker
+      '1.24-daemon_refork',
    ]
 );
