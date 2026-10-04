@@ -13,6 +13,8 @@ namespace Bootgly\WPI\Nodes;
 
 use const STREAM_PF_UNIX;
 use const STREAM_SOCK_DGRAM;
+use function fclose;
+use function is_resource;
 use function stream_socket_pair;
 use BackedEnum;
 use Closure;
@@ -263,6 +265,25 @@ class WS_Server_CLI extends TCP_Server_CLI implements WS, Server
          self::$Event::EVENT_READ,
          Relay::$Instance
       );
+   }
+
+   /**
+    * Release the cross-worker bus before a hot reload execs the fresh image:
+    * the fresh master builds its own, so this one must not survive the exec.
+    */
+   protected function unload (): void
+   {
+      // @
+      foreach ($this->buses as $Pair) {
+         foreach ($Pair as $End) {
+            if (is_resource($End)) {
+               fclose($End);
+            }
+         }
+      }
+      $this->buses = [];
+
+      parent::unload();
    }
 
    public static function boot (Environments $Environment): void

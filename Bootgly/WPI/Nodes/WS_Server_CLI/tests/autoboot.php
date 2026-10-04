@@ -22,6 +22,8 @@ return new Suite(
       // # Relay fork topology (bus inheritance + both constructor roles)
       '3.2-relay_fork',
       // # Security H4 — compressed output must be bounded during inflation
-      '4.1-decompression_limit'
+      '4.1-decompression_limit',
+      // # WS-6 — hot reloads never accumulate the bus sockets
+      '3.3-relay_bus_reload'
    ]
 );
