@@ -1653,13 +1653,19 @@ class UDP_Server_CLI implements Servers
             }
 
             // ! Off the console: a child forked under the armed prompt inherits
-            //   readline's state, and its PHP exit would put the operator's
-            //   terminal back in cooked mode beneath the master's prompt
+            //   readline's state — its PHP exit would put the operator's
+            //   terminal back in cooked mode beneath the master's prompt, and
+            //   libedit's signal handlers re-raise every signal they catch to
+            //   the whole process group, the master included
             //   (a Daemon master closed STDIN at detach(): nothing to drop)
             $Console = null;
             if (is_resource(STDIN) && stream_isatty(STDIN)) {
                fclose(STDIN);
                $Console = fopen('/dev/null', 'r');
+               // @ Drop the inherited prompt once fd 0 is /dev/null: readline's
+               //   restore misses the terminal, and PHP's handlers take back
+               //   the signal slots
+               $this->Commands->disarm();
             }
 
             // @ Run the SAME boot body as the initial fork
