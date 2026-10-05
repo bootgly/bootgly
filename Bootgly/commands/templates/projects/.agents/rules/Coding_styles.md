@@ -13,8 +13,9 @@
 
 ## House style
 
-- **SHOULD** — One space between a function or method name and its parentheses in declarations:
-  `public function boot ()`, never `public function boot()`.
+- **SHOULD** — One space before the parameter list in every declaration — functions, methods, closures
+  and arrow functions: `public function boot ()`, `function ($a)`, `fn (string $file) => …`; never
+  `public function boot()`. Calls take no space: `$this->boot()`.
 - **SHOULD** — String interpolation over concatenation: `"{$dir}{$name}.php"`, not `$dir . $name . '.php'`.
 - **SHOULD** — When you comment, use the [Semantic Commenting Code](https://github.com/bootgly/semantic_commenting_code)
   markers the shipped examples use — never add a comment just to use one:
