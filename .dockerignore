@@ -86,7 +86,6 @@ composer.lock
 storage
 tmp
 vendor
-public
 
 # @ Generic noise anywhere
 **/.DS_Store

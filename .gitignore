@@ -68,9 +68,6 @@ projects/configs/**/.env.*
 projects/**/configs/**/.env
 projects/**/configs/**/.env.*
 
-#- /public
-/public/*
-
 # /scripts
 # Ignore private scripts
 /scripts/_*.php
