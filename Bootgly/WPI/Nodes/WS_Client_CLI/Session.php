@@ -12,8 +12,6 @@ namespace Bootgly\WPI\Nodes\WS_Client_CLI;
 
 
 use const ZLIB_ENCODING_RAW;
-use const ZLIB_SYNC_FLUSH;
-use function deflate_add;
 use function deflate_init;
 use function feof;
 use function hrtime;
@@ -21,7 +19,6 @@ use function inflate_init;
 use function is_int;
 use function max;
 use function pack;
-use function str_ends_with;
 use function strlen;
 use function substr;
 use function time;
@@ -31,6 +28,7 @@ use InflateContext;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
 use Bootgly\WPI\Modules\WS;
+use Bootgly\WPI\Modules\WS\Deflater;
 use Bootgly\WPI\Modules\WS\Inflater;
 use Bootgly\WPI\Nodes\WS_Client_CLI;
 use Bootgly\WPI\Nodes\WS_Client_CLI\Message;
@@ -41,8 +39,9 @@ use Bootgly\WPI\Nodes\WS_Client_CLI\Message\Frame;
  * Per-connection client state: the negotiated session, the framing buffers, the
  * permessage-deflate contexts, and the outbound API (send / ping / close).
  *
- * Compression mirrors the server with the roles swapped: the client deflates
- * its OUTBOUND messages with the negotiated client window and inflates the
+ * Compression keeps one context per direction: the client deflates its
+ * OUTBOUND messages with the negotiated client window (dropping the window
+ * after each message under `client_no_context_takeover`) and inflates the
  * server's INBOUND messages with a full window.
  */
 class Session
@@ -462,22 +461,15 @@ class Session
          return [$payload, 0];
       }
 
-      $out = deflate_add($this->Deflator, $payload, ZLIB_SYNC_FLUSH);
+      // @ Without client context takeover, a full flush per message drops the
+      //   window, so the server can inflate each message on its own.
+      $out = Deflater::deflate(
+         $this->Deflator,
+         $payload,
+         $this->clientNoContextTakeover === false
+      );
       if ($out === false) {
          return [$payload, 0];
-      }
-
-      // @ Strip the RFC 7692 §7.2.1 trailing empty block.
-      if (str_ends_with($out, "\x00\x00\xff\xff")) {
-         $out = (string) substr($out, 0, -4);
-      }
-
-      // @ Per-message context reset when the client negotiated no-context-takeover.
-      if ($this->clientNoContextTakeover) {
-         $Deflator = deflate_init(ZLIB_ENCODING_RAW, ['window' => $this->clientWindowBits, 'level' => -1]);
-         $this->Deflator = $Deflator !== false
-            ? $Deflator
-            : null;
       }
 
       // :

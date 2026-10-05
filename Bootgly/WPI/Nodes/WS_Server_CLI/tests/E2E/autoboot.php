@@ -73,6 +73,8 @@ return new Suite(
       '1.1-handshake',
       '2.1-messaging',
       '3.1-validation',
-      '4.1-channels'
+      '4.1-channels',
+      // # H-WS-1 — permessage-deflate without context takeover
+      '5.1-compression'
    ]
 );

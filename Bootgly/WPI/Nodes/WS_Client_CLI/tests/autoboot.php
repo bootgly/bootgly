@@ -29,6 +29,8 @@ return new Suite(
       // # Security H8 — malformed DEFLATE warnings stay inside the protocol
       '6.2-decompression_warning',
       // # Security H8 — async signals must not cross warning isolation
-      '6.3-inflater_signal_guard'
+      '6.3-inflater_signal_guard',
+      // # H-WS-1 — the shared RFC 7692 Deflater honors context takeover
+      '6.4-deflater'
    ]
 );

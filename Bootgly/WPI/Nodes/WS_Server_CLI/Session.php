@@ -13,8 +13,6 @@ namespace Bootgly\WPI\Nodes\WS_Server_CLI;
 
 use const PHP_INT_MAX;
 use const ZLIB_ENCODING_RAW;
-use const ZLIB_SYNC_FLUSH;
-use function deflate_add;
 use function deflate_init;
 use function feof;
 use function hrtime;
@@ -24,7 +22,6 @@ use function is_int;
 use function max;
 use function min;
 use function pack;
-use function str_ends_with;
 use function strlen;
 use function substr;
 use function time;
@@ -39,6 +36,7 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Modules\WS;
+use Bootgly\WPI\Modules\WS\Deflater;
 use Bootgly\WPI\Modules\WS\Inflater;
 use Bootgly\WPI\Nodes\WS_Server_CLI\Channels;
 use Bootgly\WPI\Nodes\WS_Server_CLI\Channels\Channel;
@@ -66,12 +64,27 @@ class Session implements Disconnecting
    public int $port;
    // @ Negotiated
    public string $subprotocol = '';
-   /** @var array<string, mixed> */
+   /**
+    * The negotiated permessage-deflate parameters — non-empty once
+    * compression was negotiated.
+    *
+    * @var array<string, mixed>
+    */
    public array $extensions = [];
-   // @ Compression (permessage-deflate, RFC 7692)
+   // @ Compression (permessage-deflate, RFC 7692) — the server always
+   //   imposes no context takeover in both directions (see `compress()`).
+   /** The inflater of the message being inflated — set only inside `inflate()`, null between messages. */
    public null|InflateContext $Inflator = null;
+   /**
+    * The compressor this session's outbound messages go through (null =
+    * outbound uncompressed). It is shared by every session of the worker
+    * with the same window: never feed it directly — bytes added to it reach
+    * another session's next message. Send through `send()`.
+    */
    public null|DeflateContext $Deflator = null;
+   /** Always true once compressed — informational (the server imposes it). */
    public bool $clientNoContextTakeover = false;
+   /** Always true once compressed — informational (the server imposes it). */
    public bool $serverNoContextTakeover = false;
    public int $serverWindowBits = 15;
    // @ Authentication (resolved by handshake guards, if any)
@@ -105,6 +118,8 @@ class Session implements Disconnecting
    public private(set) int $deadline = 0;
    /** Footprint every session of this worker holds inbound — at most half the worker ledger. */
    private static int $held = 0;
+   /** @var array<int,DeflateContext> Worker-shared compressors, by window bits. */
+   private static array $Deflators = [];
    // @ Liveness
    public int $lastActivity = 0;
    public bool $awaitingPong = false;
@@ -475,8 +490,8 @@ class Session implements Disconnecting
          ? WS::OPCODE_BINARY
          : WS::OPCODE_TEXT;
 
-      // @ Encode once, uncompressed — per-session deflate contexts cannot be
-      //   shared across members, so fan-out frames are sent without RSV1.
+      // @ Encode once, uncompressed — one frame serves every member, whether
+      //   or not each one negotiated compression, so it carries no RSV1.
       $frame = Frame::encode($opcode, $payload);
 
       // @ Cross-worker fan-out: peer workers deliver to their own members.
@@ -496,29 +511,35 @@ class Session implements Disconnecting
    /**
     * Enable permessage-deflate for this session from the negotiated params.
     *
+    * The server imposes `server_no_context_takeover` and
+    * `client_no_context_takeover` (RFC 7692 §7.1.1), so a compressed session
+    * holds no zlib memory of its own: outbound messages share one compressor
+    * per worker and window, flushed in full after every message, and each
+    * inbound message is inflated by a fresh inflater.
+    *
     * @param array<string, mixed> $params
     */
    public function compress (array $params): void
    {
       // * Config
+      $params['server_no_context_takeover'] = true;
+      $params['client_no_context_takeover'] = true;
       $this->extensions = $params;
-      $this->serverNoContextTakeover = (bool) ($params['server_no_context_takeover'] ?? false);
-      $this->clientNoContextTakeover = (bool) ($params['client_no_context_takeover'] ?? false);
+      $this->serverNoContextTakeover = true;
+      $this->clientNoContextTakeover = true;
       $bits = $params['server_max_window_bits'] ?? 15;
       $this->serverWindowBits = is_int($bits) ? $bits : 15;
 
-      // @ The inflater always uses a full window so it can decode any client
-      //   compressor window <= 15; the deflater honors the negotiated bound.
-      $Inflator = inflate_init(ZLIB_ENCODING_RAW, ['window' => 15]);
-      $Deflator = deflate_init(ZLIB_ENCODING_RAW, ['window' => $this->serverWindowBits, 'level' => -1]);
-
-      // ? Disable compression entirely if either context could not be created.
-      if ($Inflator === false || $Deflator === false) {
-         $this->Inflator = null;
+      // @ One worker-shared compressor per window bound.
+      $Deflator = self::$Deflators[$this->serverWindowBits]
+         ?? deflate_init(ZLIB_ENCODING_RAW, ['window' => $this->serverWindowBits, 'level' => -1]);
+      // ? Without a compressor, outbound messages go uncompressed (legal);
+      //   inbound compressed messages still inflate.
+      if ($Deflator === false) {
          $this->Deflator = null;
          return;
       }
-      $this->Inflator = $Inflator;
+      self::$Deflators[$this->serverWindowBits] = $Deflator;
       $this->Deflator = $Deflator;
    }
 
@@ -531,31 +552,27 @@ class Session implements Disconnecting
    public function inflate (string $payload): string|int|false
    {
       // ?
-      if ($this->Inflator === null) {
+      if ($this->extensions === []) {
          return $payload;
+      }
+
+      // ! A fresh inflater per message (client_no_context_takeover is
+      //   imposed): a full window decodes any client compressor window <= 15,
+      //   and a back-reference to an earlier message is invalid data (1007).
+      $Inflator = inflate_init(ZLIB_ENCODING_RAW, ['window' => 15]);
+      if ($Inflator === false) {
+         return false;
       }
 
       // @ Incremental inflation checks every bounded output part before it is
       //   retained, so the configured limit governs allocation as well as wire.
-      $out = Inflater::inflate($this->Inflator, $payload, self::$maxMessageSize);
-      // ? Overflow advanced this context; the decoder closes the Session and
-      //   no later message may continue from the partial dictionary.
-      if (is_int($out)) {
+      //   `false` signals invalid compressed data — the decoder closes 1007.
+      $this->Inflator = $Inflator;
+      try {
+         $out = Inflater::inflate($Inflator, $payload, self::$maxMessageSize);
+      }
+      finally {
          $this->Inflator = null;
-
-         return $out;
-      }
-      // : `false` signals invalid compressed data — the decoder closes 1007.
-      if ($out === false) {
-         return false;
-      }
-
-      // @ Per-message context reset when no-context-takeover was negotiated.
-      if ($this->clientNoContextTakeover) {
-         $Inflator = inflate_init(ZLIB_ENCODING_RAW, ['window' => 15]);
-         $this->Inflator = $Inflator !== false
-            ? $Inflator
-            : null;
       }
 
       // :
@@ -574,22 +591,18 @@ class Session implements Disconnecting
          return [$payload, 0];
       }
 
-      $out = deflate_add($this->Deflator, $payload, ZLIB_SYNC_FLUSH);
+      // @ A full flush per message: the shared compressor carries nothing
+      //   from one message (or session) into the next.
+      $out = Deflater::deflate($this->Deflator, $payload, false);
+      // ? zlib failed: the context state is unknown — drop it from the pool
+      //   (the next handshake creates another) and send this one plain.
       if ($out === false) {
+         if ((self::$Deflators[$this->serverWindowBits] ?? null) === $this->Deflator) {
+            unset(self::$Deflators[$this->serverWindowBits]);
+         }
+         $this->Deflator = null;
+
          return [$payload, 0];
-      }
-
-      // @ Strip the RFC 7692 §7.2.1 trailing empty block.
-      if (str_ends_with($out, "\x00\x00\xff\xff")) {
-         $out = (string) substr($out, 0, -4);
-      }
-
-      // @ Per-message context reset when no-context-takeover was negotiated.
-      if ($this->serverNoContextTakeover) {
-         $Deflator = deflate_init(ZLIB_ENCODING_RAW, ['window' => $this->serverWindowBits, 'level' => -1]);
-         $this->Deflator = $Deflator !== false
-            ? $Deflator
-            : null;
       }
 
       // :

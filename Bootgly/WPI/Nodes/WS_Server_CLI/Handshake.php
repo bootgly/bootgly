@@ -157,6 +157,11 @@ class Handshake
     * Negotiate the permessage-deflate extension (RFC 7692) from the client
     * offer. Returns the accepted parameter set, or [] when not offered/enabled.
     *
+    * The accepted set always carries `server_no_context_takeover` and
+    * `client_no_context_takeover`, offered or not (§7.1.1.1, §7.1.1.2): every
+    * message is compressed and inflated on its own, so a compressed session
+    * keeps no zlib context alive between messages.
+    *
     * @return array<string, mixed>
     */
    public static function resolve (string $offer): array
@@ -177,9 +182,10 @@ class Handshake
 
          $accepted = [
             'permessage-deflate' => true,
-            'server_no_context_takeover' => false,
-            'client_no_context_takeover' => false,
-            'server_max_window_bits' => 15,
+            'server_no_context_takeover' => true,
+            'client_no_context_takeover' => true,
+            // ! null = not offered (the compressor uses a full window)
+            'server_max_window_bits' => null,
             'client_max_window_bits' => 15,
          ];
          $valid = true;
@@ -249,7 +255,8 @@ class Handshake
       }
 
       // @ The server inflates with a full window, so only the server's own
-      //   compressor window + the no-context-takeover flags are echoed.
+      //   compressor window + the no-context-takeover flags are answered; an
+      //   offered server window is accepted by echoing it (§7.1.2.1).
       $value = 'permessage-deflate';
       if (! empty($params['server_no_context_takeover'])) {
          $value .= '; server_no_context_takeover';
@@ -257,8 +264,8 @@ class Handshake
       if (! empty($params['client_no_context_takeover'])) {
          $value .= '; client_no_context_takeover';
       }
-      $serverBits = $params['server_max_window_bits'] ?? 15;
-      if (is_int($serverBits) && $serverBits < 15) {
+      $serverBits = $params['server_max_window_bits'] ?? null;
+      if (is_int($serverBits)) {
          $value .= "; server_max_window_bits={$serverBits}";
       }
 

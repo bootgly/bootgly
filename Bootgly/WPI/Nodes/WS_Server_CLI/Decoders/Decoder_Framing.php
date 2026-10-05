@@ -81,7 +81,7 @@ class Decoder_Framing extends Decoders
       if (
          $Frame->rsv1 !== 0
          && (
-            $Session->Inflator === null
+            $Session->extensions === []
             || $Frame->opcode === WS::OPCODE_CONTINUATION
             || $Frame->opcode >= WS::OPCODE_CLOSE
          )

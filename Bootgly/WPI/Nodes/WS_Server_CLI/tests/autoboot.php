@@ -30,6 +30,8 @@ return new Suite(
       '5.2-carry_budget',
       '5.3-reassembly_budget',
       '5.4-message_deadline_live',
-      '5.5-inbound_share_eviction'
+      '5.5-inbound_share_eviction',
+      // # H-WS-1 — compressed sessions hold no zlib context of their own
+      '4.2-compression_contexts'
    ]
 );
