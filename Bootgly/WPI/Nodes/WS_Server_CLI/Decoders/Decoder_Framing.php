@@ -39,6 +39,11 @@ class Decoder_Framing extends Decoders
       if ($Session instanceof Session === false) {
          return States::Rejected;
       }
+      // ? A closed session (its close frame still draining) reads nothing more
+      if ($Session->disconnected) {
+         $Package->consumed = $size;
+         return States::Incomplete;
+      }
       $Session->lastActivity = time();
 
       // @ Prepend carried partial-frame bytes from a previous read. `carry` is
@@ -53,6 +58,10 @@ class Decoder_Framing extends Decoders
 
       // ? Partial frame — buffer and wait.
       if ($Frame === null) {
+         // ? Worker-wide inbound budget (the transport ledger).
+         if ($Session->hold(strlen($data), strlen($Session->reassembly)) === false) {
+            return $this->fail($Package, $Session, 1009);
+         }
          $Session->carry = $data;
          $Package->consumed = $size;
          return States::Incomplete;
@@ -105,6 +114,10 @@ class Decoder_Framing extends Decoders
             return $this->fail($Package, $Session, $fault);
          }
 
+         // @ Only the unfinished message (if any) stays held: a finished
+         //   control frame outside one ends the deadline.
+         $Session->hold(0, strlen($Session->reassembly));
+
          $Package->consumed = $Frame->consumed - $carryBefore;
          return States::Complete;
       }
@@ -115,12 +128,24 @@ class Decoder_Framing extends Decoders
          if ($Session->reassemblyOpcode === 0) {
             return $this->fail($Package, $Session, 1002);
          }
+         // ? Cumulative message-size cap, then the worker budget for a
+         //   fragment that stays held — both BEFORE materializing it.
+         $length = strlen($Session->reassembly) + strlen($Frame->payload);
+         if ($length > Session::$maxMessageSize) {
+            return $this->fail($Package, $Session, 1009);
+         }
+         if ($Frame->fin === false && $Session->hold(0, $length) === false) {
+            return $this->fail($Package, $Session, 1009);
+         }
          $Session->reassembly .= $Frame->payload;
       }
       else if ($opcode === WS::OPCODE_TEXT || $opcode === WS::OPCODE_BINARY) {
          // ? New data frame while a fragmented message is still open.
          if ($Session->reassemblyOpcode !== 0) {
             return $this->fail($Package, $Session, 1002);
+         }
+         if ($Frame->fin === false && $Session->hold(0, strlen($Frame->payload)) === false) {
+            return $this->fail($Package, $Session, 1009);
          }
          $Session->reassemblyOpcode = $opcode;
          $Session->reassemblyCompressed = $Frame->rsv1 !== 0;
@@ -200,6 +225,11 @@ class Decoder_Framing extends Decoders
          $Session->reassembly = '';
          $Session->reassemblyOpcode = 0;
          $Session->reassemblyCompressed = false;
+         // @ Nothing stays held: return the reservation, end the deadline
+         //   (a whole single-frame message holds nothing — no call).
+         if ($Session->Buffers->retained !== 0 || $Session->deadline !== 0) {
+            $Session->hold(0, 0);
+         }
       }
 
       // :

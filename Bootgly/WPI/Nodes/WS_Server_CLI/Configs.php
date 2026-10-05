@@ -40,6 +40,12 @@ class Configs extends TCPConfigs
    public private(set) int $maxFrameSize;
    /** Maximum size, in bytes, of a reassembled inbound message. */
    public private(set) int $maxMessageSize;
+   /**
+    * Seconds an unfinished inbound message (or a frame spanning reads) may stay
+    * held, from its first held byte to its final frame — past it the session
+    * closes 1008. At least one; there is no off switch.
+    */
+   public private(set) int $maxMessageWallTime;
    // # Handshake policy
    /** @var array<string> Server-supported subprotocols, in preference order. */
    public private(set) array $subprotocols;
@@ -54,6 +60,16 @@ class Configs extends TCPConfigs
    public private(set) null|int $maxConnectionsPerIP;
    /** Selector entries each worker keeps free for its own dependency I/O (see `TCP_Server_CLI::$headroom`). */
    public private(set) null|int $headroom;
+   // # Memory budget
+   /**
+    * Worker-wide bytes held between reads — pending output and inbound holds
+    * (partial frames, unfinished messages; at most half, charged at their
+    * allocator footprint) share it (see `TCP_Server_CLI::$maxWorkerPendingBytes`);
+    * an inbound hold that does not fit closes the largest inbound holder (while
+    * it holds more than the asking session would), or the asking session, with
+    * 1009. `null` keeps the transport default (64 MiB).
+    */
+   public private(set) null|int $maxWorkerPendingBytes;
    // # HTTP fallback
    /** Responder for plain (non-upgrade) requests — e.g. the client page. */
    public private(set) null|Closure $Fallback;
@@ -77,12 +93,14 @@ class Configs extends TCPConfigs
       null|int $idleTimeout = null,
       int $maxFrameSize = 1048576,
       int $maxMessageSize = 8388608,
+      int $maxMessageWallTime = 60,
       array $subprotocols = [],
       bool $compression = true,
       array $Guards = [],
       null|int $maxConnections = null,
       null|int $maxConnectionsPerIP = null,
       null|int $headroom = null,
+      null|int $maxWorkerPendingBytes = null,
       null|Closure $Fallback = null
    )
    {
@@ -101,6 +119,7 @@ class Configs extends TCPConfigs
       $this->idleTimeout = $idleTimeout;
       $this->maxFrameSize = $maxFrameSize;
       $this->maxMessageSize = $maxMessageSize;
+      $this->maxMessageWallTime = $maxMessageWallTime;
       // # Handshake policy
       $this->subprotocols = $subprotocols;
       $this->compression = $compression;
@@ -109,6 +128,8 @@ class Configs extends TCPConfigs
       $this->maxConnections = $maxConnections;
       $this->maxConnectionsPerIP = $maxConnectionsPerIP;
       $this->headroom = $headroom;
+      // # Memory budget
+      $this->maxWorkerPendingBytes = $maxWorkerPendingBytes;
       // # HTTP fallback
       $this->Fallback = $Fallback;
    }

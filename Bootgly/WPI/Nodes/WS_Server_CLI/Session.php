@@ -11,13 +11,18 @@
 namespace Bootgly\WPI\Nodes\WS_Server_CLI;
 
 
+use const PHP_INT_MAX;
 use const ZLIB_ENCODING_RAW;
 use const ZLIB_SYNC_FLUSH;
 use function deflate_add;
 use function deflate_init;
 use function feof;
+use function hrtime;
 use function inflate_init;
+use function intdiv;
 use function is_int;
+use function max;
+use function min;
 use function pack;
 use function str_ends_with;
 use function strlen;
@@ -29,6 +34,8 @@ use InflateContext;
 
 use Bootgly\ACI\Events\Timer;
 use Bootgly\WPI\Endpoints\Servers\Disconnecting;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Modules\WS;
@@ -47,6 +54,7 @@ class Session implements Disconnecting
    public static null|int $idleTimeout = null;      // seconds of inbound silence before reaping
    public static int $maxFrameSize = 1048576;       // 1 MiB — close 1009 on exceed
    public static int $maxMessageSize = 8388608;     // 8 MiB — close 1009 on exceed
+   public static int $maxMessageWallTime = 60;      // seconds from an inbound message's first byte to its final frame — close 1008 (clamped to >= 1)
    // # Hooks (set by WS_Server_CLI::on()).
    public static null|Closure $onConnected = null;
    public static null|Closure $onDisconnected = null;
@@ -88,6 +96,15 @@ class Session implements Disconnecting
    public string $utf8Pending = '';                 // trailing incomplete UTF-8 bytes carried between text fragments
    public null|Message $Message = null;             // completed message surfaced to the encoder
    public string $outbox = '';                      // server-queued control frames (pong / close)
+   /**
+    * Worker-ledger reservation for the inbound bytes held between reads
+    * (`carry` + `reassembly`), at their allocator footprint — see `hold()`.
+    */
+   public private(set) Buffers $Buffers;
+   /** Monotonic `hrtime()` nanosecond past which the unfinished inbound message is reaped (0 = nothing unfinished). */
+   public private(set) int $deadline = 0;
+   /** Footprint every session of this worker holds inbound — at most half the worker ledger. */
+   private static int $held = 0;
    // @ Liveness
    public int $lastActivity = 0;
    public bool $awaitingPong = false;
@@ -104,6 +121,13 @@ class Session implements Disconnecting
       // * Metadata
       $this->id = $Connection->id;
       $this->lastActivity = time();
+      $this->Buffers = new Buffers;
+   }
+
+   public function __destruct ()
+   {
+      // @ A session freed without disconnect() still returns its inbound hold
+      $this->release();
    }
 
    /**
@@ -126,9 +150,11 @@ class Session implements Disconnecting
       //   timer status set never empties — otherwise Timer::del() would disarm
       //   the worker's SIGALRM and Timer::add() would not re-arm it (a stale
       //   empty runtime bucket keeps `$tasks` non-empty).
+      //   Without a heartbeat the tick also bounds how late an unfinished
+      //   message's deadline is enforced (`maxMessageWallTime`).
       $interval = self::$heartbeatInterval > 0
          ? self::$heartbeatInterval
-         : (self::$idleTimeout ?? 30);
+         : min(self::$idleTimeout ?? 30, max(1, self::$maxMessageWallTime));
       if ($interval < 1) {
          $interval = 1;
       }
@@ -166,6 +192,12 @@ class Session implements Disconnecting
       }
       $this->disconnected = true;
 
+      // @ Drop the held inbound bytes and return them to the worker ledger.
+      $this->carry = '';
+      $this->reassembly = '';
+      $this->reassemblyOpcode = 0;
+      $this->release();
+
       // @ Stop the heartbeat supervisor.
       if ($this->timer !== 0) {
          Timer::del($this->timer);
@@ -185,6 +217,140 @@ class Session implements Disconnecting
       if (self::$onDisconnected !== null) {
          (self::$onDisconnected)($this);
       }
+   }
+
+   /**
+    * Hold the inbound bytes this session keeps between reads — a partial
+    * frame of `$carry` bytes and an unfinished message of `$reassembly`
+    * bytes — on the worker ledger, charged at their allocator footprint
+    * (`Buffers::weigh()`).
+    *
+    * Inbound holds of the whole worker share at most half of
+    * `TCP_Server_CLI::$maxWorkerPendingBytes`, so pending output always keeps
+    * room. When a hold does not fit, the session holding the most inbound
+    * bytes is closed with 1009 if it holds more than this one would, and the
+    * hold is tried again. Holding anything starts the unfinished-message
+    * deadline (`maxMessageWallTime`), which a running deadline never
+    * restarts; holding nothing ends it.
+    *
+    * @return bool Whether the bytes may be held; `false` means this session
+    *              must be closed with 1009.
+    */
+   public function hold (int $carry, int $reassembly): bool
+   {
+      // ? Nothing unfinished remains
+      if ($carry <= 0 && $reassembly <= 0) {
+         $this->release();
+
+         return true;
+      }
+
+      // !
+      $wanted = Buffers::weigh($carry) + Buffers::weigh($reassembly);
+
+      // @@ Fit the hold, evicting larger inbound holders
+      while ($this->admit($wanted) === false) {
+         if ($this->evict($wanted) === false) {
+            return false;
+         }
+      }
+
+      $this->arm();
+
+      // :
+      return true;
+   }
+
+   /**
+    * Reserve `$wanted` bytes of footprint for this session inside the inbound
+    * share of the worker ledger.
+    */
+   private function admit (int $wanted): bool
+   {
+      // !
+      $growth = $wanted - $this->Buffers->retained;
+      $share = intdiv(max(0, TCP_Server_CLI::$maxWorkerPendingBytes), 2);
+
+      // ? Inbound holds stay within half the worker ledger
+      if ($growth > 0 && $growth > $share - self::$held) {
+         return false;
+      }
+      if ($this->Buffers->reserve($wanted) === false) {
+         return false;
+      }
+
+      // @
+      self::$held = max(0, self::$held + $growth);
+
+      // :
+      return true;
+   }
+
+   /**
+    * Close (1009) the established session of this worker that holds the most
+    * inbound bytes, if it holds more than `$wanted`.
+    *
+    * @return bool Whether a session was closed (its bytes are released).
+    */
+   private function evict (int $wanted): bool
+   {
+      // !
+      $Largest = null;
+      $largest = $wanted;
+
+      // @@
+      foreach (Connections::$Connections as $Connection) {
+         $Session = $Connection->decoded;
+         if (
+            $Session instanceof self === false
+            || $Session === $this
+            || $Session->disconnected
+            || $Session->Buffers->retained <= $largest
+         ) {
+            continue;
+         }
+
+         $Largest = $Session;
+         $largest = $Session->Buffers->retained;
+      }
+
+      // ?
+      if ($Largest === null) {
+         return false;
+      }
+
+      // @
+      $Largest->close(1009);
+
+      // :
+      return true;
+   }
+
+   /** Return this session's inbound hold to the worker ledger and end its deadline. */
+   private function release (): void
+   {
+      self::$held = max(0, self::$held - $this->Buffers->retained);
+      $this->Buffers->release();
+      $this->deadline = 0;
+   }
+
+   /**
+    * Start the unfinished-message deadline (`maxMessageWallTime`, at least one
+    * second) unless one is already running.
+    */
+   private function arm (): void
+   {
+      // ?
+      if ($this->deadline !== 0) {
+         return;
+      }
+
+      // @ Overflow-safe monotonic deadline (mirrors Decoder_HTTP2).
+      $now = (int) hrtime(true);
+      $seconds = max(1, self::$maxMessageWallTime);
+      $this->deadline = $seconds > intdiv(PHP_INT_MAX - $now, 1_000_000_000)
+         ? PHP_INT_MAX
+         : $now + ($seconds * 1_000_000_000);
    }
 
    /**
@@ -448,6 +614,13 @@ class Session implements Disconnecting
       if (@feof($Connection->Socket)) {
          $this->disconnect();
          $Connection->close();
+         return;
+      }
+
+      // ? An unfinished inbound message outlived its deadline — the peer keeps
+      //   bytes flowing (so it is never idle) but never completes it.
+      if ($this->deadline !== 0 && hrtime(true) >= $this->deadline) {
+         $this->close(1008);
          return;
       }
 

@@ -143,6 +143,7 @@ class WS_Server_CLI extends TCP_Server_CLI implements WS, Server
       Session::$idleTimeout = $Config->idleTimeout;
       Session::$maxFrameSize = $Config->maxFrameSize;
       Session::$maxMessageSize = $Config->maxMessageSize;
+      Session::$maxMessageWallTime = $Config->maxMessageWallTime;
       // @ Handshake policy
       Handshake::$subprotocols = $Config->subprotocols;
       Handshake::$compression = $Config->compression;
@@ -160,6 +161,10 @@ class WS_Server_CLI extends TCP_Server_CLI implements WS, Server
       }
       if ($Config->headroom !== null) {
          self::$headroom = $Config->headroom;
+      }
+      // @ Memory budget: the worker ledger that also holds inbound WS bytes
+      if ($Config->maxWorkerPendingBytes !== null) {
+         self::$maxWorkerPendingBytes = $Config->maxWorkerPendingBytes;
       }
    }
 
