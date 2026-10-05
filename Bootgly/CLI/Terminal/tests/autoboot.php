@@ -42,5 +42,6 @@ return new Suite(
       // # 1.0.x (UDP-24): the supervised prompt behind the server consoles
       '15.1-terminal-prompting',
       '6.3-input-reading-restore',
+      '15.2-terminal-prompting-plain',
    ]
 );

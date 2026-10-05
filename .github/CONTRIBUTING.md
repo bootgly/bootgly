@@ -21,7 +21,8 @@ composer install        # dev tooling only: the framework core has no third-part
 bootgly test 2          # run one suite — `bootgly test` alone runs every suite (slow)
 ```
 
-Requirements: PHP 8.4+ (`php-cli`, `php-openssl`, `php-readline`; `php-mbstring` recommended)
+Requirements: PHP 8.4+ (`php-cli`, `php-openssl`; `php-readline` and `php-mbstring` recommended —
+the console specs' terminal legs skip without readline)
 on Linux or WSL2. The servers need `pcntl`/`posix`; on macOS and Windows only the CLI tooling
 runs natively.
 

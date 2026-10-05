@@ -32,6 +32,7 @@
       "ext-fileinfo": "Required by the MIME upload validator (ADI/Validators/MIME), which sniffs the uploaded bytes",
       "ext-pcntl": "Required by the Console platform on Linux (workers, forks and signals)",
       "ext-posix": "Required by the Console platform on Linux (process control and privileges)",
+      "ext-readline": "Line editing, history and TAB completion in the servers' Interactive console",
       "ext-sqlite3": "Required by the SQLite database driver (ADI/Databases/SQL/Drivers/SQLite)"
    },
    "autoload-dev": {

@@ -1963,7 +1963,10 @@ class TCP_Server_CLI implements Servers
       $this->Logger->log(info: '@\;Entering in Interactive mode...@\;');
       $this->Logger->log(debug: '>_ Type `@#Green:stop@;` to stop the Server or `@#Green:help@;` to list commands.@\;');
       $this->Logger->log(debug: '>_ Type `@#Green:monitor@;` to enter in Monitor mode.@\;');
-      $this->Logger->log(notice: '>_ Autocompletation and history enabled.@\\\;');
+      // ? Readline edits a terminal only (without it the console still reads lines)
+      if ($this->Commands->editing) {
+         $this->Logger->log(notice: '>_ Autocompletion and history enabled.@\\\;');
+      }
 
       // ! Back from Monitor, the raw-mode Input left its own SIGINT/SIGTERM
       //   exits (exit 130/143, never stop()) and async signals behind: the

@@ -91,7 +91,7 @@ CLI tooling runs natively — use Docker for everything else.
 
 - `php-cli` ⚠️ — runs everything: the `bootgly` command, the servers (WPI) and the Console platform (CLI)
 - `php-openssl` ⚠️ — TLS in the servers and clients, JWT, the Encrypter and ACME certificates
-- `php-readline` ⚠️ — interactive terminal input: Console prompts and the servers' interactive mode
+- `php-readline` 👍 — line editing, history and TAB completion in the servers' Interactive console (without it the console reads plain lines)
 - `php-pcntl` ⚠️ (Linux) — workers, forks and signals of the servers and the Console platform
 - `php-posix` ⚠️ (Linux) — process control and privileges: worker processes, user/group switching
 - `php-mbstring` 👍 — multibyte text in the CLI UI components (a built-in fallback covers the basics)

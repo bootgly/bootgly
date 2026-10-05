@@ -27,6 +27,7 @@ use function feof;
 use function fread;
 use function function_exists;
 use function hrtime;
+use function is_resource;
 use function pcntl_signal;
 use function pcntl_signal_get_handler;
 use function preg_match;
@@ -89,6 +90,16 @@ class Terminal // extends API/Project or API/Node
    // ! Prompt
    /** Whether the readline callback handler of `prompting()` is installed */
    public private(set) bool $armed = false;
+   /**
+    * Whether `prompting()` edits the line through readline (TAB completion,
+    * recall of the lines passed to `execute()`): stdin is a terminal and
+    * ext-readline is loaded.
+    */
+   public bool $editing {
+      get => is_resource(STDIN)
+         && stream_isatty(STDIN)
+         && function_exists('readline_callback_handler_install');
+   }
    /** Plain (non-terminal) input read but not yet yielded — kept across `prompting()` calls */
    private string $buffer = '';
    /** Whether the rest of an over-long plain line is being dropped, up to its end */
@@ -143,10 +154,9 @@ class Terminal // extends API/Project or API/Node
 
    // ! Command
    /**
-    * Read and execute one command line, blocking until it is typed.
-    *
-    * @deprecated Blocks the caller for as long as nobody types: use
-    *             `prompting()`, which supervises between waits.
+    * Read and execute one command line, blocking until it is typed (needs
+    * ext-readline). A caller that must keep supervising while nobody types
+    * uses `prompting()`.
     *
     * @return bool Whether the caller may prompt again at once (false: the
     *              input is closed, or the command answers asynchronously).
@@ -164,7 +174,7 @@ class Terminal // extends API/Project or API/Node
       return $this->execute($input);
    }
    /**
-    * Prompt for command lines without ever blocking the caller.
+    * Prompt for command lines without blocking the caller while it waits.
     *
     * `$Supervise` runs before every wait for input and returns how long that
     * wait may last in microseconds (`0` polls), or `false` to end the prompt;
@@ -172,11 +182,15 @@ class Terminal // extends API/Project or API/Node
     * prompt disarmed — the caller executes it with the terminal in its own
     * mode — and the prompt is re-armed before the next wait.
     *
-    * A terminal is edited through readline (history, TAB completion), and the
-    * half-typed line survives every wait; its EOF (Ctrl-D on an empty line, a
-    * hangup) ends the prompt. Any other stdin (a pipe, a file, `/dev/null`) is
-    * read as plain lines; at its EOF nobody is left to type, so the prompt
-    * keeps running `$Supervise` without input.
+    * A terminal is edited through readline (TAB completion, recall of the
+    * lines passed to `execute()`), and the half-typed line survives every
+    * wait; its EOF (Ctrl-D on an empty line, a hangup) ends the prompt. On
+    * libedit an unfinished ESC, ^V or ^R holds the wait until the next key —
+    * a signal still cuts it short. Without ext-readline a terminal is read as
+    * plain lines under the same prompt, edited by the terminal alone (no
+    * recall or completion). Any other stdin (a pipe, a file, `/dev/null`) is read as
+    * plain lines without a prompt; at its EOF nobody is left to type, so the
+    * prompt keeps running `$Supervise` without input.
     *
     * @param Closure(): (int|false) $Supervise
     *
@@ -190,7 +204,9 @@ class Terminal // extends API/Project or API/Node
       $Stream = STDIN;
       // ? Readline edits terminals only: on anything else libedit never
       //   reports the EOF and turns the lines piped after a re-arm into ''
-      $editing = $terminal && function_exists('readline_callback_handler_install');
+      $editing = $this->editing;
+      // ! Whether a plain terminal shows the prompt for the line being typed
+      $prompted = false;
       // ! Readline callback
       $line = null;
       $accepted = false;
@@ -221,6 +237,7 @@ class Terminal // extends API/Project or API/Node
                   continue;
                }
 
+               $prompted = false;
                yield $read;
 
                continue;
@@ -238,6 +255,11 @@ class Terminal // extends API/Project or API/Node
                $this->prepare();
                readline_callback_handler_install('>_: ', $Accept);
                $this->armed = true;
+            }
+            // @ A terminal without readline: the same prompt, once per line
+            if ($terminal && $editing === false && $prompted === false) {
+               $this->Output->write('>_: ');
+               $prompted = true;
             }
 
             // @ Wait for input — a signal (no SA_RESTART) or the timeout ends it
@@ -294,8 +316,13 @@ class Terminal // extends API/Project or API/Node
             if (feof($Stream) === false) {
                continue;
             }
-            // ?: A terminal without readline: Ctrl-D, or a hangup
+            // ?: A terminal without readline: Ctrl-D, or a hangup — what
+            //   follows starts on a line of its own, not after the prompt
             if ($terminal) {
+               if ($prompted) {
+                  $this->Output->write("\n");
+               }
+
                return;
             }
 
