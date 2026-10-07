@@ -68,5 +68,11 @@ return new Suite(
       '1.23-console_prompt',
       // # 1.0.x (TCP-24): a Daemon master — STDIN closed at detach — reforks a dead worker
       '1.24-daemon_refork',
+      // # 1.0.x (UDP-22): no socket shares the UDP port, and start() never lands on one
+      '1.25-port_exclusivity',
+      // # 1.0.x (UDP-22): a squatter in the refork window or the reload gap is refused loudly, and the server recovers once it leaves
+      '1.26-port_windows',
+      // # 1.0.x (UDP-22): another account can neither take a running UDP port nor have a launch start on top of it
+      '1.27-port_cross_uid',
    ]
 );

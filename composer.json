@@ -33,6 +33,7 @@
       "ext-pcntl": "Required by the Console platform on Linux (workers, forks and signals)",
       "ext-posix": "Required by the Console platform on Linux (process control and privileges)",
       "ext-readline": "Line editing, history and TAB completion in the servers' Interactive console",
+      "ext-sockets": "Required by the UDP server (UDP_Server_CLI, exclusive port binding) and by the hot reload of the TCP and HTTP servers (listener handoff)",
       "ext-sqlite3": "Required by the SQLite database driver (ADI/Databases/SQL/Drivers/SQLite)"
    },
    "autoload-dev": {

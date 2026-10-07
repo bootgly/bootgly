@@ -11,9 +11,14 @@
 namespace Bootgly\WPI\Interfaces;
 
 
+use const AF_INET;
+use const AF_INET6;
 use const BOOTGLY_ENVIRONMENT;
+use const IPPROTO_IPV6;
+use const IPV6_V6ONLY;
 use const LOCK_EX;
 use const LOCK_NB;
+use const LOCK_UN;
 use const PHP_BINARY;
 use const PHP_SAPI;
 use const SIG_BLOCK;
@@ -34,6 +39,12 @@ use const SIGTERM;
 use const SIGTSTP;
 use const SIGUSR1;
 use const SIGUSR2;
+use const SO_REUSEPORT;
+use const SOCK_CLOEXEC;
+use const SOCK_DGRAM;
+use const SOCKET_EADDRINUSE;
+use const SOL_SOCKET;
+use const SOL_UDP;
 use const STDERR;
 use const STDIN;
 use const STDOUT;
@@ -57,6 +68,7 @@ use function feof;
 use function file;
 use function fopen;
 use function fread;
+use function function_exists;
 use function fwrite;
 use function get_included_files;
 use function getcwd;
@@ -90,17 +102,28 @@ use function posix_kill;
 use function posix_setgid;
 use function posix_setsid;
 use function posix_setuid;
+use function putenv;
 use function range;
 use function register_shutdown_function;
 use function rtrim;
-use function str_contains;
-use function stream_context_create;
+use function socket_bind;
+use function socket_close;
+use function socket_create;
+use function socket_export_stream;
+use function socket_last_error;
+use function socket_set_option;
+use function socket_strerror;
+use function str_starts_with;
 use function stream_isatty;
 use function stream_select;
 use function stream_set_blocking;
+use function stream_socket_get_name;
 use function stream_socket_pair;
 use function stream_socket_server;
 use function strlen;
+use function strpos;
+use function strrpos;
+use function substr;
 use function time;
 use function usleep;
 use ArgumentCountError;
@@ -109,6 +132,7 @@ use Closure;
 use InvalidArgumentException;
 use ReflectionProperty;
 use RuntimeException;
+use Socket;
 use stdClass;
 use Throwable;
 
@@ -163,6 +187,9 @@ class UDP_Server_CLI implements Servers
    private const int REVIVE_BURST = 3;
    private const int REVIVE_DELAY = 500_000_000;
    private const int REVIVE_CAP = 5_000_000_000;
+   // The marker a reload hands the fresh image: the master PID, which
+   // `pcntl_exec()` keeps — a fresh launch never carries it.
+   private const string RELOAD = 'BOOTGLY_UDP_RELOAD';
 
    public Logger $Logger {
       get {
@@ -234,7 +261,19 @@ class UDP_Server_CLI implements Servers
    protected static array $mask = [];
    // # Socket
    protected null|string $socket;
-   /** @var array<array<bool|int|string>|string> */
+   /**
+    * The address the host resolved to once at start — [family, IP literal,
+    * port] — that the exclusive probe and every worker bind.
+    *
+    * @var array{0:int,1:string,2:int}|array{}
+    */
+   private array $address = [];
+   /**
+    * The effective options of every worker socket: SO_REUSEPORT, and
+    * IPV6_V6ONLY off on IPv6. SO_REUSEADDR is never set.
+    *
+    * @var array<array<bool|int|string>|string>
+    */
    public static array $context;
    // # Status
    protected final Status $Status = Status::Booting;
@@ -1150,31 +1189,69 @@ class UDP_Server_CLI implements Servers
       $State = $this->Process->State;
       $State->qualify((string) ($this->port ?? 0));
 
-      // ? Pre-flight: verify socket can be bound before forking workers
-      $probeCode = 0;
-      $probeMessage = '';
-      $probeContext = stream_context_create(['socket' => ['so_reuseport' => true, 'ipv6_v6only' => false]]);
-      try {
-         $probeSocket = @stream_socket_server(
-            'udp://' . ($this->host ?? '0.0.0.0') . ':' . ($this->port ?? 0),
-            $probeCode,
-            $probeMessage,
-            STREAM_SERVER_BIND,
-            $probeContext
+      // ! A reload hands the fresh image its PID; cleared at once, so no
+      //   worker and no later image ever inherits it
+      $marker = getenv(self::RELOAD);
+      putenv(self::RELOAD);
+      $reloaded = $marker !== false && (int) $marker === posix_getpid();
+
+      // ? Pre-flight: the port must be free before forking workers. PHP binds
+      //   every UDP stream with SO_REUSEADDR, and Linux lets two such sockets
+      //   share an address with no uid check — so the workers bind through
+      //   ext-sockets, and this probe binds exclusively (neither SO_REUSEADDR
+      //   nor SO_REUSEPORT): start() never lands on top of another socket.
+      if (function_exists('socket_create') === false) {
+         $this->Logger->log(
+            error: '@\;UDP_Server_CLI needs ext-sockets to bind its port exclusively (install php-sockets).@.;'
          );
-      }
-      catch (Throwable) {
-         $probeSocket = false;
-      }
-      if ($probeSocket === false) {
-         $message = '@\;Could not bind to ' . ($this->host ?? '0.0.0.0') . ':' . ($this->port ?? 0) . ': ' . $probeMessage;
-         if ($probeCode === 13 || str_contains((string) $probeMessage, 'Permission denied')) {
-            $message .= '@\;Ports below 1024 require elevated privileges. Try running with `sudo`.@.;';
-         }
-         $this->Logger->log(error: $message);
          exit(1);
       }
-      fclose($probeSocket);
+      $resolution = $this->resolve();
+      if ($resolution !== '') {
+         $this->Logger->log(error: "@\;Could not bind to {$this->host}:{$this->port}: {$resolution}@.;");
+         exit(1);
+      }
+      if (($this->port ?? 0) > 0) {
+         $Probe = $this->bind(false);
+         if ($Probe instanceof Socket) {
+            socket_close($Probe);
+         }
+         else if ($reloaded && $Probe === SOCKET_EADDRINUSE) {
+            // ? A reload found the port taken in its gap: never exit — the
+            //   workers back off and serve once they can bind it.
+            $this->Logger->log(
+               warning: "@\;Reload: UDP port {$this->port} is held by another socket; the workers retry until they can bind it.@.;"
+            );
+         }
+         else {
+            $reason = socket_strerror($Probe);
+            [$family, $IP] = $this->address + [AF_INET, '0.0.0.0'];
+            if ($family === AF_INET6) {
+               $IP = "[{$IP}]";
+            }
+            $message = "@\;Could not bind to {$IP}:{$this->port} exclusively: {$reason}.";
+            if ($Probe === 13) {
+               $message .= '@\;Ports below 1024 require elevated privileges. Try running with `sudo`.@.;';
+            }
+            else if ($Probe === SOCKET_EADDRINUSE) {
+               // ? The same project relaunched keeps its own message — the
+               //   lock is read only when it exists, so a refused start
+               //   creates nothing
+               if (
+                  is_file($State->pidLockFile)
+                  && $State->lock(LOCK_EX | LOCK_NB) === false
+               ) {
+                  $message = "@\;Another instance is already running on port {$this->port}.@\;Use `project stop <name> <port>` to stop it or start this one on another port (PORT env).@.;";
+               }
+               else {
+                  $State->lock(LOCK_UN);
+                  $message .= "@\;Another socket — possibly another account's — holds this UDP port.@.;";
+               }
+            }
+            $this->Logger->log(error: $message);
+            exit(1);
+         }
+      }
 
       if ($this->launch($Starting) === false) { // @phpstan-ignore identical.alwaysFalse
          return false;
@@ -1357,9 +1434,6 @@ class UDP_Server_CLI implements Servers
     */
    public function instance ()
    {
-      $error_code = 0;
-      $error_message = '';
-
       // @ Set context options
       self::$context = [];
       // Socket
@@ -1372,28 +1446,40 @@ class UDP_Server_CLI implements Servers
          'ipv6_v6only' => false
       ];
 
-      // @ Create context
-      $Context = stream_context_create(self::$context);
-
-      // @ Create server socket
-      try {
-         $Socket = @stream_socket_server(
-            'udp://' . $this->host . ':' . $this->port,
-            $error_code,
-            $error_message,
-            STREAM_SERVER_BIND,
-            $Context
+      // ? ext-sockets binds without SO_REUSEADDR, which PHP's stream layer
+      //   always sets on a UDP bind — the one bind path of this server
+      if (function_exists('socket_create') === false) {
+         $this->Logger->log(
+            error: '@\;UDP_Server_CLI needs ext-sockets to bind its port exclusively (install php-sockets).@.;'
          );
-      }
-      catch (Throwable) {
-         $Socket = false;
-      }
-
-      if ($Socket === false) {
-         $this->Logger->log(error: '@\;Could not create socket: ' . $error_message);
          exit(1);
       }
-      /** @var resource $Socket */
+      // ? A direct call (no start()) resolves the host here
+      if ($this->address === []) {
+         $resolution = $this->resolve();
+         if ($resolution !== '') {
+            $this->Logger->log(error: "@\;Could not create socket: {$resolution}");
+            exit(1);
+         }
+      }
+
+      // @ Create server socket — SO_REUSEPORT (siblings join; any other
+      //   socket on the port refuses this bind, reforks included)
+      $Bound = $this->bind(true);
+      if ($Bound instanceof Socket === false) {
+         $reason = socket_strerror($Bound);
+         if ($Bound === SOCKET_EADDRINUSE) {
+            $reason = "{$reason} — another socket holds it";
+         }
+         $this->Logger->log(error: "@\;Could not bind the UDP port {$this->port}: {$reason}.@\;");
+         exit(1);
+      }
+      $Socket = socket_export_stream($Bound);
+      if ($Socket === false) {
+         socket_close($Bound);
+         $this->Logger->log(error: '@\;Could not create socket: the bound UDP socket could not be exported.@\;');
+         exit(1);
+      }
 
       // ! Router::reading() drains a finite batch. The listener itself must
       //   still be nonblocking so an empty queue returns immediately instead
@@ -1412,6 +1498,84 @@ class UDP_Server_CLI implements Servers
       $this->Status = Status::Running;
 
       return $this->Socket;
+   }
+
+   /**
+    * Resolve the configured host once into the IP literal every socket of
+    * this server binds — a `host:0` bind, so the probe and the workers can
+    * never land on different addresses of one name.
+    *
+    * @return string '' when resolved, or why the host cannot be bound.
+    */
+   private function resolve (): string
+   {
+      $host = $this->host ?? '0.0.0.0';
+      $code = 0;
+      $error = '';
+
+      // @
+      try {
+         $Probe = @stream_socket_server("udp://{$host}:0", $code, $error, STREAM_SERVER_BIND);
+      }
+      catch (Throwable $Throwable) {
+         return $Throwable->getMessage();
+      }
+      if ($Probe === false) {
+         return (string) $error ?: "{$host} cannot be bound";
+      }
+      $name = (string) stream_socket_get_name($Probe, false);
+      fclose($Probe);
+
+      // @ "[IPv6]:port" or "IPv4:port"
+      $separator = (int) strrpos($name, ':');
+      $IP = substr($name, 0, $separator);
+      $family = AF_INET;
+      if (str_starts_with($IP, '[')) {
+         $IP = substr($IP, 1, -1);
+         $family = AF_INET6;
+
+         // ? The socket name drops an IPv6 zone (`fe80::…%eth0`): carry the
+         //   configured one, or a link-local address cannot be bound
+         $zone = strpos($host, '%');
+         if ($zone !== false) {
+            $IP .= rtrim(substr($host, $zone), ']');
+         }
+      }
+      $this->address = [$family, $IP, (int) ($this->port ?? 0)];
+
+      // :
+      return '';
+   }
+
+   /**
+    * Bind a UDP socket to the resolved address without SO_REUSEADDR:
+    * shared (SO_REUSEPORT) for a worker, exclusive for the start probe.
+    *
+    * @return Socket|int The bound socket, or the errno that refused it.
+    */
+   private function bind (bool $shared): Socket|int
+   {
+      [$family, $IP, $port] = $this->address + [AF_INET, '0.0.0.0', 0];
+
+      // ! SOCK_CLOEXEC: a process a handler starts never inherits the socket
+      //   (it would stay in the SO_REUSEPORT group after the worker exits)
+      $Bound = @socket_create($family, SOCK_DGRAM | SOCK_CLOEXEC, SOL_UDP);
+      if ($Bound === false) {
+         return socket_last_error();
+      }
+      if (
+         ($shared && @socket_set_option($Bound, SOL_SOCKET, SO_REUSEPORT, 1) === false)
+         || ($family === AF_INET6 && @socket_set_option($Bound, IPPROTO_IPV6, IPV6_V6ONLY, 0) === false)
+         || @socket_bind($Bound, $IP, $port) === false
+      ) {
+         $error = socket_last_error($Bound);
+         socket_close($Bound);
+
+         return $error;
+      }
+
+      // :
+      return $Bound;
    }
 
    /**
@@ -2249,9 +2413,13 @@ class UDP_Server_CLI implements Servers
     * Graceful hot-reload (master-only): stop the workers, then re-exec this
     * master into a fresh PHP image so the whole application reloads from disk.
     * The master PID is preserved. UDP is connectionless, so there is no in-flight
-    * request drain — workers are stopped and the fresh master re-binds under
-    * SO_REUSEPORT. Files loaded before fork reload because the process image is
-    * replaced (PHP cannot redefine already-loaded classes/closures in place).
+    * request drain — workers are stopped and the fresh master's workers bind the
+    * port again. The port is free in between: a socket that takes it in that gap
+    * is logged by the fresh master and refused to its workers, which back off
+    * and serve once it leaves (the image carries a PID-bound marker, so it never
+    * exits on that refusal). Files loaded before fork reload because the process
+    * image is replaced (PHP cannot redefine already-loaded classes/closures in
+    * place).
     */
    protected function reload (): void
    {
@@ -2308,7 +2476,10 @@ class UDP_Server_CLI implements Servers
       //   worker it forks) would be born deaf to its lifecycle signals.
       //   Restored to the launcher's mask, raw: nothing may throw here.
       pcntl_sigprocmask(SIG_SETMASK, self::$mask);
-      pcntl_exec(self::$binary, self::$argv, getenv());
+      // @ The fresh image knows it is this reload by the PID exec keeps
+      $environment = getenv();
+      $environment[self::RELOAD] = (string) posix_getpid();
+      pcntl_exec(self::$binary, self::$argv, $environment);
 
       // ? exec only returns on failure.
       $this->Logger->log(error: 'Reload failed: could not re-exec the master.@\;');

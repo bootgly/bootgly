@@ -96,6 +96,7 @@ CLI tooling runs natively — use Docker for everything else.
 - `php-posix` ⚠️ (Linux) — process control and privileges: worker processes, user/group switching
 - `php-mbstring` 👍 — multibyte text in the CLI UI components (a built-in fallback covers the basics)
 - `php-fileinfo` 🧩 — the MIME upload validator (`ADI/Validators/MIME`), which sniffs the uploaded bytes
+- `php-sockets` 🧩 — the UDP server (`UDP_Server_CLI`), which binds its port exclusively through it (no other account can take it), and the hot reload of the TCP and HTTP servers (listener handoff)
 - `php-sqlite3` 🧩 — the SQLite database driver (`ADI/Databases/SQL/Drivers/SQLite`)
 
 --

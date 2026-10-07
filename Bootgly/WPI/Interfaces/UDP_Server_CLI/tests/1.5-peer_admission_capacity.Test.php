@@ -39,6 +39,8 @@ use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections\Connection\Lease;
  */
 return new Test(
    description: 'UDP peer churn must remain inside admission, timer and dispatch ceilings',
+   // ? instance() binds through ext-sockets (UDP-22) and exits without it
+   skip: function_exists('socket_create') === false,
    test: new Assertions(Case: function (): Generator {
       $segments = Display::$segments;
       $PreviousDecoder = UDP_Server_CLI::$Decoder;
