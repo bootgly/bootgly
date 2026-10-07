@@ -66,6 +66,14 @@ final class Session
    public static int $replenish = 32768;
    /** Per-stream response byte cap (head + body); 0 = unbounded. */
    public int $limit = 0;
+   /**
+    * Peer-induced output bytes (SETTINGS and PING ACKs, WINDOW_UPDATE
+    * replenishes) one connection may owe: answers queued since the transport
+    * last drained, a single read's answers included. Past it the connection
+    * fails with `Errors::EnhanceYourCalm` and status `'Control Flood'`.
+    * 0 = unbounded.
+    */
+   public int $quota = 0;
 
    // * Data
    /** Our advertised settings (push=false, streams=128, list=16384). */
@@ -83,6 +91,13 @@ final class Session
    public string $outbox = '';
    /** Partial-frame carry between feeds. */
    public string $buffer = '';
+   /**
+    * Peer-induced bytes queued and possibly still unsent (bounded by
+    * `$quota`). The preface, SETTINGS, HEADERS/CONTINUATION, request DATA,
+    * RST_STREAM and GOAWAY are not charged: the client, not the peer,
+    * decides those.
+    */
+   public protected(set) int $debt = 0;
    // # Completion
    /** @var array<int, array{stream: int, code: int, headerRaw: string, body: string, error: null|Errors, retryable: bool, status: null|string}> */
    public array $done = [];
@@ -249,13 +264,20 @@ final class Session
     * Consume peer bytes: parse frames, update state, queue answers into
     * `$outbox` and move finished streams into `$done`.
     *
+    * @param null|int $backlog Bytes the transport still holds unsent; null
+    *    keeps the whole debt (nothing is known to have drained).
+    *
     * @return bool `false` on a connection error (`$error` set, GOAWAY queued).
     */
-   public function feed (string $bytes): bool
+   public function feed (string $bytes, null|int $backlog = null): bool
    {
       // ? Dead connection
       if ($this->error !== null) {
          return false;
+      }
+      // ! Peer-induced bytes still held can never exceed what the transport still holds
+      if ($backlog !== null && $this->debt > $backlog) {
+         $this->debt = max(0, $backlog);
       }
 
       // ! Work buffer: carried partial bytes + this feed
@@ -321,9 +343,11 @@ final class Session
                // @ Connection-level replenish
                $this->pending += $payload;
                if ($this->pending >= self::$replenish) {
-                  $this->outbox .= Frame::pack(
+                  if ($this->answer(Frame::pack(
                      HTTP2::FRAME_WINDOW_UPDATE, 0, 0, pack('N', $this->pending)
-                  );
+                  )) === false) {
+                     return $this->fail(Errors::EnhanceYourCalm, 'Control Flood');
+                  }
                   $this->supply += $this->pending;
                   $this->pending = 0;
                }
@@ -375,9 +399,11 @@ final class Session
                // @ Stream-level replenish while the body is still flowing
                $Stream->pending += $payload;
                if ($Stream->pending >= self::$replenish) {
-                  $this->outbox .= Frame::pack(
+                  if ($this->answer(Frame::pack(
                      HTTP2::FRAME_WINDOW_UPDATE, 0, $stream, pack('N', $Stream->pending)
-                  );
+                  )) === false) {
+                     return $this->fail(Errors::EnhanceYourCalm, 'Control Flood');
+                  }
                   $Stream->supply += $Stream->pending;
                   $Stream->pending = 0;
                }
@@ -493,7 +519,9 @@ final class Session
                }
                $this->settled = true;
 
-               $this->outbox .= Frame::pack(HTTP2::FRAME_SETTINGS, HTTP2::FLAG_ACK, 0);
+               if ($this->answer(Frame::pack(HTTP2::FRAME_SETTINGS, HTTP2::FLAG_ACK, 0)) === false) {
+                  return $this->fail(Errors::EnhanceYourCalm, 'Control Flood');
+               }
 
                // @ Grown windows may unblock parked request tails
                $this->pump();
@@ -508,7 +536,9 @@ final class Session
                }
                // ?: Answer non-ACK pings with the same opaque payload
                if (($flags & HTTP2::FLAG_ACK) === 0) {
-                  $this->outbox .= Frame::pack(HTTP2::FRAME_PING, HTTP2::FLAG_ACK, 0, $data);
+                  if ($this->answer(Frame::pack(HTTP2::FRAME_PING, HTTP2::FLAG_ACK, 0, $data)) === false) {
+                     return $this->fail(Errors::EnhanceYourCalm, 'Control Flood');
+                  }
                }
                break;
 
@@ -908,10 +938,33 @@ final class Session
    }
 
    /**
+    * Queue one peer-induced frame, charged to `$debt`.
+    *
+    * @return bool `false` past `$quota` — the frame is not queued.
+    */
+   private function answer (string $frame): bool
+   {
+      $this->debt += strlen($frame);
+
+      // ? A peer that keeps forcing answers it never reads
+      if ($this->quota > 0 && $this->debt > $this->quota) {
+         return false;
+      }
+
+      $this->outbox .= $frame;
+
+      // :
+      return true;
+   }
+
+   /**
     * Connection error: queue GOAWAY, fail every in-flight stream and kill
     * the engine (`$error` set — every later `feed()` returns `false`).
+    *
+    * @param null|string $status A deterministic outcome for the failed
+    *    streams (never retried); null keeps the h2 error as the status.
     */
-   private function fail (Errors $error): false
+   private function fail (Errors $error, null|string $status = null): false
    {
       // @ The client never accepts pushes, so the last peer-initiated
       //   stream id is always 0 (RFC 9113 §6.8)
@@ -934,8 +987,8 @@ final class Session
             'headerRaw' => $Stream->head,
             'body' => $Stream->body,
             'error' => $error,
-            'retryable' => $Stream->headed === false,
-            'status' => null
+            'retryable' => $status === null && $Stream->headed === false,
+            'status' => $status
          ];
       }
       $this->Streams = [];

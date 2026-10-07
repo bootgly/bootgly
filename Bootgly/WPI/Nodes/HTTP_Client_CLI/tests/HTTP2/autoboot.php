@@ -20,6 +20,8 @@ return new Suite(
       '1.4-response_assembly',
       '1.5-flow_control',
       '1.6-goaway_rst',
-      '1.7-negatives'
+      '1.7-negatives',
+      // # Control budget: peer-forced answers are bounded by the quota
+      '1.8-control_budget'
    ]
 );

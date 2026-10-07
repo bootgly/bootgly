@@ -182,11 +182,21 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    /**
     * Maximum raw response bytes (headers + body) per request — 16 MiB by default, on HTTP/1.1
     * and HTTP/2 alike. `0` removes the limit (an explicit opt-out). Past it the request fails
-    * with code 0 and status `'Response Too Large'`; a declared `Content-Length` past it fails
-    * before its body is downloaded. The response head has its own fixed cap
-    * (`Decoder_::MAX_HEADER_BYTES`), whatever this allows.
+    * with code 0 and status `'Response Too Large'`; on HTTP/1.1 a declared `Content-Length` past
+    * it fails before its body is downloaded (HTTP/2 counts the bytes as they arrive). The
+    * response head has its own fixed cap (`Decoder_::MAX_HEADER_BYTES`), whatever this allows.
     */
    public int $maxResponseBytes = 16_777_216;
+   /**
+    * Maximum bytes of answers an HTTP/2 server may make one connection owe it — SETTINGS and PING
+    * acknowledgements, WINDOW_UPDATE replenishes — counted since the connection last drained its
+    * output (a single read's answers included), so a server that does not read them cannot grow
+    * the client. Uploads, request heads and bodies never count. Past it the connection is closed
+    * and every request on it fails with code 0 and status `'Control Flood'` (never retried).
+    * `0` removes the limit; budgets far below the default can trip on a bursty server that does
+    * read. HTTP/1.1 is not affected (it owes the server no answers).
+    */
+   public int $maxControlBytes = 1_048_576;
    /**
     * Maximum interim (1xx) responses accepted before the final one, per HTTP/1.1 response leg
     * (a redirect leg and a retry count from zero). RFC 9110 sets no maximum; past this one the
@@ -503,6 +513,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                //   client preface + SETTINGS into its outbox
                $Session = new Session;
                $Session->limit = $HTTP_Client_CLI->maxResponseBytes;
+               $Session->quota = $HTTP_Client_CLI->maxControlBytes;
                $HTTP_Client_CLI->Sessions[$socketId] = $Session;
 
                $HTTP_Client_CLI->Pool->attach(
@@ -1514,11 +1525,22 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                $Session = $this->Sessions[$socketID] ?? null;
                $Connection = $this->Connections->Connections[$socketID] ?? null;
                if ($Session !== null && $Connection !== null) {
+                  // ! Stalled on writes — read before the RST below queues output
+                  $stalled = $Connection->output !== '';
+
                   $Session->reset($stream, Errors::Cancel);
                   // @ The local reset record is moot — the request timed out
                   unset($Session->done[$stream]);
                   $this->flush($Session, $Connection);
-                  $this->Pool->release($Connection);
+
+                  // ? A stalled connection with no other stream is never pooled
+                  //   with its backlog; close() fires the disconnect hook
+                  if ($stalled && $Session->opened === 0) {
+                     $Connection->close();
+                  }
+                  else {
+                     $this->Pool->release($Connection);
+                  }
                }
             }
          }
@@ -1713,8 +1735,8 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          $this->bytesReceived += $bytes;
       }
 
-      // @ Feed the engine
-      $ok = $Session->feed($input);
+      // @ Feed the engine — the transport backlog bounds the peer-induced debt
+      $ok = $Session->feed($input, strlen($Connection->output));
 
       // @ Sync the pool stream capacity with the (possibly updated) peer SETTINGS
       $this->Pool->cap($Connection, max(1, $Session->capacity + $Session->opened));
@@ -1744,6 +1766,12 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       // ? Connection error — the GOAWAY was flushed above (best-effort)
       if ($ok === false) {
+         if ($Session->quota > 0 && $Session->debt > $Session->quota) {
+            $this->Logger->log(
+               warning: "HTTP/2 peer control flood ({$Session->debt} bytes of answers owed): connection closed@\\;"
+            );
+         }
+
          // @ close() fires the disconnect hook: it fails the remaining
          //   pendingStreams, drops from the pool, promotes and halts
          $Connection->close();
@@ -2309,6 +2337,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       // ? Deterministic failures never become transient by retrying
       if (
          $Request->Response->status === 'Response Too Large'
+         || $Request->Response->status === 'Control Flood'
          || $Request->Response->status === 'Response Header Fields Too Large'
          || $Request->Response->status === 'Invalid Response'
          || $Request->Response->status === 'Invalid Chunked Encoding'

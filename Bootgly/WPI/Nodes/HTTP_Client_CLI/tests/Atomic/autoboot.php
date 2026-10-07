@@ -92,5 +92,9 @@ return new Suite(
       '10.8-redirect-pin',
       '10.9-redirect-event_driven_hop_count',
       '10.10-redirect-target_limit',
+      // # 1.0.x: a peer-forced HTTP/2 control flood closes the connection;
+      //   a write-stalled h2 connection is closed on timeout, never pooled
+      '11.1-h2-control_flood',
+      '11.2-h2-timeout_stalled_close',
    ]
 );
