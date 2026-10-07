@@ -31,6 +31,9 @@ return new Suite(
       // # Security H8 — async signals must not cross warning isolation
       '6.3-inflater_signal_guard',
       // # H-WS-1 — the shared RFC 7692 Deflater honors context takeover
-      '6.4-deflater'
+      '6.4-deflater',
+      // # Server PINGs never grow a backpressured queue; the pre-101 head is capped
+      '5.6-pong_coalescing',
+      '5.7-handshake_head_cap'
    ]
 );

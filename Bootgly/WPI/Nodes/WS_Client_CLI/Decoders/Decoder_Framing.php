@@ -198,6 +198,14 @@ class Decoder_Framing extends Decoders
    {
       switch ($Frame->opcode) {
          case WS::OPCODE_PING:
+            // ? Output backpressured — park the payload: only the latest ping
+            //   is answered, once the queue drains (§5.5.3), so a server that
+            //   pings without reading cannot grow the queue.
+            if ($Session->Connection->output !== '') {
+               $Session->pong = $Frame->payload;
+               return ['consumed' => $Frame->consumed];
+            }
+
             // @ Auto-pong with the same application data (§5.5.2/§5.5.3).
             $Session->deliver(Frame::encode(WS::OPCODE_PONG, $Frame->payload));
             return ['consumed' => $Frame->consumed];

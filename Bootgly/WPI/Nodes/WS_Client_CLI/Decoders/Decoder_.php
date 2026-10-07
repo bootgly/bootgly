@@ -14,11 +14,13 @@ namespace Bootgly\WPI\Nodes\WS_Client_CLI\Decoders;
 use function array_shift;
 use function explode;
 use function in_array;
+use function strlen;
 use function strpos;
 use function strtolower;
 use function substr;
 use function trim;
 
+use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response\Decoders\Decoder_ as Response_Decoder;
 use Bootgly\WPI\Nodes\WS_Client_CLI\Decoders;
 use Bootgly\WPI\Nodes\WS_Client_CLI\Handshake;
 use Bootgly\WPI\Nodes\WS_Client_CLI\Session;
@@ -37,10 +39,19 @@ class Decoder_ extends Decoders
     */
    public function decode (Session $Session, string $buffer): null|array
    {
-      // ? Need the full response head.
+      // ? Need the full response head — within the HTTP client's response
+      //   head cap, or a peer that never ends it grows the buffer forever.
       $position = strpos($buffer, "\r\n\r\n");
       if ($position === false) {
+         if (strlen($buffer) >= Response_Decoder::MAX_HEADER_BYTES) {
+            return ['consumed' => strlen($buffer), 'fail' => 'handshake response head too large'];
+         }
+
          return null;
+      }
+      // ? Frames coalesced after the 101 are legal: cap the head, not the buffer
+      if ($position + 4 > Response_Decoder::MAX_HEADER_BYTES) {
+         return ['consumed' => strlen($buffer), 'fail' => 'handshake response head too large'];
       }
       $head = substr($buffer, 0, $position);
       $consumed = $position + 4;
@@ -83,7 +94,8 @@ class Decoder_ extends Decoders
       //   NOT return one when we offered none (§4.1).
       $subprotocol = $fields['sec-websocket-protocol'] ?? '';
       if ($subprotocol !== '' && in_array($subprotocol, $Session->offeredSubprotocols, true) === false) {
-         return ['consumed' => $consumed, 'fail' => "server selected an unoffered subprotocol '{$subprotocol}'"];
+         // ! The reason is logged: never echo the server's bytes into it
+         return ['consumed' => $consumed, 'fail' => 'server selected an unoffered subprotocol'];
       }
       $Session->subprotocol = $subprotocol;
 

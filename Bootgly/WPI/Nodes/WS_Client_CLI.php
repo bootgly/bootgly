@@ -35,6 +35,7 @@ use Bootgly\WPI\Nodes\WS_Client_CLI\Decoders\Decoder_;
 use Bootgly\WPI\Nodes\WS_Client_CLI\Decoders\Decoder_Framing;
 use Bootgly\WPI\Nodes\WS_Client_CLI\Events;
 use Bootgly\WPI\Nodes\WS_Client_CLI\Handshake;
+use Bootgly\WPI\Nodes\WS_Client_CLI\Message\Frame;
 use Bootgly\WPI\Nodes\WS_Client_CLI\Session;
 
 
@@ -561,6 +562,14 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
          if ($Owner !== null) {
             $Owner->Event->add($Socket, $Owner->Event::EVENT_READ, $Connection);
          }
+
+         // @ Answer the latest server ping parked while output was
+         //   backpressured — once, now that the queue drained (§5.5.3)
+         if ($Owner instanceof self && $Owner->Session?->pong !== null) {
+            $payload = $Owner->Session->pong;
+            $Owner->Session->pong = null;
+            $Owner->Session->deliver(Frame::encode(WS::OPCODE_PONG, $payload));
+         }
       };
 
       // @ On read: drive the handshake → framing decode loop.
@@ -595,6 +604,8 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
 
             // ? Handshake response invalid — drop the TCP connection (no reconnect).
             if (isSet($result['fail'])) {
+               // @ Every refusal reason is a framework string (no peer bytes)
+               $Client->Logger->log(warning: "Handshake refused: {$result['fail']}@\\;");
                $Session->closing = true;
                $Session->disconnect();
                $Connection->close();

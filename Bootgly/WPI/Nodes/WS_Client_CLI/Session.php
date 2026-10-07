@@ -83,6 +83,7 @@ class Session
    public int $lastActivity = 0;
    public bool $awaitingPong = false;
    public int $timer = 0;
+   public null|string $pong = null;                 // latest server PING payload parked while output is backpressured
 
 
    public function __construct (Connection $Connection, string $key, WS_Client_CLI $Client)
@@ -142,6 +143,7 @@ class Session
          return;
       }
       $this->disconnected = true;
+      $this->pong = null;
 
       // @ Stop the heartbeat supervisor.
       if ($this->timer !== 0) {
@@ -335,6 +337,15 @@ class Session
          || $Connection->status !== Connection::STATUS_ESTABLISHED
       ) {
          return false;
+      }
+
+      // @ A ping answer parked while output was backpressured rides ahead of
+      //   the next frame queued (§5.5.2), so steady sending never starves it
+      //   and a close never drops it.
+      if ($this->pong !== null) {
+         $answer = Frame::encode(WS::OPCODE_PONG, $this->pong);
+         $frame = "{$answer}{$frame}";
+         $this->pong = null;
       }
 
       // ? Preserve the authoritative suffix from an earlier short write.

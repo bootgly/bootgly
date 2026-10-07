@@ -3,7 +3,11 @@
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test;
+use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
+use Bootgly\WPI\Nodes\WS_Client_CLI;
+use Bootgly\WPI\Nodes\WS_Client_CLI\Decoders\Decoder_;
 use Bootgly\WPI\Nodes\WS_Client_CLI\Handshake;
+use Bootgly\WPI\Nodes\WS_Client_CLI\Session;
 
 
 return new Test(
@@ -86,6 +90,27 @@ return new Test(
       yield new Assertion(description: 'check() rejects a missing token')
          ->expect(Handshake::check('keep-alive', 'upgrade'))
          ->to->be(false)
+         ->assert();
+
+      // @ Decoder_ — a refusal reason is logged, so it never carries the
+      //   server's bytes (an unoffered subprotocol with terminal controls
+      //   and log markup is refused with a fixed reason).
+      $Pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+      $Client = new WS_Client_CLI(WS_Client_CLI::MODE_TEST);
+      $Client->configure(new WS_Client_CLI\Configs(host: '127.0.0.1', port: 1));
+      $Session = new Session(new Connection($Pair[0], Client: $Client), $key, $Client);
+      $Session->offeredSubprotocols = ['chat'];
+      $accept = Handshake::accept($key);
+      $head = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {$accept}\r\nSec-WebSocket-Protocol: \x1b[31mX@;\r\n\r\n";
+      $result = (new Decoder_)->decode($Session, $head);
+      foreach ($Pair as $Stream) {
+         if (is_resource($Stream)) {
+            fclose($Stream);
+         }
+      }
+      yield new Assertion(description: 'Decoder_ refuses an unoffered subprotocol with a fixed reason (no server bytes)')
+         ->expect($result['fail'] ?? null)
+         ->to->be('server selected an unoffered subprotocol')
          ->assert();
    })
 );
