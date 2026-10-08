@@ -142,6 +142,11 @@ final class Bodies
     */
    public function release (): void
    {
+      // ? A token built without its constructor (a test double) holds nothing
+      if (isSet($this->Buffers) === false) { // @phpstan-ignore isset.initializedProperty
+         return;
+      }
+
       $this->Buffers->release();
       $this->footprint = 0;
       $this->head = 0;
