@@ -62,12 +62,13 @@ class Configs extends TCPConfigs
    public private(set) null|int $headroom;
    // # Memory budget
    /**
-    * Worker-wide bytes held between reads — pending output and inbound holds
-    * (partial frames, unfinished messages; at most half, charged at their
-    * allocator footprint) share it (see `TCP_Server_CLI::$maxWorkerPendingBytes`);
+    * Worker-wide bytes held between reads, at their allocator footprint —
+    * pending output and inbound holds (partial frames, unfinished messages;
+    * at most half) share it (see `TCP_Server_CLI::$maxWorkerPendingBytes`);
     * an inbound hold that does not fit closes the largest inbound holder (while
     * it holds more than the asking session would), or the asking session, with
-    * 1009. `null` keeps the transport default (64 MiB).
+    * 1009. Lowered to half of `memory_limit` at start, with a warning, when it
+    * does not fit. `null` keeps the transport default (64 MiB).
     */
    public private(set) null|int $maxWorkerPendingBytes;
    // # HTTP fallback

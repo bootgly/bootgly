@@ -63,6 +63,7 @@ use function hash_equals;
 use function hrtime;
 use function implode;
 use function in_array;
+use function intdiv;
 use function is_a;
 use function is_array;
 use function is_dir;
@@ -162,12 +163,14 @@ use Bootgly\WPI\Event;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Events as TCP_Client_Events;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Modules\HTTP\Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\ACME_Client\CertificateSnapshot;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\ACME_Client\Challenges;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\AutoTLS;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Bodies;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading\Downloads;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_HTTP2;
@@ -651,6 +654,10 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       if ($Config->connectionIdleTimeout !== null) {
          self::$connectionIdleTimeout = $Config->connectionIdleTimeout;
       }
+      // @ Memory budget: the worker ledger behind bodies, the route cache and output
+      if ($Config->maxWorkerPendingBytes !== null) {
+         self::$maxWorkerPendingBytes = $Config->maxWorkerPendingBytes;
+      }
    }
 
    /**
@@ -746,11 +753,37 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    }
 
    /**
-    * Pre-fork setup: initialize the stable cross-worker upload controller
+    * Pre-fork setup: warn when a full request body cannot fit the worker
+    * memory budget, initialize the stable cross-worker upload controller
     * inode, then purge temp files orphaned by a previous crashed run.
     */
    protected function booting (): void
    {
+      // ? Unfinished in-memory bodies hold at most half of the worker memory
+      //   budget and at most `Bodies::$maxWorkerBodySize` raw bytes: a body of
+      //   `maxBodySize` that fits neither is always refused. The raw compare
+      //   runs first, so weigh() never sees a size near PHP_INT_MAX.
+      $body = Request::$maxBodySize;
+      $share = intdiv(max(0, self::$maxWorkerPendingBytes), 2);
+      $raw = Bodies::$maxWorkerBodySize;
+      if ($body > $raw) {
+         $this->Logger->log(
+            warning: "A request body of maxBodySize ({$body} bytes) cannot fit the raw ceiling on unfinished bodies per worker (Bodies::\$maxWorkerBodySize, {$raw} bytes): such non-multipart bodies, or multipart text fields, are refused (503 on HTTP/1.1, 413 on HTTP/2). Raise that ceiling or lower maxBodySize.@.;"
+         );
+      }
+      else if ($body > $share || Buffers::weigh($body) > $share) {
+         $this->Logger->log(
+            warning: "A request body of maxBodySize ({$body} bytes) cannot fit what unfinished bodies may hold ({$share} bytes, half of maxWorkerPendingBytes, at their allocator footprint): such non-multipart bodies, or multipart text fields, are refused (503 on HTTP/1.1, 413 on HTTP/2). Raise maxWorkerPendingBytes (and memory_limit) or lower maxBodySize.@.;"
+         );
+      }
+      // ? HTTP/2 also caps the bodies of one connection
+      if (self::$enableHTTP2 && $body > Decoder_HTTP2::$maxConnectionBodySize) {
+         $limit = Decoder_HTTP2::$maxConnectionBodySize;
+         $this->Logger->log(
+            warning: "A request body of maxBodySize ({$body} bytes) cannot fit the {$limit} bytes one HTTP/2 connection may hold (Decoder_HTTP2::\$maxConnectionBodySize): over HTTP/2 such bodies are refused with 413.@.;"
+         );
+      }
+
       // @ Keep the controller inode under the protected per-service process
       //   state namespace. Workers and a re-executed demoted master reopen
       //   independent descriptors without gaining pathname replacement rights.

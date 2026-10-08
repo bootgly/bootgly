@@ -294,7 +294,11 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
       // ? Connection preface (RFC 9113 §3.4) — also sent over TLS-ALPN
       if ($this->prefaced === false) {
          if ($length < 24) {
-            if ($this->reserve(strlen($work) + strlen($this->fragments)) === false) {
+            if (
+               $this->reserve(
+                  Buffers::weigh(strlen($work)) + Buffers::weigh(strlen($this->fragments))
+               ) === false
+            ) {
                return $this->fail(
                   $Package,
                   Errors::EnhanceYourCalm,
@@ -409,7 +413,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
                $bytes = strlen($data);
                if (
                   strlen($Stream->body) + $bytes > Request::$maxBodySize
-                  || $this->Bodies->reserve($bytes) === false
+                  || $this->Bodies->reserve($bytes, strlen($Stream->body)) === false
                ) {
                   $this->deny($stream, 413);
                   break;
@@ -516,7 +520,11 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
                }
 
                // @ Await CONTINUATION frames
-               if ($this->reserve(strlen($this->buffer) + strlen($data)) === false) {
+               if (
+                  $this->reserve(
+                     Buffers::weigh(strlen($this->buffer)) + Buffers::weigh(strlen($data))
+                  ) === false
+               ) {
                   return $this->fail(
                      $Package,
                      Errors::EnhanceYourCalm,
@@ -544,7 +552,8 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
                }
                if (
                   $this->reserve(
-                     strlen($this->buffer) + $fragmentBytes + $dataBytes
+                     Buffers::weigh(strlen($this->buffer))
+                     + Buffers::weigh($fragmentBytes + $dataBytes)
                   ) === false
                ) {
                   return $this->fail(
@@ -771,7 +780,9 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
       if ($offset < $length) {
          $carry = substr($work, $offset);
          if (
-            $this->reserve(strlen($carry) + strlen($this->fragments)) === false
+            $this->reserve(
+               Buffers::weigh(strlen($carry)) + Buffers::weigh(strlen($this->fragments))
+            ) === false
          ) {
             return $this->fail(
                $Package,
@@ -798,11 +809,14 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
     */
    public function feed (string $buffer): void
    {
-      $retained = $this->measure();
+      // ! The grown buffer replaces the current one in the footprint.
+      $held = strlen($this->buffer);
       $bytes = strlen($buffer);
       if (
-         $bytes > PHP_INT_MAX - $retained
-         || $this->reserve($retained + $bytes) === false
+         $bytes > PHP_INT_MAX - $held
+         || $this->reserve(
+            Buffers::weigh($held + $bytes) + Buffers::weigh(strlen($this->fragments))
+         ) === false
       ) {
          $Package = $this->Package;
          if ($Package !== null) {
@@ -1977,10 +1991,14 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
       return null;
    }
 
-   /** Measure protocol-internal receive bytes retained across callbacks. */
+   /**
+    * Measure protocol-internal receive bytes retained across callbacks, at
+    * the allocator footprint of each held string (`Buffers::weigh()`).
+    */
    protected function measure (): int
    {
-      return strlen($this->buffer) + strlen($this->fragments);
+      return Buffers::weigh(strlen($this->buffer))
+         + Buffers::weigh(strlen($this->fragments));
    }
 
    /** Reserve an absolute receive-carry footprint against both TCP ceilings. */

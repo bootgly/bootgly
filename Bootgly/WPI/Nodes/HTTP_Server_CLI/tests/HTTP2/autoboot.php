@@ -98,6 +98,7 @@ return new Suite(
 
             // @ Backlog cap: a window-starved stream must be RST, not grow —
             //   the breached send() must report false and run Close once
+            //   (13 MiB passes the 12 MiB a connection may hold)
             if ($Request->URI === '/sse-cap') {
                $SSE = $Response->SSE;
                $SSE->heartbeat = 0;
@@ -105,7 +106,7 @@ return new Suite(
                $SSE->open(Close: static function () use (&$capHooks): void {
                   $capHooks++;
                });
-               $capSent = $SSE->send(str_repeat('x', 5 * 1024 * 1024)) ? 'true' : 'false';
+               $capSent = $SSE->send(str_repeat('x', 13 * 1024 * 1024)) ? 'true' : 'false';
 
                return $Response;
             }
@@ -114,14 +115,14 @@ return new Suite(
                return $Response->send("sent={$capSent};hooks={$capHooks}");
             }
 
-            // @ Aggregate backlog: each event fits the per-connection budget
-            //   alone, but parked siblings count against it
+            // @ Aggregate backlog: each event (7 MiB) fits the 12 MiB
+            //   per-connection budget alone, but parked siblings count against it
             if ($Request->URI === '/sse-agg') {
                $SSE = $Response->SSE;
                $SSE->heartbeat = 0;
 
                $SSE->open();
-               $SSE->send(str_repeat('a', 3 * 1024 * 1024));
+               $SSE->send(str_repeat('a', 7 * 1024 * 1024));
 
                return $Response;
             }

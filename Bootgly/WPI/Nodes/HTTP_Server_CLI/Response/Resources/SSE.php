@@ -34,6 +34,7 @@ use Bootgly\ACI\Events\Timer;
 use Bootgly\WPI\Endpoints\Servers\Disconnecting;
 use Bootgly\WPI\Events\Cancellation;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
@@ -836,11 +837,16 @@ class SSE extends Resource implements Disconnecting
          // ? One owner admission composes this SSE backlog with the decoder,
          //   HPACK, every head/tail on the connection, and the worker ledger.
          //   Reserve before concatenation; on breach reset THIS stream only.
+         //   The grown backlog replaces the current one in the footprint.
          $retained = $Stream->measure();
+         $backlog = strlen($Stream->backlog);
          $bytes = strlen($payload);
          if (
-            $bytes > PHP_INT_MAX - $retained
-            || $H2->permit($Stream->Buffers, $retained + $bytes) === false
+            $bytes > PHP_INT_MAX - $backlog
+            || $H2->permit(
+               $Stream->Buffers,
+               $retained - Buffers::weigh($backlog) + Buffers::weigh($backlog + $bytes)
+            ) === false
          ) {
             $this->abort();
             return false;

@@ -11,6 +11,8 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
 
+use function intdiv;
+use function max;
 use function min;
 use function substr;
 use function time;
@@ -19,6 +21,7 @@ use const Bootgly\WPI;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Endpoints\Servers\Disconnecting;
 use Bootgly\WPI\Endpoints\Servers\Packages;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCP_Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
@@ -108,8 +111,15 @@ class Decoder_Waiting extends Decoders implements Disconnecting
 
          // ? The per-request cap bounds THIS body; the worker budget bounds the
          //   sum of every unfinished one. Reserve before appending: a body that
-         //   does not fit must never be allocated in the first place.
-         if ($consumed > 0 && $this->Bodies->reserve($downloaded + $consumed) === false) {
+         //   does not fit must never be allocated in the first place. The body
+         //   is one string, so its footprint is the weight of its length — or
+         //   of a whole transport read, which a body of half a read or more
+         //   may have adopted.
+         $held = $downloaded + $consumed;
+         $weight = Buffers::weigh(
+            $held >= intdiv(TCP_Packages::READ, 2) ? max($held, TCP_Packages::READ) : $held
+         );
+         if ($consumed > 0 && $this->Bodies->reserve($held, $weight) === false) {
             $Body->waiting = false;
             $Body->raw = '';
             $this->Bodies->release();

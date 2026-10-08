@@ -26,10 +26,12 @@ use function explode;
 use function fclose;
 use function fopen;
 use function fwrite;
+use function intdiv;
 use function is_array;
 use function is_file;
 use function is_string;
 use function json_decode;
+use function max;
 use function min;
 use function parse_str;
 use function preg_match;
@@ -59,6 +61,7 @@ use Throwable;
 use const Bootgly\WPI;
 use Bootgly\ABI\Resources\Storage\Driver;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Modules\HTTP2;
@@ -772,7 +775,13 @@ class Request
       //   can see. Released by `clean()` (and by the reservation's own
       //   destructor if the snapshot is simply dropped).
       $Bodies = new Bodies;
-      if ($Bodies->reserve(strlen($this->Body->raw)) === false) {
+      //   A body of half a transport read or more may be that read, adopted
+      //   whole (`Packages::READ`).
+      $held = strlen($this->Body->raw);
+      $footprint = Buffers::weigh(
+         $held >= intdiv(Packages::READ, 2) ? max($held, Packages::READ) : $held
+      );
+      if ($Bodies->reserve($held, $footprint) === false) {
          throw new RuntimeException(
             'HTTP deferred execution rejected: the worker retained-body budget is exhausted.'
          );
@@ -1183,6 +1192,15 @@ class Request
          $Decoder = new Decoder_Chunked;
          $Decoder->init();
          $Decoder->Request = $this;
+         // ? The decoder keeps this parsed head until the body completes,
+         //   so it draws on the same budget the body will.
+         if ($Decoder->Bodies->hold($Frame->weigh()) === false) {
+            $Decoder->Bodies->release();
+            $this->Body->waiting = false;
+            $Package->consumed = 0;
+            $Package->reject("HTTP/1.1 503 Service Unavailable\r\n\r\n");
+            return States::Rejected;
+         }
          // @ Decoder_Chunked implements Feeding, so TCP_Server_CLI pipelines
          //   every byte after the request head into it exactly once.
          $Package->Decoder = $Decoder;
@@ -1248,6 +1266,16 @@ class Request
                   $Decoder->init($multipartBoundary);
                   $Decoder->Request = $this;
 
+                  // ? The decoder keeps this parsed head until the body
+                  //   completes, so it draws on the same budget the body will.
+                  if ($Decoder->Bodies->hold($Frame->weigh()) === false) {
+                     $Decoder->Bodies->release();
+                     $this->Body->waiting = false;
+                     $Package->consumed = 0;
+                     $Package->reject("HTTP/1.1 503 Service Unavailable\r\n\r\n");
+                     return States::Rejected;
+                  }
+
                   if ($initialBody !== '') {
                      $Decoder->feed($initialBody);
 
@@ -1276,10 +1304,15 @@ class Request
                   $Waiting = new Decoder_Waiting;
                   $Waiting->init();
                   $Waiting->Request = $this;
-                  // ? The slice already taken from this read is retained for
-                  //   as long as the body stays unfinished, so it draws on the
-                  //   same worker budget its continuations will.
-                  if ($Waiting->Bodies->reserve($initialLength) === false) {
+                  // ? The slice already taken from this read — and the parsed
+                  //   head the decoder keeps — are retained for as long as the
+                  //   body stays unfinished, so they draw on the same worker
+                  //   budget its continuations will.
+                  if (
+                     $Waiting->Bodies->hold($Frame->weigh()) === false
+                     || $Waiting->Bodies->reserve($initialLength, Buffers::weigh($initialLength)) === false
+                  ) {
+                     $Waiting->Bodies->release();
                      $this->Body->raw = '';
                      $this->Body->waiting = false;
                      $Package->consumed = 0;

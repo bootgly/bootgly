@@ -31,6 +31,7 @@ use function trim;
 
 use Bootgly\API\Environments;
 use Bootgly\API\Workables\Server;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
@@ -97,6 +98,11 @@ final class Frame
       . '0123456789'
       . 'abcdefghijklmnopqrstuvwxyz'
       . 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+   /**
+    * Memory a parsed field value costs a Request beyond its strings: its map
+    * bucket and the copies the Request keeps (measured, rounded up).
+    */
+   private const int FIELD_BYTES = 96;
 
    // # Request line
    public string $method = '';
@@ -137,6 +143,37 @@ final class Frame
     */
    private static array $scans = [];
 
+
+   /**
+    * Weigh the memory this parsed head costs while a Request keeps it — the
+    * raw header block and every field name and value at their allocator
+    * footprint (`Buffers::weigh()`), plus `FIELD_BYTES` per field value.
+    *
+    * An unfinished request body keeps its Request, so its decoder charges
+    * this with the body (`Decoders\Bodies::hold()`).
+    */
+   public function weigh (): int
+   {
+      // !
+      $bytes = Buffers::weigh(strlen($this->headerRaw));
+
+      // @@
+      foreach ($this->fields as $name => $value) {
+         $bytes += Buffers::weigh(strlen((string) $name));
+
+         if (is_string($value)) {
+            $bytes += Buffers::weigh(strlen($value)) + self::FIELD_BYTES;
+            continue;
+         }
+
+         foreach ($value as $item) {
+            $bytes += Buffers::weigh(strlen($item)) + self::FIELD_BYTES;
+         }
+      }
+
+      // :
+      return $bytes;
+   }
 
    /**
     * Check a Host authority against RFC 9110 §7.2 `uri-host [ ":" port ]`.

@@ -189,14 +189,15 @@ class Stream
    }
 
    /**
-    * Measure the stream's persistent in-memory outbound tail.
+    * Measure the stream's persistent in-memory outbound tail, at the
+    * allocator footprint of each held string (`Buffers::weigh()`).
     *
     * File ranges remain disk-backed and are intentionally excluded. Only
     * unread raw backlog and in-memory pad segments are charged.
     */
    public function measure (): int
    {
-      $bytes = strlen($this->backlog);
+      $bytes = Buffers::weigh(strlen($this->backlog));
 
       foreach ($this->chunks as $index => $segment) {
          if ($index < $this->chunk || ! is_string($segment['data'] ?? null)) {
@@ -206,7 +207,7 @@ class Stream
          // ! `position` is a send cursor, not a memory cursor: substr() used
          //   by drain() does not compact this source string. Charge the whole
          //   allocation until drain() clears `data` on complete consumption.
-         $bytes += strlen($segment['data']);
+         $bytes += Buffers::weigh(strlen($segment['data']));
       }
 
       return $bytes;

@@ -31,8 +31,8 @@ use InflateContext;
 
 use Bootgly\ACI\Events\Timer;
 use Bootgly\WPI\Endpoints\Servers\Disconnecting;
-use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers\Shares;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Modules\WS;
@@ -111,13 +111,12 @@ class Session implements Disconnecting
    public string $outbox = '';                      // server-queued control frames (pong / close)
    /**
     * Worker-ledger reservation for the inbound bytes held between reads
-    * (`carry` + `reassembly`), at their allocator footprint — see `hold()`.
+    * (`carry` + `reassembly`), at their allocator footprint, in the Inbound
+    * share — see `hold()`.
     */
    public private(set) Buffers $Buffers;
    /** Monotonic `hrtime()` nanosecond past which the unfinished inbound message is reaped (0 = nothing unfinished). */
    public private(set) int $deadline = 0;
-   /** Footprint every session of this worker holds inbound — at most half the worker ledger. */
-   private static int $held = 0;
    /** @var array<int,DeflateContext> Worker-shared compressors, by window bits. */
    private static array $Deflators = [];
    // @ Liveness
@@ -136,7 +135,7 @@ class Session implements Disconnecting
       // * Metadata
       $this->id = $Connection->id;
       $this->lastActivity = time();
-      $this->Buffers = new Buffers;
+      $this->Buffers = new Buffers(Shares::Inbound);
    }
 
    public function __destruct ()
@@ -240,11 +239,11 @@ class Session implements Disconnecting
     * bytes — on the worker ledger, charged at their allocator footprint
     * (`Buffers::weigh()`).
     *
-    * Inbound holds of the whole worker share at most half of
-    * `TCP_Server_CLI::$maxWorkerPendingBytes`, so pending output always keeps
-    * room. When a hold does not fit, the session holding the most inbound
-    * bytes is closed with 1009 if it holds more than this one would, and the
-    * hold is tried again. Holding anything starts the unfinished-message
+    * Inbound holds of the whole worker — these and unfinished HTTP bodies —
+    * share at most half of `TCP_Server_CLI::$maxWorkerPendingBytes`
+    * (`Shares::Inbound`), so pending output always keeps room. When a hold
+    * does not fit, the session holding the most inbound bytes is closed with
+    * 1009 if it holds more than this one would, and the hold is tried again. Holding anything starts the unfinished-message
     * deadline (`maxMessageWallTime`), which a running deadline never
     * restarts; holding nothing ends it.
     *
@@ -264,38 +263,13 @@ class Session implements Disconnecting
       $wanted = Buffers::weigh($carry) + Buffers::weigh($reassembly);
 
       // @@ Fit the hold, evicting larger inbound holders
-      while ($this->admit($wanted) === false) {
+      while ($this->Buffers->reserve($wanted) === false) {
          if ($this->evict($wanted) === false) {
             return false;
          }
       }
 
       $this->arm();
-
-      // :
-      return true;
-   }
-
-   /**
-    * Reserve `$wanted` bytes of footprint for this session inside the inbound
-    * share of the worker ledger.
-    */
-   private function admit (int $wanted): bool
-   {
-      // !
-      $growth = $wanted - $this->Buffers->retained;
-      $share = intdiv(max(0, TCP_Server_CLI::$maxWorkerPendingBytes), 2);
-
-      // ? Inbound holds stay within half the worker ledger
-      if ($growth > 0 && $growth > $share - self::$held) {
-         return false;
-      }
-      if ($this->Buffers->reserve($wanted) === false) {
-         return false;
-      }
-
-      // @
-      self::$held = max(0, self::$held + $growth);
 
       // :
       return true;
@@ -344,7 +318,6 @@ class Session implements Disconnecting
    /** Return this session's inbound hold to the worker ledger and end its deadline. */
    private function release (): void
    {
-      self::$held = max(0, self::$held - $this->Buffers->retained);
       $this->Buffers->release();
       $this->deadline = 0;
    }

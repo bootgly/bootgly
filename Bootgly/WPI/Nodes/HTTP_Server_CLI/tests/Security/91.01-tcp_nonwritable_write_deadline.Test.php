@@ -5,6 +5,7 @@ use Bootgly\ACI\Tests\Suite\Test\Separator;
 use Bootgly\WPI\Connections as WPIConnections;
 use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as TCPServer;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections as TCPConnections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCPPackages;
@@ -499,6 +500,9 @@ return new Test(
 
       $controlArmed = $probe['control']['armed'] ?? [];
       $controlObserved = $probe['control']['observed'] ?? [];
+      // ! The ledger charges allocator footprints (Buffers::weigh()), not
+      //   raw lengths: the deferred control holds one 'L2-CONTROL' string.
+      $controlFootprint = Buffers::weigh(strlen('L2-CONTROL'));
       if (
          ($controlArmed['fill']['zero'] ?? false) !== true
          || ($controlArmed['writable'] ?? null) !== 0
@@ -507,7 +511,8 @@ return new Test(
          || ($controlArmed['write_registered'] ?? false) !== true
          || ($controlArmed['selector_socket'] ?? false) !== true
          || ($controlArmed['selector_payload'] ?? false) !== true
-         || ($controlArmed['retained'] ?? -1) !== strlen('L2-CONTROL')
+         // ledger charges the allocator footprint (Buffers::weigh())
+         || ($controlArmed['retained'] ?? -1) !== $controlFootprint
          || ($probe['control']['drained'] ?? 0) < 1
          || ($controlObserved['elapsed'] ?? 0.0) >= 1.0
          || ($controlObserved['payload'] ?? '') !== 'L2-CONTROL'
@@ -528,6 +533,9 @@ return new Test(
 
       $baseline = $probe['cleanup']['baseline_pending'] ?? -1;
       $attackArmed = $probe['attack']['armed'] ?? [];
+      // ! The ledger charges allocator footprints (Buffers::weigh()), not
+      //   raw lengths: the deferred attack holds one 2-byte 'L2' string.
+      $attackFootprint = Buffers::weigh(strlen('L2'));
       if (
          ($attackArmed['fill']['zero'] ?? false) !== true
          || ($attackArmed['writable'] ?? null) !== 0
@@ -539,8 +547,9 @@ return new Test(
          || ($attackArmed['write_registered'] ?? false) !== true
          || ($attackArmed['selector_socket'] ?? false) !== true
          || ($attackArmed['selector_payload'] ?? false) !== true
-         || ($attackArmed['retained'] ?? -1) !== 2
-         || ($attackArmed['worker_pending'] ?? -1) !== $baseline + 2
+         // ledger charges the allocator footprint (Buffers::weigh())
+         || ($attackArmed['retained'] ?? -1) !== $attackFootprint
+         || ($attackArmed['worker_pending'] ?? -1) !== $baseline + $attackFootprint
          || ($attackArmed['status'] ?? null) !== TCPConnections::STATUS_ESTABLISHED
          || ($attackArmed['expiration'] ?? null) !== 15
          || ($attackArmed['writes'] ?? null) !== 0
@@ -567,8 +576,9 @@ return new Test(
          && ($observed['write_registered'] ?? false) === true
          && ($observed['selector_socket'] ?? false) === true
          && ($observed['selector_payload'] ?? false) === true
-         && ($observed['retained'] ?? -1) === 2
-         && ($observed['worker_pending'] ?? -1) === $baseline + 2
+         // ledger charges the allocator footprint (Buffers::weigh())
+         && ($observed['retained'] ?? -1) === $attackFootprint
+         && ($observed['worker_pending'] ?? -1) === $baseline + $attackFootprint
          && ($observed['writes'] ?? null) === 0
          && ($observed['control_open'] ?? false) === true
          && ($observed['control_status'] ?? null) === TCPConnections::STATUS_ESTABLISHED

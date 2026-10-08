@@ -88,7 +88,7 @@ return new Test(
       $BodiesB = new Bodies(1024, 1024);
       $StreamB = new Stream(2, 65_535, 65_535, $BodiesB);
 
-      $reservedB = $BodiesB->reserve(8);
+      $reservedB = $BodiesB->reserve(8, 0);
       $StreamB->body = 'SSE-BODY';
 
       $Reentrant = new class ($StreamB) implements Disconnecting {
@@ -169,7 +169,7 @@ return new Test(
       $StreamD->Owner = $Owner;
       Ownership::attach($StreamD, $Registered);
 
-      $reservedD = $BodiesD->reserve(9);
+      $reservedD = $BodiesD->reserve(9, 0);
       $StreamD->body = 'BODY-NINE';
       $StreamD->Buffers->reserve(4);
       $StreamD->HeadBuffers->reserve(16);

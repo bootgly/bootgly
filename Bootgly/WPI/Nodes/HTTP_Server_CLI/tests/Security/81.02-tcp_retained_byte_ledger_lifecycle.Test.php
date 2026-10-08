@@ -404,7 +404,11 @@ return new Test(
 
       try {
          // # Exact cap, cap+1 refusal and cross-protocol authority.
-         TCPServer::$maxWorkerPendingBytes = $baseline + 1152;
+         // ! The ledger charges allocator footprints (Buffers::weigh()): the
+         //   Stream below holds a 512-byte backlog and a 256-byte chunk, each
+         //   weighed on its own; the Package token reserves a raw 384.
+         $streamFootprint = Buffers::weigh(512) + Buffers::weigh(256);
+         TCPServer::$maxWorkerPendingBytes = $baseline + 384 + $streamFootprint;
 
          $Socket = fopen('php://temp', 'w+');
          if (! is_resource($Socket)) {
@@ -524,7 +528,10 @@ return new Test(
          //   Exercise both a partial frame and a retained header block through
          //   the real decode path under one exact worker authority.
          $partial = substr(HTTP2::PREFACE, 0, 12);
-         TCPServer::$maxWorkerPendingBytes = $baseline + 23;
+         // ! The ledger charges allocator footprints (Buffers::weigh()): one
+         //   partial carry fits, a second one is refused by a single unit.
+         TCPServer::$maxWorkerPendingBytes =
+            $baseline + (2 * Buffers::weigh(strlen($partial))) - 1;
 
          $H2SocketA = fopen('php://temp', 'w+');
          $H2SocketB = fopen('php://temp', 'w+');
@@ -604,7 +611,9 @@ return new Test(
             //   creating a separately-budgeted persistent request head.
          ]);
          $fragmentBytes = max(1, intdiv(strlen($headerBlock), 2));
-         TCPServer::$maxWorkerPendingBytes = $baseline + (2 * $fragmentBytes) - 1;
+         // ! The ledger charges allocator footprints (Buffers::weigh()).
+         TCPServer::$maxWorkerPendingBytes =
+            $baseline + (2 * Buffers::weigh($fragmentBytes)) - 1;
          $header = Frame::pack(
             HTTP2::FRAME_HEADERS,
             0,
@@ -636,7 +645,9 @@ return new Test(
          $fragmentDisconnected = TCPServer::$pendingBytes;
 
          $feed = str_repeat('F', 10);
-         TCPServer::$maxWorkerPendingBytes = $baseline + (2 * strlen($feed)) - 1;
+         // ! The ledger charges allocator footprints (Buffers::weigh()).
+         TCPServer::$maxWorkerPendingBytes =
+            $baseline + (2 * Buffers::weigh(strlen($feed))) - 1;
          $DecoderD->feed($feed);
          $feedDRetained = $DecoderD->Buffers->retained;
          $feedTotal = TCPServer::$pendingBytes;
@@ -771,11 +782,13 @@ return new Test(
             HPACK::encode($outboxFields),
          );
          $attack = str_repeat($ping, $pingCount) . $request;
+         // ! The ledger charges allocator footprints (Buffers::weigh()): the
+         //   joined ACK output is one pending string weighed on its own.
          TCPServer::$maxWorkerPendingBytes =
             $baseline
             + (2 * $HPACKCapacity)
             + (2 * $outboxHead)
-            + (2 * $ackBytes)
+            + (2 * Buffers::weigh($ackBytes))
             - 1;
 
          $OutboxA = $OutboxDecoderA->decode(
@@ -1075,7 +1088,10 @@ return new Test(
                ['prepend' => str_repeat('C', 16), 'append' => ''],
             ],
          ]];
-         TCPServer::$maxWorkerPendingBytes = $baseline + 144;
+         // ! The ledger charges allocator footprints (Buffers::weigh()): the
+         //   64-byte head and each 40/24/16-byte pad string, weighed apart.
+         $padFootprint = Buffers::weigh(40) + Buffers::weigh(24) + Buffers::weigh(16);
+         TCPServer::$maxWorkerPendingBytes = $baseline + Buffers::weigh(64) + $padFootprint;
          $queued = $Package->enqueue($Socket, str_repeat('H', 64), $uploads);
          $queuedMeasured = $Package->inspect();
          $queuedTotal = TCPServer::$pendingBytes;
@@ -1093,7 +1109,8 @@ return new Test(
          $Package->purge();
          $afterQueuedPurge = TCPServer::$pendingBytes;
 
-         TCPServer::$maxWorkerPendingBytes = $baseline + 160;
+         // ! Active and staged pads: the same pad footprint, held twice.
+         TCPServer::$maxWorkerPendingBytes = $baseline + (2 * $padFootprint);
          $Package->uploading = $uploads;
          $Package->stagedUploading = $uploads;
          $activeMeasured = $Package->inspect();
@@ -1118,7 +1135,8 @@ return new Test(
          // # Receive-carry aggregation uses the same worker authority.
          $fragment = 'GET /l1-carry HTT';
          $bytes = strlen($fragment);
-         TCPServer::$maxWorkerPendingBytes = $baseline + (2 * $bytes) - 1;
+         // ! The ledger charges allocator footprints (Buffers::weigh()).
+         TCPServer::$maxWorkerPendingBytes = $baseline + (2 * Buffers::weigh($bytes)) - 1;
 
          $SocketA = fopen('php://temp', 'w+');
          $SocketB = fopen('php://temp', 'w+');
@@ -1182,7 +1200,9 @@ return new Test(
          // ! Keep the same cap as the failure leg. A complete socket write
          //   retains no bytes, so a wire larger than the retention ceiling is
          //   valid and isolates transport progress as the only variable.
-         TCPServer::$maxPendingBytes = 8;
+         //   The ledger charges allocator footprints (Buffers::weigh()): the
+         //   tail's footprint fits this ceiling, the wire's does not.
+         TCPServer::$maxPendingBytes = Buffers::weigh(8);
          $ControlConnection = new L1WriteFailureConnection($ControlSocket, 18412);
          $ControlPackage = new L1WriteFailurePackage($ControlConnection);
          $ControlDecoder = new L1WriteFailureDecoder;
@@ -1212,7 +1232,8 @@ return new Test(
          }
          $Resources[] = $AttackSocket;
 
-         TCPServer::$maxPendingBytes = 8;
+         // ! Footprint ceiling (Buffers::weigh()), as in the control leg.
+         TCPServer::$maxPendingBytes = Buffers::weigh(8);
          $AttackConnection = new L1WriteFailureConnection($AttackSocket, 18413);
          $AttackPackage = new L1WriteFailurePackage($AttackConnection);
          $AttackDecoder = new L1WriteFailureDecoder;
@@ -1310,7 +1331,8 @@ return new Test(
          }
          $Resources[] = $PipelineSocket;
 
-         TCPServer::$maxPendingBytes = 8;
+         // ! Footprint ceiling (Buffers::weigh()), as in the control leg.
+         TCPServer::$maxPendingBytes = Buffers::weigh(8);
          TCPServer::$maxWorkerPendingBytes = $baseline + 64;
          $PipelineConnection = new L1WriteFailureConnection($PipelineSocket, 18415);
          $PipelinePackage = new L1WriteFailurePackage($PipelineConnection);
@@ -1426,16 +1448,19 @@ return new Test(
       $baseline = $probe['baseline'];
       $accountant = $probe['accountant'];
       $atCap = $accountant['at_cap'] ?? [];
+      // ! The ledger charges allocator footprints (Buffers::weigh()) of the
+      //   Stream's 512-byte backlog and 256-byte chunk, each on its own.
+      $streamFootprint = Buffers::weigh(512) + Buffers::weigh(256);
       if (
          ! is_int($baseline)
          || ($atCap['package_accepted'] ?? null) !== true
          || ($atCap['stream_accepted'] ?? null) !== true
          || ($atCap['overflow_accepted'] ?? null) !== false
-         || ($atCap['stream_measured'] ?? null) !== 768
+         || ($atCap['stream_measured'] ?? null) !== $streamFootprint
          || ($atCap['package_retained'] ?? null) !== 384
-         || ($atCap['stream_retained'] ?? null) !== 768
+         || ($atCap['stream_retained'] ?? null) !== $streamFootprint
          || ($atCap['overflow_retained'] ?? null) !== 0
-         || ($atCap['total'] ?? null) !== $baseline + 1152
+         || ($atCap['total'] ?? null) !== $baseline + 384 + $streamFootprint
       ) {
          Vars::$labels = ['L1 exact cross-owner cap'];
          dump(json_encode($probe));
@@ -1443,11 +1468,12 @@ return new Test(
          return 'L1 ledger did not enforce the exact shared Package/HTTP2 cap.';
       }
 
+      // ! The shrunk raw 128-byte Package token plus the Stream footprint.
       if (
          ($accountant['shrunk'] ?? null) !== true
-         || ($accountant['after_shrink'] ?? null) !== $baseline + 896
-         || ($accountant['after_release'] ?? null) !== $baseline + 768
-         || ($accountant['after_duplicate'] ?? null) !== $baseline + 768
+         || ($accountant['after_shrink'] ?? null) !== $baseline + 128 + $streamFootprint
+         || ($accountant['after_release'] ?? null) !== $baseline + $streamFootprint
+         || ($accountant['after_duplicate'] ?? null) !== $baseline + $streamFootprint
          || ($accountant['after_stream_close'] ?? null) !== $baseline
          || ($accountant['destructor_accepted'] ?? null) !== true
          || ($accountant['during_destructor'] ?? null) !== $baseline + 1
@@ -1480,27 +1506,33 @@ return new Test(
       }
 
       $H2Carry = $probe['h2_carry'];
+      // ! The ledger charges allocator footprints (Buffers::weigh()) of each
+      //   held carry string; the decoder buffer itself keeps its raw length.
+      $fragmentFootprint = is_int($H2Carry['fragment_bytes'] ?? null)
+         ? Buffers::weigh($H2Carry['fragment_bytes'])
+         : null;
       if (
          ($H2Carry['partial_a'] ?? null) !== true
          || ($H2Carry['partial_a_bytes'] ?? null) !== 12
-         || ($H2Carry['partial_a_retained'] ?? null) !== 12
-         || ($H2Carry['partial_total'] ?? null) !== $baseline + 12
+         || ($H2Carry['partial_a_retained'] ?? null) !== Buffers::weigh(12)
+         || ($H2Carry['partial_total'] ?? null) !== $baseline + Buffers::weigh(12)
          || ($H2Carry['partial_b'] ?? null) !== true
          || ($H2Carry['partial_b_closed'] ?? null) !== true
          || ($H2Carry['partial_b_retained'] ?? null) !== 0
-         || ($H2Carry['partial_overflow_total'] ?? null) !== $baseline + 12
+         || ($H2Carry['partial_overflow_total'] ?? null) !== $baseline + Buffers::weigh(12)
          || ($H2Carry['partial_complete'] ?? null) !== true
          || ($H2Carry['partial_complete_retained'] ?? null) !== 0
          || ($H2Carry['partial_released'] ?? null) !== $baseline
          || ! is_int($H2Carry['fragment_bytes'] ?? null)
          || $H2Carry['fragment_bytes'] <= 0
+         || ! is_int($fragmentFootprint)
          || ($H2Carry['fragment_a'] ?? null) !== true
-         || ($H2Carry['fragment_a_retained'] ?? null) !== $H2Carry['fragment_bytes']
-         || ($H2Carry['fragment_total'] ?? null) !== $baseline + $H2Carry['fragment_bytes']
+         || ($H2Carry['fragment_a_retained'] ?? null) !== $fragmentFootprint
+         || ($H2Carry['fragment_total'] ?? null) !== $baseline + $fragmentFootprint
          || ($H2Carry['fragment_c'] ?? null) !== true
          || ($H2Carry['fragment_c_closed'] ?? null) !== true
          || ($H2Carry['fragment_c_retained'] ?? null) !== 0
-         || ($H2Carry['fragment_overflow_total'] ?? null) !== $baseline + $H2Carry['fragment_bytes']
+         || ($H2Carry['fragment_overflow_total'] ?? null) !== $baseline + $fragmentFootprint
          || ($H2Carry['fragment_complete'] ?? null) !== true
          || ($H2Carry['fragment_complete_retained'] ?? null) !== 0
          || ! is_int($H2Carry['fragment_hpack_retained'] ?? null)
@@ -1509,11 +1541,11 @@ return new Test(
             !== $baseline + $H2Carry['fragment_hpack_retained']
          || ($H2Carry['fragment_disconnected'] ?? null) !== $baseline
          || ($H2Carry['feed_bytes'] ?? null) !== 10
-         || ($H2Carry['feed_d_retained'] ?? null) !== 10
-         || ($H2Carry['feed_total'] ?? null) !== $baseline + 10
+         || ($H2Carry['feed_d_retained'] ?? null) !== Buffers::weigh(10)
+         || ($H2Carry['feed_total'] ?? null) !== $baseline + Buffers::weigh(10)
          || ($H2Carry['feed_e_closed'] ?? null) !== true
          || ($H2Carry['feed_e_retained'] ?? null) !== 0
-         || ($H2Carry['feed_overflow_total'] ?? null) !== $baseline + 10
+         || ($H2Carry['feed_overflow_total'] ?? null) !== $baseline + Buffers::weigh(10)
          || ($H2Carry['feed_released'] ?? null) !== $baseline
       ) {
          Vars::$labels = ['L1 HTTP/2 receive-carry accounting'];
@@ -1540,16 +1572,18 @@ return new Test(
          || ($outbox['a'] ?? null) !== true
          || ($outbox['a_decoder_bytes'] ?? null) !== 0
          || ($outbox['a_pending'] ?? null) !== $ackBytes
-         || ($outbox['a_retained'] ?? null) !== $ackBytes
+         // ! The ledger charges the pending ACK string's allocator
+         //   footprint (Buffers::weigh()), not its raw length.
+         || ($outbox['a_retained'] ?? null) !== Buffers::weigh($ackBytes)
          || ($outbox['a_total'] ?? null)
-            !== $baseline + $HPACKCapacity + $headBytes + $ackBytes
+            !== $baseline + $HPACKCapacity + $headBytes + Buffers::weigh($ackBytes)
          || ($outbox['b'] ?? null) !== true
          || ($outbox['b_closed'] ?? null) !== true
          || ($outbox['b_decoder_bytes'] ?? null) !== 0
          || ($outbox['b_pending'] ?? null) !== 0
          || ($outbox['b_retained'] ?? null) !== 0
          || ($outbox['overflow_total'] ?? null)
-            !== $baseline + $HPACKCapacity + $headBytes + $ackBytes
+            !== $baseline + $HPACKCapacity + $headBytes + Buffers::weigh($ackBytes)
          || ($outbox['drained'] ?? null) !== true
          || ($outbox['drained_pending'] ?? null) !== 0
          || ($outbox['drained_retained'] ?? null) !== 0
@@ -1640,17 +1674,21 @@ return new Test(
       }
 
       $pads = $probe['pads'];
+      // ! The ledger charges allocator footprints (Buffers::weigh()) of the
+      //   64-byte head and of each 40/24/16-byte pad string, weighed apart.
+      $padFootprint = Buffers::weigh(40) + Buffers::weigh(24) + Buffers::weigh(16);
+      $queuedFootprint = Buffers::weigh(64) + $padFootprint;
       if (
          ($pads['queued'] ?? null) !== true
-         || ($pads['queued_measured'] ?? null) !== 144
-         || ($pads['queued_total'] ?? null) !== $baseline + 144
+         || ($pads['queued_measured'] ?? null) !== $queuedFootprint
+         || ($pads['queued_total'] ?? null) !== $baseline + $queuedFootprint
          || ($pads['overflow_queued'] ?? null) !== false
          || ($pads['overflow_closed'] ?? null) !== true
          || ($pads['overflow_retained'] ?? null) !== 0
          || ($pads['after_queued_purge'] ?? null) !== $baseline
-         || ($pads['active_measured'] ?? null) !== 160
+         || ($pads['active_measured'] ?? null) !== 2 * $padFootprint
          || ($pads['active_reserved'] ?? null) !== true
-         || ($pads['active_total'] ?? null) !== $baseline + 160
+         || ($pads['active_total'] ?? null) !== $baseline + (2 * $padFootprint)
          || ($pads['after_active_purge'] ?? null) !== $baseline
       ) {
          Vars::$labels = ['L1 file-pad ownership'];
@@ -1668,8 +1706,9 @@ return new Test(
          || ($carry['second_closed'] ?? null) !== true
          || ($carry['second_retained'] ?? null) !== 0
          || ($carry['second_carry'] ?? null) !== 0
-         || ($carry['after_first'] ?? null) !== $baseline + $bytes
-         || ($carry['after_second'] ?? null) !== $baseline + $bytes
+         // ! The ledger charges the carry's allocator footprint (Buffers::weigh()).
+         || ($carry['after_first'] ?? null) !== $baseline + Buffers::weigh($bytes)
+         || ($carry['after_second'] ?? null) !== $baseline + Buffers::weigh($bytes)
          || ($carry['after_drop'] ?? null) !== $baseline
          || ($carry['first_retained'] ?? null) !== 0
          || ($carry['first_carry_after_drop'] ?? null) !== 0
@@ -1691,14 +1730,17 @@ return new Test(
          ! is_string($tail)
          || $tail === ''
          || ! is_int($wireBytes)
-         || $wireBytes <= 8
+         // ! The ledger charges allocator footprints (Buffers::weigh()): the
+         //   wire must outweigh the per-Package footprint ceiling.
+         || Buffers::weigh($wireBytes) <= Buffers::weigh(8)
          || ($control['read'] ?? null) !== true
          || ($control['calls'] ?? null) !== 2
          || ($control['closed'] ?? null) !== false
          || ($control['written'] ?? null) !== L1WriteFailureEncoder::$wire
          || ($control['carry'] ?? null) !== $tail
-         || ($control['retained'] ?? null) !== strlen($tail)
-         || ($control['total'] ?? null) !== $baseline + strlen($tail)
+         // ! The ledger charges the tail's allocator footprint (Buffers::weigh()).
+         || ($control['retained'] ?? null) !== Buffers::weigh(strlen($tail))
+         || ($control['total'] ?? null) !== $baseline + Buffers::weigh(strlen($tail))
          || ($control['after_cleanup'] ?? null) !== $baseline
       ) {
          Vars::$labels = ['L1 initial-write failure positive control'];
@@ -1729,8 +1771,10 @@ return new Test(
       if (
          ($close['parked'] ?? null) !== true
          || ($close['parked_pending'] ?? null) !== 'OLD'
-         || ($close['parked_retained'] ?? null) !== 3
-         || ($close['parked_total'] ?? null) !== $baseline + 3
+         // ! The ledger charges the parked 3-byte string's allocator
+         //   footprint (Buffers::weigh()).
+         || ($close['parked_retained'] ?? null) !== Buffers::weigh(3)
+         || ($close['parked_total'] ?? null) !== $baseline + Buffers::weigh(3)
          || ($close['read'] ?? null) !== true
          || ($close['calls'] ?? null) !== 1
          || ($close['closed'] ?? null) !== true

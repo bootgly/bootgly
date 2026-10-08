@@ -12,6 +12,7 @@ use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Modules\WS;
 use Bootgly\WPI\Nodes\WS_Client_CLI\Message\Frame as ClientFrame;
 use Bootgly\WPI\Nodes\WS_Server_CLI\Decoders\Decoder_Framing;
@@ -88,9 +89,20 @@ return new Test(
 
             return is_array($unpacked) ? (int) $unpacked[1] : null;
          };
-         /** Whether the session's charge equals the footprint of what it holds. */
-         $Exact = static fn (Session $Session): bool => $Session->Buffers->retained
-            === Buffers::weigh(strlen($Session->carry)) + Buffers::weigh(strlen($Session->reassembly));
+         /**
+          * Whether the session's charge equals the footprint of what it holds —
+          * a carry of half a transport read or more is charged as the whole
+          * read it may have adopted (`Packages::READ`).
+          */
+         $Exact = static function (Session $Session): bool {
+            $carry = strlen($Session->carry);
+            if ($carry >= intdiv(Packages::READ, 2)) {
+               $carry = max($carry, Packages::READ);
+            }
+
+            return $Session->Buffers->retained
+               === Buffers::weigh($carry) + Buffers::weigh(strlen($Session->reassembly));
+         };
 
          $frame = ClientFrame::encode(WS::OPCODE_BINARY, str_repeat('C', 122880));
          $head = substr($frame, 0, $part + 14);

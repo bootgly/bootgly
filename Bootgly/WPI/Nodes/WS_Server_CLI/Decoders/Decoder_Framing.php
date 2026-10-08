@@ -11,7 +11,9 @@
 namespace Bootgly\WPI\Nodes\WS_Server_CLI\Decoders;
 
 
+use function intdiv;
 use function is_int;
+use function max;
 use function pack;
 use function preg_match;
 use function strlen;
@@ -58,8 +60,13 @@ class Decoder_Framing extends Decoders
 
       // ? Partial frame — buffer and wait.
       if ($Frame === null) {
-         // ? Worker-wide inbound budget (the transport ledger).
-         if ($Session->hold(strlen($data), strlen($Session->reassembly)) === false) {
+         // ? Worker-wide inbound budget (the transport ledger). A carry of half
+         //   a transport read or more may be that read, adopted whole.
+         $carry = strlen($data);
+         if ($carry >= intdiv(TCP_Packages::READ, 2)) {
+            $carry = max($carry, TCP_Packages::READ);
+         }
+         if ($Session->hold($carry, strlen($Session->reassembly)) === false) {
             return $this->fail($Package, $Session, 1009);
          }
          $Session->carry = $data;

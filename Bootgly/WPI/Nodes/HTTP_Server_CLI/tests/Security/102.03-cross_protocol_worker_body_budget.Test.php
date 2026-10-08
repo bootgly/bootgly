@@ -358,7 +358,7 @@ return new Test(
          // The shared static ledger must be reusable after every protocol
          // owner disconnects; per-object retained=0 alone cannot prove that.
          $Reusable = new WorkerBodies;
-         $Probe->cleanup['reusable'] = $Reusable->reserve($Probe->aggregateCap);
+         $Probe->cleanup['reusable'] = $Reusable->reserve($Probe->aggregateCap, $Probe->aggregateCap);
          $Probe->cleanup['reusable_retained'] = $Reusable->retained;
          $Reusable->release();
          $Probe->cleanup['reusable_released'] = $Reusable->retained;

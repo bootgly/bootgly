@@ -6,6 +6,7 @@ use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Separator;
 use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as TCPServer;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCPPackages;
@@ -127,6 +128,10 @@ if (! class_exists('L1WorkerBudgetConnection', false)) {
  * becomes pendingBuffer on its own Package. Every response is individually
  * admissible, while their sum exceeds a deliberately small 256 KiB worker
  * probe budget without approaching memory exhaustion.
+ *
+ * Both byte ceilings and the exposed ledger counter are in allocator-footprint
+ * units: the ledger charges each held string at `Buffers::weigh()` of its
+ * length, so the oracle weighs every live pending buffer the same way.
  */
 $probeCap = 256 * 1024;
 $bodySize = 96 * 1024;
@@ -606,15 +611,18 @@ return new Test(
       }
 
       $pending = 0;
+      $footprint = 0;
       $accepted = 0;
       $rejected = 0;
       foreach ($probe['peers'] as $index => $peer) {
          $wireBytes = $peer['wire_bytes'] ?? null;
          $pendingBytes = $peer['pending_bytes'] ?? null;
+         // ! The per-connection ceiling now bounds the allocator footprint
+         //   (`Buffers::weigh()`) a Package holds, not its raw byte count.
          if (
             ! is_int($wireBytes)
             || $wireBytes <= 0
-            || $wireBytes >= $probe['per_connection_cap']
+            || Buffers::weigh($wireBytes) >= $probe['per_connection_cap']
             || ! is_int($pendingBytes)
             || $pendingBytes < 0
          ) {
@@ -626,6 +634,11 @@ return new Test(
          }
 
          $pending += $pendingBytes;
+         // ! The ledger now charges allocator footprints (`Buffers::weigh()`
+         //   of each held string). A zero-progress peer keeps its whole wire
+         //   as pendingBuffer at offset 0, so its pending bytes are the very
+         //   allocation the ledger weighs; a rejected peer holds none.
+         $footprint += Buffers::weigh($pendingBytes);
          if (
             ($peer['result'] ?? null) === true
             && ($peer['closed'] ?? null) === false
@@ -668,13 +681,15 @@ return new Test(
          return 'L1 PoC cleanup failed to drain every admitted response exactly.';
       }
 
+      // ? The ledger now charges allocator footprints (`Buffers::weigh()`):
+      //   the counter moves by the exact footprint sum of the live buffers.
       if ($probe['counter_property'] !== null) {
          $baseline = $probe['counter_baseline'];
          if (
             ! is_int($baseline)
             || $probe['counter_after_control'] !== $baseline
             || ! is_int($probe['counter_after_attack'])
-            || $probe['counter_after_attack'] - $baseline !== $pending
+            || $probe['counter_after_attack'] - $baseline !== $footprint
             || $probe['counter_after_drain'] !== $baseline
          ) {
             Vars::$labels = ['L1 retained-byte ledger'];
@@ -725,13 +740,15 @@ return new Test(
             . 'the bounded regression fixture.';
       }
 
-      if ($pending > $probeCap) {
+      // ? The worker cap now bounds allocator footprints (`Buffers::weigh()`),
+      //   never below the raw bytes, so the footprint sum is what must fit.
+      if ($footprint > $probeCap) {
          Vars::$labels = ['L1 configured-cap bypass'];
          dump(json_encode($probe));
 
          return 'CONFIRMED L1: the configured worker-wide retained-output cap '
             . "was {$probeCap} bytes, but live pending output reached {$pending} "
-            . 'bytes.';
+            . "bytes ({$footprint} bytes of allocator footprint).";
       }
 
       $fresh = $probe['fresh'];

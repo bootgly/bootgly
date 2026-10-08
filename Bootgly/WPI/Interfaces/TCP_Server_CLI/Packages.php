@@ -57,6 +57,13 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 
 abstract class Packages extends Server_Packages implements WPI\Connections\Packages
 {
+   /**
+    * Bytes one transport read asks for. PHP allocates them whole and keeps the
+    * allocation for any read of half of them or more, so a string that adopts
+    * such a read holds `READ` bytes, whatever its length.
+    */
+   public const int READ = 65_536;
+
    // ? Lazy: constructed on first read only. The transport hot path logs
    //   nothing, so an eager per-connection Logger graph (Logger + Handlers +
    //   Processors + Stream) is pure allocation churn under connection churn.
@@ -292,7 +299,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       //   are normal and must continue through fail()/feof() classification.
       if ($length === null && $timeout === null) {
          try {
-            $buffer = @fread($Socket, 65536); // @phpstan-ignore-line
+            $buffer = @fread($Socket, self::READ); // @phpstan-ignore-line
          }
          catch (Throwable) {
             $buffer = false;
@@ -318,7 +325,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
 
          try {
             do {
-               $buffer = @fread($Socket, $length ?? 65536); // @phpstan-ignore-line
+               $buffer = @fread($Socket, $length ?? self::READ); // @phpstan-ignore-line
 
                if ($buffer === false) break;
                if ($buffer === '') {
@@ -605,12 +612,15 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
 
       // ? Memory cap: a peer that never completes a request cannot grow
       //   the carry unbounded (defense in depth — `Frame::parse` rejects
-      //   oversized heads deterministically well below this).
+      //   oversized heads deterministically well below this). The new carry
+      //   replaces the old one in the footprint.
       $bytes = $length - $offset;
-      $retained = $this->measure() - strlen($this->carry);
+      $retained = $this->measure();
       if (
-         $bytes > max(0, Server::$maxPendingBytes) - $retained
-         || $this->reserve($retained + $bytes) === false
+         $retained === PHP_INT_MAX
+         || $this->reserve(
+            $retained - Buffers::weigh(strlen($this->carry)) + Buffers::weigh($bytes)
+         ) === false
       ) {
          $this->carry = '';
          $this->Buffers->reserve($this->measure());
@@ -817,11 +827,14 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
             && $this->pendingResponses === []
             && $uploads === []
          ) {
-            $bytes = strlen($buffer);
+            // ! The joined string replaces the pending one in the footprint.
+            $bytes = strlen($this->pendingBuffer) - $this->pendingOffset + strlen($buffer);
             $retained = $this->measure();
             if (
-               $bytes > max(0, Server::$maxPendingBytes) - $retained
-               || $this->reserve($retained + $bytes) === false
+               $retained === PHP_INT_MAX
+               || $this->reserve(
+                  $retained - Buffers::weigh(strlen($this->pendingBuffer)) + Buffers::weigh($bytes)
+               ) === false
             ) {
                return $this->abort($Socket);
             }
@@ -1027,11 +1040,14 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                ? $this->pendingBuffer
                : substr($this->pendingBuffer, $this->pendingOffset)
          );
-      $bytes = strlen($buffer);
+      // ! The joined string replaces the pending one in the footprint.
+      $bytes = strlen($pending) + strlen($buffer);
       $retained = $this->measure();
       if (
-         $bytes > max(0, Server::$maxPendingBytes) - $retained
-         || $this->reserve($retained + $bytes) === false
+         $retained === PHP_INT_MAX
+         || $this->reserve(
+            $retained - Buffers::weigh(strlen($this->pendingBuffer)) + Buffers::weigh($bytes)
+         ) === false
       ) {
          return false;
       }
@@ -1125,14 +1141,14 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
     */
    protected function queue (&$Socket, string $buffer, array $uploads): bool
    {
-      $bytes = strlen($buffer);
+      $bytes = Buffers::weigh(strlen($buffer));
       $uploadBytes = $this->weigh($uploads);
       $bytes = $uploadBytes > PHP_INT_MAX - $bytes
          ? PHP_INT_MAX
          : $bytes + $uploadBytes;
       $retained = $this->measure();
       if (
-         $bytes > max(0, Server::$maxPendingBytes) - $retained
+         $bytes > PHP_INT_MAX - $retained
          || $this->reserve($retained + $bytes) === false
       ) {
          $this->abort($Socket);
@@ -1147,17 +1163,19 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       return true;
    }
    /**
-    * Measure every persistent byte owned by this Package.
+    * Measure the allocator footprint of every persistent string owned by
+    * this Package — `Buffers::weigh()` of each, summed.
+    *
+    * The pending buffer is weighed whole: a send offset into it does not
+    * shrink its allocation.
     */
    protected function measure (): int
    {
-      $bytes = strlen($this->carry) + max(
-         0,
-         strlen($this->pendingBuffer) - $this->pendingOffset,
-      );
+      $bytes = Buffers::weigh(strlen($this->carry))
+         + Buffers::weigh(strlen($this->pendingBuffer));
 
       foreach ($this->pendingResponses as $Response) {
-         $bufferBytes = strlen($Response['buffer']);
+         $bufferBytes = Buffers::weigh(strlen($Response['buffer']));
          if ($bufferBytes > PHP_INT_MAX - $bytes) {
             return PHP_INT_MAX;
          }
@@ -1260,7 +1278,8 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       return implode(', ', $fields) . ' changed';
    }
    /**
-    * Weigh in-memory output strings retained by file-response metadata.
+    * Weigh in-memory output strings retained by file-response metadata, at
+    * their allocator footprint (`Buffers::weigh()` of each).
     *
     * Disk-backed ranges are excluded. Multipart prepend/append strings are
     * resident output and remain charged until their owning pad is cleared.
@@ -1290,7 +1309,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                   continue;
                }
 
-               $length = strlen($value);
+               $length = Buffers::weigh(strlen($value));
                if ($length > PHP_INT_MAX - $bytes) {
                   return PHP_INT_MAX;
                }
@@ -1302,7 +1321,8 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       return $bytes;
    }
    /**
-    * Reserve an absolute Package footprint against both byte ceilings.
+    * Reserve an absolute Package footprint against both byte ceilings: the
+    * per-connection `maxPendingBytes` and the worker memory budget.
     */
    protected function reserve (int $bytes): bool
    {

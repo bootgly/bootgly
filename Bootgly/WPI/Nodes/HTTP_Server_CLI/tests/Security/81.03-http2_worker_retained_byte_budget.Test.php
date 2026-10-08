@@ -3,6 +3,7 @@
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Separator;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
 use Bootgly\WPI\Modules\HTTP2;
 use Bootgly\WPI\Modules\HTTP2\Errors;
 use Bootgly\WPI\Modules\HTTP2\Frame;
@@ -14,7 +15,11 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
 
 
 $bodySize = 1024 * 1024;
-$workerCap = 1536 * 1024;
+// ! The worker ledger now charges allocator footprints (Buffers::weigh()):
+//   one 1 MiB body backlog holds weigh($bodySize). The cap stays one and a
+//   half body footprints, so one backlog fits and a second one does not.
+$bodyFootprint = Buffers::weigh($bodySize);
+$workerCap = $bodyFootprint + intdiv($bodyFootprint, 2);
 $workerOriginal = null;
 $probe = [
    'error' => '',
@@ -189,7 +194,8 @@ return new Test(
       try {
          $probe['setup'] = $Call($hostPort, $testIndex, '/l1-h2-setup');
 
-         // # First connection: one 1 MiB backlog fits the 1.5 MiB worker cap.
+         // # First connection: one 1 MiB backlog, charged at its allocator
+         //   footprint (Buffers::weigh()), fits the 1.5-footprint worker cap.
          $First = $Open($hostPort);
          @fwrite($First, Frame::pack(
             HTTP2::FRAME_HEADERS,
@@ -199,8 +205,9 @@ return new Test(
          ));
          $probe['first'] = $Walk($Drain($First, 1.25));
 
-         // # Second connection: individually valid, but worker aggregate +1
-         //   MiB would exceed the cap, so this new Stream must be reset.
+         // # Second connection: individually valid, but worker aggregate plus
+         //   another body footprint (Buffers::weigh()) would exceed the cap,
+         //   so this new Stream must be reset.
          $Second = $Open($hostPort);
          @fwrite($Second, Frame::pack(
             HTTP2::FRAME_HEADERS,

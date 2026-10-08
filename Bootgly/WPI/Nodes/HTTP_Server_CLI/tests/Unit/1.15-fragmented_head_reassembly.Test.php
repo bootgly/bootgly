@@ -8,6 +8,7 @@ use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\WPI\Endpoints\Servers\Encoder as ServerEncoder;
 use Bootgly\WPI\Endpoints\Servers\Packages as ServerPackages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as TCPServer;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCPPackages;
@@ -176,6 +177,8 @@ return new Test(
          U115Stream::$chunks['a'][] = $fragment1;
          $PackageA->reading($SocketA);
 
+         // ! The ledger charges allocator footprints (Buffers::weigh()),
+         //   not raw lengths: the carry costs weigh() of its length.
          yield new Assertion(
             description: 'The first fragment is retained whole, with no response',
          )
@@ -190,8 +193,8 @@ return new Test(
                $fragment1,
                '',
                false,
-               strlen($fragment1),
-               $baseline + strlen($fragment1),
+               Buffers::weigh(strlen($fragment1)),
+               $baseline + Buffers::weigh(strlen($fragment1)),
             ])
             ->assert();
 
@@ -199,6 +202,7 @@ return new Test(
          U115Stream::$chunks['b'][] = "GET /u115-b HTTP/1.1\r\nHost: localhost\r\n\r\n";
          $PackageB->reading($SocketB);
 
+         // ! Footprint ledger (Buffers::weigh()): only A's carry is held.
          yield new Assertion(
             description: 'The interleaved connection completes without seeing the other carry',
          )
@@ -216,7 +220,7 @@ return new Test(
                false,
                $fragment1,
                0,
-               $baseline + strlen($fragment1),
+               $baseline + Buffers::weigh(strlen($fragment1)),
             ])
             ->assert();
 
@@ -224,6 +228,8 @@ return new Test(
          U115Stream::$chunks['a'][] = $fragment2;
          $PackageA->reading($SocketA);
 
+         // ! Footprint ledger (Buffers::weigh()): the regrown carry is one
+         //   string, charged weigh() of its whole length.
          yield new Assertion(
             description: 'The reassembled-but-incomplete head is re-retained whole',
          )
@@ -238,8 +244,8 @@ return new Test(
                "{$fragment1}{$fragment2}",
                '',
                true,
-               strlen($fragment1 . $fragment2),
-               $baseline + strlen($fragment1 . $fragment2),
+               Buffers::weigh(strlen("{$fragment1}{$fragment2}")),
+               $baseline + Buffers::weigh(strlen("{$fragment1}{$fragment2}")),
             ])
             ->assert();
 
@@ -263,14 +269,17 @@ return new Test(
 
          // # Aggregate cap: each fragment fits alone, the second concurrent
          //   carry is exactly cap+1 and must close only its growing peer.
+         //   The ledger charges allocator footprints (Buffers::weigh()), so
+         //   the cap is two carry footprints minus one byte.
          TCPServer::$maxWorkerPendingBytes =
-            $baseline + (2 * strlen($fragment1)) - 1;
+            $baseline + (2 * Buffers::weigh(strlen($fragment1))) - 1;
 
          U115Stream::$chunks['a'][] = $fragment1;
          $PackageA->reading($SocketA);
          U115Stream::$chunks['b'][] = $fragment1;
          $PackageB->reading($SocketB);
 
+         // ! Footprint ledger (Buffers::weigh()): only A's carry is held.
          yield new Assertion(
             description: 'Concurrent carry growth is rejected at worker cap plus one',
          )
@@ -286,11 +295,11 @@ return new Test(
             ->to->be([
                false,
                $fragment1,
-               strlen($fragment1),
+               Buffers::weigh(strlen($fragment1)),
                true,
                '',
                0,
-               $baseline + strlen($fragment1),
+               $baseline + Buffers::weigh(strlen($fragment1)),
             ])
             ->assert();
 

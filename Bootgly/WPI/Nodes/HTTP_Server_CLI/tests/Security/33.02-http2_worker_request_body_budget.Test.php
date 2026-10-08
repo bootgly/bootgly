@@ -42,14 +42,14 @@ return new Test(
          $BodiesA = new Bodies(64, 96);
          $BodiesB = new Bodies(64, 96);
 
-         $probe['connection_a_64'] = $BodiesA->reserve(64);
-         $probe['connection_overrun_1'] = $BodiesA->reserve(1);
-         $probe['connection_b_32'] = $BodiesB->reserve(32);
-         $probe['worker_overrun_1'] = $BodiesB->reserve(1);
+         $probe['connection_a_64'] = $BodiesA->reserve(64, 0);
+         $probe['connection_overrun_1'] = $BodiesA->reserve(1, 0);
+         $probe['connection_b_32'] = $BodiesB->reserve(32, 0);
+         $probe['worker_overrun_1'] = $BodiesB->reserve(1, 0);
 
          $BodiesA->release(64);
          $BodiesA->release(64);
-         $probe['connection_b_after_release_32'] = $BodiesB->reserve(32);
+         $probe['connection_b_after_release_32'] = $BodiesB->reserve(32, 0);
          $probe['connection_a_retained'] = $BodiesA->retained;
          $probe['connection_b_retained'] = $BodiesB->retained;
 
@@ -58,14 +58,14 @@ return new Test(
          gc_collect_cycles();
 
          $BodiesC = new Bodies(96, 96);
-         $probe['worker_reusable_after_release'] = $BodiesC->reserve(96);
+         $probe['worker_reusable_after_release'] = $BodiesC->reserve(96, 0);
          unset($BodiesC);
          gc_collect_cycles();
 
          $BodiesD = new Bodies(96, 96);
-         $probe['worker_reusable_after_destructor'] = $BodiesD->reserve(96);
-         $probe['zero_reservation'] = $BodiesD->reserve(0);
-         $probe['negative_reservation'] = $BodiesD->reserve(-1);
+         $probe['worker_reusable_after_destructor'] = $BodiesD->reserve(96, 0);
+         $probe['zero_reservation'] = $BodiesD->reserve(0, 0);
+         $probe['negative_reservation'] = $BodiesD->reserve(-1, 0);
          $BodiesD->release(-1);
          $BodiesD->release(96);
       }

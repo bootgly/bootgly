@@ -45,6 +45,16 @@ class Configs extends TCPConfigs
    public private(set) null|int $headroom;
    /** Seconds of transport silence before a connection is closed (`0` disables). */
    public private(set) null|int $connectionIdleTimeout;
+   // # Memory budget
+   /**
+    * Worker-wide bytes held between reads, at their allocator footprint —
+    * unfinished request bodies (at most half), the route cache (at most a
+    * quarter) and pending output share it (see
+    * `TCP_Server_CLI::$maxWorkerPendingBytes`). Lowered to half of
+    * `memory_limit` at start, with a warning, when it does not fit.
+    * `null` keeps the transport default (64 MiB).
+    */
+   public private(set) null|int $maxWorkerPendingBytes;
 
 
    /**
@@ -67,7 +77,8 @@ class Configs extends TCPConfigs
       null|int $maxConnections = null,
       null|int $maxConnectionsPerIP = null,
       null|int $headroom = null,
-      null|int $connectionIdleTimeout = null
+      null|int $connectionIdleTimeout = null,
+      null|int $maxWorkerPendingBytes = null
    )
    {
       // ? One TLS source — a manual context and Auto-TLS cannot both own it
@@ -98,5 +109,6 @@ class Configs extends TCPConfigs
       $this->maxConnectionsPerIP = $maxConnectionsPerIP;
       $this->headroom = $headroom;
       $this->connectionIdleTimeout = $connectionIdleTimeout;
+      $this->maxWorkerPendingBytes = $maxWorkerPendingBytes;
    }
 }

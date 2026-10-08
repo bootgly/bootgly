@@ -14,7 +14,9 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 use function ctype_xdigit;
 use function explode;
 use function hexdec;
+use function intdiv;
 use function ltrim;
+use function max;
 use function preg_match;
 use function rtrim;
 use function strcspn;
@@ -29,6 +31,7 @@ use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Endpoints\Servers\Disconnecting;
 use Bootgly\WPI\Endpoints\Servers\Feeding;
 use Bootgly\WPI\Endpoints\Servers\Packages;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCP_Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
@@ -311,9 +314,24 @@ class Decoder_Chunked extends Decoders implements Disconnecting, Feeding
       // ? `Request::$maxBodySize` bounds THIS body; the worker budget bounds
       //   the sum of every unfinished one. Both the decoded body and the
       //   not-yet-parsed wire behind it survive across reads, so both count.
-      //   Checked right after the append, so the reservation covers exactly
-      //   what is now held; a refusal drops all of it.
-      if ($this->Bodies->reserve(strlen($this->body) + strlen($this->buffer)) === false) {
+      //   Checked right after the append, so the reservation covers what is
+      //   now held; a refusal drops all of it.
+      //   The footprint is priced for the end of this read: decoding moves
+      //   wire bytes into the body, which may then cross an allocator class
+      //   the two strings did not reach apart. At most the whole wire joins
+      //   the body and at most the whole wire stays behind it — and either
+      //   string, at half a transport read or more, may be that read adopted
+      //   whole (`Packages::READ`).
+      $body = strlen($this->body) + strlen($this->buffer);
+      $wire = strlen($this->buffer);
+      $read = intdiv(TCP_Packages::READ, 2);
+      if (
+         $this->Bodies->reserve(
+            $body,
+            Buffers::weigh($body >= $read ? max($body, TCP_Packages::READ) : $body)
+               + Buffers::weigh($wire >= $read ? max($wire, TCP_Packages::READ) : $wire)
+         ) === false
+      ) {
          $Body->waiting = false;
          $this->reset();
          $Package->Decoder = null;

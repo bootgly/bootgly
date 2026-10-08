@@ -95,7 +95,7 @@ return new Test(
       Ownership::attach($Stream, $Detached);
       Ownership::detach($Stream, $Detached);
 
-      $reserved = $Bodies->reserve(4);
+      $reserved = $Bodies->reserve(4, 0);
       $Stream->body = 'body';
       $Stream->close();
       $first = [

@@ -85,6 +85,8 @@ use function glob;
 use function hash;
 use function hrtime;
 use function implode;
+use function ini_get;
+use function ini_parse_quantity;
 use function intdiv;
 use function is_array;
 use function is_dir;
@@ -315,14 +317,22 @@ class TCP_Server_CLI implements Servers
    /** @var array<string, Closure> */
    public static array $Protocols = [];
    // # Backpressure (async write state machine)
-   //   Maximum bytes one connection-level retention domain may keep in
-   //   memory. Enforced independently by the transport writer and by
-   //   aggregate HTTP/2 protocol state (decoded heads + response tails).
-   public static int $maxPendingBytes = 4194304; // 4 MiB
-   //   Maximum bytes every transport retention owner in one worker may keep
-   //   in aggregate. This covers TCP pending output/receive carry and
-   //   protocol-level output backlogs. A zero value rejects every new
-   //   retained byte; already-held bytes can always drain or be released.
+   //   Maximum memory one connection-level retention domain may keep, at
+   //   allocator footprint (`Buffers::weigh()` of each held string).
+   //   Enforced independently by the transport writer and by aggregate
+   //   HTTP/2 protocol state (decoded heads + response tails). 12 MiB of
+   //   footprint is what 4 MiB of output could already cost: `weigh()`
+   //   charges a held string up to about 3 times its length.
+   public static int $maxPendingBytes = 12582912; // 12 MiB
+   //   Worker memory budget: the bytes every retention owner in one worker
+   //   may hold between callbacks, charged at their allocator footprint
+   //   (`Buffers::weigh()` of each held string). It covers TCP pending
+   //   output/receive carry, protocol-level output backlogs, unfinished
+   //   request bodies and WebSocket messages (at most half, `Shares::Inbound`)
+   //   and the route cache (at most a quarter, `Shares::Resident`). `start()`
+   //   lowers it to half of `memory_limit` (with a warning) when it would not
+   //   fit. A zero value rejects every new retained byte; already-held bytes
+   //   can always drain or be released.
    public static int $maxWorkerPendingBytes = 67108864; // 64 MiB
    //   Exact worker-local retained-byte diagnostic, maintained by Buffers.
    //   Configuration must use maxWorkerPendingBytes, never this counter.
@@ -901,6 +911,19 @@ class TCP_Server_CLI implements Servers
 
       // @ Boot the application, or bail when no handler is wired (overridable).
       $this->loading();
+
+      // @ Fit the worker memory budget under `memory_limit`: half of it stays
+      //   for the memory no ledger sees (response builds, string growth, the
+      //   application heap).
+      $limit = (string) ini_get('memory_limit');
+      $budget = self::$maxWorkerPendingBytes;
+      $fitted = TCP_Server_CLI\Buffers::fit($budget, ini_parse_quantity($limit));
+      if ($fitted < $budget) {
+         $this->Logger->log(
+            warning: "Worker memory budget (maxWorkerPendingBytes) lowered from {$budget} to {$fitted} bytes to fit memory_limit {$limit}: a worker keeps half its memory for what no budget sees. Raise memory_limit to at least twice the budget.@.;"
+         );
+         self::$maxWorkerPendingBytes = $fitted;
+      }
 
       // ! The state identity must be final before a reload descriptor is
       //   inspected: State::adopt() validates the received regular file

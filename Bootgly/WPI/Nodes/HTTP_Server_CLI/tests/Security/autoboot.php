@@ -700,5 +700,12 @@ return new Suite(
       // A client leaving a KV wait frees the pool slot; an idle flood leaves
       // the dependency waits their selector reserve.
       '88.02-deferred_dependency_selector_admission_lifecycle',
+      // # 1.0.x (H-HSC-3): one worker memory budget
+      // Request bodies, the route cache and pending output are charged at
+      // their allocator footprint to one worker budget, in shares, so no
+      // pool alone or together can exhaust a worker's memory_limit.
+      '103.01-worker_memory_bodies',
+      '103.02-worker_memory_cache_output',
+      '103.03-worker_memory_crash_shapes',
    ],
 );

@@ -26,6 +26,8 @@ use function substr;
 use function substr_replace;
 use function time;
 
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers\Shares;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header;
 
 
@@ -49,6 +51,13 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header;
  * nanosecond-scale, while any cross-worker store (SysV shm, Redis) costs
  * microseconds per request at the front of the hot path. Each worker warms
  * its own slots within one TTL window.
+ *
+ * Stored wires are charged at their allocator footprint (`Buffers::weigh()`
+ * of each) to the worker memory budget, in its Resident share — at most a
+ * quarter of `TCP_Server_CLI::$maxWorkerPendingBytes`. A store that does not
+ * fit evicts the oldest entries first; when nothing evictable is left, the
+ * response is simply not cached. A wire that is also queued as output is
+ * charged twice, which errs on the safe side.
  */
 class Cache
 {
@@ -69,9 +78,11 @@ class Cache
    /**
     * Max aggregate stored wire bytes per worker.
     *
-    * Public so deployments can size the L1 cache against their worker memory
-    * limit. Configure before the worker starts; flush before lowering it on a
-    * live worker. A non-positive value disables storage.
+    * A raw ceiling under the worker memory budget, which holds the stored
+    * wires at their allocator footprint within a quarter of
+    * `TCP_Server_CLI::$maxWorkerPendingBytes`. Configure before the worker
+    * starts; flush before lowering it on a live worker. A non-positive value
+    * disables storage.
     */
    public static int $maxBytes = 64 * 1024 * 1024;
    /**
@@ -128,6 +139,11 @@ class Cache
     * the request is served cold instead of risking a cross-principal hit.
     */
    private static int $unshared = 0;
+   /**
+    * Footprint of the stored wires in the worker memory budget (Resident
+    * share), created on first use.
+    */
+   private static null|Buffers $Buffers = null;
 
 
    /**
@@ -394,12 +410,33 @@ class Cache
 
    /**
     * Reconcile aggregate wire accounting with the public entries map.
+    *
+    * Trusted in-process code may have grown the map past what the worker
+    * memory budget admits; the oldest entries then go first.
     */
    private static function synchronize (): void
    {
+      // !
+      $Buffers = self::$Buffers ??= new Buffers(Shares::Resident);
       $bytes = 0;
+      $footprint = 0;
       foreach (self::$entries as $entry) {
-         $bytes += strlen($entry[0]);
+         $size = strlen($entry[0]);
+         $bytes += $size;
+         $footprint += Buffers::weigh($size);
+      }
+
+      // @@ FIFO eviction until the footprint fits (an empty map always does)
+      while ($Buffers->reserve($footprint) === false) {
+         $key = array_key_first(self::$entries);
+         if ($key === null) {
+            break;
+         }
+
+         $size = strlen(self::$entries[$key][0]);
+         $bytes -= $size;
+         $footprint -= Buffers::weigh($size);
+         unset(self::$entries[$key]);
       }
 
       self::$bytes = $bytes;
@@ -415,8 +452,12 @@ class Cache
          return;
       }
 
-      self::$bytes -= strlen($entry[0]);
+      $size = strlen($entry[0]);
+      self::$bytes -= $size;
       unset(self::$entries[$key]);
+
+      // @ Shrinking always fits
+      self::$Buffers?->reserve(self::$Buffers->retained - Buffers::weigh($size));
    }
 
 
@@ -481,7 +522,9 @@ class Cache
     * Store built wire bytes for one request key.
     *
     * Callers are responsible for request/response-side guards; this method
-    * only enforces structural limits.
+    * only enforces structural limits and the worker memory budget: when the
+    * wire cannot fit even after evicting every other entry, nothing is
+    * stored and the request keeps being served cold.
     */
    public static function store (string $key, string $wire, int $ttl, string $URI): void
    {
@@ -504,18 +547,31 @@ class Cache
          return;
       }
 
+      /** @var Buffers $Buffers */
+      $Buffers = self::$Buffers;
       $existing = self::$entries[$index] ?? null;
       $existingSize = $existing === null ? 0 : strlen($existing[0]);
       $retainedBytes = self::$bytes - $existingSize;
       $retainedEntries = count(self::$entries) + ($existing === null ? 1 : 0);
       $availableBytes = self::$maxBytes - $wireSize;
+      $retainedFootprint = $Buffers->retained - Buffers::weigh($existingSize);
+      $wireFootprint = Buffers::weigh($wireSize);
 
-      // ? FIFO eviction until BOTH independent ceilings fit. A replacement's
-      //   old wire is excluded from the projection, while its array position
-      //   remains stable when no peer needs eviction.
+      // ? A wire the worker budget could not hold even with every other entry
+      //   evicted is not cached — evicting first would empty the cache for nothing.
+      if ($wireFootprint > $Buffers->available) {
+         return;
+      }
+
+      // ? FIFO eviction until EVERY independent ceiling fits — the entry
+      //   count, the raw bytes and the worker memory budget, whose
+      //   reservation takes the final footprint once the first two fit. A
+      //   replacement's old wire is excluded from the projection, while its
+      //   array position remains stable when no peer needs eviction.
       while (
          $retainedEntries > self::ENTRIES_LIMIT
          || $retainedBytes > $availableBytes
+         || $Buffers->reserve($retainedFootprint + $wireFootprint) === false
       ) {
          $evictionKey = null;
          foreach (self::$entries as $candidate => $entry) {
@@ -524,15 +580,18 @@ class Cache
             }
 
             $evictionKey = $candidate;
-            $retainedBytes -= strlen($entry[0]);
+            $size = strlen($entry[0]);
+            $retainedBytes -= $size;
+            $retainedFootprint -= Buffers::weigh($size);
             $retainedEntries--;
             break;
          }
 
          // ? Only the replacement itself remains. Its old size is already
-         //   excluded, and the validated new wire fits an empty cache.
+         //   excluded and the validated new wire fits an empty cache's count
+         //   and bytes, so the worker budget refused it: serve cold.
          if ($evictionKey === null) {
-            break;
+            return;
          }
 
          self::evict($evictionKey);
@@ -561,5 +620,6 @@ class Cache
       self::$entries = [];
       self::$bytes = 0;
       self::$URIs = [];
+      self::$Buffers?->release();
    }
 }

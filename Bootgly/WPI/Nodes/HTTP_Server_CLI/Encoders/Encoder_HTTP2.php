@@ -29,6 +29,7 @@ use function time;
 use Bootgly\WPI\Endpoints\Servers\Ownership;
 use Bootgly\WPI\Endpoints\Servers\Packages;
 use Bootgly\WPI\Events\Cancellation;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
 use Bootgly\WPI\Modules\HTTP2;
 use Bootgly\WPI\Modules\HTTP2\Errors;
 use Bootgly\WPI\Modules\HTTP2\Frame;
@@ -150,10 +151,11 @@ final class Encoder_HTTP2
 
       // @ DATA — bounded by the connection + stream send windows.
       if ($body !== '' || $chunks !== []) {
-         $retained = strlen($body);
+         // ! Each held string at its allocator footprint
+         $retained = Buffers::weigh(strlen($body));
          foreach ($chunks as $chunk) {
             if (is_string($chunk['data'] ?? null)) {
-               $retained += strlen($chunk['data']);
+               $retained += Buffers::weigh(strlen($chunk['data']));
             }
          }
 

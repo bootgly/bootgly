@@ -291,6 +291,9 @@ return new Test(
             }
 
             $padBytes = 0;
+            // ! The ledger charges allocator footprints (Buffers::weigh() of
+            //   each held pad string), so caps and expectations use this sum.
+            $padFootprint = 0;
             $expected = $head;
             $target = '';
             $targetOffset = -1;
@@ -324,6 +327,8 @@ return new Test(
                }
                $expected .= $append;
                $padBytes += strlen($prepend) + strlen($append);
+               $padFootprint += Buffers::weigh(strlen($prepend))
+                  + Buffers::weigh(strlen($append));
             }
 
             if (
@@ -338,15 +343,23 @@ return new Test(
                throw new RuntimeException('Requested generated pad target was unavailable.');
             }
 
+            // ! The ledger charges allocator footprints (Buffers::weigh()):
+            //   the exact cap is the pads' footprint and the slack cap adds
+            //   the footprint of the unsent target suffix.
             $cap = match ($capMode) {
-               'minus-one' => $padBytes - 1,
-               'slack' => $padBytes + strlen($target) - max(0, $accepted),
-               default => $padBytes,
+               'minus-one' => $padFootprint - 1,
+               'slack' => $padFootprint
+                  + Buffers::weigh(strlen($target) - max(0, $accepted)),
+               default => $padFootprint,
             };
             TCPServer::$maxPendingBytes = $cap;
             TCPServer::$maxWorkerPendingBytes = $baseline + $cap;
 
-            $contenderBytes = $contend ? $padBytes - strlen($target) : 0;
+            // ! The contender fills the worker budget up to the target's own
+            //   footprint (Buffers::weigh()), exactly as with raw bytes.
+            $contenderBytes = $contend
+               ? $padFootprint - Buffers::weigh(strlen($target))
+               : 0;
             L2PadStream::reset(
                $target,
                $accepted,
@@ -434,6 +447,7 @@ return new Test(
                'cap_mode' => $capMode,
                'cap' => $cap,
                'pad_bytes' => $padBytes,
+               'pad_footprint' => $padFootprint,
                'target_bytes' => strlen($target),
                'target_offset' => $targetOffset,
                'contender_bytes' => $contenderBytes,
@@ -618,14 +632,21 @@ return new Test(
          $first = $scenario['first'] ?? [];
          $kind = $scenario['target_kind'] ?? '';
          $accepted = $scenario['accepted'] ?? -1;
-         $padBytes = $scenario['pad_bytes'] ?? -1;
+         $padFootprint = $scenario['pad_footprint'] ?? -1;
          $targetBytes = $scenario['target_bytes'] ?? -1;
          $expectedPending = $targetBytes >= $accepted
             ? $targetBytes - $accepted
             : -1;
-         $expectedPackage = $kind === 'append'
-            ? $expectedPending
-            : $padBytes - $accepted;
+         // ! The ledger charges allocator footprints (Buffers::weigh()): an
+         //   append owns only its unsent suffix; a prepend owns that suffix
+         //   plus every other pad string, never the cleared source pad.
+         $expectedPackage = match (true) {
+            $expectedPending < 0 => -1,
+            $kind === 'append' => Buffers::weigh($expectedPending),
+            default => $padFootprint
+               - Buffers::weigh($targetBytes)
+               + Buffers::weigh($expectedPending),
+         };
 
          $secure = $secure
             && ($first['result'] ?? null) === true
@@ -638,9 +659,12 @@ return new Test(
             && ($first['measured'] ?? null) === $expectedPackage
             && ($first['registered'] ?? null) === true
             && ($first['deadline'] ?? 0.0) > 0.0
+            // ! Footprint units (Buffers::weigh()): a double projection of
+            //   the append must fit the per-connection cap, so only the
+            //   exact worker contention can refuse it.
             && ($kind !== 'append'
                || (
-                  2 * $targetBytes <= $padBytes
+                  2 * Buffers::weigh($targetBytes) <= $padFootprint
                   && ($first['contender_total'] ?? null)
                      === $baseline + ($scenario['cap'] ?? 0)
                   && ($first['contender_accepted'] ?? null) === true
@@ -663,9 +687,10 @@ return new Test(
             && hash('sha256', (string) ($first['wire'] ?? ''))
                === ($scenario['expected_prefix_hash'] ?? null)
             && ($scenario['after_cleanup'] ?? null) === $baseline
+            // ! Footprint units (Buffers::weigh()), as in the secure oracle.
             && ($kind !== 'append'
                || (
-                  2 * $targetBytes <= $padBytes
+                  2 * Buffers::weigh($targetBytes) <= $padFootprint
                   && ($first['contender_total'] ?? null)
                      === $baseline + ($scenario['cap'] ?? 0)
                   && ($first['contender_accepted'] ?? null) === true

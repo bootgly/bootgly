@@ -312,7 +312,10 @@ $probe = [
    'projection_decoded_key_bytes' => 0,
    'projection_peak_growth' => 0,
    'projection_budget_free_after' => false,
-   'floor_budget' => 64 * 1024,
+   // ! 72 KiB: block() charges each page-class string its share of the
+   //   2 MiB chunk (a one-page string is 4,113 B), which lifts this
+   //   8-field projection 66 B past the former 64 KiB budget.
+   'floor_budget' => 72 * 1024,
    'floor_fields' => 8,
    'floor_name_bytes' => 512,
    'floor_pre_state' => '',
@@ -584,6 +587,7 @@ return new Test(
             Downloads::peek() === $warmDownloadsBefore;
          $WarmFree = new Bodies;
          $probe['jit_warm_budget_free_after'] = $WarmFree->reserve(
+            $probe['probe_budget'],
             $probe['probe_budget']
          );
          $WarmFree->release();
@@ -716,6 +720,7 @@ return new Test(
          if ($probe['budget_available']) {
             $InitialFree = new Bodies;
             $probe['initial_multipart_budget_free_after'] = $InitialFree->reserve(
+               $probe['probe_budget'],
                $probe['probe_budget']
             );
             $InitialFree->release();
@@ -774,7 +779,7 @@ return new Test(
             // ! With the admitted text parts outstanding, the whole budget
             //   must NOT still look free.
             $Probe = new Bodies;
-            $probe['multipart_budget_free_after'] = $Probe->reserve($probe['probe_budget']);
+            $probe['multipart_budget_free_after'] = $Probe->reserve($probe['probe_budget'], $probe['probe_budget']);
             $Probe->release();
          }
 
@@ -846,8 +851,8 @@ return new Test(
             //   does not; the much larger encoded names are invisible to it.
             $Remainder = new Bodies;
             $remainder = $probe['metadata_budget'] - $probe['metadata_raw_charged'];
-            $probe['metadata_budget_remainder_available'] = $Remainder->reserve($remainder);
-            $probe['metadata_one_byte_more_refused'] = $Remainder->reserve($remainder + 1) === false;
+            $probe['metadata_budget_remainder_available'] = $Remainder->reserve($remainder, $remainder);
+            $probe['metadata_one_byte_more_refused'] = $Remainder->reserve($remainder + 1, $remainder + 1) === false;
             $Remainder->release();
          }
 
@@ -952,9 +957,9 @@ return new Test(
 
             $Remainder = new Bodies;
             $remainder = $probe['active_name_budget'] - $activeReserved;
-            $probe['active_name_remainder_available'] = $Remainder->reserve($remainder);
+            $probe['active_name_remainder_available'] = $Remainder->reserve($remainder, $remainder);
             $probe['active_name_one_byte_more_refused'] =
-               $Remainder->reserve($remainder + 1) === false;
+               $Remainder->reserve($remainder + 1, $remainder + 1) === false;
             $Remainder->release();
 
             foreach ($ActivePeers as [$Connection, $Package, $Request]) {
@@ -968,6 +973,7 @@ return new Test(
 
             $Free = new Bodies;
             $probe['active_name_budget_free_after'] = $Free->reserve(
+               $probe['active_name_budget'],
                $probe['active_name_budget']
             );
             $Free->release();
@@ -1095,6 +1101,7 @@ return new Test(
 
                $Blocker = new Bodies;
                $probe['field_buffer_blocker_accepted'] = $Blocker->reserve(
+                  $probe['field_buffer_budget'] - $bound,
                   $probe['field_buffer_budget'] - $bound
                );
 
@@ -1124,6 +1131,7 @@ return new Test(
 
                $Free = new Bodies;
                $probe['field_buffer_budget_free_after'] = $Free->reserve(
+                  $probe['field_buffer_budget'],
                   $probe['field_buffer_budget']
                );
                $Free->release();
@@ -1156,6 +1164,7 @@ return new Test(
 
                $Blocker = new Bodies;
                $probe['field_buffer_short_blocker_accepted'] = $Blocker->reserve(
+                  $probe['field_buffer_budget'] - $bound + 1,
                   $probe['field_buffer_budget'] - $bound + 1
                );
                $ShortState = $ShortDecoder->decode(
@@ -1175,6 +1184,7 @@ return new Test(
 
                $Free = new Bodies;
                $probe['field_buffer_short_budget_free_after'] = $Free->reserve(
+                  $probe['field_buffer_budget'],
                   $probe['field_buffer_budget']
                );
                $Free->release();
@@ -1286,6 +1296,9 @@ return new Test(
                $probe['append_blocker_accepted'] = $Blocker->reserve(
                   $probe['append_budget']
                      - $AppendDecoder->Bodies->retained
+                     - $growth,
+                  $probe['append_budget']
+                     - $AppendDecoder->Bodies->retained
                      - $growth
                );
 
@@ -1316,6 +1329,7 @@ return new Test(
 
                $Free = new Bodies;
                $probe['append_budget_free_after'] = $Free->reserve(
+                  $probe['append_budget'],
                   $probe['append_budget']
                );
                $Free->release();
@@ -1351,6 +1365,7 @@ return new Test(
 
                $Blocker = new Bodies;
                $probe['append_zero_blocker_accepted'] = $Blocker->reserve(
+                  $probe['append_budget'] - $ControlDecoder->Bodies->retained,
                   $probe['append_budget'] - $ControlDecoder->Bodies->retained
                );
 
@@ -1377,6 +1392,7 @@ return new Test(
 
                $Free = new Bodies;
                $probe['append_zero_budget_free_after'] = $Free->reserve(
+                  $probe['append_budget'],
                   $probe['append_budget']
                );
                $Free->release();
@@ -1449,6 +1465,8 @@ return new Test(
                $Blocker = new Bodies;
                $probe['file_reserve_blocker_accepted'] = $Blocker->reserve(
                   $probe['file_reserve_budget']
+                     - $FileReserveDecoder->Bodies->retained,
+                  $probe['file_reserve_budget']
                      - $FileReserveDecoder->Bodies->retained
                );
 
@@ -1493,6 +1511,7 @@ return new Test(
 
                $Free = new Bodies;
                $probe['file_reserve_budget_free_after'] = $Free->reserve(
+                  $probe['file_reserve_budget'],
                   $probe['file_reserve_budget']
                );
                $Free->release();
@@ -1545,6 +1564,7 @@ return new Test(
 
                $Free = new Bodies;
                $probe['file_reserve_control_budget_free_after'] = $Free->reserve(
+                  $probe['append_budget'],
                   $probe['append_budget']
                );
                $Free->release();
@@ -1684,6 +1704,7 @@ return new Test(
 
                $Blocker = new Bodies;
                $probe['file_record_blocker_accepted'] = $Blocker->reserve(
+                  $probe['file_record_budget'] - $Price['bound'],
                   $probe['file_record_budget'] - $Price['bound']
                );
 
@@ -1729,6 +1750,7 @@ return new Test(
 
                $Free = new Bodies;
                $probe['file_record_budget_free_after'] = $Free->reserve(
+                  $probe['file_record_budget'],
                   $probe['file_record_budget']
                );
                $Free->release();
@@ -1744,6 +1766,7 @@ return new Test(
 
                $Blocker = new Bodies;
                $probe['file_record_short_blocker_accepted'] = $Blocker->reserve(
+                  $probe['file_record_budget'] - $Price['bound'] + 1,
                   $probe['file_record_budget'] - $Price['bound'] + 1
                );
                $ShortState = $ShortDecoder->decode(
@@ -1779,6 +1802,7 @@ return new Test(
 
                $Free = new Bodies;
                $probe['file_record_short_budget_free_after'] = $Free->reserve(
+                  $probe['file_record_budget'],
                   $probe['file_record_budget']
                );
                $Free->release();
@@ -1916,6 +1940,7 @@ return new Test(
 
             $Free = new Bodies;
             $probe['file_warning_budget_free_after'] = $Free->reserve(
+               $probe['file_record_budget'],
                $probe['file_record_budget']
             );
             $Free->release();
@@ -1987,7 +2012,7 @@ return new Test(
 
                $downloadsExact = Downloads::peek() === $downloadsBefore;
                $Free = new Bodies;
-               $budgetFree = $Free->reserve($probe['append_budget']);
+               $budgetFree = $Free->reserve($probe['append_budget'], $probe['append_budget']);
                $Free->release();
 
                return [
@@ -2132,6 +2157,7 @@ return new Test(
 
                $Blocker = new Bodies;
                $probe['file_projection_blocker_accepted'] = $Blocker->reserve(
+                  $probe['file_projection_budget'] - $projection,
                   $probe['file_projection_budget'] - $projection
                );
 
@@ -2172,6 +2198,7 @@ return new Test(
 
                $Free = new Bodies;
                $probe['file_projection_budget_free_after'] = $Free->reserve(
+                  $probe['file_projection_budget'],
                   $probe['file_projection_budget']
                );
                $Free->release();
@@ -2267,6 +2294,7 @@ return new Test(
          if ($probe['budget_available']) {
             $FileFree = new Bodies;
             $probe['file_transform_budget_free_after'] = $FileFree->reserve(
+               $probe['file_transform_budget'],
                $probe['file_transform_budget']
             );
             $FileFree->release();
@@ -2371,6 +2399,7 @@ return new Test(
                //   superseded projection — the exact boundary, not a margin.
                $Blocker = new Bodies;
                $probe['boundary_blocker_accepted'] = $Blocker->reserve(
+                  $probe['boundary_budget'] - $probe['boundary_raw_retained'] - $legacy,
                   $probe['boundary_budget'] - $probe['boundary_raw_retained'] - $legacy
                );
 
@@ -2385,7 +2414,7 @@ return new Test(
                $Package->Decoder = null;
 
                $Free = new Bodies;
-               $probe['boundary_budget_free_after'] = $Free->reserve($probe['boundary_budget']);
+               $probe['boundary_budget_free_after'] = $Free->reserve($probe['boundary_budget'], $probe['boundary_budget']);
                $Free->release();
             }
 
@@ -2468,6 +2497,7 @@ return new Test(
                // ! Leave exactly the current flat projection available.
                $Blocker = new Bodies;
                $probe['nested_blocker_accepted'] = $Blocker->reserve(
+                  $probe['nested_budget'] - $probe['nested_projection'],
                   $probe['nested_budget'] - $probe['nested_projection']
                );
 
@@ -2491,9 +2521,11 @@ return new Test(
                //   before manual Request/decoder teardown can mask a leak.
                $Released = new Bodies;
                $probe['nested_released_exactly'] = $Released->reserve(
+                  $probe['nested_projection'],
                   $probe['nested_projection']
                );
                $probe['nested_one_more_refused'] = $Released->reserve(
+                  $probe['nested_projection'] + 1,
                   $probe['nested_projection'] + 1
                ) === false;
                $Released->release();
@@ -2504,7 +2536,7 @@ return new Test(
                $Blocker->release();
 
                $Free = new Bodies;
-               $probe['nested_budget_free_after'] = $Free->reserve($probe['nested_budget']);
+               $probe['nested_budget_free_after'] = $Free->reserve($probe['nested_budget'], $probe['nested_budget']);
                $Free->release();
             }
 
@@ -2689,6 +2721,7 @@ return new Test(
                //   finish() is about to request.
                $Blocker = new Bodies;
                $probe['projection_blocker_accepted'] = $Blocker->reserve(
+                  $probe['projection_budget'] - $currentProjection,
                   $probe['projection_budget'] - $currentProjection
                );
 
@@ -2719,6 +2752,7 @@ return new Test(
 
                $Free = new Bodies;
                $probe['projection_budget_free_after'] = $Free->reserve(
+                  $probe['projection_budget'],
                   $probe['projection_budget']
                );
                $Free->release();
@@ -2807,6 +2841,7 @@ return new Test(
 
                $Blocker = new Bodies;
                $probe['floor_blocker_accepted'] = $Blocker->reserve(
+                  $probe['floor_budget'] - $currentProjection,
                   $probe['floor_budget'] - $currentProjection
                );
 
@@ -2836,7 +2871,7 @@ return new Test(
                $Blocker->release();
 
                $Free = new Bodies;
-               $probe['floor_budget_free_after'] = $Free->reserve($probe['floor_budget']);
+               $probe['floor_budget_free_after'] = $Free->reserve($probe['floor_budget'], $probe['floor_budget']);
                $Free->release();
             }
 
@@ -2950,6 +2985,7 @@ return new Test(
 
                $Blocker = new Bodies;
                $probe['cliff_blocker_accepted'] = $Blocker->reserve(
+                  $probe['cliff_budget'] - $currentProjection,
                   $probe['cliff_budget'] - $currentProjection
                );
 
@@ -2979,7 +3015,7 @@ return new Test(
                $Blocker->release();
 
                $Free = new Bodies;
-               $probe['cliff_budget_free_after'] = $Free->reserve($probe['cliff_budget']);
+               $probe['cliff_budget_free_after'] = $Free->reserve($probe['cliff_budget'], $probe['cliff_budget']);
                $Free->release();
             }
 
@@ -3111,6 +3147,7 @@ return new Test(
 
                $Blocker = new Bodies;
                $probe['segmented_blocker_accepted'] = $Blocker->reserve(
+                  $probe['segmented_budget'] - $currentProjection,
                   $probe['segmented_budget'] - $currentProjection
                );
 
@@ -3138,6 +3175,7 @@ return new Test(
 
                $Free = new Bodies;
                $probe['segmented_budget_free_after'] = $Free->reserve(
+                  $probe['segmented_budget'],
                   $probe['segmented_budget']
                );
                $Free->release();
@@ -3249,7 +3287,7 @@ return new Test(
                //   disconnect can hide the leak.
                $BeforeTeardown = new Bodies;
                $probe['container_budget_free_before_teardown'] =
-                  $BeforeTeardown->reserve($probe['container_budget']);
+                  $BeforeTeardown->reserve($probe['container_budget'], $probe['container_budget']);
                $BeforeTeardown->release();
 
                $ContainerDecoder->disconnect();
@@ -3258,7 +3296,7 @@ return new Test(
 
                $AfterTeardown = new Bodies;
                $probe['container_budget_free_after_teardown'] =
-                  $AfterTeardown->reserve($probe['container_budget']);
+                  $AfterTeardown->reserve($probe['container_budget'], $probe['container_budget']);
                $AfterTeardown->release();
             }
 
@@ -3313,15 +3351,15 @@ return new Test(
             // ! The worker ledger is deliberately private, so prove its state
             //   by what it admits: after teardown the whole budget is free.
             $Empty = new Bodies;
-            $probe['ledger_empty_after_disconnect'] = $Empty->reserve($probe['probe_budget']);
+            $probe['ledger_empty_after_disconnect'] = $Empty->reserve($probe['probe_budget'], $probe['probe_budget']);
             $Empty->release();
 
             // --- Leg 8: one peer must never release another peer's bytes.
 
             $A = new Bodies;
             $B = new Bodies;
-            $reservedA = $A->reserve(64 * 1024);
-            $reservedB = $B->reserve(64 * 1024);
+            $reservedA = $A->reserve(64 * 1024, 64 * 1024);
+            $reservedB = $B->reserve(64 * 1024, 64 * 1024);
             // ! Twice: a double release must not credit the ledger twice.
             $A->release();
             $A->release();
@@ -3330,13 +3368,13 @@ return new Test(
             // ! With only B's reservation outstanding, exactly the remainder
             //   fits and one byte more does not.
             $C = new Bodies;
-            $probe['ledger_exact'] = $C->reserve($probe['probe_budget'] - 64 * 1024)
-               && $C->reserve($probe['probe_budget']) === false;
+            $probe['ledger_exact'] = $C->reserve($probe['probe_budget'] - 64 * 1024, $probe['probe_budget'] - 64 * 1024)
+               && $C->reserve($probe['probe_budget'], $probe['probe_budget']) === false;
             $C->release();
             $B->release();
 
             $Free = new Bodies;
-            $probe['control_reservation_released'] = $Free->reserve($probe['probe_budget']);
+            $probe['control_reservation_released'] = $Free->reserve($probe['probe_budget'], $probe['probe_budget']);
             $Free->release();
          }
 
@@ -3412,7 +3450,7 @@ return new Test(
 
          if ($probe['budget_available']) {
             $Closed = new Bodies;
-            $probe['budget_free_after_close'] = $Closed->reserve($probe['probe_budget']);
+            $probe['budget_free_after_close'] = $Closed->reserve($probe['probe_budget'], $probe['probe_budget']);
             $Closed->release();
          }
          unset($Transport);
@@ -3570,6 +3608,7 @@ return new Test(
             //   invisible to the ceiling bounding every other in-memory body.
             $Ledger = new Bodies;
             $probe['retained_deferred_ledger_free'] = $Ledger->reserve(
+               Bodies::$maxWorkerBodySize,
                Bodies::$maxWorkerBodySize
             );
             $Ledger->release();
@@ -3587,6 +3626,7 @@ return new Test(
             $Captured->clean();
             $Drained = new Bodies;
             $probe['retained_deferred_ledger_drained'] = $Drained->reserve(
+               Bodies::$maxWorkerBodySize,
                Bodies::$maxWorkerBodySize
             );
             $Drained->release();

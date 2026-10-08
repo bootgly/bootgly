@@ -39,5 +39,7 @@ return new Suite(
       '1.15-console-prompt',
       // # 1.0.x (TCP-24): a Daemon master — STDIN closed at detach — reforks a dead worker
       '1.16-daemon-refork',
+      // # 1.0.x (H-HSC-3): one worker memory budget — footprint shares, epoch and memory_limit fit
+      '1.17-worker_ledger_shares_fit',
    ]
 );

@@ -34,6 +34,7 @@ use function is_file;
 use function is_numeric;
 use function is_string;
 use function ltrim;
+use function max;
 use function min;
 use function mkdir;
 use function parse_str;
@@ -58,6 +59,7 @@ use const Bootgly\WPI;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Endpoints\Servers\Disconnecting;
 use Bootgly\WPI\Endpoints\Servers\Packages;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCP_Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
@@ -333,9 +335,10 @@ class Decoder_Downloading extends Decoders implements Disconnecting
       //   request sitting just under a boundary into the next class.
       $needed = $bytes + 25 + 32;
 
-      // ? Above the largest bin the allocator serves whole pages.
+      // ? Above the largest bin the allocator serves whole pages — and a
+      //   string needing more than half a 2 MiB chunk takes the whole chunk.
       if ($needed > self::BLOCKS[29]) {
-         return (intdiv($needed, 4096) + 1) * 4096;
+         return max((intdiv($needed, 4096) + 1) * 4096, Buffers::weigh($bytes));
       }
 
       // @@ Otherwise the smallest size class that fits
@@ -805,7 +808,11 @@ class Decoder_Downloading extends Decoders implements Disconnecting
     */
    public function charge (): bool
    {
-      return $this->Bodies->reserve($this->measure());
+      // ! `measure()` already prices every held string at its footprint.
+      $footprint = $this->measure();
+
+      // :
+      return $this->Bodies->reserve($footprint, $footprint);
    }
 
    /**
@@ -906,9 +913,9 @@ class Decoder_Downloading extends Decoders implements Disconnecting
          //   realloc. `$chunk` is the already-present, transport-read-bounded
          //   source; the worker ledger prices the additional retained copy.
          $held = strlen($this->fieldBuffer);
-         $growth = self::block($held + $length);
+         $projected = $this->measure() + self::block($held + $length);
 
-         if ($this->Bodies->reserve($this->measure() + $growth) === false) {
+         if ($this->Bodies->reserve($projected, $projected) === false) {
             $reject("HTTP/1.1 503 Service Unavailable\r\n\r\n");
             return false;
          }
@@ -1179,7 +1186,8 @@ class Decoder_Downloading extends Decoders implements Disconnecting
                      $growth += self::MAP_OVERHEAD;
                   }
 
-                  if ($this->Bodies->reserve($this->measure() + $growth) === false) {
+                  $projected = $this->measure() + $growth;
+                  if ($this->Bodies->reserve($projected, $projected) === false) {
                      $reject("HTTP/1.1 503 Service Unavailable\r\n\r\n");
                      $data = '';
                      break;
@@ -1492,7 +1500,8 @@ class Decoder_Downloading extends Decoders implements Disconnecting
                         + (($index + 1) * self::ENTRY_OVERHEAD)
                         + ($index === 0 ? self::MAP_OVERHEAD : 0);
 
-                     if ($this->Bodies->reserve($this->measure() + $growth) === false) {
+                     $projected = $this->measure() + $growth;
+                     if ($this->Bodies->reserve($projected, $projected) === false) {
                         $reject("HTTP/1.1 503 Service Unavailable\r\n\r\n");
                         $data = '';
                         break;
@@ -1876,7 +1885,7 @@ class Decoder_Downloading extends Decoders implements Disconnecting
             + self::block($temporary);
       }
 
-      if ($this->Bodies->reserve($projected) === false) {
+      if ($this->Bodies->reserve($projected, $projected) === false) {
          $this->Request->Body->waiting = false;
          $this->abort();
 

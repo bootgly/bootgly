@@ -26,8 +26,8 @@ return new Test(
          ])
       );
 
-      // @ Zero send window: each `/sse-agg` event (3 MiB) parks in its
-      //   stream backlog. One stream fits the 4 MiB connection budget; the
+      // @ Zero send window: each `/sse-agg` event (7 MiB) parks in its
+      //   stream backlog. One stream fits the 12 MiB connection budget; the
       //   second one must breach it — 128 slow streams cannot multiply the
       //   cap into hundreds of MiB per connection.
       $Client = new Client;

@@ -92,5 +92,7 @@ return new Suite(
       '1.55-deferred_resource_release',
       // # 1.0.x (DEC-2/3/4): multipart part headers parsed by their grammar
       '1.56-decoder_part_headers',
+      // # 1.0.x (H-HSC-3): the HTTP Configs set the worker memory budget
+      '1.57-worker_memory_configs',
    ]
 );
