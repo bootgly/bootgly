@@ -7,6 +7,8 @@
   never grouped and never backslash-prefixed; a file without a namespace (a route set, a test, the
   `.Project.php`) calls them directly. `bootgly lint imports <path> --fix` writes the `use const` and
   `use function` lines; add `use` for global classes (`use DateTime;`) yourself — lint does not check them.
+  Globals form one block, then a blank line, then namespaced imports; 2 blank lines after `namespace`
+  and after the last `use`.
 - **SHOULD** — Nullable types are written `null|Type`, never `?Type` (`bootgly lint nullables <path> --fix`).
 - **SHOULD** — No constructor property promotion: declare properties in the class body
   (`bootgly lint promotions <path>`, check-only).
@@ -24,8 +26,8 @@
 - **RECOMMEND** — In service and component classes, group properties under `// * Config` (constructor
   inputs that are publicly readable), `// * Data` (other inputs, protected or with restricted writes) and
   `// * Metadata` (values derived from config, data or runtime state — never written from outside the
-  class; readable publicly only through `private(set)` or a `get` hook). ORM models keep their column
-  order instead.
+  class; readable publicly only through `private(set)` or a `get` hook). A constructor input that
+  is not publicly readable is Data, not Config. ORM models keep their column order instead.
 
 ## File header
 

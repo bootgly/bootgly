@@ -30,6 +30,8 @@ These names are contracts: the framework finds each file by them, and a wrong on
   `<name>.<Entity>.php` — a file returning an `Options` is `defaults.Options.php`. Never rename a file
   whose name a loader fixes (`autoboot.php`, `router.index.php`, `schedule.php`, configs, migrations,
   seeders).
+- **SHOULD** — Folders of classes start uppercase (`Models/`); folders of data or fixtures, lowercase
+  (`fixtures/`).
 - **RECOMMEND** — A directory named after a class (`Cart/` beside `Cart.php`) holds that class's
   internals, and those parts never depend back on `Cart`. Grouping directories (`Controllers/`,
   `Models/`, `Resources/`) need no class of their own. Avoid dependency cycles.
