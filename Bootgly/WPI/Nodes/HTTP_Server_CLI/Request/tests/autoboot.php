@@ -20,5 +20,8 @@ return new Suite(
       '1.4-reset_scrub_parity',
       '1.5-end_cycle_scrub',
       '1.6-exchange_lifecycle',
+      '1.7-copy_cookies_own_head',
+      '1.8-shed_head',
+      '1.9-capture_charges_head',
    ]
 );

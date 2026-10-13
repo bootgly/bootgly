@@ -32,6 +32,12 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 class Decoder_ extends Decoders
 {
    /**
+    * Most field lines a memoized head may carry (the per-connection template,
+    * the shared L1 and `Request\Frame`'s scan memo): real repeated heads stay
+    * well below it, and a long one would sit in worker memory unledgered.
+    */
+   public const int MEMOIZED = 32;
+   /**
     * Request field names a memo may retain.
     *
     * A keyword denylist is not a credential boundary — an application can
@@ -200,11 +206,17 @@ class Decoder_ extends Decoders
             $sensitive = $query !== false && $line !== false && $query < $line;
          }
 
-         // @@ Every field name must be one the memo may retain. Bounded by the
-         //    head itself and paid on the miss path only.
+         // @@ Every field name must be one the memo may retain, and at most
+         //    `MEMOIZED` of them. Bounded by the head itself and paid on the
+         //    miss path only.
          $offset = $sensitive ? false : strpos($buffer, "\r\n");
+         $lines = 0;
          while ($offset !== false && $offset < $separator) {
             $offset += 2;
+            if (++$lines > self::MEMOIZED) {
+               $sensitive = true;
+               break;
+            }
 
             $colon = strpos($buffer, ':', $offset);
             $line = strpos($buffer, "\r\n", $offset);

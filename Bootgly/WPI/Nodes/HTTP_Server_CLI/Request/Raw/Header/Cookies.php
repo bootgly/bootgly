@@ -17,7 +17,10 @@ use function explode;
 use function is_array;
 use function preg_split;
 use function trim;
+use RuntimeException;
 
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Bodies;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 
 
@@ -29,11 +32,22 @@ final class Cookies
    // ...
 
    // * Data
+   /**
+    * The ledger token of the deferred request snapshot these cookies are
+    * parsed for (`Request::capture()`): it is charged what the parsed
+    * cookies keep, and a parse that does not fit is refused.
+    */
+   public null|Bodies $Bodies = null;
    /** @var array<int, array<string, string>> */
    public protected(set) array $cookies {
       get {
          if (isSet($this->cookies) === false) {
-            $this->cookies = $this->build();
+            $cookies = $this->build();
+            // ? A deferred snapshot pays for what it parses
+            if ($this->Bodies?->grow(Buffers::tally($cookies)) === false) {
+               throw new RuntimeException(Bodies::REFUSAL);
+            }
+            $this->cookies = $cookies;
          }
 
          return $this->cookies;

@@ -94,5 +94,12 @@ return new Suite(
       '1.56-decoder_part_headers',
       // # 1.0.x (H-HSC-3): the HTTP Configs set the worker memory budget
       '1.57-worker_memory_configs',
+      // # 1.0.x (H-HSC-5): HTTP/1 heads bounded in field lines; memoized heads in 32
+      '1.58-header_fields_cap',
+      '1.59-memoized_head_lines',
+      '1.60-encoder_exits_shed_head',
+      '1.61-json_decode_bound',
+      // # 1.0.x (H-HSC-5): mounting SSE pins the live Request, never a HEAD
+      '1.62-sse_pin_skips_head',
    ]
 );

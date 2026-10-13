@@ -438,10 +438,12 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          // ? A failed first write already aborted, released and closed this
          //   Package. A successful terminal drain can also close here. Stop
          //   before a pipelined incomplete tail can reacquire retained-byte
-         //   ownership on the dead connection.
+         //   ownership on the dead connection. An encoder that refused the
+         //   request (`reject()`) closes it too: nothing pipelined runs.
          if (
             $this->write($Socket) === false // @phpstan-ignore deadCode.unreachable
             || $this->Connection->status > Connections::STATUS_ESTABLISHED
+            || $this->rejected // @phpstan-ignore booleanOr.rightAlwaysFalse (write() → encode() may reject())
          ) {
             return true;
          }
@@ -529,6 +531,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                if ( // @phpstan-ignore deadCode.unreachable
                   $this->write($Socket) === false
                   || $this->Connection->status > Connections::STATUS_ESTABLISHED
+                  || $this->rejected
                ) {
                   return true;
                }

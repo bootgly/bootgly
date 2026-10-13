@@ -341,6 +341,19 @@ class Encoder_ extends Encoders
          return '';
       }
 
+      // ? A JSON body that could not be decoded within the bodies share of the
+      //   worker budget is refused before any handler decodes it
+      //   (`Request::check()`); a body-less request pays one compare, and an
+      //   HTTP/2 stream was checked when it was dispatched
+      if ($Request->Body->length > 0 && $Request->stream === 0 && $Request->check() === false) {
+         // ! Drop the refused body and head now: owed bytes may keep the
+         //   connection open while they drain
+         $Request->scrub();
+         $Request->shed();
+         $Packages->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
+         return '';
+      }
+
       // @ Locale — negotiated BEFORE the route-cache fetch so cached wire
       //   bytes vary by language; the unconditional assign doubles as the
       //   per-request reset (nothing leaks forward); the guards keep the
@@ -727,6 +740,11 @@ class Encoder_ extends Encoders
                   $Request->clean();
                }
                $Request->scrub();
+               // @ The deferred work reads its own snapshot (`capture()`): the live
+               //   head is no longer needed on this connection.
+               if ($Request->pinned === false) {
+                  $Request->shed();
+               }
 
                return '';
             }
@@ -789,6 +807,11 @@ class Encoder_ extends Encoders
             $Request->clean();
          }
          $Request->scrub();
+         // @ The deferred work reads its own snapshot (`capture()`): the live
+         //   head is no longer needed on this connection.
+         if ($Request->pinned === false) {
+            $Request->shed();
+         }
 
          return '';
       }
@@ -816,6 +839,11 @@ class Encoder_ extends Encoders
          //   connection until the next request, unreserved. Same rationale
          //   as the post-`Handled` scrub below.
          $Request->scrub();
+         // @ The deferred work reads its own snapshot (`capture()`): the live
+         //   head is no longer needed on this connection.
+         if ($Request->pinned === false) {
+            $Request->shed();
+         }
 
          return '';
       }
@@ -969,6 +997,11 @@ class Encoder_ extends Encoders
             $Request->clean();
          }
          $Request->scrub();
+         // @ The deferred work reads its own snapshot (`capture()`): the live
+         //   head is no longer needed on this connection.
+         if ($Request->pinned === false) {
+            $Request->shed();
+         }
 
          return '';
       }
@@ -1020,6 +1053,11 @@ class Encoder_ extends Encoders
          ) {
             $length = strlen(self::$wire);
             $Exchange?->finish($Response);
+            // @ The response no longer reads the head; drop it unless a decode
+            //   template shares it (releasing a shared head frees nothing).
+            if ($Packages->Template === null) {
+               $Request->shed();
+            }
             return self::$wire;
          }
 
@@ -1070,6 +1108,14 @@ class Encoder_ extends Encoders
 
       // @ Commit only after the final representation is serializable.
       $Exchange?->finish($Response);
+
+      // @ The route cache stored or skipped the wire (it reads Cookie,
+      //   Authorization, host and URI), so the head is no longer needed:
+      //   drop it unless a decode template shares it. Never earlier —
+      //   `scrub()` above runs before `stash()`.
+      if ($Packages->Template === null) {
+         $Request->shed();
+      }
 
       // :
       return $buffer;

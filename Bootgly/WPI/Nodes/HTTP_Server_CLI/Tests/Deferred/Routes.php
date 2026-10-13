@@ -20,17 +20,21 @@ use function clearstatcache;
 use function count;
 use function fclose;
 use function file_get_contents;
+use function gc_collect_cycles;
 use function is_file;
 use function is_string;
 use function microtime;
+use function spl_object_id;
 use function stream_set_blocking;
 use function stream_socket_pair;
 use Generator;
 use RuntimeException;
+use WeakReference;
 
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\SSE;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 
 
@@ -44,6 +48,16 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
  */
 final class Routes
 {
+   // * Metadata
+   /**
+    * The snapshot of the last `/deferred/weak` deferral, held weakly: it must
+    * be gone once that deferral answered — a pooled Fiber must not keep it.
+    *
+    * @var null|WeakReference<Request>
+    */
+   private static null|WeakReference $Weak = null;
+
+
    /**
     * Mount every deferred-work route on the spec's Router.
     *
@@ -53,6 +67,12 @@ final class Routes
    {
       yield $Router->route('/deferred/ping', static function (Request $Request, Response $Response) {
          return $Response(body: 'pong');
+      }, GET);
+      // @ Which Request object served this request
+      yield $Router->route('/deferred/identify', static function (Request $Request, Response $Response) {
+         $Response->JSON->send(['id' => spl_object_id($Request)]);
+
+         return $Response;
       }, GET);
 
       // @ The request handed to the work as its second argument after the
@@ -147,16 +167,101 @@ final class Routes
 
       // @ The live per-connection Request is REUSED while this deferral parks:
       //   a second request on the same keep-alive connection is decoded into
-      //   it, so a `use ($Request)` describes that later request
+      //   it and, once answered, its head is dropped — so a `use ($Request)`
+      //   describes no request at all
       yield $Router->route('/deferred/reuse', static function (Request $Request, Response $Response) {
          return $Response->defer(static function (Response $Response, Request $Snapshot) use ($Request): void {
             self::park($Response, 0.6);
             $Response->JSON->send([
                'snapshot' => $Snapshot->URI,
                'live' => $Request->URI,
-               'live_queries' => $Request->queries
+               'live_queries' => $Request->queries,
+               'live_id' => spl_object_id($Request)
             ]);
          });
+      }, GET);
+
+      // @ The snapshot's own head after the live Request dropped its copy:
+      //   headers, cookies, URI and query of the request the work answers
+      yield $Router->route('/deferred/head', static function (Request $Request, Response $Response) {
+         return $Response->defer(static function (Response $Response, Request $Snapshot): void {
+            self::park($Response, 0.6);
+            $Response->JSON->send([
+               'echo' => $Snapshot->Header->get('X-Echo'),
+               'cookie' => $Snapshot->Cookies->get('who'),
+               'URI' => $Snapshot->URI,
+               'query' => $Snapshot->queries['q'] ?? null
+            ]);
+         });
+      }, GET);
+      // @ The live per-connection Request once the deferral returned, with no
+      //   later request on the connection: its head is already dropped
+      yield $Router->route('/deferred/live', static function (Request $Request, Response $Response) {
+         return $Response->defer(static function (Response $Response) use ($Request): void {
+            self::park($Response, 0.3);
+            $Response->JSON->send([
+               'live' => true,
+               'echo' => $Request->Header->get('X-Echo'),
+               'URI' => $Request->URI
+            ]);
+         });
+      }, GET);
+      // @ A deferral that answers; its snapshot must not outlive it
+      yield $Router->route('/deferred/weak', static function (Request $Request, Response $Response) {
+         return $Response->defer(static function (Response $Response, Request $Snapshot): void {
+            self::$Weak = WeakReference::create($Snapshot);
+            self::park($Response, 0.1);
+            $Response->JSON->send(['answered' => true]);
+         });
+      }, GET);
+      yield $Router->route('/deferred/weak/check', static function (Request $Request, Response $Response) {
+         gc_collect_cycles();
+         $Response->JSON->send([
+            'created' => self::$Weak !== null,
+            'alive' => self::$Weak?->get() !== null
+         ]);
+
+         return $Response;
+      }, GET);
+      // @ The same reads on a synchronous request
+      yield $Router->route('/deferred/echo', static function (Request $Request, Response $Response) {
+         $Response->JSON->send([
+            'echo' => $Request->Header->get('X-Echo'),
+            'cookie' => $Request->Cookies->get('who'),
+            'URI' => $Request->URI,
+            'query' => $Request->queries['q'] ?? null
+         ]);
+
+         return $Response;
+      }, GET);
+      // @ An event stream mounted in a SYNCHRONOUS route: its ticks run after
+      //   the response head was written and read the route's live Request
+      //   (`use ($Request)`) — SSE takes no snapshot, so that Request keeps
+      //   its head while the stream runs (`Request::pin()`)
+      yield $Router->route('/deferred/sse/live', static function (Request $Request, Response $Response) {
+         $ticks = 0;
+         $SSE = $Response->SSE;
+         $SSE->heartbeat = 0;
+         $SSE->open(
+            Tick: static function (SSE $SSE) use ($Request, &$ticks): void {
+               $ticks++;
+               $SSE->send([
+                  'tick' => $ticks,
+                  'URI' => $Request->URI,
+                  'query' => $Request->queries['q'] ?? null,
+                  'echo' => $Request->Header->get('X-Echo'),
+                  'cookie' => $Request->Cookies->get('who'),
+                  'token' => $Request->token
+               ]);
+               // ? Two ticks, one interval apart, then the stream ends
+               if ($ticks >= 2) {
+                  $SSE->close();
+               }
+            },
+            interval: 1
+         );
+
+         return $Response;
       }, GET);
 
       // @ The request the ROUTE received, captured by `use ()`: the live

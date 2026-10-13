@@ -12,12 +12,20 @@ namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 
 use const PHP_INT_MAX;
+use function array_is_list;
+use function array_key_first;
+use function count;
 use function intdiv;
+use function is_array;
+use function is_int;
+use function is_string;
 use function max;
 use function min;
+use function strlen;
 
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers\Shares;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers\Table;
 
 
 /**
@@ -213,6 +221,65 @@ final class Buffers
 
       // :
       return intdiv(2_097_152 + $fit - 1, $fit);
+   }
+
+   /**
+    * The memory PHP's allocator spends to keep an array of parsed values:
+    * the array, its table (at least 8 slots, doubling — a 16-byte value per
+    * slot for a list, a 32-byte bucket and two 4-byte hash slots for a map)
+    * and every string key and value at its `weigh()`, nested arrays in full.
+    * A map whose first key is `0` to `7` began as a list: its table is the
+    * one its keys build (`Buffers\Table`).
+    *
+    * @param array<mixed> $values
+    */
+   public static function tally (array $values): int
+   {
+      // ? The empty array is shared, never allocated
+      $count = count($values);
+      if ($count === 0) {
+         return 0;
+      }
+
+      // ! A map whose first key is `0` to `7` began as a list: its table is
+      //   followed key by key
+      $list = array_is_list($values);
+      $first = array_key_first($values);
+      $Table = $list === false && is_int($first) && $first >= 0 && $first < 8
+         ? new Table
+         : null;
+      $bytes = 56;
+
+      // @@
+      foreach ($values as $key => $value) {
+         $Table?->fill($key);
+
+         if (is_string($key)) {
+            $bytes += self::weigh(strlen($key));
+         }
+
+         if (is_string($value)) {
+            $bytes += self::weigh(strlen($value));
+         }
+         else if (is_array($value)) {
+            $bytes += self::tally($value);
+         }
+      }
+
+      // @ The table: at least 8 slots, doubling to fit the values
+      if ($Table !== null) {
+         $table = $Table->bytes;
+      }
+      else {
+         $size = 8;
+         while ($size < $count) {
+            $size <<= 1;
+         }
+         $table = $size * ($list ? 16 : 40);
+      }
+
+      // :
+      return $bytes + self::weigh($table);
    }
 
    /**

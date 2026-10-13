@@ -618,6 +618,12 @@ class Response extends Server\Response
          // @ Mounting SSE is the first possible out-of-band escape. Promote
          //   lazily here so ordinary responses never pay lifecycle setup.
          $this->promote();
+         // ! The stream's callbacks read this Request while it runs, and SSE
+         //   takes no snapshot: keep its head when the response is written —
+         //   a HEAD response ends at its head and never streams
+         if ($this->Request?->method !== 'HEAD') {
+            $this->Request?->pin();
+         }
          // ! Pass the owner: a carried instance must follow the response it is
          //   being attached to, or it keeps observing the generation of the one
          //   that mounted it.
@@ -1952,10 +1958,13 @@ class Response extends Server\Response
          }
 
          // ! Clear request references before parking — a parked Fiber must
-         //   not keep the previous Response/Package/buffer alive
+         //   not keep the previous Response/Package/buffer alive, nor the
+         //   request snapshot its ledger reservation was just returned for
          $work = $Response = $Package = $buffer = $length = null;
          $Cancellation = $Exchange = null;
          $Errored = $Throwable = null;
+         $Request = $Snapshot = null;
+         $Unsealed = $Unsaved = $Unreleased = null;
 
          $Self = Fiber::getCurrent();
 

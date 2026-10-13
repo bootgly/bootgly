@@ -14,9 +14,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
 /**
  * BG-15 (why the snapshot exists): while a deferral parks, a second request
  * on the SAME keep-alive connection is decoded into the live per-connection
- * Request. A `use ($Request)` inside the deferred work then describes that
- * later request — not merely an emptied one — while the snapshot still
- * describes the request the work answers.
+ * Request, answered, and its head dropped (`Request::shed()`). A
+ * `use ($Request)` inside the deferred work then describes no request at
+ * all — never the one the work answers — while the snapshot still does.
  */
 $Probe = new class {
    public string $wire = '';
@@ -35,7 +35,7 @@ return new Test(
          //   same connection while the first is still parked
          @fwrite($Socket, Client::request('/deferred/reuse', $testIndex));
          usleep(150_000);
-         @fwrite($Socket, Client::request('/deferred/ping?tag=second', $testIndex));
+         @fwrite($Socket, Client::request('/deferred/identify?tag=second', $testIndex));
 
          $deadline = microtime(true) + 3.0;
          while (microtime(true) < $deadline) {
@@ -90,14 +90,14 @@ return new Test(
    test: new Assertions(Case: function (string $response) use ($Probe): Generator {
       $evidence = json_encode(['error' => $Probe->error, 'responses' => $Probe->responses]);
       $reuse = [];
-      $pong = false;
+      $identified = null;
       foreach ($Probe->responses as $entry) {
          $decoded = json_decode($entry['body'], true);
          if (is_array($decoded) && isset($decoded['snapshot'])) {
             $reuse = $decoded;
          }
-         if ($entry['body'] === 'pong') {
-            $pong = true;
+         if (is_array($decoded) && isset($decoded['id'])) {
+            $identified = $decoded['id'];
          }
       }
 
@@ -105,7 +105,7 @@ return new Test(
          description: 'Both exchanges answered on the one connection',
          fallback: "Missing a response: {$evidence}"
       )
-         ->expect([$reuse !== [], $pong])
+         ->expect([$reuse !== [], $identified !== null])
          ->to->be([true, true])
          ->assert();
 
@@ -118,11 +118,19 @@ return new Test(
          ->assert();
 
       yield new Assertion(
-         description: 'The live per-connection Request already describes the LATER request',
-         fallback: "The live Request was not reused while parked: {$evidence}"
+         description: 'The live per-connection Request was reused and its head dropped once answered',
+         fallback: "The live Request still carries a head: {$evidence}"
       )
-         ->expect([$reuse['live'] ?? null, $reuse['live_queries']['tag'] ?? null])
-         ->to->be(['/deferred/ping?tag=second', 'second'])
+         ->expect([$reuse['live'] ?? null, $reuse['live_queries'] ?? null])
+         ->to->be(['', []])
+         ->assert();
+
+      yield new Assertion(
+         description: 'The later request was decoded into that same live Request object',
+         fallback: "The later request got another object: {$evidence}"
+      )
+         ->expect([$reuse['live_id'] ?? null, $identified])
+         ->to->be([$identified, $reuse['live_id'] ?? false])
          ->assert();
    })
 );

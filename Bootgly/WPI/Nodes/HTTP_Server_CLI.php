@@ -401,6 +401,9 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          if ($Config->maxBodySize !== null) {
             Request::$maxBodySize = $Config->maxBodySize;
          }
+         if ($Config->maxHeaderFields !== null) {
+            Request::$maxHeaderFields = $Config->maxHeaderFields;
+         }
          if ($Config->maxMultipartFieldSize !== null) {
             Request::$maxMultipartFieldSize = $Config->maxMultipartFieldSize;
          }

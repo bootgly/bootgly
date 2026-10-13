@@ -1221,6 +1221,12 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
          body: $Stream->body,
          stream: $Stream->id
       );
+      // ? A JSON body that could not be decoded within the bodies share of
+      //   the worker budget is refused before any handler decodes it
+      if ($Request->check() === false) {
+         $this->deny($Stream->id, 413);
+         return false;
+      }
 
       Server::$Request = $Request;
       $this->current = $Stream->id;

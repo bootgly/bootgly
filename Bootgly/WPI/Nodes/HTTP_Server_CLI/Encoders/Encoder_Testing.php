@@ -98,6 +98,18 @@ class Encoder_Testing extends Encoders
          return '';
       }
 
+      // ? A JSON body that could not be decoded within the bodies share of the
+      //   worker budget is refused before any handler decodes it
+      //   (mirror of `Encoder_`)
+      if ($Request->Body->length > 0 && $Request->stream === 0 && $Request->check() === false) {
+         // ! Drop the refused body and head now: owed bytes may keep the
+         //   connection open while they drain
+         $Request->scrub();
+         $Request->shed();
+         $Packages->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
+         return '';
+      }
+
       // @ Locale — negotiated BEFORE the route-cache fetch so cached wire
       //   bytes vary by language; the unconditional assign doubles as the
       //   per-request reset (mirrors Encoder_)
@@ -352,6 +364,9 @@ class Encoder_Testing extends Encoders
                   $Request->clean();
                }
                $Request->scrub();
+               if ($Request->pinned === false) {
+                  $Request->shed();
+               }
 
                return '';
             }
@@ -393,6 +408,9 @@ class Encoder_Testing extends Encoders
             $Request->clean();
          }
          $Request->scrub();
+         if ($Request->pinned === false) {
+            $Request->shed();
+         }
 
          return '';
       }
@@ -412,6 +430,9 @@ class Encoder_Testing extends Encoders
             $Request->clean();
          }
          $Request->scrub();
+         if ($Request->pinned === false) {
+            $Request->shed();
+         }
 
          return '';
       }
@@ -544,9 +565,15 @@ class Encoder_Testing extends Encoders
             $Request->clean();
          }
          $Request->scrub();
+         if ($Request->pinned === false) {
+            $Request->shed();
+         }
 
          return '';
       }
+
+      // @ End of the synchronous request cycle (mirror of `Encoder_`).
+      $Request->scrub();
 
       // ?: A post-middleware/event denial or replacement wins over replay.
       if (
@@ -561,6 +588,9 @@ class Encoder_Testing extends Encoders
          if ($admitted === Encoder_::capture($Response)) {
             $length = strlen($cacheWire);
             $Exchange?->finish($Response);
+            if ($Packages->Template === null) {
+               $Request->shed();
+            }
             return $cacheWire;
          }
 
@@ -597,6 +627,11 @@ class Encoder_Testing extends Encoders
       }
 
       $Exchange?->finish($Response);
+
+      // @ The head is no longer needed (mirror of `Encoder_`).
+      if ($Packages->Template === null) {
+         $Request->shed();
+      }
 
       // :
       return $buffer;

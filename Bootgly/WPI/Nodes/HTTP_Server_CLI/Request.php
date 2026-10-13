@@ -31,24 +31,31 @@ use function is_array;
 use function is_file;
 use function is_string;
 use function json_decode;
+use function json_validate;
 use function max;
 use function min;
 use function parse_str;
 use function preg_match;
 use function preg_match_all;
+use function preg_replace;
 use function random_bytes;
 use function rtrim;
 use function str_ends_with;
+use function str_replace;
+use function strcspn;
 use function stripos;
 use function strlen;
 use function strncmp;
 use function strpos;
 use function strrpos;
+use function strspn;
 use function strstr;
 use function strtok;
 use function strtolower;
 use function strtotime;
+use function strtr;
 use function substr;
+use function substr_count;
 use function time;
 use function trim;
 use function uasort;
@@ -62,6 +69,7 @@ use const Bootgly\WPI;
 use Bootgly\ABI\Resources\Storage\Driver;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers\Table;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Modules\HTTP2;
@@ -82,6 +90,34 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session;
 
 class Request
 {
+   /**
+    * What the objects of a deferred snapshot cost — the cloned Request,
+    * Header and Body and its ledger token (`capture()`). Measured, rounded up.
+    */
+   private const int SNAPSHOT = 2_048;
+   /** What decoded Basic credentials cost beyond their strings (`Basic`). */
+   private const int CREDENTIALS = 128;
+   /**
+    * What decoding a JSON body can spend, for `check()`: per container (`[`,
+    * `{` — an array and its 8-slot table), per object member (a 40-byte hash
+    * slot, doubling, its table rounded up to whole pages), per list element
+    * (a 16-byte slot, doubling, its table rounded up to whole pages) and per
+    * string (its header and size-class slack; its content is counted twice —
+    * a string rounds up to its size class or whole pages).
+    */
+   private const int CONTAINER = 400;
+   private const int MEMBER = 128;
+   private const int ELEMENT = 64;
+   private const int STRING = 48;
+   /**
+    * The escapes a kept JSON key may spell its digits and minus sign with.
+    */
+   private const array INDEXES = [
+      '\u0030' => '0', '\u0031' => '1', '\u0032' => '2', '\u0033' => '3', '\u0034' => '4',
+      '\u0035' => '5', '\u0036' => '6', '\u0037' => '7', '\u0038' => '8', '\u0039' => '9',
+      '\u002d' => '-', '\u002D' => '-',
+   ];
+
    public protected(set) Header $Header;
    public protected(set) Body $Body;
 
@@ -95,6 +131,13 @@ class Request
    public static int $maxMultipartFieldSize = 1 * 1024 * 1024; // @ 1 megabyte
    /** @var int Maximum multipart part header block size in bytes (default: 8KB) */
    public static int $maxMultipartHeaderSize = 8 * 1024; // @ 8 kilobytes
+   /**
+    * Maximum header field lines one HTTP/1 request may carry; more is answered
+    * `431 Request Header Fields Too Large` and the connection closed. A parsed
+    * field costs memory far beyond its bytes, so the count is bounded like
+    * the head's size (default: 100).
+    */
+   public static int $maxHeaderFields = 100;
    /** @var int Maximum number of multipart text fields */
    public static int $maxMultipartFields = 1024;
    /** @var int Maximum number of multipart file parts */
@@ -229,7 +272,13 @@ class Request
          $URL = $this->URL;
 
          // @ Extract the URN after the last slash
-         return $this->_URN = substr($URL, strrpos($URL, '/') + 1);
+         $URN = substr($URL, strrpos($URL, '/') + 1);
+         // ? A deferred snapshot pays for what it parses (`capture()`)
+         if ($this->Bodies !== null) {
+            $this->charge(Buffers::weigh(strlen($URN)));
+         }
+
+         return $this->_URN = $URN;
       }
    }
    // Host
@@ -316,6 +365,10 @@ class Request
          if ($mark !== false) {
             $query = substr($URI, $mark + 1);
          }
+         // ? A deferred snapshot pays for what it parses (`capture()`)
+         if ($this->Bodies !== null) {
+            $this->charge(Buffers::weigh(strlen($query)));
+         }
 
          return $this->_query = $query;
       }
@@ -334,6 +387,10 @@ class Request
 
          $queries = [];
          parse_str($this->query, $queries);
+         // ? A deferred snapshot pays for what it parses (`capture()`)
+         if ($this->Bodies !== null) {
+            $this->charge(Buffers::tally($queries));
+         }
 
          /** @var array<string,string|string[]> $queries */
          return $this->_queries = $queries;
@@ -414,8 +471,13 @@ class Request
    public string $input {
       get {
          if ($this->Body->input === null) {
-            // @ Materialize Body->input via Body->parse (side-effect).
-            $this->receive();
+            // @ Materialize the raw input — parsing it into fields is
+            //   `receive()`'s job, which a read of the raw bytes must not pay
+            $this->Body->parse(
+               content: 'raw',
+               type: $this->Header->get('Content-Type')
+            );
+            $this->Body->input ??= $this->Body->raw;
          }
          return $this->Body->input ?? '';
       }
@@ -466,9 +528,9 @@ class Request
          //   exits here and never reaches `receive()`. A streaming body has no
          //   `raw` — `Decoder_Downloading` owns its fields.
          if ($this->Body->length > 0 && $this->_fields === [] && ! $this->Body->streaming) {
-            /** @var array<string, array<string>|bool|float|int|string>|null $input */
-            $input = $this->input();
-            return $input ?? [];
+            // @ Parse once: `receive()` keeps what it parses (decoding again
+            //   here held a second copy of the whole structure)
+            $this->receive();
          }
 
          return $this->_fields;
@@ -565,7 +627,12 @@ class Request
          if ($this->authTokenParsed === false) {
             $authorization = $this->Header->get('Authorization');
             if (is_string($authorization) && stripos($authorization, 'Bearer ') === 0) {
-               $this->authToken = trim(substr($authorization, 7));
+               $token = trim(substr($authorization, 7));
+               // ? A deferred snapshot pays for what it parses (`capture()`)
+               if ($this->Bodies !== null) {
+                  $this->charge(Buffers::weigh(strlen($token)));
+               }
+               $this->authToken = $token;
             }
 
             $this->authTokenParsed = true;
@@ -688,6 +755,11 @@ class Request
     * @var array<string,mixed>
     */
    public array $attributes = [];
+   /**
+    * Whether an SSE stream reads this live Request while it runs (`pin()`):
+    * the encoder then keeps its head after the response head is written.
+    */
+   public private(set) bool $pinned = false;
    // @ Connection management
    public bool $closeConnection = false;
    // @ HTTP/2 stream id carried by this Request (0 = HTTP/1.x). Written only
@@ -756,6 +828,13 @@ class Request
     * Decoder cache-template path. A deferred snapshot instead preserves the
     * authentication/session/application state that was admitted while still
     * deep-cloning the mutable Header and Body subobjects via __clone().
+    *
+    * The snapshot is charged to the worker memory budget for what it keeps
+    * while parked — its body, its copy of the head and what is parsed from
+    * it, measured: what is already parsed when it is taken, and what the
+    * deferred work parses later (body fields, cookies, query vars, refused
+    * languages, credentials) when that is built — and released by `clean()`. A snapshot, or a
+    * later parse, that does not fit throws `RuntimeException`.
     */
    public function capture (): self
    {
@@ -765,28 +844,6 @@ class Request
       //   The live per-connection Request may be reused while the captured
       //   alias keeps the earlier exchange independently reachable.
       Request\Exchange::share($this, $Captured);
-
-      // @ This snapshot is the ONE body retainer a scrub cannot cover:
-      //   `Encoder_::encode()` empties the live Request the moment the
-      //   synchronous cycle ends, while the deferred work legitimately reads
-      //   this copy until its Fiber finishes. Charge it to the same worker
-      //   ledger that bounds every other in-memory body — otherwise parked
-      //   deferrals are the one way to hold request bodies that no ceiling
-      //   can see. Released by `clean()` (and by the reservation's own
-      //   destructor if the snapshot is simply dropped).
-      $Bodies = new Bodies;
-      //   A body of half a transport read or more may be that read, adopted
-      //   whole (`Packages::READ`).
-      $held = strlen($this->Body->raw);
-      $footprint = Buffers::weigh(
-         $held >= intdiv(Packages::READ, 2) ? max($held, Packages::READ) : $held
-      );
-      if ($Bodies->reserve($held, $footprint) === false) {
-         throw new RuntimeException(
-            'HTTP deferred execution rejected: the worker retained-body budget is exhausted.'
-         );
-      }
-      $Captured->Bodies = $Bodies;
 
       $Captured->_fields = $this->_fields;
       $Captured->_files = $this->_files;
@@ -808,7 +865,86 @@ class Request
          $Captured->sessioned = true;
       }
 
+      // @ This snapshot is the ONE body retainer a scrub cannot cover:
+      //   `Encoder_::encode()` empties the live Request the moment the
+      //   synchronous cycle ends, while the deferred work legitimately reads
+      //   this copy until its Fiber finishes. Charge it to the same worker
+      //   ledger that bounds every other in-memory body — otherwise parked
+      //   deferrals are the one way to hold request bodies that no ceiling
+      //   can see. Released by `clean()` (and by the reservation's own
+      //   destructor if the snapshot is simply dropped).
+      $Bodies = new Bodies;
+      //   A body of half a transport read or more may be that read, adopted
+      //   whole (`Packages::READ`).
+      $held = strlen($this->Body->raw);
+      $footprint = Buffers::weigh(
+         $held >= intdiv(Packages::READ, 2) ? max($held, Packages::READ) : $held
+      );
+      //   It also keeps its own copy of the head — the live Request drops
+      //   its copy once answered (`shed()`) — and what was parsed from it;
+      //   what the deferred work parses later (body fields, cookies, query
+      //   vars, refused languages, credentials) is charged when it is built
+      //   (`charge()`).
+      if (
+         $Bodies->hold($Captured->weigh()) === false
+         || $Bodies->reserve($held, $footprint) === false
+      ) {
+         throw new RuntimeException(Bodies::REFUSAL);
+      }
+      $Captured->Bodies = $Bodies;
+      $Captured->Header->Cookies->Bodies = $Bodies;
+
       return $Captured;
+   }
+
+   /**
+    * Charge a deferred snapshot `$bytes` more of what it parsed from its head
+    * after it was taken; refuse the parse when they do not fit.
+    *
+    * @throws RuntimeException
+    */
+   private function charge (int $bytes): void
+   {
+      // ?
+      if ($this->Bodies?->grow($bytes) === false) {
+         throw new RuntimeException(Bodies::REFUSAL);
+      }
+   }
+
+   /**
+    * Weigh what this deferred snapshot keeps when it is taken: its own
+    * objects, its copy of the HTTP/1 head and URI (an HTTP/2 stream keeps its
+    * head charged itself) and everything already parsed from the request —
+    * routed path, query and its vars, refused languages, body fields, file
+    * records and credentials — at their allocator footprint (`Buffers`).
+    */
+   private function weigh (): int
+   {
+      // ! The snapshot's own objects
+      $bytes = self::SNAPSHOT;
+
+      // @ The head and the URI (HTTP/1 only)
+      if ($this->stream === 0) {
+         $bytes += Frame::weigh($this->Header->raw ?? '', $this->Header->fields)
+            + Buffers::weigh(strlen($this->URI));
+      }
+
+      // @ What was parsed from the request
+      $bytes += Buffers::weigh(strlen($this->_URL ?? ''))
+         + Buffers::weigh(strlen($this->_URN ?? ''))
+         + Buffers::weigh(strlen($this->_query ?? ''))
+         + Buffers::weigh(strlen($this->authToken))
+         + Buffers::weigh(strlen($this->authUsername))
+         + Buffers::weigh(strlen($this->authPassword))
+         + Buffers::tally($this->_queries ?? [])
+         + Buffers::tally($this->exclusions)
+         + Buffers::tally($this->_fields)
+         + Buffers::tally($this->_files)
+         + Buffers::tally($this->claims)
+         + Buffers::tally($this->tokenHeaders);
+
+      // :
+      return $bytes;
    }
 
    public function __clone ()
@@ -842,6 +978,7 @@ class Request
       $this->tokenHeaders = [];
       $this->exclusions = [];
       $this->attributes = [];
+      $this->pinned = false;
       $this->stream = 0;
 
       $this->Session = null;
@@ -896,6 +1033,7 @@ class Request
       $this->tokenHeaders = [];
       $this->exclusions = [];
       $this->attributes = [];
+      $this->pinned = false;
       $this->stream = 0;
 
       $this->Session = null;
@@ -923,12 +1061,263 @@ class Request
     * and parsed fields are released together. Keep this unconditional and
     * straight-line: the encoder calls it for every completed or deferred
     * request so an idle keep-alive peer cannot park unreserved payload.
+    * The head stays: the route cache still reads it after this runs, and
+    * `shed()` drops it once nothing does.
     */
    final public function scrub (): void
    {
       $this->Body->raw = '';
       $this->Body->input = null;
       $this->_fields = [];
+   }
+
+   /**
+    * Pin this live Request for an SSE stream that reads it while it runs: an
+    * SSE response takes no snapshot, so the encoder keeps the head the
+    * stream's callbacks read (`shed()` is skipped). The connection serves no
+    * other request while the stream runs.
+    */
+   public function pin (): void
+   {
+      $this->pinned = true;
+   }
+
+   /**
+    * Check that this request's body can be decoded within the bodies share
+    * of the worker memory budget (half of `maxWorkerPendingBytes`).
+    *
+    * A JSON body decodes into arrays that can spend fifty times its bytes —
+    * `[[0],[0],…]` of 1 MB kills a 128M worker — so before any handler reads
+    * it, an upper bound of its decode is taken and a body over the share is
+    * refused (`413`). Its strings are emptied first, so the brackets, commas
+    * and colons inside them do not count, and a body over the quick bound
+    * (`price()`) is priced container by container (`walk()`); a repeated key
+    * is never priced below what PHP keeps of it. Invalid JSON — NDJSON, concatenated or
+    * compressed bodies — passes: `input()` decodes nothing from it. Other
+    * media types parse within PHP's own limits (`max_input_vars`,
+    * `max_input_nesting_level`).
+    */
+   public function check (): bool
+   {
+      // ? Only a JSON body decodes into a structure larger than its bytes
+      $type = $this->Header->get('Content-Type');
+      if ($type === null || stripos($type, 'json') === false) {
+         return true;
+      }
+
+      // !
+      $raw = $this->Body->raw;
+      // ? Invalid JSON decodes into nothing (`input()` validates it first)
+      if (json_validate($raw) === false) {
+         return true;
+      }
+      $share = intdiv(Server::$maxWorkerPendingBytes, 2);
+
+      // ! The structure: every string emptied to `""` — but a key of up to 20
+      //   digits and minus signs (escaped or not), which may be an index
+      //   (`walk()`). Escaped backslashes, then escaped quotes, become two
+      //   bytes that are no digit, so every quote left delimits a string and
+      //   a key that held them is never kept: one linear pass, with nothing
+      //   to backtrack
+      $shape = strpos($raw, '\\') === false
+         ? $raw
+         : str_replace(['\\\\', '\\"'], '__', $raw);
+      $shape = preg_replace(
+         '/"((?:[0-9-]|\\\\u00(?:3[0-9]|2[dD])){1,20}+)"(?=\\s*+:)|"[^"]*+"/',
+         '"$1"',
+         $shape
+      );
+      // ? PCRE failed: refuse what cannot be priced
+      if ($shape === null) {
+         return false;
+      }
+      $content = strlen($raw) - strlen($shape);
+
+      // ? Under the quick bound — which prices no object begun as a list (a
+      //   first key from `0` to `7`): such a body is left to the walk
+      if (
+         preg_match('/\\{\\s*+"(?:[0-7]|\\\\u003[0-7])"/', $shape) === 0
+         && self::price($shape, $content) <= $share
+      ) {
+         return true;
+      }
+      // ? Over the least the walk prices — a non-empty array and its 8-slot
+      //   table, and a 16-byte slot per value — so the walk is spared
+      $containers = substr_count($shape, '[') + substr_count($shape, '{');
+      //   (empty ones are shared: counted exactly, whitespace inside or not)
+      $empty = strcspn($shape, " \t\r\n") === strlen($shape)
+         ? substr_count($shape, '[]') + substr_count($shape, '{}')
+         : (int) preg_match_all('/\\[\\s*+\\]|\\{\\s*+\\}/', $shape);
+      $filled = $containers - $empty;
+      $least = max(216 * $filled, 72 * $filled + 16 * substr_count($shape, ','));
+      if ($least > $share) {
+         return false;
+      }
+
+      // :
+      return self::walk($shape, $content) <= $share;
+   }
+
+   /**
+    * Price the decode of a JSON structure at a glance: `CONTAINER` per `[`
+    * or `{`, `MEMBER` per object member, `ELEMENT` per other value, `STRING`
+    * per string, twice its `$content` bytes and once the structure's bytes.
+    * Sound only while no object begins as a list (`walk()`).
+    */
+   private static function price (string $shape, int $content): int
+   {
+      // !
+      $containers = substr_count($shape, '[') + substr_count($shape, '{');
+      $members = substr_count($shape, ':');
+      $values = $containers + substr_count($shape, ',');
+      $strings = intdiv(substr_count($shape, '"'), 2);
+
+      // :
+      return $containers * self::CONTAINER
+         + $members * self::MEMBER
+         + max(0, $values - $members) * self::ELEMENT
+         + $strings * self::STRING
+         + 2 * $content
+         + strlen($shape);
+   }
+
+   /**
+    * Walk a JSON structure (strings emptied) container by container and price
+    * each one as PHP builds it: an empty one is the shared empty array; any
+    * other is an array and its table — at least 8 slots, doubling to fit its
+    * values, 16 bytes a slot for a list, 40 for an object — at its allocator
+    * footprint (`Buffers::weigh()`), pages included. An object whose first
+    * key is kept (digits) may begin as a list: its table is followed key by
+    * key (`Buffers\Table`) — a repeated index replaces its value, as in PHP;
+    * any other repeated key counts as another one. Strings are priced as in
+    * `price()`.
+    */
+   private static function walk (string $shape, int $content): int
+   {
+      // !
+      $bytes = intdiv(substr_count($shape, '"'), 2) * self::STRING
+         + 2 * $content
+         + strlen($shape);
+      $length = strlen($shape);
+      // ! The open containers, innermost last: where each opened, whether it
+      //   is an object, its table when its first key is kept, and the commas
+      //   seen directly inside it
+      $opens = [];
+      $objects = [];
+      $Tables = [];
+      $commas = [];
+      $depth = 0;
+      $last = 0;
+      $offset = strcspn($shape, '[]{}');
+
+      // @@ Bracket to bracket: the commas between two brackets belong to the
+      //    innermost container open there
+      while ($offset < $length) {
+         $char = $shape[$offset];
+         if ($depth > 0) {
+            $commas[$depth - 1] += substr_count($shape, ',', $last, $offset - $last);
+            // @ The keys of an object that may begin as a list, in order —
+            //   the strings a colon follows; a kept one is an index when PHP
+            //   reads it as one
+            $Table = $Tables[$depth - 1];
+            if ($Table !== null) {
+               $at = $last + strcspn($shape, '"', $last, $offset - $last);
+               while ($at < $offset) {
+                  $end = (int) strpos($shape, '"', $at + 1);
+                  $next = $end + 1 + strspn($shape, " \t\r\n", $end + 1);
+                  if ($shape[$next] === ':') {
+                     $key = substr($shape, $at + 1, $end - $at - 1);
+                     if (strpos($key, '\\') !== false) {
+                        $key = strtr($key, self::INDEXES);
+                     }
+                     // ? An index is no string: its key costs nothing
+                     if ($key !== '' && (string) (int) $key === $key) {
+                        $bytes -= self::STRING;
+                        $key = (int) $key;
+                     }
+                     $Table->fill($key);
+                  }
+                  $at = $end + 1 + strcspn($shape, '"', $end + 1, $offset - $end - 1);
+               }
+            }
+         }
+         $last = $offset + 1;
+
+         if ($char === '[' || $char === '{') {
+            $opens[$depth] = $offset;
+            $objects[$depth] = $char === '{';
+            // ? A first key kept non-empty: follow the table
+            $first = $offset + 1 + strspn($shape, " \t\r\n", $offset + 1);
+            $Tables[$depth] = $char === '{'
+               && $shape[$first] === '"'
+               && $shape[$first + 1] !== '"'
+                  ? new Table
+                  : null;
+            $commas[$depth] = 0;
+            $depth++;
+         }
+         else if ($depth > 0) {
+            $depth--;
+            $open = $opens[$depth];
+            // ? Nothing between the brackets but whitespace: the empty array
+            $first = $open + 1 + strspn($shape, " \t\r\n", $open + 1);
+            if ($first < $offset) {
+               $values = $commas[$depth] + 1;
+               $size = 8;
+               while ($size < $values) {
+                  $size <<= 1;
+               }
+               $table = match (true) {
+                  $Tables[$depth] !== null => $Tables[$depth]->bytes,
+                  $objects[$depth] => $size * 40,
+                  default => $size * 16 + 8
+               };
+               $bytes += 56 + Buffers::weigh(max(1, $table - 25));
+            }
+         }
+
+         $offset += 1 + strcspn($shape, '[]{}', $offset + 1);
+      }
+
+      // :
+      return $bytes;
+   }
+
+   /**
+    * Drop the head of a request whose response is written: its raw block,
+    * field map and parsed cookies, the URI and every derivation of it, and
+    * the credentials decoded from it.
+    *
+    * An idle keep-alive connection otherwise keeps its last parsed head —
+    * up to twenty times the bytes the peer sent, a bearer token or a Basic
+    * password included — outside every ledger until its next request. The
+    * encoder calls it once the response no longer reads the head (after the
+    * route cache stored or skipped it), and only for a head this Request
+    * owns: a decode template shares it. Method, protocol, framing, Body
+    * metadata, Session and attributes stay.
+    *
+    * !! KEEP THIS STRAIGHT-LINE AND UNCONDITIONAL — same tracing-JIT
+    *   constraint as `assume()`.
+    */
+   final public function shed (): void
+   {
+      $this->Header->clear();
+      $this->URI = '';
+      $this->_URL = null;
+      $this->_URN = null;
+      $this->_query = null;
+      $this->_queries = null;
+      $this->exclusions = [];
+
+      $this->authUsername = '';
+      $this->authPassword = '';
+      $this->authParsed = false;
+      $this->authCredentials = null;
+      $this->authToken = '';
+      $this->authTokenParsed = false;
+      $this->identity = null;
+      $this->claims = [];
+      $this->tokenHeaders = [];
    }
 
    /**
@@ -1002,6 +1391,7 @@ class Request
       $this->tokenHeaders = [];
       $this->exclusions = [];
       $this->attributes = [];
+      $this->pinned = false;
 
       $this->Session = null;
       $this->sessioned = false;
@@ -1194,7 +1584,7 @@ class Request
          $Decoder->Request = $this;
          // ? The decoder keeps this parsed head until the body completes,
          //   so it draws on the same budget the body will.
-         if ($Decoder->Bodies->hold($Frame->weigh()) === false) {
+         if ($Decoder->Bodies->hold(Frame::weigh($Frame->headerRaw, $Frame->fields)) === false) {
             $Decoder->Bodies->release();
             $this->Body->waiting = false;
             $Package->consumed = 0;
@@ -1268,7 +1658,7 @@ class Request
 
                   // ? The decoder keeps this parsed head until the body
                   //   completes, so it draws on the same budget the body will.
-                  if ($Decoder->Bodies->hold($Frame->weigh()) === false) {
+                  if ($Decoder->Bodies->hold(Frame::weigh($Frame->headerRaw, $Frame->fields)) === false) {
                      $Decoder->Bodies->release();
                      $this->Body->waiting = false;
                      $Package->consumed = 0;
@@ -1309,7 +1699,7 @@ class Request
                   //   body stays unfinished, so they draw on the same worker
                   //   budget its continuations will.
                   if (
-                     $Waiting->Bodies->hold($Frame->weigh()) === false
+                     $Waiting->Bodies->hold(Frame::weigh($Frame->headerRaw, $Frame->fields)) === false
                      || $Waiting->Bodies->reserve($initialLength, Buffers::weigh($initialLength)) === false
                   ) {
                      $Waiting->Bodies->release();
@@ -1406,6 +1796,12 @@ class Request
 
       // @ JSON — strict: on parse failure, return []; never reinterpret.
       if ($contentType !== '' && stripos($contentType, 'json') !== false) {
+         // ? Invalid JSON builds nothing: a failing decode would keep what it
+         //   parsed until it unwinds, and `check()` prices valid JSON only
+         if (json_validate($input) === false) {
+            return [];
+         }
+
          try {
             $decoded = json_decode(
                json: $input,
@@ -1558,6 +1954,11 @@ class Request
       //   `$fields` hook carries; this path simply did not honor it.
       $parsed = $this->Body->streaming ? null : $this->input();
       if ($parsed !== null) {
+         // ? A deferred snapshot pays for what it parses (`capture()`) — the
+         //   growth only: a later call parses the same body again
+         if ($this->Bodies !== null) {
+            $this->charge(Buffers::tally($parsed) - Buffers::tally($this->_fields));
+         }
          $this->_fields = $parsed;
       }
 
@@ -1620,6 +2021,18 @@ class Request
          }
 
          [$username, $password] = explode(':', $decoded_credentials, 2);
+         // ? A deferred snapshot pays for what it parses (`capture()`); a
+         //   refused parse leaves the credentials unparsed, as before it
+         if ($this->Bodies !== null) {
+            try {
+               $this->charge(Buffers::weigh(strlen($username)) + Buffers::weigh(strlen($password)) + self::CREDENTIALS);
+            }
+            catch (RuntimeException $Refusal) {
+               $this->authParsed = false;
+
+               throw $Refusal;
+            }
+         }
 
          $this->username = $username;
          $this->password = $password;
@@ -1672,7 +2085,9 @@ class Request
             $pattern = '/(\*|[a-z]{1,8}(?:-[a-z0-9]{1,8})*)\s*(?:;\s*q\s*=\s*(\d*(?:\.\d+)?))?/i';
 
             // ! Per-parse reset — a headerless (or all-accepting) request
-            //   must not inherit the previous parse's refusals
+            //   must not inherit the previous parse's refusals; a snapshot
+            //   pays only for growth over them
+            $excluded = $this->exclusions;
             $this->exclusions = [];
 
             break;
@@ -1734,7 +2149,21 @@ class Request
       // ! Exclusions surface only for Accept-Language — the other Accept-*
       //   negotiations keep their accepted-only contract
       if ($with === self::ACCEPTS_LANGUAGES && $refused !== []) {
-         $this->exclusions = array_keys($refused);
+         $exclusions = array_keys($refused);
+         // ? A deferred snapshot pays for what it parses (`capture()`) — the
+         //   growth only: a later read rebuilds the same list
+         if ($this->Bodies !== null) {
+            try {
+               $this->charge(Buffers::tally($exclusions) - Buffers::tally($excluded ?? []));
+            }
+            catch (RuntimeException $Refusal) {
+               // ! A refused parse keeps the refusals parsed before it
+               $this->exclusions = $excluded ?? [];
+
+               throw $Refusal;
+            }
+         }
+         $this->exclusions = $exclusions;
       }
 
       uasort($results, function ($a, $b) {

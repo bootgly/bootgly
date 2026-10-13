@@ -707,5 +707,15 @@ return new Suite(
       '103.01-worker_memory_bodies',
       '103.02-worker_memory_cache_output',
       '103.03-worker_memory_crash_shapes',
+      // # 1.0.x (H-HSC-5): idle request heads
+      // An idle keep-alive connection keeps no parsed head of its last
+      // request (raw block, fields, cookies, URI memos), and a head carries
+      // at most 100 field lines (431 past it).
+      '103.04-idle_request_heads',
+      // A deferral's snapshot — head, what the work parses from it, multipart
+      // fields — is charged to the worker budget while it parks (refused past
+      // the Inbound share), and neither the live connection nor the pooled
+      // Fiber keeps any of it once answered.
+      '103.05-deferred_request_heads',
    ],
 );

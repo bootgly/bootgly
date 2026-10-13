@@ -271,7 +271,7 @@ return new Test(
          }
 
          // :
-         return $Frame->weigh();
+         return Head::weigh($Frame->headerRaw, $Frame->fields);
       };
 
       // @ The parsed-head footprint the installed body decoder holds
@@ -739,8 +739,12 @@ return new Test(
             $row['finish'] = $Drip($Package, $Request, $held);
             $row['raw'] = strlen($Request->Body->raw);
             $row['completed'] = $Measure();
+            // ! What the snapshot keeps beside its body: its head and the
+            //   caches the deferred work may parse from it (H-HSC-5)
+            $price = new ReflectionMethod(Request::class, 'weigh')->invoke($Request);
+            $row['price'] = $price;
 
-            // @ The snapshot charges its own copy of the body
+            // @ The snapshot charges its own copy of the body and its head
             $Captured = $Request->capture();
             $Cleanups[] = static function () use ($Captured): void {
                $Captured->clean();
@@ -758,7 +762,7 @@ return new Test(
 
             // # Inbound share at the edge, with the worker budget far from full
             TCP_Server_CLI::$maxWorkerPendingBytes = $budget;
-            $room = intdiv($budget, 2) - Buffers::weigh($held);
+            $room = intdiv($budget, 2) - Buffers::weigh($held) - $price;
             $Filler = new Bodies;
             $Cleanups[] = static function () use ($Filler): void {
                $Filler->release();
@@ -802,12 +806,19 @@ return new Test(
          //     decoder that keeps one: Content-Length, chunked and unfinished
          //     multipart.
          $Probe->rows['g'] = $Run(static function () use (
-            $Send, $Close, $Measure, $Weigh, $Parse, $Hold, $Answer
+            $Send, $Close, $Measure, $Weigh, $Parse, $Hold, $Answer, &$Cleanups
          ): array {
             $fields = implode('', array_map(
                static fn (int $number): string => sprintf("X-%04d: v\r\n", $number),
                range(0, 1_299)
             ));
+            // ! The premise is a head past the field-line cap (H-HSC-5): lift
+            //   it for this row, so the ledger is what the row measures
+            $cap = Request::$maxHeaderFields;
+            Request::$maxHeaderFields = 2_000;
+            $Cleanups[] = static function () use ($cap): void {
+               Request::$maxHeaderFields = $cap;
+            };
             $wires = [
                'length' => "POST /hhsc3/g/length HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/octet-stream\r\nContent-Length: 1000000\r\n{$fields}\r\n",
                'chunked' => "POST /hhsc3/g/chunked HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n{$fields}\r\n",
@@ -859,6 +870,7 @@ return new Test(
 
                $row[$shape] = $leg;
             }
+            Request::$maxHeaderFields = $cap;
 
             // :
             return $row;
@@ -982,9 +994,10 @@ return new Test(
             $row['finish'] = $State->name;
             $row['raw'] = strlen($Request->Body->raw);
             $row['completed'] = $Measure();
+            $row['price'] = new ReflectionMethod(Request::class, 'weigh')->invoke($Request);
 
             // @ The snapshot charges its own copy of the body — its own
-            //   reservation, with no head
+            //   reservation, with the price of its head (H-HSC-5)
             $Captured = $Request->capture();
             $Cleanups[] = static function () use ($Captured): void {
                $Captured->clean();
@@ -1253,13 +1266,14 @@ return new Test(
             && ($e['attack']['released'] ?? null) === 0,
          'f' => ($f['start'] ?? null) === 0
             && ($f['completed'] ?? null) === 0
-            && ($f['charged'] ?? null) === $chunk
+            && ($f['price'] ?? 0) > 0
+            && ($f['charged'] ?? null) === $chunk + ($f['price'] ?? -1)
             && ($f['cleaned'] ?? null) === 0
             && ($f['fit'] ?? null) === $inbound
-            && ($f['fit_cleaned'] ?? null) === $inbound - $chunk
+            && ($f['fit_cleaned'] ?? null) === $inbound - $chunk - ($f['price'] ?? -1)
             && ($f['refused'] ?? null)
                === 'HTTP deferred execution rejected: the worker retained-body budget is exhausted.'
-            && ($f['refused_charge'] ?? null) === $inbound - $chunk + 1
+            && ($f['refused_charge'] ?? null) === $inbound - $chunk - ($f['price'] ?? -1) + 1
             && ($f['released'] ?? null) === 0,
          'g' => $ledgerG,
          'h' => ($h['start'] ?? null) === 0
@@ -1279,8 +1293,9 @@ return new Test(
          'j' => ($j['start'] ?? null) === 0
             && ($j['read'] ?? null) === $slice
             && ($j['completed'] ?? null) === 0
-            && ($j['charged'] ?? null) === $read
-            && ($j['token'] ?? null) === [$j['adopted'] ?? -1, 0]
+            && ($j['price'] ?? 0) > 0
+            && ($j['charged'] ?? null) === $read + ($j['price'] ?? -1)
+            && ($j['token'] ?? null) === [$j['adopted'] ?? -1, $j['price'] ?? -1]
             && ($j['cleaned'] ?? null) === 0,
       ];
 
@@ -1342,7 +1357,7 @@ return new Test(
       );
       yield assert(
          assertion: $verdicts['f'],
-         description: "H-HSC-3 (f) a deferred Request::capture() snapshot must charge weigh() of its body in the Inbound share, release it on clean() and be refused when that share is full; rows={$summary} evidence={$Evidence('f')}"
+         description: "H-HSC-3 (f) a deferred Request::capture() snapshot must charge weigh() of its body and the price of its head in the Inbound share, release it on clean() and be refused when that share is full; rows={$summary} evidence={$Evidence('f')}"
       );
       yield assert(
          assertion: $verdicts['g'],
@@ -1358,7 +1373,7 @@ return new Test(
       );
       yield assert(
          assertion: $verdicts['j'],
-         description: "H-HSC-3 (j) a deferred Request::capture() snapshot of a completed body of half a transport read or more must charge weigh({$slice}) in its own reservation, not weigh() of its length, and clean() must return it; rows={$summary} evidence={$Evidence('j')}"
+         description: "H-HSC-3 (j) a deferred Request::capture() snapshot of a completed body of half a transport read or more must charge weigh({$slice}) and the price of its head in its own reservation, not weigh() of its length, and clean() must return it; rows={$summary} evidence={$Evidence('j')}"
       );
    },
 );

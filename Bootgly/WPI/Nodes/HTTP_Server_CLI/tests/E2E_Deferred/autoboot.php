@@ -89,6 +89,10 @@ return new Suite(
       '3.2-records_carry_the_booted_instance',
       // FEAT-1: the AccessLog middleware writes one line per request, cancelled ones included (appended last)
       '5.1-access_log_lines_per_outcome',
-      '5.2-access_log_cancelled_and_timeout'
+      '5.2-access_log_cancelled_and_timeout',
+      // H-HSC-5: the snapshot keeps its own head once the live Request drops its copy
+      '5.3-snapshot_keeps_own_head',
+      // H-HSC-5: an SSE stream keeps reading its route's live Request
+      '5.4-sse_keeps_route_request'
    ]
 );

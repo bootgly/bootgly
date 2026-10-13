@@ -33,6 +33,8 @@ class Configs implements Configuring
    public private(set) null|int $maxFileSize;
    /** Maximum bytes of a request body. */
    public private(set) null|int $maxBodySize;
+   /** Maximum header field lines of one HTTP/1 request (more is answered `431`). */
+   public private(set) null|int $maxHeaderFields;
    /** Maximum bytes of one multipart field value. */
    public private(set) null|int $maxMultipartFieldSize;
    /** Maximum bytes of one multipart part header block. */
@@ -52,6 +54,7 @@ class Configs implements Configuring
       Argument $Named = Argument::Undefined,
       null|int $maxFileSize = null,
       null|int $maxBodySize = null,
+      null|int $maxHeaderFields = null,
       null|int $maxMultipartFieldSize = null,
       null|int $maxMultipartHeaderSize = null,
       null|int $maxMultipartFields = null,
@@ -62,6 +65,7 @@ class Configs implements Configuring
       // * Config
       $this->maxFileSize = $maxFileSize;
       $this->maxBodySize = $maxBodySize;
+      $this->maxHeaderFields = $maxHeaderFields;
 
       $this->maxMultipartFieldSize = $maxMultipartFieldSize;
       $this->maxMultipartHeaderSize = $maxMultipartHeaderSize;

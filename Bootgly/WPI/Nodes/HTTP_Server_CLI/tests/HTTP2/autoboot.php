@@ -251,6 +251,7 @@ return new Suite(
       '6.7-sse_head_method',
       '6.8-sse_drain_deadline',
       '6.9-sse_stall_progress',
-      '6.10-code_1xx_rejected'
+      '6.10-code_1xx_rejected',
+      '6.11-json_refusal_stream'
    ]
 );

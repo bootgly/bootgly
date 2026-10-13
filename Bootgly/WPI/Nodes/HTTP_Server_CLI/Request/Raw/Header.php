@@ -69,6 +69,15 @@ class Header
       $this->built = false;
       #$this->length = strlen($raw);
    }
+   /**
+    * A copy (a cloned or captured Request) parses its own cookies: the lazily
+    * created `Cookies` reads the Header it was bound to, and that is still the
+    * live one — which the connection's next request re-defines.
+    */
+   public function __clone ()
+   {
+      unset($this->Cookies);
+   }
    public function __get (string $name): mixed
    {
       switch ($name) {
@@ -127,6 +136,22 @@ class Header
       $this->built = true;
       // Cookies parse lazily from `fields`; drop the previous request's
       // instance so the next access re-binds to the assumed fields.
+      unset($this->Cookies);
+   }
+
+   /**
+    * Clear the head this Header holds — its raw block, its field map and the
+    * cookies parsed from it — once the response no longer needs it.
+    *
+    * !! KEEP THIS STRAIGHT-LINE — it runs at the end of every response cycle
+    *   that owns its head (see `Request::shed()`).
+    */
+   final public function clear (): void
+   {
+      $this->fields = [];
+      $this->raw = '';
+      $this->length = 0;
+      // ! `built` stays: an empty block builds to the same empty map
       unset($this->Cookies);
    }
 

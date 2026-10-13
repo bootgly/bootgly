@@ -41,5 +41,7 @@ return new Suite(
       '1.16-daemon-refork',
       // # 1.0.x (H-HSC-3): one worker memory budget — footprint shares, epoch and memory_limit fit
       '1.17-worker_ledger_shares_fit',
+      // # 1.0.x (H-HSC-5): an array begun as a list keeps the table PHP grows and converts it to (Buffers\Table, tally)
+      '1.18-buffers_table_fill',
    ]
 );

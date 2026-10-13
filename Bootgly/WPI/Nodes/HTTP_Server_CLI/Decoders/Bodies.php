@@ -42,6 +42,9 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers\Shares;
  */
 final class Bodies
 {
+   /** Why a deferred request snapshot, or what it parses later, is refused. */
+   public const string REFUSAL = 'HTTP deferred execution rejected: the worker retained-body budget is exhausted.';
+
    // * Config
    /**
     * Per-worker ceiling, in bytes, on the sum of every unfinished in-memory
@@ -69,6 +72,8 @@ final class Bodies
    private Buffers $Buffers;
    /** Footprint of the body bytes this decoder holds, the head excluded. */
    private int $footprint = 0;
+   /** Whether `release()` returned everything this token held. */
+   private bool $released = false;
 
 
    public function __construct ()
@@ -137,6 +142,24 @@ final class Bodies
    }
 
    /**
+    * Charge `$bytes` more of parsed request alongside the held head — what a
+    * deferred snapshot parses after it was taken (its body fields, cookies,
+    * query vars, refused languages, credentials). Returns false when they do
+    * not fit, leaving the previous reservation untouched.
+    */
+   public function grow (int $bytes): bool
+   {
+      // ? Released: the request it charged for has ended — a parse made
+      //   while it unwinds lives no longer than that and is not charged
+      if ($this->released) {
+         return true;
+      }
+
+      // :
+      return $this->hold($this->head + max(0, $bytes));
+   }
+
+   /**
     * Return everything this decoder holds. Idempotent: a decoder released on
     * completion and again on disconnect must not credit the ledger twice.
     */
@@ -150,6 +173,7 @@ final class Bodies
       $this->Buffers->release();
       $this->footprint = 0;
       $this->head = 0;
+      $this->released = true;
 
       // ?
       if ($this->retained === 0) {

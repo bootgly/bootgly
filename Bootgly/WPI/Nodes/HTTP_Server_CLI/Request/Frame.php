@@ -138,27 +138,32 @@ final class Frame
     * guards always replay per request.
     * @var array<string,array{
     *    0: array<string, string|array<int,string>>,
-    *    1: null|int, 2: bool, 3: bool, 4: string, 5: string, 6: bool, 7: bool
+    *    1: null|int, 2: bool, 3: bool, 4: string, 5: string, 6: bool, 7: bool,
+    *    8: int
     * }>
     */
    private static array $scans = [];
 
 
    /**
-    * Weigh the memory this parsed head costs while a Request keeps it — the
+    * Weigh the memory a parsed head costs while a Request keeps it — the
     * raw header block and every field name and value at their allocator
     * footprint (`Buffers::weigh()`), plus `FIELD_BYTES` per field value.
     *
     * An unfinished request body keeps its Request, so its decoder charges
-    * this with the body (`Decoders\Bodies::hold()`).
+    * this with the body; a deferred snapshot keeps its own copy of the head
+    * (`Request::capture()`). Both draw on `Decoders\Bodies::hold()`.
+    *
+    * @param string $raw The raw header block.
+    * @param array<string, string|array<int,string>> $fields The parsed field map.
     */
-   public function weigh (): int
+   public static function weigh (string $raw, array $fields): int
    {
       // !
-      $bytes = Buffers::weigh(strlen($this->headerRaw));
+      $bytes = Buffers::weigh(strlen($raw));
 
       // @@
-      foreach ($this->fields as $name => $value) {
+      foreach ($fields as $name => $value) {
          $bytes += Buffers::weigh(strlen((string) $name));
 
          if (is_string($value)) {
@@ -370,6 +375,22 @@ final class Frame
       //   evidence/testing dispatch path stays untouched.
       $testing = Server::$Environment === Environments::Test;
       $scan = $testing ? null : (self::$scans[$header_raw] ?? null);
+      // ! The field lines: replayed with the scan, or the split the scan
+      //   walks (`$header_raw` ends each field line with CRLF, so the split
+      //   ends with one empty part)
+      $parts = $scan === null ? explode("\r\n", $header_raw) : [];
+      $lines = $scan === null ? count($parts) - 1 : $scan[8];
+      // ? RFC 6585 §5: too many field lines. Every parsed field costs a Request
+      //   far more than its bytes, so the count is bounded like the bytes are
+      //   — before the scan, and on a scan-memo hit too, so a stored scan
+      //   never replays past a lowered cap. (A decode template — at most
+      //   `Decoder_::MEMOIZED` lines — is replayed without parsing: the cap
+      //   is boot configuration.)
+      if ($lines > Request::$maxHeaderFields) {
+         $Package->reject("HTTP/1.1 431 Request Header Fields Too Large\r\n\r\n");
+         return null;
+      }
+
       if ($scan !== null) {
          [$fields, $contentLength, $chunked, $expectContinue, $contentType,
             $hostValue, $closeConnection, $keepAliveSeen] = $scan;
@@ -390,7 +411,7 @@ final class Frame
       $closeConnection = false;
       $keepAliveSeen = false;
 
-      foreach (explode("\r\n", $header_raw) as $line) {
+      foreach ($parts as $line) {
          if ($line === '') {
             continue;
          }
@@ -539,7 +560,9 @@ final class Frame
       //   block carrying anything unrecognized is simply never stored — which
       //   costs nothing, because such a block is near-unique per user and was
       //   never the byte-identical repeat the memo exists for.
-      $memoizable = $testing === false && strlen($header_raw) <= 2048;
+      $memoizable = $testing === false
+         && strlen($header_raw) <= 2048
+         && $lines <= Decoder_::MEMOIZED;
       if ($memoizable) {
          foreach ($fields as $name => $ignored) {
             if (isSet(Decoder_::MEMOIZABLE[$name]) === false) {
@@ -555,7 +578,7 @@ final class Frame
          }
          self::$scans[$header_raw] = [$fields, $contentLength, $chunked,
             $expectContinue, $contentType, $hostValue, $closeConnection,
-            $keepAliveSeen];
+            $keepAliveSeen, $lines];
       }
       }
 
