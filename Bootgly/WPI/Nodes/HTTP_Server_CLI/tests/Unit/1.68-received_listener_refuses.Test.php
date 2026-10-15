@@ -90,6 +90,7 @@ return new Test(
       $OldDecoder = TCP_Server_CLI::$Decoder;
       $OldEncoder = TCP_Server_CLI::$Encoder;
       $oldIdle = TCP_Server_CLI::$connectionIdleTimeout;
+      $oldContext = isset(TCP_Server_CLI::$context) ? TCP_Server_CLI::$context : null;
       $OldRequest = isset(HTTP_Server_CLI::$Request) ? HTTP_Server_CLI::$Request : null;
       $OldResponse = isset(HTTP_Server_CLI::$Response) ? HTTP_Server_CLI::$Response : null;
       $OldRouter = isset(HTTP_Server_CLI::$Router) ? HTTP_Server_CLI::$Router : null;
@@ -162,6 +163,9 @@ return new Test(
 
       try {
          TCP_Server_CLI::$connectionIdleTimeout = 0;
+         // ! Plain connections: a TLS context an earlier suite left behind
+         //   would make every socket pair start a handshake and close
+         TCP_Server_CLI::$context = [];
          TCP_Server_CLI::$Decoder = new Decoder_;
          HTTP_Server_CLI::$enableHTTP2 = true;
          SAPI::$Environment = Environments::Test;
@@ -745,6 +749,9 @@ return new Test(
          TCP_Server_CLI::$Decoder = $OldDecoder;
          TCP_Server_CLI::$Encoder = $OldEncoder;
          TCP_Server_CLI::$connectionIdleTimeout = $oldIdle;
+         if ($oldContext !== null) {
+            TCP_Server_CLI::$context = $oldContext;
+         }
          if ($oldAlarm > 0) {
             pcntl_alarm($oldAlarm);
          }

@@ -94,10 +94,13 @@ return static function (Closure $Work): mixed {
       $Connection->writes = 0;
       // ! An established connection: a refused request is answered on it
       $Connection->status = Connections::STATUS_ESTABLISHED;
-      // ! Its identity, initialized in the class scope (readonly)
-      (function () use ($Socket): void {
+      // ! Its identity, initialized in the class scope (readonly) — bound
+      //   through a variable: the Native coverage compiler cannot instrument
+      //   an immediately invoked closure (ACI BUGS TCOV-9)
+      $Identify = function () use ($Socket): void {
          $this->id = (int) $Socket;
-      })->call($Connection);
+      };
+      $Identify->call($Connection);
 
       $Encode = static function (string $raw) use ($Connection): string {
          $Package = new class($Connection) extends TCPPackages {
