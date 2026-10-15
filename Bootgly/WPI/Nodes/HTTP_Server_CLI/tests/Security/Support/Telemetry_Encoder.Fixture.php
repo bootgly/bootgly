@@ -4,6 +4,7 @@ use Bootgly\ABI\Events\Emitter;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\API\Workables\Server\Middlewares;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCPPackages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
@@ -91,6 +92,12 @@ return static function (Closure $Work): mixed {
       $Connection->port = 12345;
       $Connection->encrypted = false;
       $Connection->writes = 0;
+      // ! An established connection: a refused request is answered on it
+      $Connection->status = Connections::STATUS_ESTABLISHED;
+      // ! Its identity, initialized in the class scope (readonly)
+      (function () use ($Socket): void {
+         $this->id = (int) $Socket;
+      })->call($Connection);
 
       $Encode = static function (string $raw) use ($Connection): string {
          $Package = new class($Connection) extends TCPPackages {
@@ -187,6 +194,9 @@ return static function (Closure $Work): mixed {
          SAPI::$Middlewares = $OldMiddlewares;
       }
 
-      @fclose($Socket);
+      // ? A refused request (a throwing Received listener) closes it first
+      if (is_resource($Socket)) {
+         fclose($Socket);
+      }
    }
 };

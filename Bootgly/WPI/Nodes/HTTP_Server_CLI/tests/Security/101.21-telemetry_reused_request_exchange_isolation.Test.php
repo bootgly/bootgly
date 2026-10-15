@@ -1,4 +1,12 @@
 <?php
+/*
+ * --------------------------------------------------------------------------
+ * Bootgly PHP Framework
+ * Developed by Rodrigo Vieira (@rodrigoslayertech)
+ * Copyright (c) 2023-present Bootgly and contributors
+ * Licensed under MIT
+ * --------------------------------------------------------------------------
+ */
 
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\ACI\Observability;
@@ -16,14 +24,19 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
 
 
 /**
- * L4 reused-Request Exchange isolation regression.
+ * L4 reused-Request Exchange isolation regression, on the in-order wire.
  *
- * Request A is admitted through a Telemetry-enabled Emitter and suspends with
- * an active deferred generation. Its callback then replaces the global Emitter
- * with an empty one before request B reaches the same worker. B therefore has
- * no public Received listener, but still reuses Server::$Request. It must enter
- * without inheriting A, lazily promote only when SSE is mounted, complete that
- * fresh Exchange as 200, and leave A active until its explicit 202 release.
+ * Request A is admitted through a Telemetry-enabled Emitter and parks with an
+ * active deferred generation. Its work then replaces the global Emitter with
+ * an empty one, and request B is pipelined on A's connection while A is
+ * parked. HTTP/1.1 answers in request order (RFC 9112 §9.3.2; H-HSC-6,
+ * ENC-3): B waits undecoded behind A's park, so the connection stays silent
+ * until A's explicit 202 release, and then exactly two answers leave — A's
+ * 202 first, B's after it. B has no public Received listener but still
+ * reuses Server::$Request, the live object whose alias A retained. It must
+ * enter without inheriting A's Exchange, lazily promote only when SSE is
+ * mounted, and complete that fresh Exchange as 200 — after A's terminal 202,
+ * never while A is active.
  */
 $GatePair = stream_socket_pair(
    STREAM_PF_UNIX,
@@ -44,9 +57,10 @@ $Probe = new class {
    public mixed $ConnectionA = null;
    public string $error = '';
    public string $marker = '';
-   public string $earlyA = '';
-   public string $wireA = '';
-   public string $wireB = '';
+   /** What the connection wrote while A was parked and B pipelined behind it. */
+   public string $early = '';
+   /** What the connection wrote once A was released. */
+   public string $wire = '';
    public int $requestA = 0;
    public int $requestB = 0;
    public bool $unobservedB = false;
@@ -98,21 +112,56 @@ $ReadLine = static function ($Connection): string {
    return $line;
 };
 
-$Read = static function ($Connection, float $grace = 0.0): string {
+/**
+ * Split a wire into its complete answers — a head with Content-Length takes
+ * exactly that many body bytes; a head without one (B's HEAD) has no body —
+ * and whatever follows the last complete one.
+ *
+ * @return array{0:list<array{head:string,body:string}>,1:string}
+ */
+$Split = static function (string $wire): array {
+   $answers = [];
+   $offset = 0;
+
+   while (true) {
+      $separator = strpos($wire, "\r\n\r\n", $offset);
+      if ($separator === false) {
+         break;
+      }
+      $head = substr($wire, $offset, $separator + 4 - $offset);
+      $matches = [];
+      $length = preg_match('/\r\nContent-Length:[ \t]*(\d+)[ \t]*\r\n/i', $head, $matches) === 1
+         ? (int) $matches[1]
+         : 0;
+      if (strlen($wire) < $separator + 4 + $length) {
+         break;
+      }
+      $answers[] = ['head' => $head, 'body' => substr($wire, $separator + 4, $length)];
+      $offset = $separator + 4 + $length;
+   }
+
+   return [$answers, substr($wire, $offset)];
+};
+
+/**
+ * Read until `$answers` complete answers arrived, then `$window` seconds more
+ * — anything written in that window is kept too. Bounded at 5 s.
+ */
+$Read = static function ($Connection, int $answers, float $window) use ($Split): string {
    if (is_resource($Connection) === false) {
       return '';
    }
 
    stream_set_blocking($Connection, false);
    $wire = '';
-   $completeAt = null;
+   $completeAt = $answers === 0 ? microtime(true) : null;
    $deadline = microtime(true) + 5.0;
 
    while (microtime(true) < $deadline) {
       $read = [$Connection];
       $write = null;
       $except = null;
-      $ready = stream_select($read, $write, $except, 0, 50000);
+      $ready = stream_select($read, $write, $except, 0, 20000);
       if ($ready === false) {
          break;
       }
@@ -129,25 +178,10 @@ $Read = static function ($Connection, float $grace = 0.0): string {
          }
       }
 
-      if ($completeAt === null) {
-         $separator = strpos($wire, "\r\n\r\n");
-         if ($separator !== false) {
-            $matches = [];
-            $finite = preg_match(
-               '/\r\nContent-Length:[ \t]*(\d+)[ \t]*\r\n/i',
-               substr($wire, 0, $separator + 2),
-               $matches,
-            ) === 1;
-            if (
-               $finite === false
-               || strlen($wire) >= $separator + 4 + (int) $matches[1]
-            ) {
-               $completeAt = microtime(true);
-            }
-         }
+      if ($completeAt === null && count($Split($wire)[0]) >= $answers) {
+         $completeAt = microtime(true);
       }
-
-      if ($completeAt !== null && microtime(true) - $completeAt >= $grace) {
+      if ($completeAt !== null && microtime(true) - $completeAt >= $window) {
          break;
       }
    }
@@ -178,7 +212,7 @@ $Snapshot = static function (Observability $Observability): array {
 };
 
 return new Test(
-   description: 'A reused Request must not carry an active observed Exchange into an unobserved SSE',
+   description: 'A request pipelined behind a parked deferral waits for its answer, then owns an unobserved SSE Exchange',
    Separator: new Separator(line: true),
 
    requests: [
@@ -219,7 +253,7 @@ return new Test(
             );
 
             // ! The marker is written only after A replaced the worker-global
-            //   Emitter and suspended with its original Exchange still active.
+            //   Emitter and parked with its original Exchange still active.
             $Probe->marker = $ReadLine($gateTest);
             if ($Probe->marker !== "L4-101.21-A-READY\n") {
                throw new RuntimeException(
@@ -228,8 +262,8 @@ return new Test(
                );
             }
 
-            // ! Pipeline B onto A's still-open transport. The connection's
-            //   decoded Request is the exact live object whose alias A retained.
+            // ! Pipeline B onto A's connection while A is parked: B waits
+            //   behind A, then reuses the connection's live Request object.
             $Send(
                $ConnectionA,
                "HEAD /l4/reused-exchange/b HTTP/1.1\r\n"
@@ -237,22 +271,16 @@ return new Test(
                   . "X-Bootgly-Test: {$testIndex}\r\n\r\n",
                'B',
             );
-            $Probe->wireB = $Read($ConnectionA);
 
-            // ! A must remain completely silent until its own release.
-            stream_set_blocking($ConnectionA, false);
-            $read = [$ConnectionA];
-            $write = null;
-            $except = null;
-            if (stream_select($read, $write, $except, 0, 200000) === 1) {
-               $Probe->earlyA = (string) fread($ConnectionA, 8192);
-            }
+            // @ Nothing may be answered while A is parked: neither A nor B
+            $Probe->early = $Read($ConnectionA, 0, 0.2);
 
+            // @ Release A, then read both answers — and anything after them
             if (fwrite($gateTest, 'A') !== 1) {
                throw new RuntimeException('L4-101.21 could not release request A.');
             }
             fclose($gateTest);
-            $Probe->wireA = $Probe->earlyA . $Read($ConnectionA, 0.05);
+            $Probe->wire = $Read($ConnectionA, 2, 0.2);
             fclose($ConnectionA);
             $Probe->ConnectionA = null;
          }
@@ -357,7 +385,7 @@ return new Test(
          $Probe->lazyBAtEntry = Exchange::fetch($Request) === null;
 
          // @ SSE is B's first lifecycle-sensitive operation. Mounting it must
-         //   promote a token for B without inheriting suspended request A.
+         //   promote a token for B without inheriting request A.
          $Response(code: 409, body: 'L4-101.21-B-INHERITED');
          $SSE = $Response->SSE;
          $ExchangeB = Exchange::fetch($Response);
@@ -378,8 +406,8 @@ return new Test(
             ];
          });
 
-         // ! The fallback makes the vulnerable boundary observable on wire:
-         //   inheriting A's active scheduler lease rejects this SSE as a 409.
+         // ! The fallback makes an inherited lifecycle observable on wire:
+         //   inheriting A's scheduler lease rejects this SSE as a 409.
          $SSE->heartbeat = 0;
          $SSE->open();
          $Probe->closedB = $SSE->closed;
@@ -424,7 +452,7 @@ return new Test(
       }, GET);
    },
 
-   test: static function (array $responses) use ($Probe): bool|string {
+   test: static function (array $responses) use ($Probe, $Split): bool|string {
       if (
          count($responses) !== 2
          || str_contains($responses[0] ?? '', 'L4-101.21-SETUP') === false
@@ -439,23 +467,27 @@ return new Test(
       if ($Probe->marker !== "L4-101.21-A-READY\n") {
          $failures['barrier'] = $Probe->marker;
       }
-      if ($Probe->earlyA !== '') {
-         $failures['early_a'] = $Probe->earlyA;
+      // ? In request order: nothing leaves while A is parked — B waits for it
+      if ($Probe->early !== '') {
+         $failures['early'] = $Probe->early;
       }
+      // ? Then exactly two answers: A's 202, then B's own SSE head (HEAD: no
+      //   body), and nothing after them
+      [$answers, $rest] = $Split($Probe->wire);
+      $first = $answers[0] ?? ['head' => '', 'body' => ''];
+      $second = $answers[1] ?? ['head' => '', 'body' => ''];
       if (
-         substr_count($Probe->wireB, 'HTTP/1.1 ') !== 1
-         || str_contains($Probe->wireB, 'HTTP/1.1 200 OK') === false
-         || str_contains($Probe->wireB, 'Content-Type: text/event-stream') === false
-         || str_contains($Probe->wireB, 'L4-101.21-B-INHERITED')
+         count($answers) !== 2
+         || $rest !== ''
+         || substr_count($Probe->wire, 'HTTP/1.1 ') !== 2
+         || str_starts_with($first['head'], "HTTP/1.1 202 Accepted\r\n") === false
+         || $first['body'] !== 'L4-101.21-A-202'
+         || str_starts_with($second['head'], "HTTP/1.1 200 OK\r\n") === false
+         || str_contains($second['head'], "\r\nContent-Type: text/event-stream\r\n") === false
+         || $second['body'] !== ''
+         || str_contains($Probe->wire, 'L4-101.21-B-INHERITED')
       ) {
-         $failures['wire_b'] = $Probe->wireB;
-      }
-      if (
-         substr_count($Probe->wireA, 'HTTP/1.1 ') !== 1
-         || str_contains($Probe->wireA, 'HTTP/1.1 202 Accepted') === false
-         || str_contains($Probe->wireA, 'L4-101.21-A-202') === false
-      ) {
-         $failures['wire_a'] = $Probe->wireA;
+         $failures['wire'] = $Probe->wire;
       }
 
       $wire = $responses[1] ?? '';
@@ -465,21 +497,23 @@ return new Test(
       $evidence = str_starts_with($body, $prefix)
          ? json_decode(substr($body, strlen($prefix)), true)
          : null;
+      // ! B runs only once A's Exchange is terminal (A's 202 observed first),
+      //   and still owns a fresh, unobserved Exchange of its own
       $expected = [
          'same_request' => true,
          'unobserved_b' => true,
          'lazy_b_at_entry' => true,
          'distinct_b' => true,
-         'active_a_at_b' => true,
+         'active_a_at_b' => false,
          'active_b_at_b' => true,
          'closed_b' => true,
          'terminal_b_after_open' => true,
-         'active_a_after_b' => true,
+         'active_a_after_b' => false,
          'terminal_a_final' => true,
          'terminal_b_final' => true,
          'terminals' => [
-            ['owner' => 'B', 'exchange' => true, 'code' => 200],
             ['owner' => 'A', 'exchange' => true, 'code' => 202],
+            ['owner' => 'B', 'exchange' => true, 'code' => 200],
          ],
          'metrics' => [
             'requests_total' => 1,
@@ -495,9 +529,9 @@ return new Test(
       }
 
       if ($failures !== []) {
-         return 'L4-101.21 CONFIRMED: an unobserved request reused A\'s active '
-            . 'Exchange instead of owning an independent SSE lifecycle. Evidence: '
-            . json_encode($failures);
+         $evidence = json_encode($failures);
+
+         return "L4-101.21 CONFIRMED: request B, pipelined behind parked A, was answered out of request order or did not own an independent SSE lifecycle. Evidence: {$evidence}";
       }
 
       return true;

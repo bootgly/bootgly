@@ -10,6 +10,7 @@
 
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 
+
 use function explode;
 use function implode;
 use function is_array;
@@ -20,7 +21,6 @@ use function stripos;
 use function strlen;
 use function strncmp;
 use function strpos;
-use function strtok;
 use function strtolower;
 use function substr;
 use Generator;
@@ -37,6 +37,8 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCPPackages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\ACME_Client\Challenges;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Cache;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Bodies\Refusal;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_HTTP2;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Catcher;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Challenge;
@@ -46,6 +48,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Events as RequestEvents;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Exchange;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Telemetry\Admissions;
+
 
 class Encoder_ extends Encoders
 {
@@ -420,7 +423,44 @@ class Encoder_ extends Encoders
             //   routing catcher. A listener failure must still close the
             //   admitted observational token exactly once.
             $Exchange->finish(null);
-            throw $Throwable;
+            // ? A pre-routing listener refused the request: answer it and close,
+            //   never let its Throwable reach the reactor — the worker would
+            //   die with every connection it serves. A budget refusal is
+            //   answered unavailable and reported nowhere.
+            $refused = $Throwable instanceof Refusal;
+            if ($refused === false) {
+               Throwables::notify($Throwable, [
+                  'interface' => 'WPI',
+                  'phase' => 'Received',
+                  'method' => $Request->method,
+                  'URI' => explode('?', $Request->URI, 2)[0],
+                  'peer' => $Request->peer,
+               ]);
+            }
+            // ! The refused request's uploads, body and head go with it — its
+            //   budget charge is already released
+            if ($Request->hasFiles) {
+               $Request->clean();
+            }
+            $Request->scrub();
+            $Request->shed();
+            // ?: An HTTP/2 stream: refuse that stream alone — the connection and
+            //   its other streams live. Its HEADERS leave now, with the pending
+            //   control frames: they are not flow-controlled
+            $H2 = $Packages->decoded;
+            if ($Request->stream !== 0 && $H2 instanceof Decoder_HTTP2) {
+               $H2->deny($Request->stream, $refused ? 503 : 500);
+               $raw = $H2->outbox;
+               $H2->outbox = '';
+               $length = strlen($raw);
+
+               return $raw;
+            }
+            $Packages->reject($refused
+               ? "HTTP/1.1 503 Service Unavailable\r\n\r\n"
+               : "HTTP/1.1 500 Internal Server Error\r\n\r\n");
+
+            return '';
          }
       }
 
@@ -677,11 +717,16 @@ class Encoder_ extends Encoders
          //   throwable — and nothing between here and Select::loop catches,
          //   so it would kill the worker. Degrade to a bare 500 instead: a
          //   failing Catcher costs one response, never the whole worker.
+         // ? A budget refusal (`defer()`) is the server's capacity, not an
+         //   application error: answered unavailable, nothing reported
+         $refused = $Throwable instanceof Refusal;
          try {
-            $Errored = Catcher::respond($Request, Server::$Response, $Throwable);
+            $Errored = $refused
+               ? Catcher::respond($Request, Server::$Response, code: 503)
+               : Catcher::respond($Request, Server::$Response, $Throwable);
          }
          catch (Throwable) {
-            $Errored = new Response(code: 500, body: '');
+            $Errored = new Response(code: $refused ? 503 : 500, body: '');
          }
          unset($Response);
          $Response = $Errored;
@@ -733,7 +778,7 @@ class Encoder_ extends Encoders
                   'interface' => 'WPI',
                   'phase' => 'Session',
                   'method' => $Request->method,
-                  'URI' => strtok($Request->URI, '?'),
+                  'URI' => explode('?', $Request->URI, 2)[0],
                   'peer' => $Request->peer,
                ]);
                if ($Request->hasFiles) {
@@ -915,7 +960,7 @@ class Encoder_ extends Encoders
                   'interface' => 'WPI',
                   'phase' => 'Handled',
                   'method' => $Request->method,
-                  'URI' => strtok($Request->URI, '?'),
+                  'URI' => explode('?', $Request->URI, 2)[0],
                   'peer' => $Request->peer,
                ]);
             }
@@ -942,11 +987,16 @@ class Encoder_ extends Encoders
                self::$handled = [];
                self::$mutated = false;
 
+               // ? A budget refusal (a listener's `defer()`) is the server's capacity,
+               //   not an application error: answered unavailable, nothing reported
+               $refused = $Throwable instanceof Refusal;
                try {
-                  $Errored = Catcher::respond($Request, Server::$Response, $Throwable);
+                  $Errored = $refused
+                     ? Catcher::respond($Request, Server::$Response, code: 503)
+                     : Catcher::respond($Request, Server::$Response, $Throwable);
                }
                catch (Throwable) {
-                  $Errored = new Response(code: 500, body: '');
+                  $Errored = new Response(code: $refused ? 503 : 500, body: '');
                }
 
                // Connection management ran before Handled. The fresh error

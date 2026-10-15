@@ -62,7 +62,6 @@ use function uasort;
 use function unlink;
 use function usort;
 use JsonException;
-use RuntimeException;
 use Throwable;
 
 use const Bootgly\WPI;
@@ -75,6 +74,7 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Modules\HTTP2;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Bodies;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Bodies\Refusal;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Chunked;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading\Downloads;
@@ -95,6 +95,13 @@ class Request
     * Header and Body and its ledger token (`capture()`). Measured, rounded up.
     */
    private const int SNAPSHOT = 2_048;
+   /**
+    * What `Response::defer()` builds around a parked snapshot — the Response
+    * and Route clones, the Fiber and its VM stack, the Cancellation, the
+    * Exchange alias and observers, the reactor binding and the deadline
+    * timer. Measured on a parked long-poll, rounded up.
+    */
+   private const int GENERATION = 36_864;
    /** What decoded Basic credentials cost beyond their strings (`Basic`). */
    private const int CREDENTIALS = 128;
    /**
@@ -834,7 +841,7 @@ class Request
     * it, measured: what is already parsed when it is taken, and what the
     * deferred work parses later (body fields, cookies, query vars, refused
     * languages, credentials) when that is built — and released by `clean()`. A snapshot, or a
-    * later parse, that does not fit throws `RuntimeException`.
+    * later parse, that does not fit throws `Decoders\Bodies\Refusal`.
     */
    public function capture (): self
    {
@@ -889,7 +896,7 @@ class Request
          $Bodies->hold($Captured->weigh()) === false
          || $Bodies->reserve($held, $footprint) === false
       ) {
-         throw new RuntimeException(Bodies::REFUSAL);
+         throw new Refusal(Bodies::REFUSAL);
       }
       $Captured->Bodies = $Bodies;
       $Captured->Header->Cookies->Bodies = $Bodies;
@@ -901,27 +908,28 @@ class Request
     * Charge a deferred snapshot `$bytes` more of what it parsed from its head
     * after it was taken; refuse the parse when they do not fit.
     *
-    * @throws RuntimeException
+    * @throws Refusal
     */
    private function charge (int $bytes): void
    {
       // ?
       if ($this->Bodies?->grow($bytes) === false) {
-         throw new RuntimeException(Bodies::REFUSAL);
+         throw new Refusal(Bodies::REFUSAL);
       }
    }
 
    /**
     * Weigh what this deferred snapshot keeps when it is taken: its own
-    * objects, its copy of the HTTP/1 head and URI (an HTTP/2 stream keeps its
-    * head charged itself) and everything already parsed from the request —
-    * routed path, query and its vars, refused languages, body fields, file
-    * records and credentials — at their allocator footprint (`Buffers`).
+    * objects and the generation parked around it, its copy of the HTTP/1
+    * head and URI (an HTTP/2 stream keeps its head charged itself) and
+    * everything already parsed from the request — routed path, query and its
+    * vars, refused languages, body fields, file records and credentials — at
+    * their allocator footprint (`Buffers`).
     */
    private function weigh (): int
    {
-      // ! The snapshot's own objects
-      $bytes = self::SNAPSHOT;
+      // ! The snapshot's own objects and its parked generation
+      $bytes = self::SNAPSHOT + self::GENERATION;
 
       // @ The head and the URI (HTTP/1 only)
       if ($this->stream === 0) {
@@ -2027,7 +2035,7 @@ class Request
             try {
                $this->charge(Buffers::weigh(strlen($username)) + Buffers::weigh(strlen($password)) + self::CREDENTIALS);
             }
-            catch (RuntimeException $Refusal) {
+            catch (Refusal $Refusal) {
                $this->authParsed = false;
 
                throw $Refusal;
@@ -2156,7 +2164,7 @@ class Request
             try {
                $this->charge(Buffers::tally($exclusions) - Buffers::tally($excluded ?? []));
             }
-            catch (RuntimeException $Refusal) {
+            catch (Refusal $Refusal) {
                // ! A refused parse keeps the refusals parsed before it
                $this->exclusions = $excluded ?? [];
 

@@ -16,13 +16,19 @@ use function usleep;
 use InvalidArgumentException;
 use RuntimeException;
 
+use Bootgly\ABI\Events\Emission;
+use Bootgly\ABI\Events\Emitter;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Bodies;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Bodies\Refusal;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_Testing;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 
@@ -61,9 +67,12 @@ return new Suite(
       $holdHooks = 0;
       $capSent = 'pending';
       $capHooks = 0;
+      // ! ENC-12 over h2: the Received gate is armed once, by the case that
+      //   needs it (the last one)
+      $armed = false;
       $HTTP_Server_CLI->on(
          Events::RequestReceived,
-         function ($Request, Response $Response) use (&$hooked, &$holdHooks, &$capSent, &$capHooks): Response {
+         function ($Request, Response $Response) use (&$hooked, &$holdHooks, &$capSent, &$capHooks, &$armed): Response {
             if ($Request->URI === '/h2-s4-large') {
                return $Response->upload('statics/h2-s4-large.bin', close: false);
             }
@@ -193,6 +202,43 @@ return new Suite(
                return $Response->send("{$hooked};count={$holdHooks}");
             }
 
+            // @ ENC-12 over h2: a `Request\Events::Received` listener refuses
+            //   `/received-refuse` (an application error → 500) and
+            //   `/received-refuse-budget` (a budget `Refusal` → 503). Armed on
+            //   demand — a Received listener puts every later request through
+            //   its lifecycle, so the cases before 6.12 run without one — and
+            //   the arming route picks the encoder that serves the requests
+            //   after it (both carry the refusal), answering its class
+            if ($Request->URI === '/received-arm/production' || $Request->URI === '/received-arm/testing') {
+               if ($armed === false) {
+                  $armed = true;
+                  Emitter::$Instance->listen(
+                     Request\Events::Received,
+                     static function (Emission $Emission): void {
+                        $Received = $Emission->payload[0] ?? null;
+                        if ($Received instanceof Request === false) {
+                           return;
+                        }
+
+                        if ($Received->URI === '/received-refuse') {
+                           throw new RuntimeException('HTTP2 6.12: the Received gate refused the stream');
+                        }
+                        if ($Received->URI === '/received-refuse-budget') {
+                           throw new Refusal(Bodies::REFUSAL);
+                        }
+                     }
+                  );
+               }
+
+               HTTP_Server_CLI::$Encoder = $Request->URI === '/received-arm/production'
+                  ? new Encoder_
+                  : new Encoder_Testing;
+               $Encoder = HTTP_Server_CLI::$Encoder;
+               $class = $Encoder::class;
+
+               return $Response->send("armed:{$class}");
+            }
+
             return $Response->send("method={$Request->method};uri={$Request->URI};protocol={$Request->protocol};body={$Request->input}");
          }
       );
@@ -252,6 +298,8 @@ return new Suite(
       '6.8-sse_drain_deadline',
       '6.9-sse_stall_progress',
       '6.10-code_1xx_rejected',
-      '6.11-json_refusal_stream'
+      '6.11-json_refusal_stream',
+      // # 1.0.x (ENC-12): a throwing Received listener refuses its h2 stream alone, never the connection
+      '6.12-received_refusal_stream'
    ]
 );

@@ -37,10 +37,11 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
  * charged to no ledger, so parked deferrals could hold any amount of worker
  * memory; and the live per-connection Request kept its own copy of the head
  * until the peer's next request. Now `capture()` charges the snapshot's price
- * (`Request::weigh()`: its objects, head, URI and what was already parsed —
- * multipart text fields included) to the worker budget's Inbound share, what
- * the work parses later (its cookies, query vars) is charged when it is built
- * (`Decoders\Bodies::grow()`), and either is refused when it does not fit;
+ * (`Request::weigh()`: its objects and the generation parked around it, head,
+ * URI and what was already parsed — multipart text fields included) to the
+ * worker budget's Inbound share, what the work parses later (its cookies,
+ * query vars) is charged when it is built (`Decoders\Bodies::grow()`), and
+ * either is refused — answered `503`, never reported — when it does not fit;
  * the encoder sheds the live head as soon as the deferral is scheduled, and a
  * finished Fiber drops the snapshot before it parks in the reuse pool.
  *
@@ -57,12 +58,15 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
  *   ledger by exactly `Request::weigh()` of its request (read through
  *   reflection on the decoded request); a parked snapshot then holds that plus
  *   its parsed jar (`Buffers::tally()`); exactly as many park as fit the share
- *   at that charge, every other one is answered `500` at once (refused at the
- *   cookie parse — the current mapping, tracked as ENC-8); the ledger holds
- *   the parked snapshots, `/w` wakes every one, each answers with its jar and
- *   the ledger returns to its base. Measured (PHP 8.5, 2026-10-12): capture
- *   39,817 B, jar 215,485 B, so 255,302 B per parked snapshot — 32 parked
- *   (8,169,664 B held), 28 refused. HEAD b98692a0 parked all 60 with the
+ *   at that charge, every other one is answered `503` at once (refused at the
+ *   cookie parse: the worker's capacity, not an application error — ENC-8);
+ *   the ledger holds the parked snapshots, `/w` wakes every one, each answers
+ *   with its jar and the ledger returns to its base. Measured (PHP 8.5,
+ *   2026-10-13): capture 76,681 B (the generation parked around the snapshot
+ *   included, H-HSC-6), jar 215,485 B, so 292,166 B per parked snapshot — 28
+ *   parked (8,180,648 B held), 32 refused `503`. HEAD 658e986b charged no
+ *   generation and answered a refusal `500`: capture 39,817 B, 32 parked
+ *   (8,169,664 B held), 28 refused `500`. HEAD b98692a0 parked all 60 with the
  *   ledger at 0 (no `weigh()`, no `tally()`).
  * - D2 live head after a deferral: 200 keep-alive peers each send one head of
  *   exactly 100 field lines and 16,380 bytes to a route whose deferred work
@@ -97,10 +101,10 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
  *   price, and every later upload is refused `503` by the multipart decoder
  *   while it parses, because the parked snapshots already hold the share.
  *   `/w` wakes every parked one, each answers with its 9 fields, and the
- *   ledger returns to its base. Measured (PHP 8.5, 2026-10-12): 18,878,256 B
+ *   ledger returns to its base. Measured (PHP 8.5, 2026-10-13): 18,915,120 B
  *   per snapshot (fields 18,875,480 B — each 1 MB string is a whole 2 MiB
  *   chunk), so 1 parked (the GET), 15 POSTs refused 503, worker memory
- *   3.1 → 12.3 → 3.2 MB. HEAD b98692a0 charged nothing (ledger 0): 13
+ *   3.2 → 12.4 → 3.3 MB. HEAD b98692a0 charged nothing (ledger 0): 13
  *   deferrals parked, the 14th upload killed the worker (`Allowed memory
  *   size` in `Decoder_Downloading`) and the parked peers never answered.
  * - D5 deferred work parses its body: default budget. 12 peers, one at a
@@ -112,11 +116,11 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
  *   (`Buffers::tally()` — predicted here by parsing the same bytes); the work
  *   records the ledgers right before its parse, so a peer must park exactly
  *   when that charge fits the Inbound share and the budget, and be answered
- *   `500` (refused inside the work) otherwise. `/w` wakes every parked one,
+ *   `503` (refused inside the work) otherwise. `/w` wakes every parked one,
  *   each answers with its 990 fields and the ledger returns to its base.
- *   Measured (PHP 8.5, 2026-10-12): 18,801,220 B per parse (either body),
- *   capture 142,747 B (form) / 302,498 B (JSON), so 1 parked (18,943,967 B
- *   held), 11 refused 500, worker memory 3.2 → 19.7 → 3.3 MB, no refork.
+ *   Measured (PHP 8.5, 2026-10-13): 18,801,220 B per parse (either body),
+ *   capture 179,611 B (form) / 339,362 B (JSON), so 1 parked (18,980,831 B
+ *   held), 11 refused 503, worker memory 3.2 → 19.7 → 3.3 MB, no refork.
  *   HEAD b98692a0 charged no parse (the getter decoded a second copy through
  *   `input()`): every POST parked, worker memory +32.7 MB per POST, the
  *   worker died (`Allowed memory size`) on every 4th POST — 3 reforks.
@@ -233,10 +237,10 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
  *   whose deferred work reads `$Snapshot->fields` and parks. The parse is
  *   charged its `Buffers::tally()` — which must cover what the same decode
  *   really spends, measured here — so a peer must park exactly when that
- *   charge fits, and be answered `500` otherwise; `/w` wakes every parked
+ *   charge fits, and be answered `503` otherwise; `/w` wakes every parked
  *   one, each answers with its 1,000 objects, the ledger returns to its
- *   base. Measured (PHP 8.5, 2026-10-12): decode 8,268,536 B, tally
- *   8,333,820 B, so 3 parked (25,429,605 B held), 21 refused 500, worker
+ *   base. Measured (PHP 8.5, 2026-10-13): decode 8,268,536 B, tally
+ *   8,333,820 B, so 3 parked (25,540,197 B held), 21 refused 503, worker
  *   memory 3.2 → 28.8 → 3.4 MB. With `tally()` sizing those objects as maps
  *   (the R4 tree) each parse was charged 1,612,820 B: the parked snapshots
  *   held five times their charge and the worker died (`Allowed memory
@@ -445,7 +449,7 @@ if (
          $record = $row === 'D1';
 
          // @ A snapshot refused at capture throws out of defer(), one refused
-         //   at the cookie parse throws inside the work: both answer 500
+         //   at the cookie parse throws inside the work: both answer 503
          $Response->defer(static function (Response $Response, Request $Snapshot) use ($Inbound, $Park, $Tally, $price, $before, $record): void {
             if ($record) {
                $GLOBALS['hhsc5_captures'][] = [$price, $Inbound() - $before];
@@ -494,7 +498,7 @@ if (
          $peer = (int) $Request->Header->get('X-Peer');
          $before = $Inbound();
 
-         // @ A parse refused inside the work answers 500
+         // @ A parse refused inside the work answers 503
          $Response->defer(static function (Response $Response, Request $Snapshot) use ($Inbound, $Park, $Tally, $peer, $before): void {
             // ! The ledgers right before the parse: Inbound, the whole budget
             //   and what the capture moved
@@ -2581,13 +2585,13 @@ return new Test(
                   && $evidence['holds'] === [$charge => $parks],
                'parked exactly what fits the 8 MiB Inbound share at that charge' => $parks >= 1
                   && $evidence['parked'] === $parks,
-               'every other peer refused with 500 at once' => $refused >= 1
-                  && $evidence['immediate'] === ['500' => $refused],
+               'every other peer refused with 503 at once' => $refused >= 1
+                  && $evidence['immediate'] === ['503' => $refused],
                'the Inbound ledger held exactly the parked snapshots' => $evidence['held'] === $base + $parks * $charge
                   && $evidence['held'] > $base,
                'every parked deferral woke and answered with its jar' => $evidence['wake'] === "200 woken {$parks}"
                   && ($evidence['answers'][$answer] ?? 0) === $parks
-                  && ($evidence['answers']['500'] ?? 0) === $refused
+                  && ($evidence['answers']['503'] ?? 0) === $refused
                   && count($evidence['answers']) === 2,
                'the Inbound ledger returned to its base' => $evidence['released'] === $base
                   && $evidence['remaining'] === 0,
@@ -2694,14 +2698,14 @@ return new Test(
                $fits = is_array($attempt)
                   && $tally <= $share - (int) $attempt[0]
                   && $tally <= $budget - (int) $attempt[1];
-               $expected[$peer] = $fits ? 'parked' : '500';
+               $expected[$peer] = $fits ? 'parked' : '503';
                if ($fits) {
                   $last = $peer;
                }
             }
             $parked = array_keys($expected, 'parked', true);
             $parsing = array_filter(
-               array_keys($expected, '500', true),
+               array_keys($expected, '503', true),
                static fn (int $peer): bool => isSet($attempts[$peer]),
             );
             $charged = array_filter(
@@ -2723,7 +2727,7 @@ return new Test(
                   && $length < 130_000
                   && $predicted['form'] > 50 * $length
                   && $predicted['json'] > 50 * $length,
-               'every peer parked while its parse fit the Inbound share, every other one answered 500' => count($evidence['outcomes']) === $peers
+               'every peer parked while its parse fit the Inbound share, every other one answered 503' => count($evidence['outcomes']) === $peers
                   && $evidence['outcomes'] === $expected
                   && $woken >= 1
                   && $parsing !== [],
@@ -2734,7 +2738,7 @@ return new Test(
                   && $evidence['held'] === (int) $attempts[$last][0] + (int) $predicted[$evidence['kinds'][$last]],
                'every parked deferral woke and answered with its 990 fields' => $evidence['wake'] === "200 woken {$woken}"
                   && ($evidence['answers']['200 woke 990'] ?? 0) === $woken
-                  && ($evidence['answers']['500'] ?? 0) === $peers - $woken
+                  && ($evidence['answers']['503'] ?? 0) === $peers - $woken
                   && count($evidence['answers']) === 2,
                'the Inbound ledger returned to its base' => $evidence['released'] === $evidence['base']
                   && $evidence['remaining'] === 0,
@@ -2955,14 +2959,14 @@ return new Test(
                $fits = is_array($attempt)
                   && $predicted <= $share - (int) $attempt[0]
                   && $predicted <= $budget - (int) $attempt[1];
-               $expected[$peer] = $fits ? 'parked' : '500';
+               $expected[$peer] = $fits ? 'parked' : '503';
                if ($fits) {
                   $last = $peer;
                }
             }
             $parked = array_keys($expected, 'parked', true);
             $parsing = array_filter(
-               array_keys($expected, '500', true),
+               array_keys($expected, '503', true),
                static fn (int $peer): bool => isSet($attempts[$peer]),
             );
             $charged = array_filter(
@@ -2977,7 +2981,7 @@ return new Test(
                'shape: ~125 KB of D12\'s objects decode into 60x their bytes, and Buffers::tally() covers what the decode really spends' => $bytes === 125_001
                   && $real > 60 * $bytes
                   && $predicted >= $real,
-               'every peer parked while its parse fit the Inbound share, every other one answered 500' => count($evidence['outcomes']) === $peers
+               'every peer parked while its parse fit the Inbound share, every other one answered 503' => count($evidence['outcomes']) === $peers
                   && $evidence['outcomes'] === $expected
                   && $woken >= 1
                   && $parsing !== [],
@@ -2988,7 +2992,7 @@ return new Test(
                   && $evidence['held'] === (int) $attempts[$last][0] + $predicted,
                'every parked deferral woke and answered with its 1,000 objects' => $evidence['wake'] === "200 woken {$woken}"
                   && ($evidence['answers']['200 woke 1000'] ?? 0) === $woken
-                  && ($evidence['answers']['500'] ?? 0) === $peers - $woken
+                  && ($evidence['answers']['503'] ?? 0) === $peers - $woken
                   && count($evidence['answers']) === 2,
                'the Inbound ledger returned to its base' => $evidence['released'] === $evidence['base']
                   && $evidence['remaining'] === 0,
@@ -2996,11 +3000,11 @@ return new Test(
          },
       ];
       $descriptions = [
-         'D1' => 'D1: a snapshot is charged weigh() at capture and its cookies when parsed — what fits the 8 MiB Inbound share parks, the rest 500, the ledger returns to its base',
+         'D1' => 'D1: a snapshot is charged weigh() at capture and its cookies when parsed — what fits the 8 MiB Inbound share parks, the rest 503, the ledger returns to its base',
          'D2' => "D2: 200 idle keep-alive peers answered by a deferral hold under {$threshold} B each, no refork",
          'D3' => "D3: once rounds of heavy and cheap deferrals answered, no pooled Fiber keeps a snapshot — worker memory within {$drift} B of its base",
          'D4' => 'D4: a parked snapshot is charged its multipart text fields — what fits the Inbound share parks, the rest are refused, no refork',
-         'D5' => 'D5: a parked snapshot is charged what its work parses from a form or JSON body — what fits the Inbound share parks, the rest 500, no refork',
+         'D5' => 'D5: a parked snapshot is charged what its work parses from a form or JSON body — what fits the Inbound share parks, the rest 503, no refork',
          'D6' => 'D6: a JSON body that cannot decode within the bodies share is answered 413 before any handler, no refork; an ordinary one 200',
          'D7' => 'D7: 14 refused ~10 MB JSON bodies behind owed output — none held while their peers drain, each 413 then closed, no refork',
          'D8' => 'D8: a GET pipelined behind a refused JSON body never runs nor answers',
@@ -3008,7 +3012,7 @@ return new Test(
          'D10' => 'D10: a ~1 MB unterminated escape string — invalid JSON — is answered 200 with no fields within 2 s, without freezing the worker',
          'D11' => "D11: a ~1.4 MB NDJSON bulk body and a cut [[0],…] body are answered 200 with no fields, the worker peak under {$bounded} B more, no refork",
          'D12' => 'D12: a ~1.72 MB body of objects keyed 0-16, 63, 64 (~114 MB decoded) is answered 413 before any handler, no refork; one-based rows 200',
-         'D13' => 'D13: a parked snapshot is charged what its int-keyed JSON objects really decode into — what fits the Inbound share parks, the rest 500, no refork',
+         'D13' => 'D13: a parked snapshot is charged what its int-keyed JSON objects really decode into — what fits the Inbound share parks, the rest 503, no refork',
       ];
 
       // @@ Judge every row before asserting any, so the first failure

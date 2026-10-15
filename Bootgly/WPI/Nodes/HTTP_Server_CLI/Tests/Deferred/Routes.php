@@ -27,11 +27,13 @@ use function microtime;
 use function spl_object_id;
 use function stream_set_blocking;
 use function stream_socket_pair;
+use Fiber;
 use Generator;
 use RuntimeException;
 use WeakReference;
 
 use Bootgly\ACI\Events\Readiness;
+use Bootgly\WPI\Events\Cancellation;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\SSE;
@@ -56,6 +58,12 @@ final class Routes
     * @var null|WeakReference<Request>
     */
    private static null|WeakReference $Weak = null;
+   /**
+    * How many `/deferred/queue` deferrals are parked right now. Each one
+    * answers the count it saw once it parked, so the highest answer is the
+    * most that were ever parked at once.
+    */
+   private static int $parked = 0;
 
 
    /**
@@ -165,10 +173,10 @@ final class Routes
          });
       }, GET);
 
-      // @ The live per-connection Request is REUSED while this deferral parks:
-      //   a second request on the same keep-alive connection is decoded into
-      //   it and, once answered, its head is dropped — so a `use ($Request)`
-      //   describes no request at all
+      // @ The live per-connection Request a `use ($Request)` captured: its
+      //   head is already dropped while this deferral parks, and a second
+      //   request on the same keep-alive connection — held until this one
+      //   is answered — is decoded into that same object afterwards
       yield $Router->route('/deferred/reuse', static function (Request $Request, Response $Response) {
          return $Response->defer(static function (Response $Response, Request $Snapshot) use ($Request): void {
             self::park($Response, 0.6);
@@ -262,6 +270,60 @@ final class Routes
          );
 
          return $Response;
+      }, GET);
+
+      // @ A deferral that parks `ms` milliseconds (300 by default), then
+      //   answers its `tag` and how many of these deferrals were parked once
+      //   it parked — at most one per HTTP/1.1 connection: the requests
+      //   pipelined behind a parked deferral wait, undecoded
+      yield $Router->route('/deferred/queue', static function (Request $Request, Response $Response) {
+         return $Response->defer(static function (Response $Response, Request $Snapshot): void {
+            $Response->wait();
+            $tag = $Snapshot->queries['tag'] ?? '';
+            $milliseconds = (int) ($Snapshot->queries['ms'] ?? 300);
+            $depth = ++self::$parked;
+            try {
+               self::park($Response, $milliseconds / 1000);
+            }
+            finally {
+               self::$parked--;
+            }
+            $Response->JSON->send(['tag' => $tag, 'depth' => $depth]);
+         });
+      }, GET);
+      // @ The synchronous twin: answers its `tag` at once
+      yield $Router->route('/deferred/tag', static function (Request $Request, Response $Response) {
+         $Response->JSON->send(['tag' => $Request->queries['tag'] ?? '']);
+
+         return $Response;
+      }, GET);
+      // @ A parked deferral that hands its connection to an event stream: one
+      //   event, then the stream ends at its first tick — one to two seconds
+      //   later (the timer counts whole seconds)
+      yield $Router->route('/deferred/handoff', static function (Request $Request, Response $Response) {
+         return $Response->defer(static function (Response $Response): void {
+            self::park($Response, 0.3);
+            $SSE = $Response->SSE;
+            $SSE->heartbeat = 0;
+            $SSE->open(
+               Tick: static function (SSE $SSE): void {
+                  $SSE->close();
+               },
+               interval: 2
+            );
+            $SSE->send(['handoff' => true]);
+         });
+      }, GET);
+      // @ A parked deferral whose generation ends without a response: the
+      //   work cancels its own generation, so the exchange finishes unanswered
+      yield $Router->route('/deferred/abandon', static function (Request $Request, Response $Response) {
+         return $Response->defer(static function (Response $Response): void {
+            self::park($Response, 0.3);
+            $Fiber = Fiber::getCurrent();
+            if ($Fiber !== null) {
+               Cancellation::fetch($Fiber)?->cancel();
+            }
+         });
       }, GET);
 
       // @ The request the ROUTE received, captured by `use ()`: the live

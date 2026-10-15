@@ -31,14 +31,24 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Frame;
  * parked deferral kept up to ~370 KB of parsed head (cookies, refused
  * languages, query vars) outside every ledger. Pinned:
  *
+ * - `capture()` also charges, once per snapshot, the generation
+ *   `Response::defer()` parks around it (`Request::GENERATION`: the Response
+ *   and Route clones, the Fiber and its VM stack, the Cancellation, the
+ *   Exchange alias and observers, the reactor binding, the deadline timer).
+ *   That generation is not part of the snapshot object, so every bound below
+ *   compares the snapshot's own share — the charge minus `GENERATION` —
+ *   with what dropping the snapshot returns; `GENERATION` itself is charged
+ *   exactly once per capture beside the snapshot's terms, is at least the
+ *   36 KiB a parked long-poll was calibrated to keep and at most 40 KiB (past
+ *   it, a worker refuses long-polls it could park), and `clean()` returns it;
  * - per shape (cookie pairs and lines, a long cookie value, refused languages,
  *   query vars, a long query value, nested keys in both bracket encodings, a
  *   long path, a minimal head, heads of bare separators, and long query and
  *   cookie names): `capture()`
  *   charges what the snapshot holds (`weigh()`), and after the deferred work
- *   parsed cookies, languages and query vars the charge covers what the
- *   snapshot keeps — measured by dropping it — and stays within twice that,
- *   so a crafted head cannot reserve the budget it does not use;
+ *   parsed cookies, languages and query vars the snapshot's share covers
+ *   what the snapshot keeps — measured by dropping it — and stays within
+ *   twice that, so a crafted head cannot reserve the budget it does not use;
  * - a parse the budget cannot hold is refused inside the work and keeps
  *   nothing; an HTTP/2 stream keeps its head charged itself; a snapshot that
  *   does not fit the Inbound share is refused and moves nothing; `clean()`
@@ -48,7 +58,8 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Frame;
  *   claims, token headers) is priced with the snapshot — each shape leans on
  *   one term of the price, so dropping any term turns it red — and body
  *   fields the deferred work parses (urlencoded, JSON maps, lists and nested
- *   maps) are charged once: a second read moves nothing;
+ *   maps) are charged once: a second read moves nothing (both compared
+ *   through the snapshot's share);
  * - query vars, the routed name, refused languages, a bearer token, Basic
  *   credentials and body fields that do not fit are refused on the snapshot,
  *   move nothing and leave their memo unbuilt; a second languages read pays
@@ -63,9 +74,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Frame;
  *   keeps the refusals parsed before it;
  * - sparse integer keys (`0`..`16`, `63`, `64`) — 1,000 JSON objects (125 KB
  *   decoding into ~8.4 MB), 52 query arrays (988 vars), 40 Cookie lines of
- *   numeric names — begin as lists and end as maps of 128 slots: each shape
- *   is charged what its snapshot keeps (`Buffers\Table`), within twice that
- *   (JSON within 1.2 times), never the table their count suggests.
+ *   numeric names — begin as lists and end as maps of 128 slots: each
+ *   shape's share is what its snapshot keeps (`Buffers\Table`), within twice
+ *   that (JSON within 1.2 times), never the table their count suggests.
  */
 return new Test(
    description: 'A deferred snapshot is charged for its head and what is parsed from it',
@@ -162,6 +173,11 @@ return new Test(
       $Held = static fn (): int => new ReflectionProperty(Buffers::class, 'held')->getValue()[Shares::Inbound->value];
       $Scans = new ReflectionProperty(Frame::class, 'scans');
       $scans = $Scans->getValue();
+      // ! What `Response::defer()` parks around a snapshot is charged with it
+      //   but is not part of it: every bound compares the snapshot's own
+      //   share — the charge minus the generation — with what dropping the
+      //   snapshot returns
+      $generation = new ReflectionClassConstant(Request::class, 'GENERATION')->getValue();
 
       $budget = TCP_Server_CLI::$maxWorkerPendingBytes;
       try {
@@ -223,15 +239,63 @@ return new Test(
             $rows["{$shape} (unread)"] = $Measure($wire, false);
          }
          $failed = array_filter($rows, static fn (array $row): bool => $row['captured'] !== $row['price']
-            || $row['charged'] < $row['kept']
-            || $row['charged'] > 2 * $row['kept']
+            || $row['charged'] - $generation < $row['kept']
+            || $row['charged'] - $generation > 2 * $row['kept']
             || $row['kept'] <= 0
             || $row['returned'] !== 0);
-         $evidence = json_encode($rows);
+         $evidence = json_encode(['generation' => $generation, 'rows' => $rows]);
 
          yield assert(
             assertion: $failed === [],
-            description: "Each snapshot is charged what it holds, then what its work parses — covering what it keeps, within twice that — and clean() returns it: {$evidence}",
+            description: "Each snapshot is charged what it holds, then what its work parses — its share (the charge minus the generation) covering what it keeps, within twice that — and clean() returns it: {$evidence}",
+         );
+
+         // # The parked generation: charged once per capture, beside the
+         //   snapshot's own terms — its objects, its copy of the head and URI
+         //   and the routed path (a minimal head parses nothing else) — and
+         //   returned by clean()
+         $snapshot = new ReflectionClassConstant(Request::class, 'SNAPSHOT')->getValue();
+         $Routed = new ReflectionProperty(Request::class, '_URL');
+         $Lives = [];
+         for ($index = 0; $index < $count; $index++) {
+            $Lives[] = $Decode($Shapes['minimal']);
+         }
+         $Scans->setValue(null, []);
+         $before = $Held();
+         $Snapshots = [];
+         $misses = [];
+         foreach ($Lives as $index => $Live) {
+            $terms = $snapshot
+               + Frame::weigh($Live->Header->raw ?? '', $Live->Header->fields)
+               + Buffers::weigh(strlen($Live->URI))
+               + Buffers::weigh(strlen((string) $Routed->getValue($Live)));
+            $held = $Held();
+            $Snapshots[] = $Live->capture();
+            $moved = $Held() - $held;
+            $Live->shed();
+            if ($moved !== $generation + $terms) {
+               $misses[$index] = ['moved' => $moved, 'terms' => $terms];
+            }
+         }
+         unset($Live);
+         $Lives = [];
+         $charged = $Held() - $before;
+         foreach ($Snapshots as $Snapshot) {
+            $Snapshot->clean();
+         }
+         unset($Snapshot);
+         $Snapshots = [];
+         $generationEvidence = json_encode([
+            'generation' => $generation, 'charged' => $charged, 'misses' => $misses, 'returned' => $Held() - $before,
+         ]);
+
+         yield assert(
+            assertion: $generation >= 36_864
+               && $generation <= 40_960
+               && $misses === []
+               && $charged > $count * $generation
+               && $Held() === $before,
+            description: "Each capture charges the parked generation (36 to 40 KiB) once, beside the snapshot's own terms, and clean() returns it: {$generationEvidence}",
          );
 
          // # Body fields parsed before the snapshot (multipart text parts) are
@@ -266,12 +330,14 @@ return new Test(
          gc_collect_cycles();
          $fieldsKept = intdiv($memory - memory_get_usage(), $count);
          $Lives = [];
-         $fieldsEvidence = json_encode(['charged' => $fieldsCharged, 'kept' => $fieldsKept, 'returned' => $Held() - $before]);
+         $fieldsEvidence = json_encode([
+            'charged' => $fieldsCharged, 'generation' => $generation, 'kept' => $fieldsKept, 'returned' => $Held() - $before,
+         ]);
 
          yield assert(
             assertion: $fieldsKept > 150_000
-               && $fieldsCharged >= $fieldsKept
-               && $fieldsCharged <= 2 * $fieldsKept
+               && $fieldsCharged - $generation >= $fieldsKept
+               && $fieldsCharged - $generation <= 2 * $fieldsKept
                && $Held() === $before,
             description: "Body fields copied into a snapshot are charged with it: {$fieldsEvidence}",
          );
@@ -367,7 +433,7 @@ return new Test(
          //   `capture()` — what the route read or set — and `$Work` twice on
          //   each snapshot after it, the first result kept with the snapshot
          //   as the deferred work would keep it
-         $Gauge = static function (string $wire, bool $body, Closure $Prepare, Closure $Work, null|int $copies = null) use ($Decode, $Scans, $Price, $Held, $count): array {
+         $Gauge = static function (string $wire, bool $body, Closure $Prepare, Closure $Work, null|int $copies = null) use ($Decode, $Scans, $Price, $Held, $count, $generation): array {
             $copies ??= $count;
             $Lives = [];
             $priced = 0;
@@ -415,13 +481,17 @@ return new Test(
             $Results = [];
             gc_collect_cycles();
             $kept = intdiv($memory - memory_get_usage(), $copies);
+            // ! The snapshot's own share: the parked generation is charged
+            //   with it, not kept by it
+            $share = $charged - $generation;
 
             // :
             return [
                'priced' => $captured === $priced,
                'charged' => $charged,
+               'share' => $share,
                'kept' => $kept,
-               'ratio' => $kept > 0 ? round($charged / $kept, 3) : 0,
+               'ratio' => $kept > 0 ? round($share / $kept, 3) : 0,
                'again' => $again,
                'same' => $same,
                'returned' => $Held() - $before,
@@ -430,8 +500,8 @@ return new Test(
          $Idle = static function (): void {};
          $Within = static fn (array $row): bool => $row['priced'] === true
             && $row['kept'] > 0
-            && $row['charged'] >= $row['kept']
-            && $row['charged'] <= 2 * $row['kept']
+            && $row['share'] >= $row['kept']
+            && $row['share'] <= 2 * $row['kept']
             && $row['again'] === 0
             && $row['same'] === true
             && $row['returned'] === 0;
@@ -949,7 +1019,7 @@ return new Test(
             $rows,
             static fn (array $row, string $shape): bool => $Within($row) === false
                || $row['kept'] < $least[$shape]
-               || ($shape === 'JSON objects' && $row['charged'] > 1.2 * $row['kept']),
+               || ($shape === 'JSON objects' && $row['share'] > 1.2 * $row['kept']),
             ARRAY_FILTER_USE_BOTH
          );
          $evidence = json_encode($rows);

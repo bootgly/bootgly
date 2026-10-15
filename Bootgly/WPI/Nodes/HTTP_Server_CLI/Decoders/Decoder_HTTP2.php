@@ -1236,11 +1236,20 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
    }
 
    /**
-    * Send a canned status response and close the stream (no router pass).
+    * Answer a stream with a canned status and release it (no router pass);
+    * the connection and its other streams live. The frames — HEADERS with
+    * END_STREAM, plus RST_STREAM when the peer may still send on the stream —
+    * are queued in `$outbox`, not written: inside `decode()` they leave with
+    * the next flush, and a caller outside the decoder (the encoder refusing a
+    * stream for a throwing `Request\Events::Received` listener) takes the
+    * outbox and writes it.
     *
-    * @param array<int, array{0: string, 1: string}> $fields
+    * @param int $stream An open, or ended but unanswered, client stream.
+    * @param int $code A final status (`>= 200`), sent as `:status`.
+    * @param array<int, array{0: string, 1: string}> $fields Extra response
+    *        fields, after `:status`.
     */
-   protected function deny (int $stream, int $code, array $fields = []): null|States
+   public function deny (int $stream, int $code, array $fields = []): null|States
    {
       array_unshift($fields, [':status', (string) $code]);
 

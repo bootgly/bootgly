@@ -739,8 +739,9 @@ return new Test(
             $row['finish'] = $Drip($Package, $Request, $held);
             $row['raw'] = strlen($Request->Body->raw);
             $row['completed'] = $Measure();
-            // ! What the snapshot keeps beside its body: its head and the
-            //   caches the deferred work may parse from it (H-HSC-5)
+            // ! What the snapshot keeps beside its body: its head, the caches
+            //   the deferred work may parse from it (H-HSC-5) and the
+            //   generation parked around it (H-HSC-6)
             $price = new ReflectionMethod(Request::class, 'weigh')->invoke($Request);
             $row['price'] = $price;
 

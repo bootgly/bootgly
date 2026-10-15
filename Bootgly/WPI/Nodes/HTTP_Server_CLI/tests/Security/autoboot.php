@@ -717,5 +717,11 @@ return new Suite(
       // the Inbound share), and neither the live connection nor the pooled
       // Fiber keeps any of it once answered.
       '103.05-deferred_request_heads',
+      // # 1.0.x (H-HSC-6): one parked deferral per HTTP/1.1 connection
+      // The requests pipelined behind a parked deferral wait undecoded (at
+      // most one transport read) and are answered in order, and every parked
+      // deferral is charged its generation, so neither pipelining, h2c
+      // streams nor many connections exhaust the worker.
+      '103.06-deferred_pipeline_holds',
    ],
 );

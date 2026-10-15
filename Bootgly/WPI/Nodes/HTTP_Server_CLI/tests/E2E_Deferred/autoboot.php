@@ -60,7 +60,7 @@ return new Suite(
       '1.4-session_first_touch_after_await_sets_cookie',
       '1.5-session_write_then_throw_persists_and_500',
       '1.6-credentials_and_files_survive_await',
-      '1.7-live_request_reused_while_parked',
+      '1.7-pipelined_request_waits_for_parked',
       '1.8-session_write_then_sse_handoff_persists',
       '1.9-session_write_then_client_leaves_not_persisted',
       '1.10-session_write_around_nested_defer_persists',
@@ -93,6 +93,14 @@ return new Suite(
       // H-HSC-5: the snapshot keeps its own head once the live Request drops its copy
       '5.3-snapshot_keeps_own_head',
       // H-HSC-5: an SSE stream keeps reading its route's live Request
-      '5.4-sse_keeps_route_request'
+      '5.4-sse_keeps_route_request',
+      // H-HSC-6: an HTTP/1.1 connection parks one deferral at a time — the
+      //   requests pipelined behind it wait and are answered in order
+      '6.1-pipelined_answers_in_order',
+      '6.2-one_park_per_connection',
+      '6.3-sse_handoff_discards_held_bytes',
+      '6.4-connection_close_ends_pipeline',
+      '6.5-abandoned_deferral_closes',
+      '6.6-second_park_answered_after_another_connection'
    ]
 );

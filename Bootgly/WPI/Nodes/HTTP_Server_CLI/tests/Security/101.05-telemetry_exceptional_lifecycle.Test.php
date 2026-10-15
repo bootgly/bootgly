@@ -8,6 +8,7 @@ use Bootgly\ACI\Tests\Suite\Test\Separator;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\API\Workables\Server\Middlewares;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCPPackages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
@@ -34,12 +35,15 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
  * The positive control proves the real decoder, encoder, handler and 2xx
  * terminal path. Three isolated negative legs then check the registry:
  *
- * 1. a Received listener ordered after Telemetry throws before Response reset;
+ * 1. a Received listener ordered after Telemetry throws before Response reset —
+ *    the encoder refuses that request itself (BUGS ENC-12: `500` through
+ *    `Packages::reject()`, the connection closed), so no Throwable escapes
+ *    `encode()` and no wire is returned;
  * 2. a persistent scoped Response resource throws from clean() during reset;
  * 3. a Session atomic handler throws while save() commits the selected response;
  *    Encoder_ must replace it with a fresh 500 before any wire is emitted.
  *
- * The first two exceptions are cancellation-like for observability. The
+ * The first two failures are cancellation-like for observability. The
  * reversible Session failure is a completed 5xx lifecycle: total and duration
  * close, the in-flight gauge returns to zero, and exactly one 5xx is recorded.
  */
@@ -152,6 +156,12 @@ return new Test(
          $Connection->port = 12345;
          $Connection->encrypted = false;
          $Connection->writes = 0;
+         // ! An established connection: a refused request is answered on it
+         $Connection->status = Connections::STATUS_ESTABLISHED;
+         // ! Its identity, initialized in the class scope (readonly)
+         (function () use ($socket): void {
+            $this->id = (int) $socket;
+         })->call($Connection);
 
          $Encode = static function (string $raw) use ($Connection): string {
             $Package = new class($Connection) extends TCPPackages {
@@ -545,7 +555,10 @@ return new Test(
             SAPI::$Middlewares = $OldMiddlewares;
          }
 
-         @fclose($socket);
+         // ? A refused request (a throwing Received listener) closes it first
+         if (is_resource($socket)) {
+            fclose($socket);
+         }
       }
 
       return "GET /l4/exceptional/harness HTTP/1.1\r\n"
@@ -636,14 +649,14 @@ return new Test(
          ($received['listeners'] ?? null) !== 1
          || ($received['public_payload'] ?? null) !== true
          || ($received['handlers'] ?? null) !== 0
-         || ($received['wire'] ?? null) !== null
-         || ($received['throwable_class'] ?? null) !== RuntimeException::class
-         || ($received['throwable_message'] ?? null) !== 'L4-RECEIVED-LISTENER-THROW'
+         || ($received['wire'] ?? null) !== ''
+         || ($received['throwable_class'] ?? null) !== null
+         || ($received['throwable_message'] ?? null) !== null
       ) {
          Vars::$labels = ['L4 posterior Received-listener throw controls'];
          dump(json_encode($received));
 
-         return 'L4 exceptional fixture did not preserve the posterior Received listener throw/no-wire path.';
+         return 'L4 exceptional fixture did not refuse the posterior Received listener throw without a wire or an escaping Throwable.';
       }
 
       $resource = $Probe->resource;

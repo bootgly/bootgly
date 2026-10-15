@@ -101,5 +101,14 @@ return new Suite(
       '1.61-json_decode_bound',
       // # 1.0.x (H-HSC-5): mounting SSE pins the live Request, never a HEAD
       '1.62-sse_pin_skips_head',
+      // # 1.0.x (H-HSC-6): one parked deferral per HTTP/1 connection, its pipeline held in order
+      '1.63-decoder_holding_cap',
+      '1.64-zero_read_carry_resume',
+      '1.65-deferred_hold_release',
+      '1.66-defer_backstop',
+      // # 1.0.x (ENC-8): a worker budget refusal answers 503 and reports nothing
+      '1.67-refusal_unavailable',
+      // # 1.0.x (ENC-12): a throwing Received listener refuses the request, never kills the worker
+      '1.68-received_listener_refuses',
    ]
 );

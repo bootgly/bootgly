@@ -360,9 +360,14 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       //   SSL_read() returning WANT_READ (record split across TCP segments)
       //   also surfaces as fread() === '' with feof() === false. fail()
       //   closes and counts real closes and leaves live sockets alone; the
-      //   $input conjunct keeps a partial sized read decodable below.
+      //   $input conjunct keeps a partial sized read decodable below. A live
+      //   socket with a held carry decodes it (a parked deferral released
+      //   the requests pipelined behind it).
       if ($buffer === '' && $input === '') {
-         return $this->fail($Socket, 'read');
+         $failed = $this->fail($Socket, 'read');
+         if ($failed || $this->carry === '') {
+            return $failed;
+         }
       }
 
       // @ Check issues
@@ -619,11 +624,14 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       //   replaces the old one in the footprint.
       $bytes = $length - $offset;
       $retained = $this->measure();
+      // ! A carry of half a read or more may be that read adopted whole,
+      //   which keeps the read's full allocation (`measure()` alike)
+      $carried = strlen($this->carry);
+      $before = Buffers::weigh($carried >= intdiv(self::READ, 2) ? max($carried, self::READ) : $carried);
+      $after = Buffers::weigh($bytes >= intdiv(self::READ, 2) ? max($bytes, self::READ) : $bytes);
       if (
          $retained === PHP_INT_MAX
-         || $this->reserve(
-            $retained - Buffers::weigh(strlen($this->carry)) + Buffers::weigh($bytes)
-         ) === false
+         || $this->reserve($retained - $before + $after) === false
       ) {
          $this->carry = '';
          $this->Buffers->reserve($this->measure());
@@ -1174,7 +1182,9 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
     */
    protected function measure (): int
    {
-      $bytes = Buffers::weigh(strlen($this->carry))
+      // ! A carry of half a read or more may be that read adopted whole
+      $carried = strlen($this->carry);
+      $bytes = Buffers::weigh($carried >= intdiv(self::READ, 2) ? max($carried, self::READ) : $carried)
          + Buffers::weigh(strlen($this->pendingBuffer));
 
       foreach ($this->pendingResponses as $Response) {

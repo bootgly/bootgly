@@ -46,7 +46,6 @@ use function strlen;
 use function strncasecmp;
 use function strncmp;
 use function strpos;
-use function strtok;
 use function strtolower;
 use function substr;
 use function trim;
@@ -78,10 +77,13 @@ use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\WPI\Endpoints\Servers\Ownership;
 use Bootgly\WPI\Events\Cancellation;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Modules\HTTP\Server;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Authentication;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Bodies\Refusal;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Holding;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_HTTP2;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Catcher;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Challenge;
@@ -317,6 +319,13 @@ class Response extends Server\Response
       $capturing = $this->capturing;
       $Exchange = $SourceResponse->promote();
 
+      // ! Capture before this clone refers to itself (`Owner`): a refused
+      //   capture throws out of `__clone`, and PHP never frees a clone that
+      //   already referenced itself — every refused deferral would leak one
+      if ($capturing && $SourceRequest !== null) {
+         $this->Request = $SourceRequest->capture();
+      }
+
       $this->Owner = $this;
       $this->Exchange = $Exchange;
 
@@ -324,9 +333,6 @@ class Response extends Server\Response
       $this->Body = clone $this->Body;
 
       if ($capturing) {
-         if ($this->Request !== null) {
-            $this->Request = $this->Request->capture();
-         }
          $this->capturing = false;
          // ! defer() assigns a fresh generation only after the clone and all
          //   resource forks succeed. Inheriting the parent's token here would
@@ -1786,18 +1792,19 @@ class Response extends Server\Response
                   $Errored = null;
                }
                else if ($Errored === null) {
-                  // ? Unhandled — a deferral past its budget is answered as
-                  //   unavailable, not as an application error: no report
-                  //   intake, no debug page. Recomputed: a boundary may have
-                  //   replaced the Throwable on its way out.
-                  $timedOut = $Throwable instanceof Timeout;
+                  // ? Unhandled — a deferral past its budget, or a parse the
+                  //   worker budget refused, is answered as unavailable, not
+                  //   as an application error: no report intake, no debug
+                  //   page. Recomputed: a boundary may have replaced the
+                  //   Throwable on its way out.
+                  $unavailable = $Throwable instanceof Timeout || $Throwable instanceof Refusal;
                   try {
-                     $Errored = $timedOut
+                     $Errored = $unavailable
                         ? Catcher::respond($Response->Request, $Response, code: 503)
                         : Catcher::respond($Response->Request, $Response, $Throwable);
                   }
                   catch (Throwable) {
-                     $Errored = new Response(code: $timedOut ? 503 : 500, body: '');
+                     $Errored = new Response(code: $unavailable ? 503 : 500, body: '');
                   }
                }
 
@@ -1828,7 +1835,7 @@ class Response extends Server\Response
                         'interface' => 'WPI',
                         'phase' => 'Sealing',
                         'method' => $Snapshot->method ?? '',
-                        'URI' => strtok($Snapshot->URI ?? '', '?'),
+                        'URI' => explode('?', $Snapshot->URI ?? '', 2)[0],
                         'peer' => $Snapshot->peer ?? '',
                      ]);
                   }
@@ -1846,7 +1853,7 @@ class Response extends Server\Response
                         'interface' => 'WPI',
                         'phase' => 'Session',
                         'method' => $Snapshot->method ?? '',
-                        'URI' => strtok($Snapshot->URI ?? '', '?'),
+                        'URI' => explode('?', $Snapshot->URI ?? '', 2)[0],
                         'peer' => $Snapshot->peer ?? '',
                      ]);
                   }
@@ -1907,7 +1914,7 @@ class Response extends Server\Response
                      'interface' => 'WPI',
                      'phase' => 'Session',
                      'method' => $Snapshot->method ?? '',
-                     'URI' => strtok($Snapshot->URI ?? '', '?'),
+                     'URI' => explode('?', $Snapshot->URI ?? '', 2)[0],
                      'peer' => $Snapshot->peer ?? '',
                   ]);
                }
@@ -1941,7 +1948,7 @@ class Response extends Server\Response
                   'interface' => 'WPI',
                   'phase' => 'Resources',
                   'method' => $Snapshot->method ?? '',
-                  'URI' => strtok($Snapshot->URI ?? '', '?'),
+                  'URI' => explode('?', $Snapshot->URI ?? '', 2)[0],
                   'peer' => $Snapshot->peer ?? '',
                ]);
             }
@@ -2069,12 +2076,20 @@ class Response extends Server\Response
    /**
     * Run response work on a pooled Fiber that may park on the worker reactor.
     *
+    * An HTTP/1.1 connection parks one deferral at a time: the requests it
+    * pipelines behind a parked one wait, undecoded, until its response is
+    * written, and are answered in order. Each parked deferral is charged to
+    * the worker memory budget (`Request::capture()`).
+    *
     * @param Closure $work The deferred work, receiving this Response and —
     *    when it declares a second parameter that accepts a Request — the
     *    snapshot it answers, the same object as `$Response->Request`.
     * @param int|float $timeout Seconds the work may stay parked before a
     *    `Response\Timeout` is delivered at its suspension point; `0` uses
     *    `self::$deferredTimeout`, where `0` means unbounded.
+    *
+    * @throws Refusal When the worker memory budget cannot hold the request
+    *    snapshot; left unhandled it is answered `503`.
     */
    public function defer (Closure $work, int|float $timeout = 0): self
    {
@@ -2136,6 +2151,19 @@ class Response extends Server\Response
          //   both the target Response and the currently running Fiber to carry
          //   the active generation; neither identity alone grants authority.
          $this->deferred = true;
+
+         return $this;
+      }
+      // ? Backstop — an HTTP/1.1 connection that already parks a deferral
+      //   never parks another (its hold keeps the pipelined requests
+      //   undecoded): answer nothing and close after the write
+      if (
+         $Lease === null
+         && ($Request === null || $Request->stream === 0)
+         && Ownership::check($Package->Connection)
+      ) {
+         $this->deferred = true;
+         $Package->closeAfterWrite = true;
 
          return $this;
       }
@@ -2386,6 +2414,74 @@ class Response extends Server\Response
                //   a firing deadline always finds the generation still active.
                $Cancellation->observe(static function () use ($Event, $timer): void {
                   $Event->cancel($timer);
+               });
+            }
+
+            // @ Hold — an HTTP/1.1 connection answers in request order (RFC
+            //   9112 §9.3.2): the requests pipelined behind this parked
+            //   deferral wait undecoded in the transport carry, charged, so
+            //   a connection parks one deferral at a time. A nested handoff
+            //   finds the slot taken and shares this Exchange.
+            if (
+               $Exchange !== null
+               && $Request?->stream === 0
+               && $Package->Decoder === null
+            ) {
+               $Hold = new Decoder_Holding;
+               $Package->Decoder = $Hold;
+               $close = $Request->closeConnection;
+               $Exchange->observe(static function (
+                  Exchange $Finished,
+                  null|int $code,
+               ) use ($Event, $Package, $Hold, $close): void {
+                  // ! Observers run before the parked response is written:
+                  //   release the hold on the next tick, behind it
+                  $Event->defer((int) hrtime(true), static function () use (
+                     $Package,
+                     $Hold,
+                     $code,
+                     $close,
+                  ): void {
+                     $Connection = $Package->Connection;
+                     $Socket = $Connection->Socket;
+                     // ? Closed
+                     if ($Connection->status > Connections::STATUS_ESTABLISHED) {
+                        return;
+                     }
+                     // ? The slot changed hands (an SSE stream): its decoder
+                     //   takes the held bytes, so their charge is not kept
+                     //   for the life of the stream
+                     if ($Package->Decoder !== $Hold) {
+                        if ($Package->carry !== '') {
+                           try {
+                              $Package->reading($Socket);
+                           }
+                           catch (Throwable) {
+                              $Connection->close();
+                           }
+                        }
+
+                        return;
+                     }
+                     // ? Unanswered, or asked to close: nothing may follow
+                     if ($code === null || $close) {
+                        $Package->closeAfterDrain = true;
+                        $Package->writing($Socket);
+
+                        return;
+                     }
+
+                     // @ Decode the held requests, in order
+                     $Package->Decoder = null;
+                     if ($Package->carry !== '') {
+                        try {
+                           $Package->reading($Socket);
+                        }
+                        catch (Throwable) {
+                           $Connection->close();
+                        }
+                     }
+                  });
                });
             }
          }

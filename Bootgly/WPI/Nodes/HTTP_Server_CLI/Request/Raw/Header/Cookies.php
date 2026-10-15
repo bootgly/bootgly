@@ -17,10 +17,10 @@ use function explode;
 use function is_array;
 use function preg_split;
 use function trim;
-use RuntimeException;
 
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Bodies;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Bodies\Refusal;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 
 
@@ -45,7 +45,7 @@ final class Cookies
             $cookies = $this->build();
             // ? A deferred snapshot pays for what it parses
             if ($this->Bodies?->grow(Buffers::tally($cookies)) === false) {
-               throw new RuntimeException(Bodies::REFUSAL);
+               throw new Refusal(Bodies::REFUSAL);
             }
             $this->cookies = $cookies;
          }

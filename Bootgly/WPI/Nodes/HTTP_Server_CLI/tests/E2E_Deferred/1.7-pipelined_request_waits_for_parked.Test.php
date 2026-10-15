@@ -1,4 +1,13 @@
 <?php
+/*
+ * --------------------------------------------------------------------------
+ * Bootgly PHP Framework
+ * Developed by Rodrigo Vieira (@rodrigoslayertech)
+ * Copyright (c) 2023-present Bootgly and contributors
+ * Licensed under MIT
+ * --------------------------------------------------------------------------
+ */
+
 
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
@@ -12,11 +21,16 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
 
 
 /**
- * BG-15 (why the snapshot exists): while a deferral parks, a second request
- * on the SAME keep-alive connection is decoded into the live per-connection
- * Request, answered, and its head dropped (`Request::shed()`). A
- * `use ($Request)` inside the deferred work then describes no request at
- * all — never the one the work answers — while the snapshot still does.
+ * H-HSC-6 / ENC-3: an HTTP/1.1 connection answers in request order (RFC 9112
+ * §9.3.2). A request pipelined onto the SAME keep-alive connection while a
+ * deferral parks waits, undecoded, until the parked one is answered — its
+ * answer leaves second.
+ *
+ * BG-15 (why the snapshot exists): the deferred work's `use ($Request)` is the
+ * live per-connection Request. Its head is already dropped while the deferral
+ * parks (`Request::shed()`), and the waiting request is decoded into that
+ * same object afterwards — so it never describes the request the work
+ * answers, while the snapshot still does.
  */
 $Probe = new class {
    public string $wire = '';
@@ -49,7 +63,11 @@ return new Test(
                }
                $Probe->wire .= $chunk;
             }
-            if (substr_count($Probe->wire, "\r\n\r\n") >= 2 && str_contains($Probe->wire, '"snapshot"')) {
+            if (
+               substr_count($Probe->wire, "\r\n\r\n") >= 2
+               && str_contains($Probe->wire, '"snapshot"')
+               && str_contains($Probe->wire, '"id"')
+            ) {
                // ? Both heads arrived; give the bodies one more slice
                usleep(50_000);
                $chunk = @fread($Socket, 65536);
@@ -78,7 +96,8 @@ return new Test(
          }
       }
       catch (Throwable $Throwable) {
-         $Probe->error = $Throwable::class . ': ' . $Throwable->getMessage();
+         $class = $Throwable::class;
+         $Probe->error = "{$class}: {$Throwable->getMessage()}";
       }
 
       return "GET /deferred/ping HTTP/1.1\r\nHost: localhost\r\n\r\n";
@@ -91,13 +110,16 @@ return new Test(
       $evidence = json_encode(['error' => $Probe->error, 'responses' => $Probe->responses]);
       $reuse = [];
       $identified = null;
+      $order = [];
       foreach ($Probe->responses as $entry) {
          $decoded = json_decode($entry['body'], true);
          if (is_array($decoded) && isset($decoded['snapshot'])) {
             $reuse = $decoded;
+            $order[] = 'parked';
          }
          if (is_array($decoded) && isset($decoded['id'])) {
             $identified = $decoded['id'];
+            $order[] = 'pipelined';
          }
       }
 
@@ -110,6 +132,14 @@ return new Test(
          ->assert();
 
       yield new Assertion(
+         description: 'The pipelined request is answered after the parked one, in request order',
+         fallback: "Answered out of request order: {$evidence}"
+      )
+         ->expect($order)
+         ->to->be(['parked', 'pipelined'])
+         ->assert();
+
+      yield new Assertion(
          description: 'The snapshot still describes the request the work answers',
          fallback: "Snapshot drifted: {$evidence}"
       )
@@ -118,7 +148,7 @@ return new Test(
          ->assert();
 
       yield new Assertion(
-         description: 'The live per-connection Request was reused and its head dropped once answered',
+         description: 'The live per-connection Request carries no head while the deferral parks',
          fallback: "The live Request still carries a head: {$evidence}"
       )
          ->expect([$reuse['live'] ?? null, $reuse['live_queries'] ?? null])
@@ -126,7 +156,7 @@ return new Test(
          ->assert();
 
       yield new Assertion(
-         description: 'The later request was decoded into that same live Request object',
+         description: 'The waiting request was decoded into that same live Request object',
          fallback: "The later request got another object: {$evidence}"
       )
          ->expect([$reuse['live_id'] ?? null, $identified])

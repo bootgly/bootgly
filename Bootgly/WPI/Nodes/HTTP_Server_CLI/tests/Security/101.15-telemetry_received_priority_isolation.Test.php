@@ -20,8 +20,10 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
  * An application listener registered before Telemetry at the maximum public
  * priority can stop ordinary event propagation. It must not blind core request
  * accounting. A second leg registers a throwing maximum-priority listener
- * after Telemetry and proves the exceptional no-wire terminal path still
- * preserves the original Throwable and closes without inventing a status.
+ * after Telemetry and proves the exceptional terminal path closes without
+ * inventing a status: the encoder refuses that request itself (BUGS ENC-12:
+ * `500` through `Packages::reject()`), so no Throwable escapes `encode()` and
+ * no wire is returned.
  */
 $Probe = new class {
    public string $error = '';
@@ -148,8 +150,8 @@ return new Test(
 
             // ? Ordering control: Telemetry boots first, then a same-priority
             //   application listener throws. Accounting must observe admission
-            //   and replay terminal closure while the original throw/no-wire
-            //   semantics remain unchanged.
+            //   and replay terminal closure while the encoder refuses the
+            //   request (no escaping Throwable, no returned wire).
             $ThrownEvents = new Emitter;
             $ThrownObservability = new Observability(collectors: false);
             Emitter::$Instance = $ThrownEvents;
@@ -265,9 +267,9 @@ return new Test(
       $expectedNoStatus['responses_2xx'] = 0;
       $thrown = $Probe->thrown;
       if (
-         ($thrown['wire'] ?? null) !== null
-         || ($thrown['throwable_class'] ?? null) !== RuntimeException::class
-         || ($thrown['throwable_message'] ?? null) !== 'L4-RECEIVED-MAX-THROW'
+         ($thrown['wire'] ?? null) !== ''
+         || ($thrown['throwable_class'] ?? null) !== null
+         || ($thrown['throwable_message'] ?? null) !== null
          || ($thrown['throwers'] ?? null) !== 1
          || ($thrown['handlers'] ?? null) !== 0
          || ($thrown['metrics'] ?? null) !== $expectedNoStatus
@@ -275,8 +277,8 @@ return new Test(
          Vars::$labels = ['L4 posterior maximum-priority Received throw evidence'];
          dump(json_encode($thrown));
 
-         return 'L4 Received-priority throw control did not preserve the '
-            . 'original Throwable, no-wire result and null-status lifecycle.';
+         return 'L4 Received-priority throw control did not refuse the request '
+            . 'without a wire, an escaping Throwable or a status.';
       }
 
       return true;

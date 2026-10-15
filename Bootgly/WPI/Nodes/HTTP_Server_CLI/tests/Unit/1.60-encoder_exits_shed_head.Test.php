@@ -41,7 +41,11 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_Testing;
  * The same walk pins the JSON refusal (`Request::check()`): the first
  * statement after the `Body->waiting` guard answers `413` to a body whose
  * decode bound does not fit, so no route-cache replay, event or handler runs
- * before it.
+ * before it. The other refusal that drops the head before it answers is a
+ * `Request\Events::Received` listener that throws (`500`, or `503` for a
+ * budget `Refusal`) — BUGS ENC-12: its Throwable no longer reaches the reactor.
+ * It sheds before both of its answers: the HTTP/2 stream denial (the branch on
+ * `$Packages->decoded`) and the HTTP/1 `reject()`.
  */
 return new Test(
    description: 'H-HSC-5: every encode() exit that answered a request drops its head',
@@ -82,10 +86,16 @@ return new Test(
                $sites['deferred']++;
                continue;
             }
-            // ? The JSON refusal drops the refused request before it answers
+            // ? A refusal (the JSON bound, a throwing Received listener) drops
+            //   the refused request before it answers — the Received one before
+            //   its HTTP/2 branch too
+            $answer = implode('', array_slice($tokens, $index + 6, 6));
             if (
                implode('', array_slice($tokens, $index - 6, 6)) === '$Request->scrub();'
-               && str_starts_with(implode('', array_slice($tokens, $index + 6, 4)), '$Packages->reject(')
+               && (
+                  str_starts_with($answer, '$Packages->reject(')
+                  || str_starts_with($answer, '$H2=$Packages->decoded;')
+               )
             ) {
                $sites['refusal']++;
                continue;
@@ -135,7 +145,7 @@ return new Test(
             fallback: "A shed() is missing or out of place: {$evidence}"
          )
             ->expect([$sites, $misplaced, $unshed])
-            ->to->be([['deferred' => 4, 'synchronous' => 2, 'refusal' => 1], [], 0])
+            ->to->be([['deferred' => 4, 'synchronous' => 2, 'refusal' => 2], [], 0])
             ->assert();
 
          // @ The JSON refusal is the first statement after the waiting guard
