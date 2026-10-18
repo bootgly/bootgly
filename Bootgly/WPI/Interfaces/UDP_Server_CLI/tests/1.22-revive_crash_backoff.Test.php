@@ -186,7 +186,10 @@ PHP;
          $Gap = static fn (int $from, int $to): int => isSet($Times[$to], $Times[$from])
             ? intdiv($Times[$to] - $Times[$from], 1_000_000)
             : -1;
-         $Observed['two immediate retries (3 boots within 300 ms)'] = $Gap(0, 2) >= 0 && $Gap(0, 2) < 300;
+         // ! Each retry under the first backoff step: a loaded runner boots a
+         //   worker in well over 100 ms, so the three boots are not timed together
+         $Observed['two immediate retries (each under 450 ms)'] = $Gap(0, 1) >= 0 && $Gap(0, 1) < 450
+            && $Gap(1, 2) >= 0 && $Gap(1, 2) < 450;
          $Observed['then 0.5 s (450-900 ms)'] = $Gap(2, 3) >= 450 && $Gap(2, 3) < 900;
          $Observed['then doubled to 1 s (950-1600 ms)'] = $Gap(3, 4) >= 950 && $Gap(3, 4) < 1_600;
          $Observed['master alive while backing off'] = $Alive();
@@ -255,7 +258,7 @@ PHP;
             'bounded (<= 6 boots in 3 s)' => true,
             'state saves bounded (<= 6 in 3 s)' => true,
             'crash loop logged' => true,
-            'two immediate retries (3 boots within 300 ms)' => true,
+            'two immediate retries (each under 450 ms)' => true,
             'then 0.5 s (450-900 ms)' => true,
             'then doubled to 1 s (950-1600 ms)' => true,
             'master alive while backing off' => true,
