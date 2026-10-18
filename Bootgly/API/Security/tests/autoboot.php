@@ -62,5 +62,7 @@ return new Suite(
       '1.44-jwt_remote_origin_floor',
       // # 1.0.x (M8): an unknown identifier costs the work of a wrong password
       '1.45-users_decoy_uniform_cost',
+      // # 1.0.x (M12/JWT-4/JWT-10): a consumed refresh token stays detectable on every host of one store
+      '1.46-jwt_rotate_tombstone_visibility',
    ]
 );

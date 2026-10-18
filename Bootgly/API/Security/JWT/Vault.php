@@ -50,6 +50,9 @@ use RuntimeException;
 
 use Bootgly\ABI\Resources\Cache as Storage;
 use Bootgly\ABI\Resources\Cache\Atomic;
+use Bootgly\ABI\Resources\Cache\Drivers\File;
+use Bootgly\ABI\Resources\Cache\Drivers\Memory;
+use Bootgly\ABI\Resources\Cache\Drivers\Shared;
 
 
 /**
@@ -61,11 +64,13 @@ use Bootgly\ABI\Resources\Cache\Atomic;
  * backend fails MAC verification and reads as a miss. The default backend is
  * the `file` driver rooted at the Vault path (same-host worker sharing, as
  * before); passing a Redis-backed Cache enables fleet-wide token revocation —
- * inject a shared `$secret` in that case, since the default secret is derived
+ * it then requires a shared `$secret`, since the default secret is derived
  * per host. `claim()` and `take()` elect their winners through the backend's
  * atomic create/compare-and-evict primitives. `lock()` remains deliberately
  * host-local: it serializes compound sections within one host, but is not a
- * distributed multi-key transaction.
+ * distributed multi-key transaction and gives no exclusion across hosts —
+ * `Tokens` stays correct in a fleet by the order of its writes around the
+ * atomic take, not by the lock.
  */
 class Vault implements Cache
 {
@@ -96,7 +101,13 @@ class Vault implements Cache
     * create/swap/evict contract.
     * @param string $prefix Storage key prefix.
     * @param null|string $secret Shared HMAC secret (>= 32 bytes); null derives
-    * a per-host secret file.
+    * a per-host secret file — allowed only for the host-local `file`,
+    * `memory` and `shared` drivers.
+    * @throws InvalidArgumentException When the prefix is empty or holds a
+    * directory separator, the secret is shorter than 32 bytes, the driver is
+    * not atomic, or an injected backend other hosts can reach (`redis`, a
+    * custom driver) comes without a secret — each host would sign with its
+    * own and read the others' records as misses: revocation would fail open.
     */
    public function __construct (
       null|string|Storage $storage = null,
@@ -131,6 +142,19 @@ class Vault implements Cache
       if ($this->Storage->Driver instanceof Atomic === false) {
          throw new InvalidArgumentException(
             'JWT cache storage driver must provide atomic create, swap and evict operations.'
+         );
+      }
+      // ? A backend other hosts can reach needs one secret for all of them
+      $Driver = $this->Storage->Driver;
+      if (
+         $storage instanceof Storage
+         && $secret === null
+         && $Driver instanceof File === false
+         && $Driver instanceof Memory === false
+         && $Driver instanceof Shared === false
+      ) {
+         throw new InvalidArgumentException(
+            "JWT cache secret is required for a storage backend other hosts can reach; pass the contents of {$this->path}{$prefix}.secret to keep existing records."
          );
       }
 

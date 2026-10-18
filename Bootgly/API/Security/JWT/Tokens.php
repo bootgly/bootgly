@@ -35,6 +35,13 @@ use RuntimeException;
  */
 class Tokens
 {
+   /**
+    * Seconds a family's revocation marker outlives the horizon it covers:
+    * absorbs clock skew between hosts and a rotation stalled at the edge of
+    * its token's expiry.
+    */
+   private const int SLACK = 60;
+
    // * Data
    private Cache $Cache;
    public private(set) null|int $timestamp = null;
@@ -117,6 +124,22 @@ class Tokens
 
    /**
     * Rotate a refresh token, revoking its family on replay.
+    *
+    * The token is consumed by the store's atomic take, after its successor
+    * and its tombstone are stored — so every consumer that misses it, on any
+    * host of a shared store, finds the tombstone: a concurrent double-submit
+    * yields at most one `Token`, and the other caller gets a `Replay` (or
+    * `null`) with the family revoked until its newest token would expire.
+    * `lock()` only serializes callers on one host.
+    *
+    * @return null|Replay|Token The successor; a `Replay` when the token was
+    *    already consumed (the family is revoked); `null` when it is unknown,
+    *    expired (also when it expires during this rotation, by this host's
+    *    clock within the tolerated skew) or of a revoked family — it is not
+    *    consumed, unless a revocation lands during the rotation.
+    * @throws RuntimeException When the store refuses a write or the evict:
+    *    the presented token stays valid for a retry — unless it was already
+    *    consumed, then the retry is a `Replay`.
     */
    public function rotate (string $refresh, int $ttl): null|Replay|Token
    {
@@ -125,30 +148,96 @@ class Tokens
       }
 
       $Result = $this->Cache->lock(function () use ($refresh, $ttl): null|Replay|Token {
-         $Record = $this->take($refresh);
+         // ! The presented token — nothing is destroyed yet
+         $Record = $this->read($refresh);
+         // ? Not active: a spent token is a replay, anything else unknown
          if ($Record === null) {
             $Spent = $this->detect($refresh);
-            if ($Spent !== null) {
-               $this->write($this->index('family', $Spent['family']), '1', $this->limit($Spent['expires']));
-
-               return $this->report($Spent);
+            if ($Spent === null) {
+               return null;
             }
 
-            return null;
-         }
+            $this->ban($Spent['family'], $Spent['horizon']);
 
+            return $this->report($Spent);
+         }
+         // ? A revoked family rotates nothing: the token is not consumed
          if ($this->Cache->read($this->index('family', $Record['family'])) !== null) {
             return null;
          }
 
-         $this->write($this->index('spent', $refresh), $this->encode([
-            'subject' => $Record['subject'],
-            'family' => $Record['family'],
-            'claims' => $Record['claims'],
-            'expires' => $Record['expires'],
-         ]), $this->limit($Record['expires']));
+         // @ The successor first: a refused claim throws with the token intact
+         $Token = $this->issue($Record['subject'], $Record['family'], $ttl, $Record['claims']);
+         $successor = $this->index('active', $Token->refresh);
+         $horizon = $Record['expires'] > $Token->expires ? $Record['expires'] : $Token->expires;
+         // @ The tombstone before the token can disappear: a consumer that
+         //   misses the token always finds it
+         try {
+            $this->write($this->index('spent', $refresh), $this->encode([
+               'subject' => $Record['subject'],
+               'family' => $Record['family'],
+               'claims' => $Record['claims'],
+               'expires' => $Record['expires'],
+               'horizon' => $horizon,
+            ]), $this->limit($horizon));
+         }
+         catch (RuntimeException $Exception) {
+            $this->Cache->delete($successor);
 
-         return $this->issue($Record['subject'], $Record['family'], $ttl, $Record['claims']);
+            throw $Exception;
+         }
+
+         // @ The election: one consumer evicts the token
+         if ($this->take($refresh) === null) {
+            $this->Cache->delete($successor);
+            // ? Still active: the store refused the evict — nobody consumed it
+            if ($this->read($refresh) !== null) {
+               throw new RuntimeException('JWT refresh token could not be consumed.');
+            }
+            // ?: Expired during this rotation — by this host's clock, within the
+            //   skew tolerated between hosts: an expired token, not a replay.
+            //   Its family is revoked first (nothing a last-instant consumer
+            //   stored survives a failure past this point), then our tombstone goes
+            if ($Record['expires'] <= $this->time + self::SLACK) {
+               $this->ban($Record['family'], $horizon);
+               $this->Cache->delete($this->index('spent', $refresh));
+
+               return null;
+            }
+
+            // : Another consumer won: a replay (our record stands in for a
+            //   tombstone the store evicted)
+            $Spent = $this->detect($refresh) ?? [
+               'subject' => $Record['subject'],
+               'family' => $Record['family'],
+               'claims' => $Record['claims'],
+               'expires' => $Record['expires'],
+               'horizon' => $horizon,
+            ];
+            $this->ban($Spent['family'], $Spent['horizon'] > $horizon ? $Spent['horizon'] : $horizon);
+
+            return $this->report($Spent);
+         }
+
+         // @ The family horizon, then the revocation re-check: ban() writes
+         //   the marker and reads the horizon, so one of the two sees the other
+         try {
+            $this->write($this->index('horizon', $Record['family']), (string) $Token->expires, $this->limit($Token->expires));
+         }
+         catch (RuntimeException $Exception) {
+            $this->Cache->delete($successor);
+
+            throw $Exception;
+         }
+         if ($this->Cache->read($this->index('family', $Record['family'])) !== null) {
+            $this->Cache->delete($successor);
+            $this->ban($Record['family'], $horizon);
+
+            return null;
+         }
+
+         // :
+         return $Token;
       });
 
       if ($Result === null || $Result instanceof Replay || $Result instanceof Token) {
@@ -160,36 +249,81 @@ class Tokens
 
    /**
     * Revoke a refresh token family.
+    *
+    * The family is revoked first, until its newest token would expire — a
+    * logout racing a rotation of the same token returns `true` and leaves no
+    * successor alive.
+    *
+    * @return bool `false` only for an unknown or expired token.
+    * @throws RuntimeException When the store refuses a write: a retry with
+    *    the same token completes the revocation.
     */
    public function revoke (string $refresh): bool
    {
       $Result = $this->Cache->lock(function () use ($refresh): bool {
-         $Record = $this->take($refresh);
+         // ! The presented token
+         $Record = $this->read($refresh);
+         // ? Not active: a spent token revokes its family, anything else is unknown
          if ($Record === null) {
             $Spent = $this->detect($refresh);
             if ($Spent === null) {
                return false;
             }
 
-            $this->write($this->index('family', $Spent['family']), '1', $this->limit($Spent['expires']));
+            $this->ban($Spent['family'], $Spent['horizon']);
 
             return true;
          }
 
-         $ttl = $this->limit($Record['expires']);
+         // @ The family dies first; the rest is cleanup a retry redoes
+         $horizon = $this->ban($Record['family'], $Record['expires']);
          $this->write($this->index('spent', $refresh), $this->encode([
             'subject' => $Record['subject'],
             'family' => $Record['family'],
             'claims' => $Record['claims'],
             'expires' => $Record['expires'],
-         ]), $ttl);
+            'horizon' => $horizon,
+         ]), $this->limit($horizon));
+         $this->take($refresh);
 
-         $this->write($this->index('family', $Record['family']), '1', $ttl);
-
+         // :
          return true;
       });
 
       return $Result === true;
+   }
+
+   /**
+    * Revoke a family until its horizon — the expiry of its newest token —
+    * and return the horizon covered.
+    *
+    * The marker holds the horizon it covers and is never written below one
+    * already known (an earlier ban's, the family's horizon key). After the
+    * write it reads the horizon key again: a rotation that stored a newer
+    * successor writes that key before it re-reads the marker, so one of the
+    * two always sees the other.
+    */
+   private function ban (string $family, int $horizon): int
+   {
+      $marker = $this->index('family', $family);
+      $key = $this->index('horizon', $family);
+
+      // ! The longest horizon already known
+      foreach ([$this->Cache->read($marker), $this->Cache->read($key)] as $known) {
+         if ($known !== null && $known === (string) (int) $known && (int) $known > $horizon) {
+            $horizon = (int) $known;
+         }
+      }
+      $this->write($marker, (string) $horizon, $this->limit($horizon) + self::SLACK);
+
+      // @ A newer successor stored meanwhile extends it
+      $latest = $this->Cache->read($key);
+      if ($latest !== null && $latest === (string) (int) $latest && (int) $latest > $horizon) {
+         $horizon = (int) $latest;
+         $this->write($marker, (string) $horizon, $this->limit($horizon) + self::SLACK);
+      }
+
+      return $horizon;
    }
 
    /**
@@ -263,7 +397,11 @@ class Tokens
    /**
     * Read a spent refresh-token tombstone.
     *
-      * @return null|array{subject:string,family:string,claims:array<string,mixed>,expires:int}
+    * Its `horizon` — the expiry of the family's newest token when it was
+    * written — falls back to the consumed token's expiry for a tombstone that
+    * carries none (written by an earlier release).
+    *
+    * @return null|array{subject:string,family:string,claims:array<string,mixed>,expires:int,horizon:int}
     */
    private function detect (string $refresh): null|array
    {
@@ -299,11 +437,17 @@ class Tokens
          $claims[$name] = $value;
       }
 
+      $horizon = $decoded['expires'];
+      if (is_int($decoded['horizon'] ?? null) && $decoded['horizon'] > $horizon) {
+         $horizon = $decoded['horizon'];
+      }
+
       return [
          'subject' => $decoded['subject'],
          'family' => $decoded['family'],
          'claims' => $claims,
          'expires' => $decoded['expires'],
+         'horizon' => $horizon,
       ];
    }
 
@@ -386,7 +530,7 @@ class Tokens
    /**
     * Build a replay incident from a tombstone.
     *
-    * @param array{subject:string,family:string,claims:array<string,mixed>,expires:int} $Record
+    * @param array{subject:string,family:string,claims:array<string,mixed>,expires:int,horizon:int} $Record
     */
    private function report (array $Record): Replay
    {
