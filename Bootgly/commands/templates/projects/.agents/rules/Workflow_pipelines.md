@@ -5,6 +5,9 @@
 - **SHOULD** — State your assumptions; when a request allows several readings (CLI or WPI? which
   database?), present them instead of picking one silently; say so when a simpler approach exists; stop
   and ask when something is unclear.
+- **SHOULD** — Ask every question (a decision, a clarification, a confirmation, a next step) through
+  your agent's question tool when it has one (`AskUserQuestion` in Claude Code) — never as prose at the
+  end of a reply, where it is easy to miss.
 - **SHOULD** — Search before inventing, in this order: the CLI scaffolders; the shipped examples in
   `projects/`; the documentation (a page as Markdown at `<page>/overview.md`, e.g.
   https://docs.bootgly.com/guide/database-migrations/overview.md, the index at
