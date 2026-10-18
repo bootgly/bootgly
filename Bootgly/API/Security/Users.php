@@ -11,9 +11,12 @@
 namespace Bootgly\API\Security;
 
 
+use function base64_encode;
 use function in_array;
 use function is_numeric;
 use function is_string;
+use function random_bytes;
+use function rtrim;
 use RuntimeException;
 use stdClass;
 
@@ -70,13 +73,20 @@ class Users
 
    // * Metadata
    /**
-    * Lazy decoy hash — burned on unknown-identifier verifies so the
-    * response time does not reveal whether an account exists.
+    * Decoy hash — verified on unknown-identifier paths, so a miss costs one
+    * verify at the current policy: the work of a wrong password. A
+    * well-formed argon2id string of the policy with a random salt and tag,
+    * never a real hash — building it costs nothing (a hashed decoy made the
+    * first miss of every instance cost a hash as well) and no password
+    * verifies against it.
     */
    private string $decoy {
       get {
          if (isSet($this->decoy) === false) {
-            $this->decoy = $this->Password->hash('bootgly-decoy');
+            $Password = $this->Password;
+            $salt = rtrim(base64_encode(random_bytes(16)), '=');
+            $tag = rtrim(base64_encode(random_bytes(32)), '=');
+            $this->decoy = "\$argon2id\$v=19\$m={$Password->memory},t={$Password->time},p={$Password->threads}\${$salt}\${$tag}";
          }
 
          return $this->decoy;
@@ -183,9 +193,11 @@ class Users
    /**
     * Verify credentials with uniform timing and rehash-on-verify.
     *
-    * Unknown identifiers burn a decoy argon2 hash so timing does not
-    * reveal account existence. Legacy hashes upgrade to the current
-    * policy transparently on successful verification.
+    * An unknown identifier costs one verify against a decoy of the current
+    * policy — the work of a wrong password — so timing does not reveal
+    * whether an account exists. A stored hash of another algorithm or cost
+    * (a legacy bcrypt hash) verifies at its own cost until the next
+    * successful verification upgrades it to the current policy.
     *
     * @return null|Identity Claims: `email` (string), `verified` (bool).
     * @throws RuntimeException When the database fails.
@@ -194,7 +206,7 @@ class Users
    {
       // !
       $row = $this->select($email);
-      // ? Unknown identifier — burn a decoy verify (uniform timing)
+      // ? Unknown identifier — one decoy verify (uniform timing)
       if ($row === null) {
          $this->Password->verify($password, $this->decoy);
 
@@ -244,7 +256,7 @@ class Users
    {
       // !
       $row = $this->locate($user);
-      // ? Unknown account — burn a decoy verify (uniform timing)
+      // ? Unknown account — one decoy verify (uniform timing)
       if ($row === null) {
          $this->Password->verify($password, $this->decoy);
 

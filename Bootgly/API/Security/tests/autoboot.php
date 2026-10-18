@@ -60,5 +60,7 @@ return new Suite(
       '1.43-jwt_remote_redirect_opaque_target',
       // # 1.0.x (API-SEC-1): the remote JWKS resolver bounds its origin fetches per process
       '1.44-jwt_remote_origin_floor',
+      // # 1.0.x (M8): an unknown identifier costs the work of a wrong password
+      '1.45-users_decoy_uniform_cost',
    ]
 );
