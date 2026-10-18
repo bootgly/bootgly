@@ -17,6 +17,7 @@ use const BOOTGLY_VERSION;
 use const BOOTGLY_WORKING_DIR;
 use const JSON_INVALID_UTF8_SUBSTITUTE;
 use const JSON_UNESCAPED_SLASHES;
+use const PATH_SEPARATOR;
 use const PHP_BINARY;
 use const PHP_EOL;
 use function array_intersect_key;
@@ -44,6 +45,7 @@ use function getmypid;
 use function implode;
 use function in_array;
 use function is_dir;
+use function is_executable;
 use function is_file;
 use function is_link;
 use function is_resource;
@@ -68,7 +70,6 @@ use function rtrim;
 use function scandir;
 use function sha1;
 use function sha1_file;
-use function shell_exec;
 use function str_contains;
 use function str_pad;
 use function str_replace;
@@ -1062,9 +1063,28 @@ class KitCommand extends Command
       if (Container::check() === true) {
          return '';
       }
+      // ! The global on PATH, walked natively: `command -v` needs a shell,
+      //   and a runtime without one (php-wasm, a host with `shell_exec`
+      //   disabled) turned a mere tip into a fatal error
+      $global = null;
+      $PATH = getenv('PATH');
+      $PATH = $PATH === false || $PATH === '' ? '/usr/local/bin:/usr/bin:/bin' : $PATH;
+      // @@
+      foreach (explode(PATH_SEPARATOR, $PATH) as $directory) {
+         // ? An empty or relative entry means "the current directory" — never that
+         if (str_starts_with($directory, '/') === false) {
+            continue;
+         }
+
+         $candidate = rtrim($directory, '/');
+         $candidate = "{$candidate}/bootgly";
+         if (is_file($candidate) === true && is_executable($candidate) === true) {
+            $global = $candidate;
+            break;
+         }
+      }
       // ?: No global at all
-      $global = trim((string) shell_exec('command -v bootgly 2>/dev/null'));
-      if ($global === '' || is_file($global) === false) {
+      if ($global === null) {
          return 'php ';
       }
       // ?: The walk-up wrapper — the stamp only `setup` writes; a launcher
