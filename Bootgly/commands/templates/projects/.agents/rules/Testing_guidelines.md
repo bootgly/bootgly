@@ -3,8 +3,8 @@
 ## The test framework
 
 - **MUST** — Tests use the Bootgly test framework only: `bootgly test` runs Bootgly suites and nothing
-  else, so a PHPUnit or Pest test never runs. The scaffolded `tests/example/` suite is the template —
-  and a new case or suite runs only once it is listed (see *Organizational structures*).
+  else (a PHPUnit or Pest test never runs). The scaffolded `tests/example/` suite is the template; a new
+  case or suite runs only once it is listed (see *Organizational structures*).
 - **SHOULD** — Every behaviour you add or change gets a test case: console commands, public model and
   service methods, controller logic.
 - **RECOMMEND** — Route (HTTP) tests return a `Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test`
@@ -21,8 +21,8 @@
   Any non-empty value, `0` included, means agent. Read `result` and `failures`, not only the totals.
 - **SHOULD** — Target what you are fixing: `bootgly test <suite> <case>` (1-based indexes), with
   `--fail-fast` while hunting; do a full project run before you call the work done.
-- **RECOMMEND** — PHPStan is optional: if the project adds `phpstan/phpstan` as its own dev dependency,
-  keep it clean.
+- **RECOMMEND** — PHPStan is optional: if the project adds `phpstan/phpstan` as a dev dependency, keep
+  it clean.
 
 ## Definition of done
 

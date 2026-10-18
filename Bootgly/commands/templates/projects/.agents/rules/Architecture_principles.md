@@ -37,18 +37,18 @@ opinionated extras on top.
 ## Dependencies
 
 - **MUST** — Composer is per project (`projects/<Name>/composer.json` + `vendor/`) and is yours for
-  domain dependencies. Never `composer require` the framework: the kit delivers it as the pinned
-  `Bootgly/` submodule, and a vendored copy is dead weight that misleads anyone reading `vendor/`.
+  domain dependencies. Never `composer require` the framework: the kit pins it as the `Bootgly/`
+  submodule, and a vendored copy only misleads.
 - **RECOMMEND** — Keep each third-party library behind a class of your own, so the library never
   shapes the application.
 
 ## Efficiency
 
-- **SHOULD** — No trivial wrappers: a method that only returns a property should not exist. Expose
-  stored state as a property.
+- **SHOULD** — No trivial wrappers: expose stored state as a property, not through a method that only
+  returns it.
 - **RECOMMEND** — Expose state in this order: an asymmetric-visibility property
   (`public private(set)`), then a property hook for computed, aliased or lazy state (a get-only hook
   is already read-only: declare it plain `public`; a lazy hook that stores into its property pairs with
   `public private(set)`), then a method — only when real behaviour exists.
-- **RECOMMEND** — Prefer the simplest, lowest-overhead design at equal clarity. Never trade clarity,
+- **RECOMMEND** — Prefer the simplest, lowest-overhead design at equal clarity; never trade clarity,
   security or a framework contract for speed.

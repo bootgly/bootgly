@@ -3,18 +3,17 @@
 ## Think before coding
 
 - **SHOULD** — State your assumptions; when a request allows several readings (CLI or WPI? which
-  database?), present them instead of picking one silently; say so when a simpler approach exists; stop
-  and ask when something is unclear.
-- **SHOULD** — Ask every question (a decision, a clarification, a confirmation, a next step) through
-  your agent's question tool when it has one (`AskUserQuestion` in Claude Code) — never as prose at the
-  end of a reply, where it is easy to miss.
+  database?), present them instead of picking one; say when a simpler approach exists; stop and ask when
+  something is unclear.
+- **SHOULD** — Ask every question (decision, clarification, confirmation, next step) through your
+  agent's question tool if it has one (`AskUserQuestion` in Claude Code), never as prose ending a reply.
 - **SHOULD** — Search before inventing, in this order: the CLI scaffolders; the shipped examples in
   `projects/`; the documentation (a page as Markdown at `<page>/overview.md`, e.g.
   https://docs.bootgly.com/guide/database-migrations/overview.md, the index at
   https://docs.bootgly.com/llms.txt, or the MCP server at https://docs.bootgly.com/mcp);
   the pinned source under `Bootgly/` (and `Console/`, `Web/`).
 - **MUST** — Never guess a Bootgly signature, named argument, enum case or configuration key. The kit
-  pins one release; the documentation describes the latest. When they disagree, the pinned source wins.
+  pins one release and the documentation describes the latest: when they disagree, the pinned source wins.
 - **RECOMMEND** — Split multi-step work into steps you can verify one by one (config → migration →
   model → routes → tests); a step is done when its checks pass.
 
@@ -25,7 +24,7 @@
 - **MUST** — The kit is a delivery vehicle: never commit, stage, push or discard anything in its own
   repository or its submodules (the project repositories under `projects/` are yours to work in).
   Read-only git (`status`, `log`, `diff`) is fine anywhere. When a `bootgly kit …` message asks for a git
-  action, show it to the user and let them choose.
+  action, let the user choose.
 - **MUST** — A project created from scratch is its own git repository; a `--from` copy, a shipped
   example and a `--no-git` project are not until `project <Name> boot`. Before any git write, check that
   `git rev-parse --show-toplevel` prints the project directory; anything else (the kit root, a parent
@@ -44,13 +43,13 @@
   `php ../bootgly` from `projects/` and `php ../../bootgly` from `projects/<Name>/` (one more `../` per
   nested segment). In the `bootgly/bootgly.kit` image: `docker exec -w /bootgly/projects/<Name> <container> bootgly …`.
 - **MUST** — Found a framework bug? Work around it in the project and draft the report for the user
-  to file upstream — never patch `Bootgly/`, and never file it yourself.
+  to file upstream — never patch `Bootgly/` or file it yourself.
 
 ## Secrets and commits
 
 - **MUST** — Never hard-code credentials: bind them to environment keys with `Config`
   (`->bind(key: 'DB_PASSWORD', default: '')`), and never commit a `configs/**/.env` file.
-- **SHOULD** — Commit only when the user asks; an approval covers that commit only; never push unless asked.
+- **SHOULD** — Commit only when asked; an approval covers that commit only; never push unless asked.
 - **RECOMMEND** — Follow the project's commit convention; with none, use Conventional Commits
   (`feat(cart): add item quantities`).
 - **RECOMMEND** — Document the public API of reusable classes with PHPDoc, array shapes included.

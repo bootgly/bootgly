@@ -32,6 +32,6 @@ These names are contracts: the framework finds each file by them, and a wrong on
   seeders).
 - **SHOULD** — Folders of classes start uppercase (`Models/`); folders of data or fixtures, lowercase
   (`fixtures/`).
-- **RECOMMEND** — A directory named after a class (`Cart/` beside `Cart.php`) holds that class's
-  internals, and those parts never depend back on `Cart`. Grouping directories (`Controllers/`,
-  `Models/`, `Resources/`) need no class of their own. Avoid dependency cycles.
+- **RECOMMEND** — A directory named after a class (`Cart/` beside `Cart.php`) holds its internals,
+  which never depend back on `Cart`; grouping directories (`Controllers/`, `Models/`) need no class.
+  Avoid dependency cycles.
