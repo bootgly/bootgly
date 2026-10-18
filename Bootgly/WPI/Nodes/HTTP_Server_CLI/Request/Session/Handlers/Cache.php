@@ -22,7 +22,6 @@ use function count;
 use function dirname;
 use function fclose;
 use function fflush;
-use function file_exists;
 use function file_get_contents;
 use function fopen;
 use function fsync;
@@ -427,17 +426,25 @@ class Cache implements Committing
          );
       }
 
-      if (is_link($path)) {
+      // ! One look at the path: two checks (a file? then: anything?) let a
+      //   concurrent worker publish the key between them, refusing a key that
+      //   is a regular file by then
+      $state = @lstat($path);
+      // ?: No key yet — create it (a worker that loses the publication race
+      //   imports the winner's)
+      if ($state === false) {
+         return self::create($path);
+      }
+      $type = (int) $state['mode'] & 0170000;
+      if ($type === 0120000) {
          throw new RuntimeException('Session Cache key path must not be a symbolic link.');
       }
-      if (is_file($path)) {
-         return self::import($path);
-      }
-      if (file_exists($path)) {
+      if ($type !== 0100000) {
          throw new RuntimeException('Session Cache key path must be a regular file.');
       }
 
-      return self::create($path);
+      // :
+      return self::import($path);
    }
 
    /** Atomically create the default key without exposing partial contents. */

@@ -30,5 +30,7 @@ return new Suite(
 
       '5.1-file-handler-filesystem_security',
       '5.2-file-handler-atomic_commit_destroy',
+      // # 1.1.0-dev (SESS-3): the key path is classified with one look
+      '2.5-cache-handler-key_single_look',
    ]
 );
