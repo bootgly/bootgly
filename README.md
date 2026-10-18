@@ -20,7 +20,7 @@ Bootgly is a base framework for building **APIs and apps** on both the **Web (WP
 ## Why Bootgly?
 
 - ⚡ **Native async HTTP server in pure PHP** — long-running and event-loop driven, with Fibers for non-blocking I/O. No Nginx, no PHP-FPM in front. A pure-PHP alternative to Swoole, Workerman and FrankenPHP — no C extension required. <ins>**AutoTLS with ACME v2</ins>.**
-- 📦 **Zero third-party dependencies in the core** — every essential feature (HTTP server, router, config, testing, sessions, DBAL + ORM) is built in. A smaller `vendor/` and a smaller supply-chain surface.
+- 📦 **Zero third-party dependencies in the core** — every essential feature (HTTP server, router, config, testing, sessions, DBAL + ORM) is built in. A smaller `vendor/` and a smaller supply-chain surface. Only the core is native (built-in) — your project is still extensible via Composer.
 - 🎯 **One canonical way to do everything** — one HTTP server, one config schema, one test framework. Predictable, consistent code: fewer decisions, less to maintain, no bikeshedding.
 - 🧱 **Strict, enforceable architecture** — six layers (ABI → ACI → ADI → API → CLI → WPI) with one-way dependencies and no cross-layer skipping. One core, two platforms.
 
