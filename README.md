@@ -180,7 +180,7 @@ php bootgly projects import
 ### 📟 Bootgly CLI
 
 <details>
-   <summary><kbd>Import `Demo/CLI` project and run Bootgly CLI demo</kbd></summary><br>
+   <summary><kbd>Run Bootgly CLI demo</kbd></summary><br>
 
    1) Run the Bootgly CLI demo in terminal:
 
@@ -225,10 +225,9 @@ php bootgly projects import
 ### 🌐 Bootgly WPI
 
 <details>
-   <summary><kbd>Import `Demo/HTTP_Server_CLI` project and run the demo of HTTP Server</kbd></summary>
+   <summary><kbd>Run the demo of HTTP Server</kbd></summary>
 
-   1) Import a Web project with the wizard (`php bootgly projects import`);
-   2) Run it in the terminal:
+   1) Run it in the terminal:
 
    ```bash
    bootgly project Demo/HTTP_Server_CLI start
