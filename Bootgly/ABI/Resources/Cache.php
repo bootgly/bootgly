@@ -207,6 +207,11 @@ class Cache
     * (one round-trip on Redis). A stored `null` is indistinguishable from a
     * miss and is recomputed — do not cache `null` values.
     *
+    * The store after the compute is unconditional: a `delete()` or
+    * `invalidate()` that lands while the compute runs is overwritten with the
+    * value read before it. Values a concurrent invalidation must win bind
+    * themselves to a generation key read before the compute instead.
+    *
     * @param array<int,string> $tags
     */
    public function resolve (string $key, int $TTL, Closure $compute, array $tags = []): mixed

@@ -249,7 +249,7 @@ return new Test(
                && count($observed) === 1
                && $observed[0][1] === null
                && $observed[0][2] === 0,
-            description: 'an upgrade write that lands on no row is announced by the store even though the driver recorded no error'
+            description: 'an upgrade write that lands on no row while the verified hash is still stored is announced by the store even though the driver recorded no error'
          );
 
          // ! The announcement is best-effort end to end: a broken listener on

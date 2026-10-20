@@ -8,6 +8,7 @@ use function count;
 use function is_array;
 use function is_dir;
 use function str_contains;
+use RuntimeException;
 
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Suite\Test;
@@ -27,20 +28,27 @@ use Bootgly\API\Security\Identity;
 class RecordingSQL extends SQL
 {
    /**
-    * @var array<int,array{sql:string,parameters:array<int|string,mixed>}>
+    * @var array<int,array{sql:string,parameters:array<int|string,mixed>,reading:bool,Scope:null|object}>
     */
    public array $queries = [];
    /**
     * @var array<int,array<string,mixed>>
     */
    public array $rows;
+   /**
+    * The failure is recorded when the query is created.
+    */
    public bool $fail;
+   /**
+    * The failure is recorded while the query is awaited.
+    */
+   public bool $late;
 
 
    /**
     * @param array<int,array<string,mixed>> $rows
     */
-   public function __construct (array $rows = [], bool $fail = false)
+   public function __construct (array $rows = [], bool $fail = false, bool $late = false)
    {
       parent::__construct(['driver' => 'sqlite', 'pool' => ['min' => 0, 'max' => 0]]);
       // ! Zero-size pool keeps the real SQL constructor connection-free for this double.
@@ -48,6 +56,7 @@ class RecordingSQL extends SQL
       // * Data
       $this->rows = $rows;
       $this->fail = $fail;
+      $this->late = $late;
    }
 
    /**
@@ -62,10 +71,16 @@ class RecordingSQL extends SQL
       $this->queries[] = [
          'sql'        => $Operation->SQL,
          'parameters' => $Operation->parameters,
+         'reading'    => $Normalized->reading,
+         'Scope'      => $Scope,
       ];
 
       if ($this->fail) {
          return $Operation->fail('RBAC database failure.');
+      }
+      // ? Still running: the failure lands while it is awaited
+      if ($this->late) {
+         return $Operation;
       }
 
       $Operation->rows = $this->rows;
@@ -76,6 +91,15 @@ class RecordingSQL extends SQL
 
    public function await (SQLOperation $Operation): SQLOperation
    {
+      if ($this->late && $Operation->finished === false) {
+         $Operation->fail('RBAC database failure while awaited.');
+      }
+
+      // ? Like Pool::wait(): a failed operation throws
+      if ($Operation->error !== null) {
+         throw new RuntimeException($Operation->error);
+      }
+
       return $Operation;
    }
 }
@@ -99,6 +123,19 @@ return new Test(
             && str_contains($Database->queries[0]['sql'], '"role_permissions"')
             && $Database->queries[0]['parameters'] === ['demo-user', 'demo:read'],
          description: 'RBAC resolver compiles a joined role-permission lookup'
+      );
+
+      // ! Replica lag never decides an authorization: the lookup reaches the
+      //   SQL facade write-classified, under a one-use scope
+      $Scope = $Database->queries[0]['Scope'];
+      $RBAC->check($Identity, 'demo:write');
+      yield assert(
+         assertion: $Database->queries[0]['reading'] === false
+            && $Scope !== null
+            && $Database->queries[1]['reading'] === false
+            && $Database->queries[1]['Scope'] !== null
+            && $Database->queries[1]['Scope'] !== $Scope,
+         description: 'RBAC lookups are routed to the primary (write-classified) with a fresh scope each'
       );
 
       $Database = new RecordingSQL(rows: [['allowed' => 0]]);
@@ -126,10 +163,24 @@ return new Test(
 
       $Database = new RecordingSQL(fail: true);
       $RBAC = new RBAC($Database);
+      $Untouched = new Identity(id: 'demo-user', scopes: ['token:scope']);
 
       yield assert(
-         assertion: $RBAC->check($Identity, 'demo:read') === false,
-         description: 'RBAC resolver fails closed on database errors'
+         assertion: $RBAC->check($Identity, 'demo:read') === false
+            && $RBAC->load($Untouched) === $Untouched
+            && $Untouched->scopes === ['token:scope'],
+         description: 'RBAC resolver fails closed on database errors (check() denies, load() keeps the identity)'
+      );
+
+      $Database = new RecordingSQL(late: true);
+      $RBAC = new RBAC($Database);
+
+      yield assert(
+         assertion: $RBAC->check($Identity, 'demo:read') === false
+            && $RBAC->load($Untouched) === $Untouched
+            && $Untouched->scopes === ['token:scope']
+            && count($Database->queries) === 2,
+         description: 'RBAC resolver fails closed on a database error thrown while the query is awaited'
       );
 
       // ! The fixture ships on the framework's own shelf — the consumer's

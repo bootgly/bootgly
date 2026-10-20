@@ -64,5 +64,11 @@ return new Suite(
       '1.45-users_decoy_uniform_cost',
       // # 1.0.x (M12/JWT-4/JWT-10): a consumed refresh token stays detectable on every host of one store
       '1.46-jwt_rotate_tombstone_visibility',
+      // # 1.0.x (H6C-4/USR-11): a reset or upgrade committed during a login wins over its rehash write
+      '1.47-users_rehash_compare_and_set',
+      // # 1.0.x (H6C-5/AUTH-3): an RBAC invalidate() inside a check's window is never undone by that check
+      '1.48-authorization_rbac_cache_generation',
+      // # 1.0.x (AUTH-1/AUTH-2): RBAC resolvers sharing a cache store stay within their own realm
+      '1.49-authorization_rbac_cache_scope',
    ]
 );

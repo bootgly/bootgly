@@ -197,9 +197,17 @@ class Users
     * policy — the work of a wrong password — so timing does not reveal
     * whether an account exists. A stored hash of another algorithm or cost
     * (a legacy bcrypt hash) verifies at its own cost until the next
-    * successful verification upgrades it to the current policy.
+    * successful verification upgrades it to the current policy. The upgrade
+    * is a compare-and-set on the hash just verified: a reset or password
+    * change (`rotate()`) committed during the login wins — the login fails,
+    * as it does when the account is gone, while a concurrent login's upgrade
+    * of the same password lets it stand; only an upgrade that failed or was
+    * suppressed is announced through `Events::Failed`. When the account
+    * cannot be re-read after an upgrade that landed on no row, the miss is
+    * announced and the failure propagates (a reset may have won).
     *
-    * @return null|Identity Claims: `email` (string), `verified` (bool).
+    * @return null|Identity Claims: `email` (string), `verified` (bool) — as
+    *    the account holds them after the upgrade.
     * @throws RuntimeException When the database fails.
     */
    public function verify (string $email, #[\SensitiveParameter] string $password): null|Identity
@@ -220,11 +228,16 @@ class Users
          return null;
       }
 
-      // ?: Rehash-on-verify — persist the upgraded hash. Best-effort by
-      //   contract: the credential fact is already proven, so an upgrade that
-      //   does not land must not fail the login — but it must not be invisible
-      //   either. A recorded driver error already announced itself through
-      //   `Events::Failed`; a write that landed on no row is announced here.
+      // ?: Rehash-on-verify — persist the upgraded hash, compare-and-set on
+      //   the hash just verified: a reset or a password change committed
+      //   meanwhile wins, and the old password never comes back. Best-effort
+      //   by contract: the credential fact is already proven, so an upgrade
+      //   that does not land must not fail the login — but it must not be
+      //   invisible either. A recorded driver error already announced itself
+      //   through `Events::Failed`; a write that landed on no row is announced
+      //   here, unless the row moved on (a newer hash, or no account) — a
+      //   race lost, and the login fails unless the newer hash still opens
+      //   with this password (a concurrent login's upgrade).
       if ($Verification->hash !== null) {
          $Operation = $this->attempt(
             $this->Database
@@ -232,11 +245,44 @@ class Users
                ->update()
                ->set(new Identifier($this->secret), $Verification->hash)
                ->filter(new Identifier($this->key), Operators::Equal, $row['id'])
+               ->filter(new Identifier($this->secret), Operators::Equal, $row['secret'])
          );
 
          if ($Operation->error === null && $Operation->affected !== 1) {
-            $Emitter = Emitter::$Instance;
-            $Emitter->check(Events::Failed) && $Emitter->emit(Events::Failed, $Operation);
+            // ! What the row holds now — a re-read that fails proves nothing:
+            //   the miss is announced and the login fails closed
+            try {
+               $Current = $this->locate($row['id']);
+            }
+            catch (RuntimeException $Exception) {
+               $Emitter = Emitter::$Instance;
+               $Emitter->check(Events::Failed) && $Emitter->emit(Events::Failed, $Operation);
+
+               throw $Exception;
+            }
+
+            // ? The account is gone
+            if ($Current === null) {
+               return null;
+            }
+
+            // @ The verified hash is still stored — a suppressed upgrade
+            if ($Current['secret'] === $row['secret']) {
+               $Emitter = Emitter::$Instance;
+               $Emitter->check(Events::Failed) && $Emitter->emit(Events::Failed, $Operation);
+            }
+            // ? A newer hash: a concurrent login's upgrade still opens with
+            //   this password; a reset — or another account under the id —
+            //   does not, and the reset wins
+            elseif (
+               $Current['email'] !== $row['email']
+               || $this->Password->verify($password, $Current['secret']) === false
+            ) {
+               return null;
+            }
+
+            // ! The claims as the account holds them now
+            $row = $Current;
          }
       }
 
