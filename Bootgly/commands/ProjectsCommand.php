@@ -85,7 +85,6 @@ use Bootgly\ACI\Process\State;
 use Bootgly\ACI\Process\States;
 use Bootgly\API\Environment\Build;
 use Bootgly\API\Projects;
-use Bootgly\API\Projects\Project;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\UI\Base\Fieldset;
@@ -544,6 +543,36 @@ class ProjectsCommand extends Command
 
          return false;
       }
+      // ? A signature is a regular file of the repository: a symbolic link is
+      //   copied AS the link, and every reader would follow it out of the
+      //   project — to a host file, or to code the repository does not hold
+      foreach ($signatures as $signature) {
+         if (is_link($signature) === true) {
+            $Alert = new Alert($Output);
+            $Alert->Type::Failure->set();
+            $Alert->message = 'Not imported: @#cyan:' . $this->clean(basename($signature))
+               . '@; is a symbolic link — a project signature must be a regular file.';
+            $Alert->render();
+
+            $this->erase($tmp);
+
+            return false;
+         }
+      }
+      // ? A `bootgly` launcher inside the project would be run by the global
+      //   command from in there — on any verb, a listing included
+      $launcher = Projects::probe($tmp);
+      if ($launcher !== null) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = 'Not imported: @#cyan:' . $this->clean($launcher)
+            . '@; is a Bootgly launcher — the global `bootgly` command would run it from inside the project.';
+         $Alert->render();
+
+         $this->erase($tmp);
+
+         return false;
+      }
 
       // ! Summary
       $content  = '@#Green:' . str_pad('Mode', 12) . ' @; Import external repository' . PHP_EOL;
@@ -558,10 +587,14 @@ class ProjectsCommand extends Command
       $Fieldset->render();
       $Output->write(PHP_EOL);
 
-      // ? Imported projects execute third-party code when started
+      // ? Imported code runs whenever a command runs the project — `start`
+      //   (also `restart`, a `startup` unit), `migrate`, `seed`, `schedule`,
+      //   its tests and its queues; `projects list` and `project info` only
+      //   read its signature
       if (isSet($options['yes']) === false) {
          $confirmed = $this->confirm(
-            "Importing will run third-party code when the project starts. Import as `{$path}`?"
+            "Its code runs whenever a command runs it (start, restart, startup, migrate, seed, schedule, its tests and queues); "
+            . "projects list and project info only read its signature. Import as `{$path}`?"
          );
 
          if ($confirmed === false) {
@@ -624,9 +657,15 @@ class ProjectsCommand extends Command
             continue;
          }
 
+         // ! The signature is the project's own text: a broken one is a
+         //   marked row, never an aborted listing, and nothing it carries
+         //   may drive the terminal or the Output markup
+         $description = $meta['error'] !== ''
+            ? "(invalid signature: {$meta['error']})"
+            : $meta['description'];
          $all[$folder] = [
-            'interfaces'  => implode(', ', $entry['interfaces'] ?? []),
-            'description' => $meta['description']
+            'interfaces'  => $this->clean(implode(', ', $entry['interfaces'] ?? [])),
+            'description' => $this->clean($description)
          ];
       }
 
@@ -2206,7 +2245,7 @@ class ProjectsCommand extends Command
     *
     * @param string $dir
     *
-    * @return bool True when the signature file returns an exportable Project.
+    * @return bool True when the signature declares `exportable: true` (read as tokens).
     */
    private function inspect (string $dir): bool
    {
@@ -2216,15 +2255,8 @@ class ProjectsCommand extends Command
          return false;
       }
 
-      try {
-         $Project = include $signatures[0];
-      }
-      catch (Throwable) {
-         return false;
-      }
-
-      // :
-      return $Project instanceof Project && $Project->exportable === true;
+      // : Read, never run — `exportable: true` must be written as a literal
+      return Projects::inspect($signatures[0], basename($dir))['exportable'];
    }
 
    /**

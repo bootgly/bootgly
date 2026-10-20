@@ -78,5 +78,8 @@ return new Suite(
       '11.8-kit-agent-rules',
       // # kit boot lays down and refreshes the agent rules; a move re-lays them
       '8.10-kit-agent-rules',
+      // # list/info read signatures without running them; symlinked
+      //   signatures and hostile metadata stay inert (appended last)
+      '6.4-projects-list-inert',
    ]
 );

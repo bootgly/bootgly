@@ -2565,32 +2565,26 @@ class ProjectCommand extends Command
          return false;
       }
 
-      // @ Load metadata from project file (leaf-named)
+      // @ Read the signature (leaf-named) for its metadata — as tokens: info
+      //   never runs project code, its own or any other project's
       $projectFile = $projectDir . basename($folder) . '.Project.php';
-      $meta = is_file($projectFile)
-         ? Projects::inspect($projectFile, $folder)
-         : ['name' => $folder, 'description' => '', 'version' => '', 'author' => ''];
+      $meta = Projects::inspect($projectFile, $folder);
 
-      // @ Detect interfaces from index files
-      $interfaces = [];
-      $projects_CLI = Projects::discover('CLI');
-      $projects_WPI = Projects::discover('WPI');
-      if (isSet($projects_CLI[$folder])) {
-         $interfaces[] = 'CLI';
-      }
-      if (isSet($projects_WPI[$folder])) {
-         $interfaces[] = 'WPI';
-      }
+      // @ Interfaces — the registry binds them (resolve() proved membership)
+      $interfaces = Projects::read()[$folder]['interfaces'] ?? [];
 
-      // @ Build Fieldset content
+      // @ Build Fieldset content — every value is outside text
       $content = '';
-      $content .= '@#Green:' . str_pad('Name', 14) . ' @; ' . $meta['name'] . PHP_EOL;
-      $content .= '@#Green:' . str_pad('Folder', 14) . ' @; ' . $folder . PHP_EOL;
-      $content .= '@#Green:' . str_pad('Description', 14) . ' @; ' . ($meta['description'] ?: '(none)') . PHP_EOL;
-      $content .= '@#Green:' . str_pad('Version', 14) . ' @; ' . ($meta['version'] ?: '(none)') . PHP_EOL;
-      $content .= '@#Green:' . str_pad('Author', 14) . ' @; ' . ($meta['author'] ?: '(none)') . PHP_EOL;
-      $content .= '@#Green:' . str_pad('Interfaces', 14) . ' @; ' . (implode(', ', $interfaces) ?: '(none)') . PHP_EOL;
-      $content .= '@#Green:' . str_pad('Path', 14) . ' @; ' . $projectDir;
+      $content .= '@#Green:' . str_pad('Name', 14) . ' @; ' . $this->clean($meta['name']) . PHP_EOL;
+      $content .= '@#Green:' . str_pad('Folder', 14) . ' @; ' . $this->clean($folder) . PHP_EOL;
+      $content .= '@#Green:' . str_pad('Description', 14) . ' @; ' . ($this->clean($meta['description']) ?: '(none)') . PHP_EOL;
+      $content .= '@#Green:' . str_pad('Version', 14) . ' @; ' . ($this->clean($meta['version']) ?: '(none)') . PHP_EOL;
+      $content .= '@#Green:' . str_pad('Author', 14) . ' @; ' . ($this->clean($meta['author']) ?: '(none)') . PHP_EOL;
+      $content .= '@#Green:' . str_pad('Interfaces', 14) . ' @; ' . ($this->clean(implode(', ', $interfaces)) ?: '(none)') . PHP_EOL;
+      if ($meta['error'] !== '') {
+         $content .= '@#Yellow:' . str_pad('Signature', 14) . ' @; ' . $this->clean("invalid — {$meta['error']}") . PHP_EOL;
+      }
+      $content .= '@#Green:' . str_pad('Path', 14) . ' @; ' . $this->clean($projectDir);
 
       $Output->write(PHP_EOL);
       $Fieldset = new Fieldset($Output);

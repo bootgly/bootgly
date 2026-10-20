@@ -100,7 +100,7 @@ bootgly projects import https://github.com/acme/shop.git Shop --interfaces=WPI -
 
 - The repository root must hold a `*.Project.php`. The copy keeps its history and `origin`. The name
   defaults to the repository name. `--interfaces` defaults to `WPI`: pass `CLI` for a console app.
-- Imported code runs when the project starts. `--yes` skips that confirmation: only for a user's URL.
+- Imported code runs on `start`/`restart`, its `migrate`/`seed`/`schedule`, tests and queues (`list`/`info` only read it). `--yes` skips the confirmation: only for a user's URL.
 - A different target name renames the signature file and leaves that change uncommitted. Namespaces
   are not renamed: apply the rename from section 3 and let the user review and commit it.
 

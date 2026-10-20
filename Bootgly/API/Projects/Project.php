@@ -77,11 +77,15 @@ class Project
     * @param Closure $boot Boot function executed by `bootgly project <Name> start` —
     *                      receives the command `$arguments` and `$options`.
     * @param bool $exportable Whether the project appears in the `bootgly projects create`
-    *                         import picker to be copied into user workspaces.
+    *                         import picker to be copied into user workspaces — read
+    *                         without running the signature, so write the literal `true`.
     * @param string $name Human-readable project name (e.g. `My App`).
     * @param string $folder Projects-root-relative folder override (e.g. `App/API`).
     *                       Derived from the signature file location when omitted.
-    * @param string $description Short description shown by `bootgly projects list`.
+    * @param string $description Short description shown by `bootgly projects list` —
+    *                            listings read `$name`, `$description`, `$version` and
+    *                            `$author` as string literals (an expression shows
+    *                            as `(dynamic)`).
     * @param string $version Project version — plain semver (e.g. `1.0.0`).
     * @param string $author Project author (person or organization).
     */

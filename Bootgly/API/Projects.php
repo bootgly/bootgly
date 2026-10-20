@@ -13,29 +13,62 @@ namespace Bootgly\API;
 
 use const BOOTGLY_ROOT_BASE;
 use const BOOTGLY_WORKING_BASE;
+use const T_AS;
+use const T_ATTRIBUTE;
+use const T_CLOSE_TAG;
+use const T_COMMENT;
+use const T_CONST;
+use const T_CONSTANT_ENCAPSED_STRING;
+use const T_CURLY_OPEN;
+use const T_DOC_COMMENT;
+use const T_DOLLAR_OPEN_CURLY_BRACES;
+use const T_ELLIPSIS;
+use const T_FUNCTION;
+use const T_INLINE_HTML;
+use const T_NAME_FULLY_QUALIFIED;
+use const T_NAME_QUALIFIED;
+use const T_NAME_RELATIVE;
+use const T_NAMESPACE;
+use const T_NEW;
+use const T_NS_SEPARATOR;
+use const T_OPEN_TAG;
+use const T_RETURN;
+use const T_STRING;
+use const T_USE;
+use const T_WHITESPACE;
 use const TOKEN_PARSE;
 use function addcslashes;
 use function array_filter;
 use function array_key_exists;
 use function array_map;
+use function array_slice;
 use function array_values;
 use function basename;
 use function bin2hex;
+use function chr;
 use function count;
 use function dirname;
+use function end;
+use function explode;
 use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
+use function filesize;
 use function glob;
+use function hexdec;
 use function implode;
 use function in_array;
 use function is_array;
 use function is_dir;
 use function is_file;
+use function is_link;
 use function is_string;
 use function ksort;
+use function ltrim;
 use function mkdir;
+use function octdec;
 use function preg_match;
+use function preg_replace_callback;
 use function random_bytes;
 use function rawurlencode;
 use function realpath;
@@ -50,10 +83,16 @@ use function str_starts_with;
 use function strlen;
 use function strtolower;
 use function strtr;
+use function substr;
 use function token_get_all;
 use function unlink;
 use function var_export;
+use FilesystemIterator;
 use ParseError;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
+use ReflectionMethod;
+use SplFileInfo;
 use Throwable;
 
 use function Bootgly\ABI\copy_recursively;
@@ -93,6 +132,17 @@ abstract class Projects
       'Embedded',
       'Mobile',
    ];
+   // # Inspect
+   /**
+    * What `inspect()` reads for a metadata field the signature computes
+    * instead of writing as a literal — shown as is by `projects list`/`info`.
+    */
+   public const string DYNAMIC = '(dynamic)';
+   /**
+    * The largest signature `inspect()` reads, in bytes: a signature is a few
+    * hundred bytes of metadata, and tokens cost ~150× their source in memory.
+    */
+   public const int SIGNATURE = 262_144;
 
    // * Config
    // ...
@@ -241,7 +291,7 @@ abstract class Projects
     *
     * @param string $interface CLI or WPI
     *
-    * @return array<string, array{name: string, description: string, version: string, author: string}>
+    * @return array<string, array{name: string, description: string, version: string, author: string, exportable: bool, error: string}>
     */
    public static function discover (string $interface): array
    {
@@ -254,10 +304,10 @@ abstract class Projects
       // @ Iterate the registered paths for this interface (leaf-named project files)
       foreach (self::filter($interface) as $path) {
          $leaf = basename($path);
-         $file = $projectsDir . $path . '/' . $leaf . '.Project.php';
-         if (is_file($file)) {
-            $projects[$path] = self::inspect($file, $path);
-         }
+         $file = "{$projectsDir}{$path}/{$leaf}.Project.php";
+         // ! Every registered path is a row — a missing or symlinked signature
+         //   is one marked by `inspect()`, never a silently absent project
+         $projects[$path] = self::inspect($file, $path);
       }
 
       // :
@@ -265,39 +315,454 @@ abstract class Projects
    }
 
    /**
-    * Inspect one project signature for its metadata.
+    * Inspect one project signature for its metadata — without running it.
+    *
+    * A signature is PHP that only the executing verbs may run (`start`, and
+    * `migrate`/`seed`/`schedule`, which open it). Listings read it as tokens
+    * instead: the top-level `return new Project(...)` — its class resolved
+    * through the file's namespace and `use` imports, and accepted only as
+    * `Bootgly\API\Projects\Project` — gives `name`, `description`, `version`
+    * and `author` when each is a plain string literal (named or positional),
+    * and `exportable` when it is the literal `true`. A field written as any
+    * other expression reads `Projects::DYNAMIC`. A signature that is a
+    * symlink, unreadable, unparseable or not a `return new Project(...)`
+    * keeps the fallbacks and carries a fixed `error`, so one bad project never
+    * aborts a listing.
+    *
+    * The values are the file's own text: neutralize them before rendering.
     *
     * @param string $file The project file path
     * @param string $folder The project folder name (fallback)
     *
-    * @return array{name: string, description: string, version: string, author: string}
+    * @return array{name: string, description: string, version: string, author: string, exportable: bool, error: string}
     */
    public static function inspect (string $file, string $folder): array
    {
       // !
-      $defaults = [
+      $metadata = [
          'name'        => $folder,
          'description' => '',
          'version'     => '',
-         'author'      => ''
+         'author'      => '',
+         'exportable'  => false,
+         'error'       => '',
       ];
 
-      // @ The signature is read for its metadata only — never load the
-      //   project's Composer autoloader here: `list`/`info` read EVERY
-      //   project, and stacking N vendor bootstraps in one process makes a
-      //   read-only listing run everyone's dependency code
-      $Project = require $file;
-      if ($Project instanceof Project === false) {
-         return $defaults;
+      // ? A symlinked signature reads a file outside the project
+      if (is_link($file) === true) {
+         $metadata['error'] = 'symlinked signature refused';
+
+         return $metadata;
+      }
+      // ? A registered project without its signature
+      if (is_file($file) === false) {
+         $metadata['error'] = 'missing signature';
+
+         return $metadata;
+      }
+
+      // @ Tokens — TOKEN_PARSE runs the real parser, never the code; the
+      //   read is bounded (a file that grows after the size check included)
+      try {
+         $size = @filesize($file);
+         $source = $size === false || $size > self::SIGNATURE
+            ? false
+            : @file_get_contents($file, false, null, 0, self::SIGNATURE + 1);
+         if ($size !== false && $size > self::SIGNATURE || is_string($source) && strlen($source) > self::SIGNATURE) {
+            $metadata['error'] = 'signature too large';
+
+            return $metadata;
+         }
+         if ($source === false) {
+            $metadata['error'] = 'unreadable signature';
+
+            return $metadata;
+         }
+         // @ Compile-time notices (an octal escape overflow, a deprecated
+         //   interpolation) belong to the signature, not to the listing
+         $tokens = @token_get_all($source, TOKEN_PARSE);
+      }
+      catch (ParseError $Error) {
+         $metadata['error'] = "syntax error on line {$Error->getLine()}";
+
+         return $metadata;
+      }
+      catch (Throwable) {
+         $metadata['error'] = 'unreadable signature';
+
+         return $metadata;
+      }
+
+      // ? The top-level `return new Bootgly\API\Projects\Project(...)`
+      $located = self::locate($tokens);
+      if ($located === null || strtolower($located[0]) !== strtolower(Project::class)) {
+         $metadata['error'] = 'no top-level `return new Project(...)`';
+
+         return $metadata;
+      }
+
+      // ! Constructor order — positional arguments bind through it
+      $parameters = [];
+      foreach (new ReflectionMethod(Project::class, '__construct')->getParameters() as $Parameter) {
+         $parameters[] = $Parameter->name;
+      }
+
+      // @@ Bind each argument to its parameter (PHP's own call rules)
+      /** @var array<string,array<int,array{0:int,1:string,2:int}|string>> $values */
+      $values = [];
+      $named = false;
+      $spread = false;
+      foreach ($located[1] as $position => $argument) {
+         $head = $argument[0];
+         // ? `...$arguments` — any field left unnamed is unknown
+         if (is_array($head) === true && $head[0] === T_ELLIPSIS) {
+            $spread = true;
+
+            continue;
+         }
+
+         if (
+            ($argument[1] ?? null) === ':'
+            && is_array($head) === true
+            && preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/D', $head[1]) === 1
+         ) {
+            $named = true;
+            $parameter = $head[1];
+            $value = array_slice($argument, 2);
+         }
+         else {
+            // ? A positional argument after a named or unpacked one never compiles
+            $parameter = ($named === true || $spread === true) ? null : ($parameters[$position] ?? null);
+            $value = $argument;
+         }
+
+         // ? Unknown, duplicated or out-of-place — PHP would refuse the call
+         if ($parameter === null || in_array($parameter, $parameters, true) === false || isSet($values[$parameter]) === true) {
+            $metadata['error'] = 'invalid `new Project(...)` arguments';
+
+            return $metadata;
+         }
+         $values[$parameter] = $value;
+      }
+
+      // @ String fields: one literal each, anything else is dynamic
+      foreach (['name', 'description', 'version', 'author'] as $field) {
+         if (isSet($values[$field]) === false) {
+            if ($spread === true) {
+               $metadata[$field] = self::DYNAMIC;
+            }
+
+            continue;
+         }
+
+         $metadata[$field] = self::unquote($values[$field]) ?? self::DYNAMIC;
+      }
+      if ($metadata['name'] === '') {
+         $metadata['name'] = $folder;
+      }
+
+      // @ Exportable: only the literal `true`
+      $flag = $values['exportable'] ?? [];
+      $metadata['exportable'] = count($flag) === 1
+         && is_array($flag[0]) === true
+         && ($flag[0][0] === T_STRING || $flag[0][0] === T_NAME_FULLY_QUALIFIED)
+         && strtolower(ltrim($flag[0][1], '\\')) === 'true';
+
+      // :
+      return $metadata;
+   }
+
+   /**
+    * Locate the top-level `return new <Class>(...)` statement of a signature.
+    *
+    * Only the first `return` that starts a statement outside every block is
+    * read (a braced namespace counts as top level), it must construct a named
+    * class, and the call must end the statement. `<Class>` is resolved
+    * through the namespace and the class imports in effect there.
+    *
+    * @param array<int,array{0:int,1:string,2:int}|string> $tokens
+    *
+    * @return null|array{0:string,1:array<int,non-empty-array<int,array{0:int,1:string,2:int}|string>>}
+    *         The resolved class and its arguments (insignificant tokens dropped).
+    */
+   private static function locate (array $tokens): null|array
+   {
+      // ! Significant tokens
+      $list = [];
+      foreach ($tokens as $token) {
+         if (is_array($token) === true && in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true) === true) {
+            continue;
+         }
+         $list[] = $token;
+      }
+      $names = [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE];
+      $bounds = [';', '{', '}', T_OPEN_TAG, T_CLOSE_TAG, T_INLINE_HTML];
+
+      // ! Scope
+      $namespace = '';
+      /** @var array<string,string> $aliases */
+      $aliases = [];
+      $depth = 0;
+      $base = 0;
+
+      // @@
+      $count = count($list);
+      for ($i = 0; $i < $count; $i++) {
+         $token = $list[$i];
+         $id = is_array($token) ? $token[0] : $token;
+
+         // # Blocks
+         if ($id === '{' || $id === T_CURLY_OPEN || $id === T_DOLLAR_OPEN_CURLY_BRACES) {
+            $depth++;
+
+            continue;
+         }
+         if ($id === '}') {
+            $depth--;
+            if ($depth < $base) {
+               $base = 0;
+            }
+
+            continue;
+         }
+         // ? Statements only start at the top level, after a boundary
+         $previous = $i > 0 ? $list[$i - 1] : ';';
+         $previous = is_array($previous) ? $previous[0] : $previous;
+         if ($depth !== $base || in_array($previous, $bounds, true) === false) {
+            continue;
+         }
+
+         // # Namespace — resets the imports
+         if ($id === T_NAMESPACE) {
+            $next = $list[$i + 1] ?? ';';
+            $namespace = is_array($next) && in_array($next[0], $names, true) ? $next[1] : '';
+            $aliases = [];
+            $j = $i + 1;
+            while ($j < $count && $list[$j] !== ';' && $list[$j] !== '{') {
+               $j++;
+            }
+            if (($list[$j] ?? null) === '{') {
+               $base = 1;
+               $depth = 1;
+            }
+            $i = $j;
+
+            continue;
+         }
+
+         // # Imports — classes only (`use function` / `use const` skipped)
+         if ($id === T_USE) {
+            $kind = is_array($list[$i + 1] ?? null) ? $list[$i + 1][0] : null;
+            $group = '';
+            $pending = null;
+            $alias = null;
+            $skip = $kind === T_FUNCTION || $kind === T_CONST;
+            for ($i++; $i < $count && $list[$i] !== ';'; $i++) {
+               $part = $list[$i];
+               if (is_array($part) && $part[0] === T_NS_SEPARATOR && ($list[$i + 1] ?? null) === '{') {
+                  $group = ltrim((string) $pending, '\\');
+                  $pending = null;
+                  $i++;
+
+                  continue;
+               }
+               if (is_array($part) && ($part[0] === T_FUNCTION || $part[0] === T_CONST)) {
+                  $pending = false;
+
+                  continue;
+               }
+               if (is_array($part) && $part[0] === T_AS) {
+                  $alias = is_array($list[$i + 1] ?? null) ? $list[$i + 1][1] : null;
+                  $i++;
+
+                  continue;
+               }
+               if (is_array($part) && in_array($part[0], $names, true) && $pending !== false) {
+                  $pending = $part[1];
+
+                  continue;
+               }
+               if ($part === ',' || $part === '}') {
+                  if ($skip === false && is_string($pending)) {
+                     $full = ltrim($group !== '' ? "{$group}\\{$pending}" : $pending, '\\');
+                     $segments = explode('\\', $full);
+                     $aliases[strtolower($alias ?? end($segments))] = $full;
+                  }
+                  $pending = null;
+                  $alias = null;
+                  if ($part === '}') {
+                     $group = '';
+                  }
+               }
+            }
+            if ($skip === false && is_string($pending)) {
+               $full = ltrim($group !== '' ? "{$group}\\{$pending}" : $pending, '\\');
+               $segments = explode('\\', $full);
+               $aliases[strtolower($alias ?? end($segments))] = $full;
+            }
+
+            continue;
+         }
+
+         // ? Anything but `return` is not the statement this reads
+         if ($id !== T_RETURN) {
+            continue;
+         }
+
+         // ?: `return new <Name>(` — the first top-level return decides
+         $new = $list[$i + 1] ?? null;
+         $class = $list[$i + 2] ?? null;
+         if (
+            is_array($new) === false || $new[0] !== T_NEW
+            || is_array($class) === false || in_array($class[0], $names, true) === false
+            || ($list[$i + 3] ?? null) !== '('
+         ) {
+            return null;
+         }
+
+         // @@ Arguments up to the matching parenthesis, split at its own commas
+         $arguments = [];
+         $argument = [];
+         $level = 0;
+         for ($j = $i + 4; $j < $count; $j++) {
+            $part = $list[$j];
+            $mark = is_array($part) ? $part[0] : $part;
+            if ($level === 0 && ($mark === ')' || $mark === ',')) {
+               if ($argument !== []) {
+                  $arguments[] = $argument;
+               }
+               $argument = [];
+               if ($mark === ')') {
+                  break;
+               }
+
+               continue;
+            }
+            if ($mark === '(' || $mark === '[' || $mark === '{' || $mark === T_CURLY_OPEN || $mark === T_DOLLAR_OPEN_CURLY_BRACES || $mark === T_ATTRIBUTE) {
+               $level++;
+            }
+            else if ($mark === ')' || $mark === ']' || $mark === '}') {
+               $level--;
+            }
+            $argument[] = $part;
+         }
+         // ? The construction must end the statement (no chained call, no operator)
+         $end = $list[$j + 1] ?? null;
+         $end = is_array($end) ? $end[0] : $end;
+         if ($end !== ';' && $end !== T_CLOSE_TAG) {
+            return null;
+         }
+
+         // :
+         return [self::resolve($class, $namespace, $aliases), $arguments];
       }
 
       // :
-      return [
-         'name'        => $Project->name !== '' ? $Project->name : $folder,
-         'description' => $Project->description,
-         'version'     => $Project->version,
-         'author'      => $Project->author
-      ];
+      return null;
+   }
+
+   /**
+    * Resolve a class name token to its fully qualified name, the way PHP does
+    * for `new`: fully qualified as written, `namespace\` against the current
+    * namespace, otherwise the first segment through the class imports, then
+    * the current namespace.
+    *
+    * @param array{0:int,1:string,2:int} $token
+    * @param string $namespace
+    * @param array<string,string> $aliases Lower-cased alias => fully qualified name.
+    *
+    * @return string
+    */
+   private static function resolve (array $token, string $namespace, array $aliases): string
+   {
+      [$id, $name] = $token;
+
+      // ?: `\Foo\Bar`
+      if ($id === T_NAME_FULLY_QUALIFIED) {
+         return substr($name, 1);
+      }
+      // ?: `namespace\Bar`
+      if ($id === T_NAME_RELATIVE) {
+         $rest = substr($name, strlen('namespace\\'));
+
+         return $namespace !== '' ? "{$namespace}\\{$rest}" : $rest;
+      }
+
+      // @ First segment through the imports
+      $segments = explode('\\', $name, 2);
+      $imported = $aliases[strtolower($segments[0])] ?? null;
+      if ($imported !== null) {
+         return isSet($segments[1]) ? "{$imported}\\{$segments[1]}" : $imported;
+      }
+
+      // :
+      return $namespace !== '' ? "{$namespace}\\{$name}" : $name;
+   }
+
+   /**
+    * Unquote one PHP string literal token — the only value a listing reads.
+    *
+    * Single-quoted literals unescape `\\` and `\'`; double-quoted ones (the
+    * lexer only emits them as one constant token when nothing interpolates)
+    * unescape PHP's sequences: `\n` `\r` `\t` `\v` `\e` `\f` `\\` `\$` `\"`,
+    * octal, `\x` and `\u{}`. Anything that is not exactly one literal is
+    * dynamic (null).
+    *
+    * @param array<int,array{0:int,1:string,2:int}|string> $value
+    *
+    * @return null|string
+    */
+   private static function unquote (array $value): null|string
+   {
+      // ? One string literal, nothing else
+      if (count($value) !== 1 || is_array($value[0]) === false || $value[0][0] !== T_CONSTANT_ENCAPSED_STRING) {
+         return null;
+      }
+
+      // ! Binary prefix (`b'…'`)
+      $literal = ltrim($value[0][1], 'bB');
+      $body = substr($literal, 1, -1);
+
+      // ?: Single-quoted
+      if ($literal[0] === "'") {
+         return strtr($body, ['\\\\' => '\\', "\\'" => "'"]);
+      }
+
+      // : Double-quoted
+      return preg_replace_callback(
+         '/\\\\(?:([nrtvef\\\\$"])|([0-7]{1,3})|x([0-9A-Fa-f]{1,2})|u\{([0-9A-Fa-f]+)\})/',
+         static function (array $escape): string {
+            if ($escape[1] !== '') {
+               return match ($escape[1]) {
+                  'n' => "\n",
+                  'r' => "\r",
+                  't' => "\t",
+                  'v' => "\v",
+                  'e' => "\e",
+                  'f' => "\f",
+                  default => $escape[1],
+               };
+            }
+            if ($escape[2] !== '') {
+               return chr(((int) octdec($escape[2])) & 255);
+            }
+            if ($escape[3] !== '') {
+               return chr((int) hexdec($escape[3]));
+            }
+
+            // : `\u{…}` — UTF-8, encoded the way PHP does (surrogates included)
+            $code = (int) hexdec($escape[4]);
+
+            return match (true) {
+               $code < 0x80    => chr($code),
+               $code < 0x800   => chr(0xC0 | $code >> 6) . chr(0x80 | $code & 0x3F),
+               $code < 0x10000 => chr(0xE0 | $code >> 12) . chr(0x80 | $code >> 6 & 0x3F) . chr(0x80 | $code & 0x3F),
+               default         => chr(0xF0 | $code >> 18) . chr(0x80 | $code >> 12 & 0x3F)
+                  . chr(0x80 | $code >> 6 & 0x3F) . chr(0x80 | $code & 0x3F),
+            };
+         },
+         $body
+      ) ?? $body;
    }
 
    /**
@@ -483,6 +948,53 @@ abstract class Projects
    }
 
    /**
+    * Probe a project tree for a file the global `bootgly` command would run
+    * as a launcher: the wrapper walks up from the working directory and runs
+    * the nearest `bootgly` that defines `BOOTGLY_WORKING_BASE`, so one shipped
+    * inside an imported project would run whenever a verb is called from in
+    * there — `projects list` and `project info` included.
+    *
+    * @param string $source The project tree.
+    *
+    * @return null|string The offending path, relative to `$source` (`.` when
+    *    the tree cannot be read); `null` when the tree carries no launcher.
+    */
+   public static function probe (string $source): null|string
+   {
+      // ?
+      if (is_dir($source) === false) {
+         return null;
+      }
+
+      // @@ Every entry named `bootgly` — links are never followed
+      try {
+         $Entries = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($source, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST
+         );
+         foreach ($Entries as $Entry) {
+            /** @var SplFileInfo $Entry */
+            $path = $Entry->getPathname();
+            if ($Entry->getFilename() !== 'bootgly' || $Entry->isLink() === false && $Entry->isDir() === true) {
+               continue;
+            }
+
+            $head = $Entry->isLink() === true ? false : @file_get_contents($path, false, null, 0, 1_048_576);
+            // ? A link (resolved by the wrapper) or a launcher
+            if ($head === false || str_contains($head, 'BOOTGLY_WORKING_BASE') === true) {
+               return substr($path, strlen(rtrim($source, '/')) + 1);
+            }
+         }
+      }
+      catch (Throwable) {
+         return '.';
+      }
+
+      // :
+      return null;
+   }
+
+   /**
     * Import a project available on disk into the consumer projects directory.
     *
     * The source directory must carry the Bootgly project signature — a
@@ -520,6 +1032,17 @@ abstract class Projects
          return false;
       }
       $leaf = basename($signatures[0], '.Project.php');
+      // ? A symlinked signature would import (and later run) a file from
+      //   outside the project — copy_recursively() keeps links as links
+      foreach ($signatures as $signature) {
+         if (is_link($signature) === true) {
+            return false;
+         }
+      }
+      // ? A launcher the global `bootgly` command would run from inside it
+      if (self::probe($source) !== null) {
+         return false;
+      }
 
       // ? Every write-path gate, before anything is copied — the path becomes
       //   a registry key
