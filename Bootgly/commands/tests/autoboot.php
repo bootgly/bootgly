@@ -81,5 +81,9 @@ return new Suite(
       // # list/info read signatures without running them; symlinked
       //   signatures and hostile metadata stay inert (appended last)
       '6.4-projects-list-inert',
+      // # projects import screens its URL and clones without a shell into a
+      //   private staging directory; kit screens its releases remote
+      '1.13-project-import-url',
+      '8.11-kit-remote-screen',
    ]
 );

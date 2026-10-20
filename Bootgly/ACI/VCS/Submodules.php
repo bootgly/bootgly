@@ -141,7 +141,9 @@ final class Submodules
     */
    public function update (null|Closure $Callback = null): int
    {
-      // ! The update fetches inside a submodule whose pin is not local yet — under the same deadline as every transfer
+      // ! The update fetches inside a submodule whose pin is not local yet — under the same deadline as every
+      //   transfer, but NOT `transfer()`: its `GIT_ALLOW_PROTOCOL` names `file`, which would lift git's
+      //   `protocol.file.allow=user` to `always` for submodule URLs
       return $this->Git->execute([...Git::DEADLINE, 'submodule', 'update'], $Callback);
    }
 }

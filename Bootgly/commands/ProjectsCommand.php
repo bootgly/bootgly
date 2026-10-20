@@ -20,6 +20,8 @@ use const JSON_THROW_ON_ERROR;
 use const JSON_UNESCAPED_SLASHES;
 use const PHP_EOL;
 use const PHP_INT_MAX;
+use const SIGINT;
+use const SIGTERM;
 use const STR_PAD_LEFT;
 use function array_filter;
 use function array_intersect_key;
@@ -31,6 +33,7 @@ use function array_slice;
 use function array_sum;
 use function array_values;
 use function basename;
+use function bin2hex;
 use function count;
 use function dirname;
 use function escapeshellarg;
@@ -40,6 +43,7 @@ use function fgets;
 use function file_exists;
 use function filesize;
 use function function_exists;
+use function getcwd;
 use function getmypid;
 use function glob;
 use function implode;
@@ -56,10 +60,16 @@ use function json_encode;
 use function max;
 use function mb_strlen;
 use function mb_substr;
+use function mkdir;
+use function pcntl_async_signals;
+use function pcntl_signal;
+use function pcntl_signal_get_handler;
 use function posix_getuid;
 use function preg_match;
 use function proc_close;
 use function proc_open;
+use function random_bytes;
+use function register_shutdown_function;
 use function rmdir;
 use function rtrim;
 use function scandir;
@@ -76,6 +86,7 @@ use function time;
 use function trim;
 use function unlink;
 use Exception;
+use RuntimeException;
 use Throwable;
 
 use const Bootgly\ABI\BOOTSTRAP_FILENAME;
@@ -83,6 +94,9 @@ use const Bootgly\CLI;
 use Bootgly\ACI\Logs\Data\Record;
 use Bootgly\ACI\Process\State;
 use Bootgly\ACI\Process\States;
+use Bootgly\ACI\VCS\Git;
+use Bootgly\ACI\VCS\Remotes;
+use Bootgly\ACI\VCS\Remotes\Refusals;
 use Bootgly\API\Environment\Build;
 use Bootgly\API\Projects;
 use Bootgly\CLI\Command;
@@ -142,7 +156,7 @@ class ProjectsCommand extends Command
       'import' => [
          'description' => 'Import a project from a git repository URL',
          'arguments'   => [
-            '<url>'  => 'Repository URL with a *.Project.php signature at its root',
+            '<url>'  => 'Repository URL (https://, SSH or a local path) with a *.Project.php signature at its root',
             '[name]' => 'Project path to import as (defaults to the repository name)'
          ]
       ],
@@ -400,6 +414,13 @@ class ProjectsCommand extends Command
     * one, interactive terminals choose the import source: the Platforms
     * (pick, confirm, transfer) or a Git remote (asks the URL).
     *
+    * The URL is screened before anything is written or run
+    * (`Remotes::screen()`): `https://` without credentials, SSH, `file://` or
+    * a local path — credentials in the URL, a remote helper (`ext::`), a
+    * plaintext transport and an option-shaped value are refused. The clone
+    * runs without a shell, under the network deadline and the transport
+    * allow-list, into a private staging directory that is always removed.
+    *
     * @param array<string> $arguments
     * @param array<string, bool|int|string> $options
     *
@@ -432,6 +453,7 @@ class ProjectsCommand extends Command
          $Textbox = new Textbox(CLI->Terminal->Input, $Output);
          $Textbox->prompt = 'Repository URL (git)';
          $Textbox->required = true;
+         $Textbox->Validator = fn (string $answer): true|string => $this->vet($answer);
          $url = $Textbox->ask();
          // ?
          if ($url === '') {
@@ -442,6 +464,18 @@ class ProjectsCommand extends Command
 
             return false;
          }
+      }
+
+      // ? The URL — before the path (its default derives from it) and before
+      //   anything is written or run: the Wizard step and the prompt land here too
+      $result = $this->vet($url);
+      if ($result !== true) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = $result;
+         $Alert->render();
+
+         return false;
       }
 
       // ! Target project path
@@ -504,119 +538,170 @@ class ProjectsCommand extends Command
          return false;
       }
 
-      // @ Fetch with the system git
-      $tmp = sys_get_temp_dir() . '/bootgly-import-' . getmypid();
-      $this->erase($tmp);
-
-      // ! Scrubbed ONCE, for every site that displays it: `@` opens Output
-      //   markup and a raw control byte reaches the terminal verbatim (OSC 52
-      //   writes the clipboard, and a URL travels in READMEs and issues). The
-      //   clone below uses `$url` itself, escaped for the shell.
-      $shown = $this->clean($url);
-
-      $Output->render("@#green:Fetching@; @#cyan:{$shown}@;@.;");
-      $repository = escapeshellarg($url);
-      $target = escapeshellarg($tmp);
-
-      $status = $this->execute("git clone {$repository} {$target}");
-      // ?
-      if ($status !== 0 || is_dir($tmp) === false) {
+      // ! git, run from the caller's directory: a relative path means what it
+      //   means on their command line
+      $cwd = getcwd();
+      try {
+         $Git = new Git($cwd === false ? BOOTGLY_WORKING_DIR : $cwd);
+      }
+      catch (RuntimeException) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = "Could not clone @#cyan:{$shown}@;.";
+         $Alert->message = 'git was not found on PATH.';
          $Alert->render();
-
-         $this->erase($tmp);
 
          return false;
       }
 
-      // ? Bootgly project signature
-      $signatures = glob("{$tmp}/*.Project.php") ?: [];
-      if ($signatures === []) {
+      // ! Staging nobody else can name or enter: an unguessable name that
+      //   mkdir() refuses to reuse (a planted entry fails the import, never
+      //   receives the clone), mode 0700 — git creates the clone one level in
+      $temp = sys_get_temp_dir();
+      $process = getmypid();
+      $nonce = bin2hex(random_bytes(16));
+      $staging = "{$temp}/bootgly-import-{$process}-{$nonce}";
+      if (@mkdir($staging, 0700) === false) {
+         $shown = $this->clean($temp);
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = 'Not a Bootgly project: no @#cyan:*.Project.php@; signature file at the repository root.';
+         $Alert->message = "Could not create a private staging directory in @#cyan:{$shown}@;.";
          $Alert->render();
-
-         $this->erase($tmp);
 
          return false;
       }
-      // ? A signature is a regular file of the repository: a symbolic link is
-      //   copied AS the link, and every reader would follow it out of the
-      //   project — to a host file, or to code the repository does not hold
-      foreach ($signatures as $signature) {
-         if (is_link($signature) === true) {
+      $tmp = "{$staging}/clone";
+      // ! An exit that skips the `finally` below — Ctrl+C at a prompt (the
+      //   terminal's SIGINT handler exits), a fatal error — still leaves nothing staged
+      register_shutdown_function(function () use ($staging): void {
+         $this->erase($staging);
+      });
+      // ! Ctrl+C or a TERM while it is staged — at the consent prompt or during
+      //   the clone — exits through that erase instead of the default action,
+      //   which runs nothing; a blocked read is interrupted, not restarted
+      $handlers = [];
+      $async = null;
+      if (function_exists('pcntl_signal') === true) {
+         $async = pcntl_async_signals(true);
+         foreach ([SIGINT => 130, SIGTERM => 143] as $signal => $code) {
+            $handlers[$signal] = pcntl_signal_get_handler($signal);
+            pcntl_signal($signal, static function () use ($code): void {
+               exit($code);
+            }, false);
+         }
+      }
+
+      // ! Redacted, then scrubbed — ONCE, for every site that displays it: a
+      //   URL travels in READMEs and issues, `@` opens Output markup and a raw
+      //   control byte reaches the terminal verbatim (OSC 52 writes the
+      //   clipboard). The clone below uses `$url` itself.
+      $shown = $this->clean(Remotes::redact($url));
+
+      try {
+         $Output->render("@#green:Fetching@; @#cyan:{$shown}@;@.;");
+         // ! No shell, the network deadline, the transport allow-list and `--`
+         //   before the URL (`Git::clone()`); stdin is never the terminal
+         $status = $Git->clone($url, $tmp, function (string $line) use ($Output): void {
+            $Output->write($line . PHP_EOL);
+         });
+         // ?
+         if ($status !== 0 || is_dir($tmp) === false) {
             $Alert = new Alert($Output);
             $Alert->Type::Failure->set();
-            $Alert->message = 'Not imported: @#cyan:' . $this->clean(basename($signature))
-               . '@; is a symbolic link — a project signature must be a regular file.';
+            $Alert->message = "Could not clone @#cyan:{$shown}@;.";
             $Alert->render();
-
-            $this->erase($tmp);
 
             return false;
          }
-      }
-      // ? A `bootgly` launcher inside the project would be run by the global
-      //   command from in there — on any verb, a listing included
-      $launcher = Projects::probe($tmp);
-      if ($launcher !== null) {
-         $Alert = new Alert($Output);
-         $Alert->Type::Failure->set();
-         $Alert->message = 'Not imported: @#cyan:' . $this->clean($launcher)
-            . '@; is a Bootgly launcher — the global `bootgly` command would run it from inside the project.';
-         $Alert->render();
 
-         $this->erase($tmp);
-
-         return false;
-      }
-
-      // ! Summary
-      $content  = '@#Green:' . str_pad('Mode', 12) . ' @; Import external repository' . PHP_EOL;
-      $content .= '@#Green:' . str_pad('Source', 12) . ' @; ' . $shown . PHP_EOL;
-      $content .= '@#Green:' . str_pad('Path', 12) . ' @; ' . $path . PHP_EOL;
-      $content .= '@#Green:' . str_pad('Interfaces', 12) . ' @; ' . $interface;
-
-      $Output->write(PHP_EOL);
-      $Fieldset = new Fieldset($Output);
-      $Fieldset->title = '@#Cyan: Import project @;';
-      $Fieldset->content = $content;
-      $Fieldset->render();
-      $Output->write(PHP_EOL);
-
-      // ? Imported code runs whenever a command runs the project — `start`
-      //   (also `restart`, a `startup` unit), `migrate`, `seed`, `schedule`,
-      //   its tests and its queues; `projects list` and `project info` only
-      //   read its signature
-      if (isSet($options['yes']) === false) {
-         $confirmed = $this->confirm(
-            "Its code runs whenever a command runs it (start, restart, startup, migrate, seed, schedule, its tests and queues); "
-            . "projects list and project info only read its signature. Import as `{$path}`?"
-         );
-
-         if ($confirmed === false) {
+         // ? Bootgly project signature
+         $signatures = glob("{$tmp}/*.Project.php") ?: [];
+         if ($signatures === []) {
             $Alert = new Alert($Output);
-            $Alert->Type::Attention->set();
-            $Alert->message = 'Import aborted.';
+            $Alert->Type::Failure->set();
+            $Alert->message = 'Not a Bootgly project: no @#cyan:*.Project.php@; signature file at the repository root.';
             $Alert->render();
-
-            $this->erase($tmp);
 
             return false;
          }
+         // ? A signature is a regular file of the repository: a symbolic link is
+         //   copied AS the link, and every reader would follow it out of the
+         //   project — to a host file, or to code the repository does not hold
+         foreach ($signatures as $signature) {
+            if (is_link($signature) === true) {
+               $Alert = new Alert($Output);
+               $Alert->Type::Failure->set();
+               $Alert->message = 'Not imported: @#cyan:' . $this->clean(basename($signature))
+                  . '@; is a symbolic link — a project signature must be a regular file.';
+               $Alert->render();
+
+               return false;
+            }
+         }
+         // ? A `bootgly` launcher inside the project would be run by the global
+         //   command from in there — on any verb, a listing included
+         $launcher = Projects::probe($tmp);
+         if ($launcher !== null) {
+            $Alert = new Alert($Output);
+            $Alert->Type::Failure->set();
+            $Alert->message = 'Not imported: @#cyan:' . $this->clean($launcher)
+               . '@; is a Bootgly launcher — the global `bootgly` command would run it from inside the project.';
+            $Alert->render();
+
+            return false;
+         }
+
+         // ! Summary
+         $content  = '@#Green:' . str_pad('Mode', 12) . ' @; Import external repository' . PHP_EOL;
+         $content .= '@#Green:' . str_pad('Source', 12) . ' @; ' . $shown . PHP_EOL;
+         $content .= '@#Green:' . str_pad('Path', 12) . ' @; ' . $path . PHP_EOL;
+         $content .= '@#Green:' . str_pad('Interfaces', 12) . ' @; ' . $interface;
+
+         $Output->write(PHP_EOL);
+         $Fieldset = new Fieldset($Output);
+         $Fieldset->title = '@#Cyan: Import project @;';
+         $Fieldset->content = $content;
+         $Fieldset->render();
+         $Output->write(PHP_EOL);
+
+         // ? Imported code runs whenever a command runs the project — `start`
+         //   (also `restart`, a `startup` unit), `migrate`, `seed`, `schedule`,
+         //   its tests and its queues; `projects list` and `project info` only
+         //   read its signature
+         if (isSet($options['yes']) === false) {
+            $confirmed = $this->confirm(
+               "Its code runs whenever a command runs it (start, restart, startup, migrate, seed, schedule, its tests and queues); "
+               . "projects list and project info only read its signature. Import as `{$path}`?"
+            );
+
+            if ($confirmed === false) {
+               $Alert = new Alert($Output);
+               $Alert->Type::Attention->set();
+               $Alert->message = 'Import aborted.';
+               $Alert->render();
+
+               return false;
+            }
+         }
+
+         // @ Import — VCS metadata KEPT: the copy stays a working clone, with
+         //   its history and its `origin`, so the user keeps committing and
+         //   pushing from `projects/` — the project is the unit of versioning
+         $done = Projects::import($tmp, $path, [
+            'interfaces' => [$interface],
+         ]);
       }
+      finally {
+         // ! The caller's signal handling comes back
+         foreach ($handlers as $signal => $Handler) {
+            pcntl_signal($signal, $Handler);
+         }
+         if ($async !== null) {
+            pcntl_async_signals($async);
+         }
 
-      // @ Import — VCS metadata KEPT: the copy stays a working clone, with
-      //   its history and its `origin`, so the user keeps committing and
-      //   pushing from `projects/` — the project is the unit of versioning
-      $done = Projects::import($tmp, $path, [
-         'interfaces' => [$interface],
-      ]);
-
-      $this->erase($tmp);
+         // ! Refused, aborted, failed or imported — nothing stays staged
+         $this->erase($staging);
+      }
 
       // ? The signature rename (source leaf -> target leaf) is a real,
       //   uncommitted change inside the clone — the user's to review
@@ -1264,6 +1349,7 @@ class ProjectsCommand extends Command
             $Textbox = new Textbox($Wizard->Input, $Wizard->Output);
             $Textbox->prompt = 'Repository URL (git)';
             $Textbox->required = true;
+            $Textbox->Validator = fn (string $answer): true|string => $this->vet($answer);
             $url = $Textbox->ask();
             // ?
             if ($url === '') {
@@ -1426,7 +1512,7 @@ class ProjectsCommand extends Command
          $this->summarize("Project {$target}", [
             'Path'       => "projects/{$target}/",
             'Interface'  => (string) ($options['interfaces'] ?? 'CLI'),
-            'Source'     => $url,
+            'Source'     => $this->clean(Remotes::redact($url)),
             'History'    => 'kept — the clone carries its own origin',
          ]);
 
@@ -2030,6 +2116,42 @@ class ProjectsCommand extends Command
 
       // :
       return true;
+   }
+
+   /**
+    * Vet a repository URL before anything is written or run — the one screen
+    * ACI\VCS applies (`Remotes::screen()`), worded for this command. A
+    * refusal never echoes a credential: it shows the URL redacted.
+    *
+    * @param string $URL The repository URL, as typed.
+    *
+    * @return true|string True when admitted; the refusal (Output markup) otherwise.
+    */
+   private function vet (string $URL): true|string
+   {
+      $Refusal = Remotes::screen($URL);
+      // ?:
+      if ($Refusal === null) {
+         return true;
+      }
+
+      $shown = $this->clean(Remotes::redact($URL));
+
+      // :
+      return match ($Refusal) {
+         Refusals::Credentials => 'The repository URL carries credentials — they would be shown, kept as the '
+            . "clone's `origin` and readable by every local user. Give them to git instead (a credential helper: "
+            . "@#cyan:git help credentials@;) or use SSH, then import @#cyan:{$shown}@;.",
+         Refusals::Helper => 'Remote helpers (`<helper>::`) are not imported — `ext::` runs a command. '
+            . 'Clone the repository yourself and import its local path.',
+         Refusals::Plaintext => 'Plaintext transports (http://, git://, ftp://) are refused — anyone on the path '
+            . 'can rewrite what is fetched. Use https:// or SSH.',
+         Refusals::Unsupported => 'Unsupported transport. Use https://, SSH (`git@host:owner/repo.git` or '
+            . '`ssh://`), file:// or a local path.',
+         Refusals::Malformed => 'Malformed repository URL: it is empty or padded with blanks, starts with a dash, '
+            . 'carries a control character, has text before its `scheme://` or a slash past the second one, or its '
+            . 'host part holds `?`, `#`, a backslash or a blank.',
+      };
    }
 
    /**

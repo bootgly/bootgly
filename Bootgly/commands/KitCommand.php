@@ -93,6 +93,8 @@ use Bootgly\ABI\Data\SemVer;
 use Bootgly\ACI\Process\States;
 use Bootgly\ACI\VCS;
 use Bootgly\ACI\VCS\Git;
+use Bootgly\ACI\VCS\Remotes;
+use Bootgly\ACI\VCS\Remotes\Refusals;
 use Bootgly\API\Environment\Agent;
 use Bootgly\API\Environment\Container;
 use Bootgly\API\Projects;
@@ -139,8 +141,6 @@ class KitCommand extends Command
    private const string SKILL = '/^bootgly-[a-z0-9-]+$/';
    /** The first line of an agent-rules entry point `boot` owns — anything else in its place is the user's. */
    public const string STAMP = '<!-- Machine-managed by `bootgly kit boot`';
-   /** The transports a releases remote may use — anything else is refused. */
-   private const array TRANSPORTS = ['https', 'ssh', 'git+ssh', 'file'];
 
    // * Config
    public int $group = 0;
@@ -1738,13 +1738,32 @@ class KitCommand extends Command
       $shown = $this->clean($remote);
 
       // ? The releases are code this process will run — never over a transport
-      //   anyone on the path can rewrite: an allow-list, so a plaintext helper
-      //   git grows tomorrow fails closed. A scheme-less URL is scp-like or a path.
-      $URL = $VCS->Remotes->list()[$remote] ?? '';
-      if (preg_match('#^([a-z][a-z0-9+.-]*)://#i', $URL, $scheme) === 1
-         && in_array(strtolower($scheme[1]), self::TRANSPORTS, true) === false) {
+      //   anyone on the path can rewrite, a remote helper (`ext::` runs a
+      //   command) or an authority git and curl read apart: the one screen
+      //   ACI\VCS applies (an allow-list, so a transport git grows tomorrow
+      //   fails closed), enforced again inside git by the fetch's allow-list
+      $Refusal = Remotes::screen($VCS->Remotes->list()[$remote] ?? '');
+      // ? A credential the user's own `insteadOf` adds is theirs: judged on the
+      //   URL the kit stores — the one a `set-url` would change
+      if ($Refusal === Refusals::Credentials) {
+         // ! Every stored URL — git dials the first, `--get` reads the last
+         $stored = $VCS->Git->query(['config', '--get-all', "remote.{$remote}.url"]);
+         $clean = $stored !== null && $stored !== '';
+         foreach (explode("\n", (string) $stored) as $URL) {
+            $clean = $clean && Remotes::screen(trim($URL)) === null;
+         }
+         if ($clean === true) {
+            $Refusal = null;
+         }
+      }
+      if ($Refusal !== null) {
          $this->fail(
-            "The releases remote @#cyan:{$shown}@; uses an insecure transport.",
+            match ($Refusal) {
+               Refusals::Credentials => "The releases remote @#cyan:{$shown}@; carries credentials in its URL.",
+               Refusals::Helper => "The releases remote @#cyan:{$shown}@; is a remote helper, not a repository.",
+               Refusals::Malformed => "The releases remote @#cyan:{$shown}@; has a malformed URL.",
+               default => "The releases remote @#cyan:{$shown}@; uses an insecure transport.",
+            },
             "Point it at @#cyan:{$this->repository}@; (@#cyan:git remote set-url {$shown} {$this->repository}@;) and run again."
          );
 

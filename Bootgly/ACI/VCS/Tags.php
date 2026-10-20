@@ -111,7 +111,7 @@ final class Tags
    public function probe (string $remote): null|array
    {
       // ?
-      if ($this->Git->execute([...Git::DEADLINE, 'ls-remote', '--tags', '--refs', '--', $remote]) !== 0) {
+      if ($this->Git->transfer(['ls-remote', '--tags', '--refs', '--', $remote]) !== 0) {
          return null;
       }
 

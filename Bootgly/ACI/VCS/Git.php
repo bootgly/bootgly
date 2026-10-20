@@ -12,14 +12,17 @@ namespace Bootgly\ACI\VCS;
 
 
 use const PATH_SEPARATOR;
+use function array_intersect;
 use function count;
 use function explode;
 use function fclose;
 use function fgets;
 use function getenv;
+use function implode;
 use function is_executable;
 use function is_file;
 use function is_resource;
+use function is_string;
 use function preg_match;
 use function proc_close;
 use function proc_open;
@@ -43,7 +46,11 @@ use RuntimeException;
  * SSH agent, config) minus the `GIT_DIR` family — a hook or a nested tool
  * could otherwise point every command at a repository other than `$path`.
  * Both streams come back through one pipe, in order, and the last run's
- * combined output and exit status stay readable on the instance.
+ * combined output and exit status stay readable on the instance. Transfers
+ * run under the network deadline and the transport allow-list
+ * (`transfer()`), and a caller value is never read as an option: `--` ends
+ * option parsing before it, or a value shaped like an option is refused
+ * before git runs.
  */
 final class Git
 {
@@ -63,6 +70,23 @@ final class Git
    ];
    /** The network deadline every transfer runs under: under 1 KB/s for 20 s is a dead remote. */
    public const array DEADLINE = ['-c', 'http.lowSpeedLimit=1000', '-c', 'http.lowSpeedTime=20'];
+   /**
+    * The transports a transfer may use — `GIT_ALLOW_PROTOCOL` on every child
+    * that talks to a remote (`transfer()`).
+    *
+    * An explicit list beats `protocol.<name>.allow` from any config channel or
+    * `-c`, and an inherited `GIT_ALLOW_PROTOCOL` can only narrow it
+    * (`transfer()` keeps the names both lists share): `ext`/`fd` run
+    * or read through commands, `http`/`git` are plaintext, a `<helper>::` is a
+    * program on `PATH` — and it also sees what a typed URL cannot show (an
+    * `insteadOf` rewrite, an https→http redirect). `file` covers `file://`
+    * and a local path; `ssh` covers `ssh://`, `git+ssh://` and scp-like
+    * addresses. Never set on `submodule update`: naming `file` there would
+    * lift git's `protocol.file.allow=user` to `always`.
+    */
+   public const string PROTOCOLS = 'file:https:ssh';
+   /** What a streamed command keeps in `$output`, and the longest line one read takes. */
+   public const int TAIL = 65_536;
 
    // * Config
    /** The working tree — absolute, no trailing separator. */
@@ -71,7 +95,7 @@ final class Git
    public private(set) string $binary;
 
    // * Metadata
-   /** Combined stdout + stderr of the last `execute()`. */
+   /** Combined stdout + stderr of the last `execute()` — its last `TAIL` bytes when a callback streamed it. */
    public private(set) string $output = '';
    /** Exit status of the last `execute()`. */
    public private(set) int $status = 0;
@@ -125,10 +149,11 @@ final class Git
     *
     * @param list<string> $arguments The command line after `git`.
     * @param null|Closure $Callback Receives each output line as it arrives, without its break.
+    * @param array<string,string> $variables Set on the child, over the caller's environment.
     *
     * @return int The exit status — `126` when the process could not start.
     */
-   public function execute (array $arguments, null|Closure $Callback = null): int
+   public function execute (array $arguments, null|Closure $Callback = null, array $variables = []): int
    {
       // ! The caller's environment, minus what would redirect the command
       $environment = getenv();
@@ -143,6 +168,7 @@ final class Git
       $environment['GIT_TERMINAL_PROMPT'] = '0';
       unset($environment['GIT_ASKPASS'], $environment['SSH_ASKPASS']);
       $environment['SSH_ASKPASS_REQUIRE'] = 'never';
+      $environment = [...$environment, ...$variables];
 
       $this->output = '';
 
@@ -165,20 +191,77 @@ final class Git
          return $this->status = 126;
       }
 
-      // @@ Line by line, as it arrives — a carriage return is progress
-      //   repainting, which has no place in a captured or nested output
-      while (($line = fgets($pipes[1])) !== false) {
+      // @@ Line by line, as it arrives (a line past `TAIL` comes in pieces) — a
+      //   carriage return is progress repainting, which has no place in a
+      //   captured or nested output
+      while (($line = fgets($pipes[1], self::TAIL)) !== false) {
          $this->output .= $line;
 
          if ($Callback !== null) {
+            // ! Streamed: the callback has every line, the instance keeps the
+            //   tail — a remote that talks forever must not exhaust the memory
+            //   (cut at twice the tail, so a long run copies rarely)
+            if (strlen($this->output) > self::TAIL * 2) {
+               $this->output = substr($this->output, -self::TAIL);
+            }
+
             $Callback(str_replace("\r", '', rtrim($line, "\n")));
          }
+      }
+      if ($Callback !== null && strlen($this->output) > self::TAIL) {
+         $this->output = substr($this->output, -self::TAIL);
       }
 
       fclose($pipes[1]);
 
       // :
       return $this->status = proc_close($process);
+   }
+
+   /**
+    * Run one git command that talks to a remote — under the network deadline
+    * (`DEADLINE`) and the transport allow-list (`PROTOCOLS`, narrowed to the
+    * names an inherited `GIT_ALLOW_PROTOCOL` also lists; none in common allows
+    * none).
+    *
+    * @param list<string> $arguments The command line after `git` (and the deadline).
+    * @param null|Closure $Callback Receives each output line as it arrives.
+    *
+    * @return int The exit status.
+    */
+   public function transfer (array $arguments, null|Closure $Callback = null): int
+   {
+      // ! The allow-list — narrowed, never widened, by one the environment already sets
+      $protocols = self::PROTOCOLS;
+      $inherited = getenv('GIT_ALLOW_PROTOCOL');
+      // ? Set — an empty value included: git reads it as "allow none"
+      if (is_string($inherited) === true) {
+         $shared = array_intersect(explode(':', self::PROTOCOLS), explode(':', $inherited));
+         // ! `none` names no transport: an empty value would not reach the child at all
+         $protocols = $shared === [] ? 'none' : implode(':', $shared);
+      }
+
+      return $this->execute([...self::DEADLINE, ...$arguments], $Callback, ['GIT_ALLOW_PROTOCOL' => $protocols]);
+   }
+
+   /**
+    * Clone a repository — run from `$path`, as on a command line: a relative
+    * URL or target is read against it.
+    *
+    * The transfer runs under `transfer()`'s deadline and allow-list, and
+    * option parsing ends before the URL. The allow-list stops transports, not
+    * credentials or an ambiguous authority: screen an untrusted URL first
+    * (`Remotes::screen()`).
+    *
+    * @param string $URL The repository URL or path.
+    * @param string $target The directory to create — absent or empty.
+    * @param null|Closure $Callback Receives each output line as it arrives.
+    *
+    * @return int The exit status.
+    */
+   public function clone (string $URL, string $target, null|Closure $Callback = null): int
+   {
+      return $this->transfer(['clone', '--', $URL, $target], $Callback);
    }
 
    /**
@@ -249,6 +332,12 @@ final class Git
     */
    public function describe (string $commit = 'HEAD', array $patterns = []): null|array
    {
+      // ? A commit shaped like an option is never one — refused before git
+      //   runs (`--end-of-options` reaches no further back than git 2.24)
+      if (str_starts_with($commit, '-') === true) {
+         return null;
+      }
+
       $arguments = ['describe', '--tags', '--long'];
       foreach ($patterns as $pattern) {
          $arguments[] = '--match';
@@ -325,8 +414,9 @@ final class Git
          $refspecs = ['+refs/tags/*:refs/tags/*'];
       }
 
-      // ! A deadline: a blackholed remote must fail, not hang a headless run forever
-      return $this->execute([...self::DEADLINE, 'fetch', '--no-recurse-submodules', $remote, ...$refspecs], $Callback);
+      // ! A deadline (a blackholed remote must fail, not hang a headless run
+      //   forever), the transport allow-list, and `--`: a remote is never an option
+      return $this->transfer(['fetch', '--no-recurse-submodules', '--', $remote, ...$refspecs], $Callback);
    }
 
    /**
@@ -340,8 +430,17 @@ final class Git
     */
    public function checkout (string $reference, null|Closure $Callback = null): int
    {
+      // ? A reference shaped like an option is never one — refused before git
+      //   runs: `--end-of-options` is a pathspec to `checkout` before git 2.43.1
+      if (str_starts_with($reference, '-') === true) {
+         $this->output = '';
+
+         return $this->status = 126;
+      }
+
+      // ! `--` after the reference: nothing that follows it is a path
       return $this->execute(
-         ['-c', 'advice.detachedHead=false', 'checkout', '--quiet', $reference],
+         ['-c', 'advice.detachedHead=false', 'checkout', '--quiet', $reference, '--'],
          $Callback
       );
    }

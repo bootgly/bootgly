@@ -18,5 +18,7 @@ return new Suite(
       '1.2-tags-remotes',
       '1.3-submodules',
       '1.4-git-environment',
+      '1.5-remote-screen',
+      '1.6-git-transfer',
    ]
 );
