@@ -70,5 +70,7 @@ return new Suite(
       '1.48-authorization_rbac_cache_generation',
       // # 1.0.x (AUTH-1/AUTH-2): RBAC resolvers sharing a cache store stay within their own realm
       '1.49-authorization_rbac_cache_scope',
+      // # 1.0.x (API-SEC-3): a remote JWKS redirect never crosses from a public to a non-public address
+      '1.50-jwt_remote_destination_policy',
    ]
 );

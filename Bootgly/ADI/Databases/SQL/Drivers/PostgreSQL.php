@@ -11,16 +11,19 @@
 namespace Bootgly\ADI\Databases\SQL\Drivers;
 
 
+use const FILTER_VALIDATE_IP;
 use function array_key_first;
 use function array_shift;
 use function count;
 use function explode;
 use function fclose;
 use function feof;
+use function filter_var;
 use function fread;
 use function fwrite;
 use function hex2bin;
 use function implode;
+use function inet_pton;
 use function is_array;
 use function is_bool;
 use function is_float;
@@ -31,6 +34,7 @@ use function is_scalar;
 use function is_string;
 use function ltrim;
 use function microtime;
+use function ord;
 use function preg_match;
 use function sha1;
 use function spl_object_id;
@@ -40,7 +44,9 @@ use function stream_socket_client;
 use function strlen;
 use function strtolower;
 use function substr;
+use function trim;
 use DateTimeImmutable;
+use InvalidArgumentException;
 use Throwable;
 use WeakReference;
 
@@ -67,6 +73,13 @@ use Bootgly\ADI\Databases\SQL\Operation;
  */
 class PostgreSQL extends Driver
 {
+   /**
+    * The SCRAM iteration floor a downgraded session accepts — PostgreSQL's
+    * default and RFC 7677's minimum (§4): a cheaper count makes the proof as
+    * crackable offline as an MD5 response.
+    */
+   private const int ITERATIONS = 4096;
+
    // * Config
    public Authentication $Authentication;
    public Encoder $Encoder;
@@ -91,6 +104,41 @@ class PostgreSQL extends Driver
    private array $completed = [];
    // @ True when the current stream completed TLS here or arrived encrypted.
    private bool $encrypted = false;
+   /**
+    * Whether the configured host is `localhost` or a loopback literal
+    * (127.0.0.0/8, `::1`, bracketed or not): no on-path attacker stands
+    * between this client and it. Read when a `prefer` session that fell back
+    * to plaintext authenticates, so it is derived, never stored.
+    */
+   private bool $loopback {
+      get {
+         $host = strtolower(trim($this->Config->host, '[]'));
+
+         if ($host === 'localhost') {
+            return true;
+         }
+
+         if (filter_var($host, FILTER_VALIDATE_IP) === false) {
+            return false;
+         }
+
+         $address = (string) inet_pton($host);
+
+         return strlen($address) === 4
+            ? ord($address[0]) === 127
+            : $address === inet_pton('::1');
+      }
+   }
+   /**
+    * Whether this session fell back to plaintext under `prefer` (`N`) on a
+    * host an on-path attacker can reach. `encrypted` is reset on every dial
+    * (Connecting), so a downgrade never outlives the session it happened on.
+    */
+   private bool $downgraded {
+      get => $this->encrypted === false
+         && $this->Config->secure['mode'] === Config::SECURE_PREFER
+         && $this->loopback === false;
+   }
    // @ This driver tore its session down and must never drive a replacement
    //   socket attached to the same Connection object.
    private bool $aborted = false;
@@ -1686,6 +1734,21 @@ class PostgreSQL extends Driver
             return $Operation;
          }
 
+         // ? A `prefer` session that fell back to plaintext (`N`) must not hand
+         //   the password — in cleartext, or as an MD5 response relayable or
+         //   crackable offline — to whoever answered: an on-path attacker can
+         //   refuse TLS and ask for either. SCRAM never sends the password and
+         //   goes on (at an iteration floor, below); a loopback host has no path
+         //   to attack; `disable` declares plaintext.
+         if (($code === 3 || $code === 5) && $this->downgraded) {
+            $method = $code === 3 ? 'cleartext' : 'MD5';
+            $Operation->quarantine = true;
+
+            return $Operation->fail(
+               "PostgreSQL server {$this->Config->host}:{$this->Config->port} declined TLS and then requested {$method} password authentication: the password is not sent over plaintext under secure.mode => 'prefer'. Enable TLS on the server, or set secure.mode => 'disable' to accept plaintext authentication."
+            );
+         }
+
          $Encoder = $this->Encoder;
 
          if ($code === 3) {
@@ -1723,7 +1786,16 @@ class PostgreSQL extends Driver
                }
             }
 
-            $Operation->write = $Encoder->encode(Encoder::SASL, $this->Authentication->start($mechanismList));
+            try {
+               $start = $this->Authentication->start($mechanismList);
+            }
+            catch (InvalidArgumentException $Exception) {
+               $Operation->quarantine = true;
+
+               return $Operation->fail($Exception->getMessage());
+            }
+
+            $Operation->write = $Encoder->encode(Encoder::SASL, $start);
             $Operation->state = OperationStates::Password;
 
             return $Operation;
@@ -1736,7 +1808,27 @@ class PostgreSQL extends Driver
                return $Operation->fail('PostgreSQL SASL continue message is invalid.');
             }
 
-            $Operation->write = $Encoder->encode(Encoder::RESPONSE, $this->Authentication->resume($message));
+            // ? A downgraded session runs SCRAM only at the iteration floor
+            //   (PostgreSQL's default, RFC 7677's minimum): a cheaper count would
+            //   hand an on-path attacker a proof as crackable offline as the MD5
+            //   response refused above. The count is judged by the same strict
+            //   parse that derives the key; a malformed or ambiguous message
+            //   fails the session.
+            $floor = $this->downgraded ? self::ITERATIONS : 1;
+            try {
+               $response = $this->Authentication->resume($message, $floor);
+            }
+            catch (InvalidArgumentException $Exception) {
+               $iterations = $this->Authentication->iterations;
+               $Operation->quarantine = true;
+
+               return $Operation->fail($iterations > 0 && $iterations < $floor
+                  ? "PostgreSQL server {$this->Config->host}:{$this->Config->port} declined TLS and then requested SCRAM with {$iterations} iterations (below {$floor}): the proof is not sent over plaintext under secure.mode => 'prefer'. Enable TLS on the server, or set secure.mode => 'disable' to accept plaintext authentication."
+                  : $Exception->getMessage()
+               );
+            }
+
+            $Operation->write = $Encoder->encode(Encoder::RESPONSE, $response);
             $Operation->state = OperationStates::Password;
 
             return $Operation;

@@ -11,15 +11,28 @@
 namespace Bootgly\API\Security\JWT;
 
 
+use const DNS_AAAA;
+use const FILTER_FLAG_GLOBAL_RANGE;
+use const FILTER_VALIDATE_IP;
 use const JSON_BIGINT_AS_STRING;
 use const JSON_THROW_ON_ERROR;
 use const PHP_INT_MAX;
 use const PREG_SET_ORDER;
+use const SOCK_STREAM;
 use function array_slice;
+use function array_unique;
+use function array_values;
+use function dns_get_record;
 use function file_get_contents;
+use function filter_var;
+use function function_exists;
+use function gethostbynamel;
 use function hrtime;
+use function http_clear_last_response_headers;
 use function http_get_last_response_headers;
 use function in_array;
+use function inet_ntop;
+use function inet_pton;
 use function is_array;
 use function is_int;
 use function is_string;
@@ -27,13 +40,21 @@ use function json_decode;
 use function json_encode;
 use function max;
 use function min;
+use function ord;
 use function parse_url;
 use function preg_match;
 use function preg_match_all;
+use function rtrim;
+use function socket_addrinfo_explain;
+use function socket_addrinfo_lookup;
+use function str_contains;
+use function str_ends_with;
 use function strcasecmp;
 use function stream_context_create;
+use function stream_context_set_option;
 use function strlen;
 use function strtolower;
+use function substr;
 use function time;
 use function trim;
 use Closure;
@@ -56,10 +77,24 @@ use Bootgly\API\Security\JWT\Remote\Response;
  * unauthenticated token could force one blocking fetch inside the worker. Only
  * `refresh()` and the refresh on an unknown `kid` (at most one per `cooldown`)
  * bypass it.
+ *
+ * The native fetch resolves each hop once and dials those addresses in
+ * resolver order — never the name again, so a second DNS answer cannot
+ * redirect the request — and, once a hop was answered from a public address,
+ * refuses a later hop that resolves to a non-public one (loopback, private,
+ * link-local, reserved, NAT64-embedded): a compromised or misconfigured IdP
+ * cannot point the worker at its own network. The configured URI is never
+ * refused (an intranet IdP keeps working), and a custom `Fetcher` owns its
+ * own transport.
  */
 class Remote implements KeyResolver
 {
    private const int MAX_TTL = 31_536_000;
+   /**
+    * The least time, in seconds, a hop's next address is tried with: when
+    * less of the hop's timeout is left, the hop ends.
+    */
+   private const float TRY_FLOOR = 0.05;
 
    // * Config
    public private(set) string $URI;
@@ -130,6 +165,8 @@ class Remote implements KeyResolver
    // ? Until when the origin is not asked again (forced loads excepted)
    private int $pause = 0;
    private null|Failures $Fault = null;
+   // ? Why the native fetch refused a hop ('' when it did not)
+   private string $refusal = '';
 
 
    /**
@@ -333,7 +370,7 @@ class Remote implements KeyResolver
          $this->pause = $ended + $this->cooldown * 1_000_000_000;
       }
       if ($Response instanceof Failures) {
-         return $this->mark($Response, 'Remote JWKS fetch failed.');
+         return $this->mark($Response, $this->refusal !== '' ? $this->refusal : 'Remote JWKS fetch failed.');
       }
 
       if ($Response->status < 200 || $Response->status > 299) {
@@ -584,20 +621,7 @@ class Remote implements KeyResolver
     */
    private function pull (): Response|Failures
    {
-      $Context = stream_context_create([
-         'http' => [
-            'method' => 'GET',
-            'header' => "Accept: application/json\r\n",
-            'timeout' => $this->timeout,
-            'ignore_errors' => true,
-            'follow_location' => 0,
-            'max_redirects' => 0,
-         ],
-         'ssl' => [
-            'verify_peer' => true,
-            'verify_peer_name' => true,
-         ],
-      ]);
+      $this->refusal = '';
 
       $limit = $this->size + 1;
       if ($limit < 1) {
@@ -606,6 +630,9 @@ class Remote implements KeyResolver
 
       $URI = $this->URI;
       $redirected = 0;
+      // ! Whether a hop was already answered from a public address: from then
+      //   on every address a hop resolves to must be public
+      $public = false;
 
       while (true) {
          // ! Validate every hop before opening its transport. Delegating
@@ -618,10 +645,94 @@ class Remote implements KeyResolver
          if ($scheme !== 'https' && ($this->insecure === false || $scheme !== 'http')) {
             return Failures::Network;
          }
-
-         $body = @file_get_contents($URI, false, $Context, 0, $limit);
-         if (is_string($body) === false) {
+         $Hop = URI::parse($URI);
+         if ($Hop === null) {
             return Failures::Network;
+         }
+
+         // ! Resolve the hop once — the transport dials this literal, so a
+         //   second DNS answer (rebinding) never decides where bytes go. A
+         //   terminal dot stays in the lookup name (no resolver search suffix).
+         $addresses = $this->discover($Hop->host[0] === '[' ? $Hop->hostname : $Hop->host);
+         if ($addresses === []) {
+            return Failures::Network;
+         }
+         // ? Once a hop was answered from a public address, a later hop never
+         //   reaches a non-public one — none of its addresses may be
+         if ($public) {
+            foreach ($addresses as $address) {
+               if ($this->permit($address) === false) {
+                  $this->refusal = 'Remote JWKS redirect from a public address to a non-public address was refused.';
+
+                  return Failures::Network;
+               }
+            }
+         }
+
+         // ! Dial the vetted literals in resolver order until one answers; the
+         //   hop's own name stays the HTTP authority (`Host`) and the TLS
+         //   identity (`peer_name`: SNI and certificate verification)
+         $port = $Hop->port ?? ($scheme === 'https' ? 443 : 80);
+         $userinfo = $Hop->userinfo === null ? '' : "{$Hop->userinfo}@";
+         $path = $Hop->path === '' ? '/' : $Hop->path;
+         $query = $Hop->query === null ? '' : "?{$Hop->query}";
+         $default = $scheme === 'https' ? 443 : 80;
+         $host = $Hop->port === null || $Hop->port === $default
+            ? $Hop->host
+            : "{$Hop->host}:{$Hop->port}";
+         $Context = stream_context_create([
+            'http' => [
+               'method' => 'GET',
+               'header' => "Host: {$host}\r\nAccept: application/json\r\n",
+               'timeout' => $this->timeout,
+               'ignore_errors' => true,
+               'follow_location' => 0,
+               'max_redirects' => 0,
+            ],
+            'ssl' => [
+               'verify_peer' => true,
+               'verify_peer_name' => true,
+               'peer_name' => $Hop->hostname,
+            ],
+         ]);
+         // ! The hop's own timeout bounds every try together: each one gets
+         //   what is left of it
+         $deadline = hrtime(true) + (int) ($this->timeout * 1_000_000_000);
+         $body = false;
+         $answered = null;
+         // @@
+         foreach ($addresses as $index => $address) {
+            // ? A later address only with what is left of the hop's timeout
+            if ($index > 0) {
+               $remaining = ($deadline - hrtime(true)) / 1_000_000_000;
+               if ($remaining < self::TRY_FLOOR) {
+                  break;
+               }
+               stream_context_set_option($Context, 'http', 'timeout', $remaining);
+            }
+            $literal = str_contains($address, ':') ? "[{$address}]" : $address;
+            http_clear_last_response_headers();
+            $body = @file_get_contents(
+               "{$scheme}://{$userinfo}{$literal}:{$port}{$path}{$query}",
+               false,
+               $Context,
+               0,
+               $limit
+            );
+            // ? An address that took the request ends the hop — with its
+            //   answer, or with the failure it caused midway; a refused,
+            //   unreachable or TLS-failed one hands over to the next
+            if (is_string($body) || http_get_last_response_headers() !== null) {
+               $answered = $address;
+               break;
+            }
+         }
+         if (is_string($body) === false || $answered === null) {
+            return Failures::Network;
+         }
+         // ! A hop answered from a public address arms the policy
+         if ($public === false && $this->permit($answered)) {
+            $public = true;
          }
 
          // @ The headers PHP recorded for this one manual request. Selecting
@@ -658,7 +769,7 @@ class Remote implements KeyResolver
          // ! RFC 3986 §5 against the hop that answered; a target that is not an
          //   absolute hierarchical URI with a host (`g:h`, `https:x`) ends the
          //   fetch — PHP's wrappers would read `https:x` as a local file
-         $Target = URI::parse($URI)?->resolve($location);
+         $Target = $Hop->resolve($location);
          if ($Target === null) {
             return Failures::Network;
          }
@@ -666,6 +777,164 @@ class Remote implements KeyResolver
 
          $redirected++;
       }
+   }
+
+   /**
+    * Resolve one host to its canonical IP addresses — once per hop: the native
+    * fetch dials one of these literals and never resolves the name again.
+    *
+    * An IP literal is returned canonical without a lookup (an IPv4-mapped
+    * IPv6 address as its IPv4 address). Overridable by a subclass — a test
+    * models DNS answers through it.
+    *
+    * @param string $host A registered name (a terminal dot kept) or an IP literal without brackets.
+    *
+    * @return array<int,string> Canonical addresses in resolver order (getaddrinfo's with ext-sockets;
+    *    without it, the IPv4 answers first, then the absolute name's DNS AAAA records — a DNS round trip
+    *    outside the hop's `timeout`, none for `localhost`); empty when the host does not resolve.
+    */
+   protected function discover (string $host): array
+   {
+      // ? An IP literal needs no lookup
+      $literal = $this->normalize($host);
+      if ($literal !== null) {
+         return [$literal];
+      }
+
+      // @ The system resolver — the one PHP's own wrapper would have used
+      $addresses = [];
+      if (function_exists('socket_addrinfo_lookup')) {
+         try {
+            $AddressInfos = @socket_addrinfo_lookup($host, null, [
+               'ai_socktype' => SOCK_STREAM,
+            ]);
+         }
+         catch (Throwable) {
+            $AddressInfos = false;
+         }
+         foreach (is_array($AddressInfos) ? $AddressInfos : [] as $AddressInfo) {
+            $explained = socket_addrinfo_explain($AddressInfo);
+            $IP = $explained['ai_addr']['sin_addr']
+               ?? ($explained['ai_addr']['sin6_addr'] ?? null);
+            if (is_string($IP)) {
+               $addresses[] = $IP;
+            }
+         }
+      }
+      // ! Without ext-sockets: the system resolver's IPv4 answers (hosts
+      //   file included) first, then the name's DNS AAAA records — asked for
+      //   the absolute name (no search list), never for `localhost`
+      else {
+         $IPv4 = @gethostbynamel($host);
+         foreach (is_array($IPv4) ? $IPv4 : [] as $IP) {
+            $addresses[] = $IP;
+         }
+
+         $name = strtolower(rtrim($host, '.'));
+         if ($name !== 'localhost' && str_ends_with($name, '.localhost') === false) {
+            $records = @dns_get_record("{$name}.", DNS_AAAA);
+            foreach (is_array($records) ? $records : [] as $record) {
+               $IP = $record['ipv6'] ?? null;
+               if (is_string($IP)) {
+                  $addresses[] = $IP;
+               }
+            }
+         }
+      }
+
+      // ! An answer that is not an address voids the whole lookup
+      $normalized = [];
+      foreach ($addresses as $IP) {
+         $address = $this->normalize($IP);
+         if ($address === null) {
+            return [];
+         }
+         $normalized[] = $address;
+      }
+
+      // :
+      return array_values(array_unique($normalized));
+   }
+
+   /**
+    * Whether one canonical IP address is public — a globally routable unicast
+    * destination.
+    *
+    * Non-public: loopback, private, link-local, shared (CGNAT), reserved and
+    * documentation ranges (PHP's `FILTER_FLAG_GLOBAL_RANGE`), plus what that
+    * classifier still admits — `0/8`, multicast and `240/4`, the 6to4 relay
+    * anycast `192.88.99/24`, the unspecified `::`, the IPv4-compatible
+    * `::/96`, SIIT `::ffff:0:0/96`, multicast `ff00::/8`, the NAT64 local-use
+    * prefix `64:ff9b:1::/48`, site-local `fec0::/10`, documentation
+    * `3fff::/20` and SRv6 `5f00::/16`. An IPv4-mapped address, and one in the
+    * NAT64 well-known prefix `64:ff9b::/96`, is judged as the IPv4 address it
+    * carries; a network-specific NAT64 prefix is not recognized. Overridable
+    * by a subclass — a test models a public origin on loopback through it.
+    *
+    * @param string $IP A canonical IPv4 or IPv6 address.
+    */
+   protected function permit (string $IP): bool
+   {
+      $address = $this->normalize($IP);
+      $packed = $address === null ? false : @inet_pton($address);
+      if ($address === null || $packed === false) {
+         return false;
+      }
+
+      $first = ord($packed[0]);
+      if (strlen($packed) === 4) {
+         // ? `0/8`, multicast `224/4`, reserved `240/4`; the 6to4 relay anycast
+         if ($first === 0 || $first >= 224 || substr($packed, 0, 3) === "\xc0\x58\x63") {
+            return false;
+         }
+      }
+      else {
+         // ?: The NAT64 well-known prefix only translates global IPv4: judge
+         //   the IPv4 address it embeds
+         if (substr($packed, 0, 12) === "\x00\x64\xff\x9b\x00\x00\x00\x00\x00\x00\x00\x00") {
+            $embedded = inet_ntop(substr($packed, 12));
+
+            return is_string($embedded) && $this->permit($embedded);
+         }
+
+         $second = ord($packed[1]);
+         // ? `::/96` (unspecified, IPv4-compatible), SIIT `::ffff:0:0/96`,
+         //   multicast, NAT64 local-use, site-local `fec0::/10`, documentation
+         //   `3fff::/20`, SRv6 `5f00::/16`
+         if (
+            substr($packed, 0, 12) === "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+            || substr($packed, 0, 12) === "\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\x00\x00"
+            || $first === 255
+            || substr($packed, 0, 6) === "\x00\x64\xff\x9b\x00\x01"
+            || ($first === 0xfe && ($second & 0xc0) === 0xc0)
+            || ($first === 0x3f && $second === 0xff && (ord($packed[2]) & 0xf0) === 0)
+            || ($first === 0x5f && $second === 0x00)
+         ) {
+            return false;
+         }
+      }
+
+      // @phpstan-ignore notIdentical.alwaysTrue (GLOBAL_RANGE is narrower than valid-IP)
+      return filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_GLOBAL_RANGE) !== false;
+   }
+
+   /**
+    * Canonicalize an IPv4/IPv6 literal (an IPv4-mapped IPv6 address becomes
+    * its IPv4 address); null when the string is not one.
+    */
+   private function normalize (string $IP): null|string
+   {
+      $packed = @inet_pton($IP);
+      if ($packed === false) {
+         return null;
+      }
+      if (strlen($packed) === 16 && substr($packed, 0, 12) === "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff") {
+         $packed = substr($packed, 12);
+      }
+
+      $normalized = inet_ntop($packed);
+
+      return is_string($normalized) ? $normalized : null;
    }
 
    /**

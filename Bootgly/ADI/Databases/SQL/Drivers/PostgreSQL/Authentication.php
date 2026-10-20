@@ -22,6 +22,7 @@ use function hash_pbkdf2;
 use function in_array;
 use function md5;
 use function ord;
+use function preg_match;
 use function random_bytes;
 use function str_replace;
 use function str_starts_with;
@@ -37,6 +38,13 @@ use Bootgly\ADI\Database\Config;
  */
 class Authentication
 {
+   /**
+    * The highest SCRAM iteration count accepted: PBKDF2 runs synchronously in
+    * the worker, so a hostile server could otherwise stall it for minutes
+    * (about two seconds at this ceiling).
+    */
+   private const int CEILING = 10_000_000;
+
    // * Config
    public Config $Config;
 
@@ -50,7 +58,11 @@ class Authentication
    public bool $authenticated = false;
 
    // * Metadata
-   // ...
+   /**
+    * The iteration count of the last server-first message `resume()` read
+    * (`0` until one carried a valid count).
+    */
+   public private(set) int $iterations = 0;
 
 
    public function __construct (Config $Config)
@@ -99,20 +111,39 @@ class Authentication
 
    /**
     * Resume a SCRAM exchange from the server-first-message.
+    *
+    * @param int $floor The lowest iteration count the caller accepts — the
+    *    count is judged from the same strict parse that derives the key.
+    *
+    * @throws InvalidArgumentException When the message is malformed or ambiguous, or its count is below `$floor`.
     */
-   public function resume (string $message): string
+   public function resume (string $message, int $floor = 1): string
    {
+      $this->iterations = 0;
       $Fields = $this->parse($message);
       $nonce = $Fields['r'] ?? '';
       $salt = base64_decode($Fields['s'] ?? '', true);
-      $iterations = (int) ($Fields['i'] ?? '0');
+      $count = $Fields['i'] ?? '';
 
       if ($nonce === '' || str_starts_with($nonce, $this->clientNonce) === false) {
          throw new InvalidArgumentException('PostgreSQL SCRAM nonce is invalid.');
       }
 
+      // ? A count is a decimal integer and nothing else
+      $iterations = preg_match('/^[0-9]{1,10}$/', $count) === 1 ? (int) $count : 0;
       if ($salt === false || $iterations <= 0) {
          throw new InvalidArgumentException('PostgreSQL SCRAM salt or iteration count is invalid.');
+      }
+      $this->iterations = $iterations;
+
+      // ? A count that would stall the worker
+      if ($iterations > self::CEILING) {
+         throw new InvalidArgumentException('PostgreSQL SCRAM iteration count is too large.');
+      }
+
+      // ? Below the floor the caller requires
+      if ($iterations < $floor) {
+         throw new InvalidArgumentException("PostgreSQL SCRAM iteration count {$iterations} is below {$floor}.");
       }
 
       $this->serverFirst = $message;
@@ -141,7 +172,12 @@ class Authentication
     */
    public function finish (string $message): bool
    {
-      $Fields = $this->parse($message);
+      try {
+         $Fields = $this->parse($message);
+      }
+      catch (InvalidArgumentException) {
+         return false;
+      }
       $signature = $Fields['v'] ?? '';
 
       return hash_equals($this->serverSignature, $signature);
@@ -158,9 +194,13 @@ class Authentication
    }
 
    /**
-    * Parse SCRAM key-value attributes.
+    * Parse SCRAM key-value attributes — strictly: every attribute has `=`
+    * right after its one-character name and appears once, so no two readers
+    * of one message can see different values.
     *
     * @return array<string,string>
+    *
+    * @throws InvalidArgumentException When an attribute is malformed or repeated.
     */
    private function parse (string $message): array
    {
@@ -168,11 +208,17 @@ class Authentication
       $parts = explode(',', $message);
 
       foreach ($parts as $part) {
-         if (strlen($part) < 3) {
-            continue;
+         // ?
+         if (strlen($part) < 2 || $part[1] !== '=') {
+            throw new InvalidArgumentException('PostgreSQL SCRAM attribute is malformed.');
          }
 
          $key = $part[0];
+         // ?
+         if (isset($Fields[$key])) {
+            throw new InvalidArgumentException('PostgreSQL SCRAM attribute is repeated.');
+         }
+
          $Fields[$key] = substr($part, 2);
       }
 

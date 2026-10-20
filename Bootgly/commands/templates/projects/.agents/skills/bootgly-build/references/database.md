@@ -28,7 +28,10 @@ return new Config(scope: 'database')
 - **MySQL:** a `->MySQL` block with `->Driver` (`'mysql'`), `->Host`, `->Port` (3306, `cast: Types::Integer`), `->Database`, `->Username`, `->Password` bound to `DB_HOST DB_PORT DB_NAME DB_USER DB_PASS`, and `Default` `'mysql'`. **PostgreSQL:** same keys in a `->PostgreSQL` block, driver `'pgsql'`, port 5432.
 - `Default` must name a declared block, or the config throws `…missing the selected connection scope…`. TLS goes in
   the block: `->Secure->Mode->bind(key: 'DB_SSLMODE', default: 'prefer')->up()` (a local Docker MySQL on kits ≤ 1.0.2
-  needs `'disable'`; see the Shop cookbook). Secrets stay in env keys or `configs/database/.env`, which you never commit.
+  needs `'disable'`; see the Shop cookbook). A PostgreSQL server or PgBouncer without TLS that asks for a
+  cleartext/MD5 password (or SCRAM below 4096 iterations) on a non-loopback host is refused under `prefer`
+  since 1.0.10: set `DB_SSLMODE=disable`.
+  Secrets stay in env keys or `configs/database/.env`, which you never commit.
 
 ## 2. Migrations (commands for §2 and §3)
 ```bash

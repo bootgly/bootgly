@@ -157,5 +157,8 @@ return new Suite(
       '3.7-connection-dial_failures',
       // # 1.0.x (RH-H3-residual): a withdrawn operation fails locally and gives its slot back
       '4.18-pool-withdraw',
+      // # 1.0.x (ADI-SQL-4): a `prefer` downgrade to plaintext never hands out a
+      //   cleartext or MD5 password to a non-loopback host
+      '6.6-postgresql_prefer_cleartext_refusal',
    ]
 );

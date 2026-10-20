@@ -78,9 +78,11 @@ use Bootgly\ADI\Databases\KV\Operation;
  * read or loaded, whose diagnostic the Connection keeps whatever
  * `error_reporting()` masks — an untrusted certificate, a peer name mismatch
  * or a TLS alert: those abort.
- * Every mode but `disable` verifies the certificate chain and the peer name
- * unless the config says `verify => false` / `name => false`; `verify-ca`
- * verifies the chain only and `verify-full` always verifies both.
+ * Only `verify-ca` (the chain) and `verify-full` (the chain and the peer
+ * name) verify the server certificate. `prefer` and `require` encrypt
+ * without verification unless the config opts in with `verify => true` (and
+ * `name`), so they stop passive observers only: an active on-path attacker
+ * can answer the handshake with any certificate and receive `AUTH`.
  */
 class Redis extends Driver
 {
