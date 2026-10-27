@@ -12,7 +12,7 @@ The rules live in `<kit>/projects/.agents/rules/`; this skill links them as `../
 
 This skill builds features inside an existing project under `projects/<Name>/`; paths are relative to it.
 Obey the rules instead of restating them: [Architecture](../../../.agents/rules/Architecture_principles.md) ·
-[Coding styles](../../../.agents/rules/Coding_styles.md) · [Naming](../../../.agents/rules/Naming_conventions.md) ·
+[Coding styles](../../../.agents/rules/Coding_styles.md) · [Extensibility](../../../.agents/rules/Extensibility.md) · [Naming](../../../.agents/rules/Naming_conventions.md) ·
 [Organization](../../../.agents/rules/Organizational_structures.md) · [Testing](../../../.agents/rules/Testing_guidelines.md) ·
 [Workflow](../../../.agents/rules/Workflow_pipelines.md). The non-interactive flags live only in `<kit>/AGENTS.md`.
 

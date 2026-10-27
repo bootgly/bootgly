@@ -8,6 +8,7 @@ files in `.agents/rules/` — one per section:
 
 - `.agents/rules/Architecture_principles.md`
 - `.agents/rules/Coding_styles.md`
+- `.agents/rules/Extensibility.md`
 - `.agents/rules/Naming_conventions.md`
 - `.agents/rules/Organizational_structures.md`
 - `.agents/rules/Testing_guidelines.md`
@@ -27,6 +28,7 @@ kit itself — install, create, import, upgrade and the non-interactive flags �
 
 @.agents/rules/Architecture_principles.md
 @.agents/rules/Coding_styles.md
+@.agents/rules/Extensibility.md
 @.agents/rules/Naming_conventions.md
 @.agents/rules/Organizational_structures.md
 @.agents/rules/Testing_guidelines.md

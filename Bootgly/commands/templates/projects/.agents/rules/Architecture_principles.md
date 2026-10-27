@@ -14,9 +14,10 @@ opinionated extras on top.
   (commands, terminal UI), `Bootgly\WPI` (HTTP server, router).
 - **MUST** — Never modify `Bootgly/`, `Console/` or `Web/`: they are pinned, read-only submodules.
   Never copy framework internals into a project, and never shadow a `Bootgly\`, `Console\` or `Web\`
-  class. All code, configuration and notes live under `projects/<Name>/`.
-- **MUST** — A project path never starts with a reserved segment: `Bootgly`, `Console`, `Web`, `Data`,
-  `Graphics`, `Embedded`, `Mobile`.
+  class (a successor in `<Name>\<Workable>\Bootgly\` does not: see *Extensibility*). All code,
+  configuration and notes live under `projects/<Name>/`.
+- **MUST** — A project's path in `projects/` never starts with a reserved segment: `Bootgly`, `Console`,
+  `Web`, `Data`, `Graphics`, `Embedded`, `Mobile`.
 - **MUST** — A project that uses a platform package needs it initialized — a fresh kit sets both up;
   otherwise pass `--platform=console|web` to `projects create`: `Console\` and `Web\` classes do not
   exist in a kit booted without them.
