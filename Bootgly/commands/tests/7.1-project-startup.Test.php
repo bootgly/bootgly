@@ -7,6 +7,7 @@ use const BOOTGLY_STORAGE_DIR;
 use const PHP_BINARY;
 use function assert;
 use function chmod;
+use function escapeshellarg;
 use function file_get_contents;
 use function file_put_contents;
 use function getenv;
@@ -246,9 +247,12 @@ return new Test(
             );
          }
          else {
+            // ! The command is printed shell-ready: its project path quoted
+            $quoted = escapeshellarg($project);
+
             yield assert(
                assertion: $result === false && str_contains($output, 'only systemd is supported')
-                  && str_contains($output, "project {$project} start -f") && is_file($staged) === false,
+                  && str_contains($output, "project {$quoted} start -f") && is_file($staged) === false,
                description: 'an unsupported platform is named, with the command a service must run — got: ' . $output
             );
 
