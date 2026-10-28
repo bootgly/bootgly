@@ -160,5 +160,11 @@ return new Suite(
       // # 1.0.x (ADI-SQL-4): a `prefer` downgrade to plaintext never hands out a
       //   cleartext or MD5 password to a non-loopback host
       '6.6-postgresql_prefer_cleartext_refusal',
+      // # 1.0.x (POOL-35 review): an exclusive operation is never handed an idle
+      //   connection an unflushed co-located operation still claims
+      '4.19-pool-colocated_claims',
+      // # 1.0.x (SEC-R3-2): a kept session is reset behind everything it owes
+      //   before anyone else runs there
+      '4.20-pool-session_reset',
    ]
 );

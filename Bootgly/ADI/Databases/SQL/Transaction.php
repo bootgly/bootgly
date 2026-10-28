@@ -410,17 +410,17 @@ class Transaction implements Awaiting, Querying
          return;
       }
 
-      // @ The driver may still own this statement's wire: let it reconcile there
-      //   first, exactly as the pool does for a deadline it expired out of band.
-      $Operation->Protocol?->abandon($Operation);
-
-      // ? A command the wire never carried must never reach it. The transaction
-      //   that would have contained it is ending, so flushing it afterwards
-      //   would run it in autocommit — on a connection the pool has by then
-      //   handed to somebody else. fail() drops the buffered command with it.
-      if ($Operation->finished === false) {
-         $Operation->fail('SQL transaction statement was discarded by the rollback.');
-      }
+      // @ Withdrawn through its pool, as a caller that stops waiting withdraws
+      //   one: the driver reconciles the statement's wire there, and its
+      //   failure drops a command the wire never carried — flushed after the
+      //   transaction ends, it would run in autocommit on a connection the
+      //   pool has by then handed to somebody else. A statement already on
+      //   the wire keeps its slot counted until its own deadline when its
+      //   session drops (`Pool::withdraw()`): the server still runs it.
+      //   Reconciled on the driver alone, that session dropped with its slot
+      //   freed, so every overtaken statement let one more session open past
+      //   `max` while it ran.
+      $this->Database->Pool->withdraw($Operation);
 
       // ! Detach it from the pool for good. The caller still holds this object —
       //   Repository::save() returns it and Hooks::Saved publishes it — and

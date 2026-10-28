@@ -30,6 +30,7 @@ use Throwable;
 use WeakReference;
 
 use const Bootgly\WPI;
+use Bootgly\ADI\Database\Operation\OperationStates;
 use Bootgly\ADI\Database\Operation\Result;
 use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Databases\SQL\Awaiting;
@@ -54,6 +55,17 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource\Scheduling;
 
 /**
  * HTTP response resource for awaiting async SQL database operations.
+ *
+ * A wait that never comes back — refused by the reactor, interrupted, or a
+ * request Fiber destroyed on client disconnect or eviction — withdraws what it
+ * left in flight, so the pool takes the slot back at once. A refused or
+ * interrupted wait does so inside a transaction too: its error reaches the
+ * work, and withdrawing a statement on the reserved connection severs that
+ * session. The one exception is the transaction a destroyed Fiber had open
+ * inside `transact()` — in its work, its commit, or the rollback of a failed
+ * work: it is not withdrawn, but adopted by a detached Fiber on the worker
+ * reactor that drains it and rolls it back on its own session, which is
+ * reset — advisory locks, LISTEN — before the next caller gets it.
  */
 class Database extends Resource implements Awaiting, Scheduling
 {
@@ -89,6 +101,14 @@ class Database extends Resource implements Awaiting, Scheduling
    //   only unwound by a later GC run, its transaction teardown with it.
    /** @var null|WeakReference<Fiber<mixed,mixed,mixed,mixed>> */
    private null|WeakReference $Fiber = null;
+   // ! The execution context known to be under destruction: one of its waits
+   //   came back through its `finally` alone (see withdraw()). Code the work
+   //   runs while it unwinds — a `finally` that queries, a destructor — can
+   //   still throw into transact(), which must then leave the transaction to
+   //   its adopter instead of awaiting a rollback nothing can drive. Held
+   //   weakly, for the same reason as $Fiber.
+   /** @var null|WeakReference<Fiber<mixed,mixed,mixed,mixed>> */
+   private null|WeakReference $Destroyed = null;
 
 
    public function __construct (SQL $Database)
@@ -425,7 +445,9 @@ class Database extends Resource implements Awaiting, Scheduling
       finally {
          // ? The wait never came back: refused, interrupted, or the Fiber is
          //   being destroyed (only this block runs then) — nobody will advance
-         //   the operation again, so its connection is taken back here.
+         //   the operation again, so its connection is taken back here. A
+         //   destroyed Fiber leaves its open transaction's operation to the
+         //   transact() frame that adopts it (see withdraw()).
          if ($returned === false) {
             $this->withdraw([$Operation], $thrown);
          }
@@ -515,7 +537,8 @@ class Database extends Resource implements Awaiting, Scheduling
          throw $Throwable;
       }
       finally {
-         // ? Same as await(): whatever the group still has in flight is withdrawn.
+         // ? Same as await(): whatever the group still has in flight is
+         //   withdrawn — but for a destroyed Fiber's open transaction.
          if ($returned === false) {
             $this->withdraw($Operations, $thrown);
          }
@@ -524,6 +547,20 @@ class Database extends Resource implements Awaiting, Scheduling
 
    /**
     * Execute work inside one SQL transaction.
+    *
+    * The whole unit of work is this call's: its BEGIN, the callback and the
+    * commit of every level it left open, or the rollback of every level when
+    * the work throws. A wait refused or interrupted inside it withdraws its
+    * operation — on the reserved connection, which severs the session — and
+    * its error reaches the work, as anywhere else. A request Fiber destroyed
+    * anywhere inside it — a client disconnect, an eviction — does not sever
+    * the transaction, even when the work's own unwinding throws or the
+    * rollback of a failed work was in flight: a detached Fiber adopts it on
+    * the worker reactor, drains what was still in flight on the reserved
+    * connection and rolls the transaction back on its own session, and the
+    * session is reset — advisory locks, LISTEN — before the connection is
+    * lent again (see adopt()). Without a reactor it is withdrawn instead,
+    * which severs the session so the server rolls it back.
     *
     * @param callable(Transaction,self):mixed $work
     */
@@ -554,60 +591,70 @@ class Database extends Resource implements Awaiting, Scheduling
          $Begin = $Transaction->begin();
       }
 
-      if ($Begin !== null) {
-         $this->await($Begin);
-         $this->check($Begin);
-      }
-
-      // ! For the length of the callback, this resource's query surface IS the
-      //   transaction. Through the facade the same call asks the pool for a
-      //   DIFFERENT connection: with capacity to spare it runs outside the unit
-      //   of work that is supposed to contain it — reading none of its writes,
-      //   covered by none of its rollback — and with none to spare it parks
-      //   waiting for the connection this very caller is holding.
+      // ! For the length of the unit of work — its BEGIN, the callback and the
+      //   commit — this resource's query surface IS the transaction. Through
+      //   the facade the same call asks the pool for a DIFFERENT connection:
+      //   with capacity to spare it runs outside the unit of work that is
+      //   supposed to contain it — reading none of its writes, covered by none
+      //   of its rollback — and with none to spare it parks waiting for the
+      //   connection this very caller is holding. The surface also tells a
+      //   destroyed Fiber's await() which operation to leave for adoption.
       //   Saved and restored, never cleared, so a nested transact() hands the
-      //   outer surface back.
+      //   outer surface back — and restored before this frame's rollback
+      //   path: the outermost frame has settled by then, so its awaits are
+      //   not adopted, while a nested frame's still belong to the outer one.
       $Previous = $this->Transaction;
       $Owner = $this->Fiber;
+      $begun = false;
       $settled = false;
+      $rolling = false;
 
       try {
          try {
             $this->Transaction = $Transaction;
             $this->Fiber = $Context;
 
+            // @ Awaited inside the teardown region, so a Fiber destroyed while
+            //   its BEGIN (or savepoint) is in flight is adopted too.
+            if ($Begin !== null) {
+               $this->await($Begin);
+               $this->check($Begin);
+            }
+
+            $begun = true;
+
             $result = $work($Transaction, $this);
+
+            // @@ The work may have opened nested levels and left them open. One
+            //    commit() at `depth > 1` releases a savepoint, so the outer
+            //    transaction would never be committed and its pinned connection
+            //    never handed back — while this method reported the unit of work
+            //    as done. The contract here is the whole transaction, not the
+            //    level the callback happened to stop on.
+            do {
+               // ? A `do` runs once even when the callback already unwound past the
+               //   depth this call found — and at `depth === $entry === 1` commit()
+               //   is no longer a savepoint release: it ends the CALLER's
+               //   transaction, from inside a nested call, and the caller's own
+               //   rollback then has nothing left to reach. The `$entry > 0` half
+               //   keeps the outer call attempting its teardown unconditionally,
+               //   which is what a transaction reporting `depth === 0` needs.
+               if ($entry > 0 && $Transaction->depth <= $entry) {
+                  break;
+               }
+
+               $Commit = $this->await($Transaction->commit());
+
+               // ? Every commit() that cannot make progress fails the operation,
+               //   so the loop always ends through here rather than spinning.
+               $this->check($Commit);
+            }
+            while ($Transaction->depth > $entry);
          }
          finally {
             $this->Transaction = $Previous;
             $this->Fiber = $Owner;
          }
-
-         // @@ The work may have opened nested levels and left them open. One
-         //    commit() at `depth > 1` releases a savepoint, so the outer
-         //    transaction would never be committed and its pinned connection
-         //    never handed back — while this method reported the unit of work
-         //    as done. The contract here is the whole transaction, not the
-         //    level the callback happened to stop on.
-         do {
-            // ? A `do` runs once even when the callback already unwound past the
-            //   depth this call found — and at `depth === $entry === 1` commit()
-            //   is no longer a savepoint release: it ends the CALLER's
-            //   transaction, from inside a nested call, and the caller's own
-            //   rollback then has nothing left to reach. The `$entry > 0` half
-            //   keeps the outer call attempting its teardown unconditionally,
-            //   which is what a transaction reporting `depth === 0` needs.
-            if ($entry > 0 && $Transaction->depth <= $entry) {
-               break;
-            }
-
-            $Commit = $this->await($Transaction->commit());
-
-            // ? Every commit() that cannot make progress fails the operation,
-            //   so the loop always ends through here rather than spinning.
-            $this->check($Commit);
-         }
-         while ($Transaction->depth > $entry);
 
          $settled = true;
 
@@ -616,61 +663,116 @@ class Database extends Resource implements Awaiting, Scheduling
          return $result;
       }
       catch (Throwable $Throwable) {
+         // ? The Fiber is being destroyed and the work's own unwinding threw —
+         //   a `finally` that queries, a destructor. Nothing here can await a
+         //   rollback, and composing one would discard the statement left in
+         //   flight for the adopter, dropping its session outside the pool's
+         //   accounting. Left unsettled, the finally below adopts it.
+         $Current = Fiber::getCurrent();
+
+         if ($Current !== null && $this->Destroyed?->get() === $Current) {
+            throw $Throwable;
+         }
+
+         unset($Current);
+
          $settled = true;
 
-         // @@ Same for the failure path — a single rollback() unwinds one
-         //    savepoint and leaves the transaction open. Every level is
-         //    attempted: only the outermost carries `unlock`, so stopping at
-         //    the first failure would strand the reservation.
-         do {
-            // ? A `do` runs once even when the callback already unwound past the
-            //   depth this call found — and at `depth === $entry === 1` commit()
-            //   is no longer a savepoint release: it ends the CALLER's
-            //   transaction, from inside a nested call, and the caller's own
-            //   rollback then has nothing left to reach. The `$entry > 0` half
-            //   keeps the outer call attempting its teardown unconditionally,
-            //   which is what a transaction reporting `depth === 0` needs.
-            if ($entry > 0 && $Transaction->depth <= $entry) {
-               break;
-            }
+         // ? A BEGIN that failed opened no level: there is nothing to unwind.
+         if ($begun === false) {
+            throw $Throwable;
+         }
 
-            $depth = $Transaction->depth;
+         // ! The outermost frame keeps the surface for its own teardown: a
+         //   Fiber destroyed while the ROLLBACK is in flight leaves it to the
+         //   adopter (see withdraw()), as during the work. A nested frame's
+         //   rollbacks run on the outer surface, the same transaction, already.
+         if ($entry === 0) {
+            $this->Transaction = $Transaction;
+            $this->Fiber = $Context;
+            $rolling = true;
+         }
 
-            try {
-               $this->await($Transaction->rollback());
-            }
-            catch (Throwable) {
-               // Preserve the original work failure.
-            }
+         try {
+            // @@ Same for the failure path — a single rollback() unwinds one
+            //    savepoint and leaves the transaction open. Every level is
+            //    attempted: only the outermost carries `unlock`, so stopping at
+            //    the first failure would strand the reservation.
+            do {
+               // ? A `do` runs once even when the callback already unwound past the
+               //   depth this call found — and at `depth === $entry === 1` commit()
+               //   is no longer a savepoint release: it ends the CALLER's
+               //   transaction, from inside a nested call, and the caller's own
+               //   rollback then has nothing left to reach. The `$entry > 0` half
+               //   keeps the outer call attempting its teardown unconditionally,
+               //   which is what a transaction reporting `depth === 0` needs.
+               if ($entry > 0 && $Transaction->depth <= $entry) {
+                  break;
+               }
 
-            // ? await() does not raise here and the catch above swallows what
-            //   would, so a teardown that cannot advance is what ends this loop.
-            if ($Transaction->depth >= $depth) {
-               break;
+               $depth = $Transaction->depth;
+
+               try {
+                  $this->await($Transaction->rollback());
+               }
+               catch (Throwable) {
+                  // Preserve the original work failure.
+               }
+
+               // ? await() does not raise here and the catch above swallows what
+               //   would, so a teardown that cannot advance is what ends this loop.
+               if ($Transaction->depth >= $depth) {
+                  break;
+               }
+            }
+            while ($Transaction->depth > $entry);
+         }
+         finally {
+            if ($entry === 0) {
+               $this->Transaction = $Previous;
+               $this->Fiber = $Owner;
             }
          }
-         while ($Transaction->depth > $entry);
+
+         // ! Reached only when the loop ended: destroyed inside it, the
+         //   rollback in flight is still the finally's to adopt.
+         $rolling = false;
 
          throw $Throwable;
       }
       finally {
          // ? Neither committed nor rolled back: the Fiber is being destroyed
-         //   (only this block runs then — a client disconnect, an eviction), so
-         //   nothing will ever await a teardown. The outermost frame ends the
-         //   whole transaction locally, at any savepoint depth: its ROLLBACK is
-         //   withdrawn before it reaches the wire, which severs the session, so
-         //   the server rolls the work back and the pool reservation drops. (A
-         //   final COMMIT already in flight is await()'s to withdraw — whether
-         //   the server committed it is then unknown — and leaves nothing to
-         //   abort here.) A failed withdrawal has nobody to report to: the
-         //   dying Fiber must not unwind into handler code it cannot suspend in.
+         //   (only this block runs then — a client disconnect, an eviction —
+         //   or the work's unwinding threw while it was, see the catch), so
+         //   nothing here will ever await a teardown. Destroyed while the
+         //   catch's rollback was in flight counts the same: that rollback is
+         //   the operation left in flight. The outermost frame hands
+         //   the whole transaction, at any savepoint depth, to an adopter: the
+         //   one operation the context left in flight on the reserved
+         //   connection — its BEGIN, a statement, a savepoint, the final COMMIT
+         //   — is drained there, then the transaction is rolled back on its
+         //   own session unless that COMMIT already ended it. The session keeps
+         //   its slot and the teardown's own completion releases the
+         //   reservation. When nothing can adopt it, it is withdrawn as before:
+         //   its ROLLBACK withdrawn before the wire severs the session, so the
+         //   server rolls the work back and the pool reservation drops. A
+         //   failure has nobody to report to: the dying Fiber must not unwind
+         //   into handler code it cannot suspend in.
          // @phpstan-ignore-next-line (a destroyed Fiber skips the try and the catch)
-         if ($settled === false && $entry === 0) {
+         if ($entry === 0 && ($settled === false || $rolling)) {
+            $Operation = $Transaction->Operation;
+            $Pending = $Operation !== null && $Operation->finished === false ? [$Operation] : [];
+            $adopted = false;
+
             try {
-               $this->Database->withdraw($Transaction->abort());
+               $adopted = $this->adopt($Transaction, $Pending);
             }
             catch (Throwable) {
-               // ? Dropped with the Fiber
+               // ? Withdrawn below
+            }
+
+            if ($adopted === false) {
+               self::sever($this->Database, $Transaction, $Pending);
             }
          }
       }
@@ -683,13 +785,41 @@ class Database extends Resource implements Awaiting, Scheduling
     */
    private function withdraw (array $Operations, bool $thrown): void
    {
+      // ! A destroyed Fiber (nothing thrown) leaves the operation its open
+      //   transaction tracks in flight — its BEGIN, a statement, a savepoint
+      //   or the final COMMIT: the outermost transact() frame adopts it (see
+      //   adopt()), and withdrawing it here would sever the very session the
+      //   adopter drains it on. Only this context's transaction qualifies, and
+      //   only while transact() holds it as the surface: a refused or
+      //   interrupted wait, a stranger context, or the outermost frame's
+      //   rollback path after a failed work still withdraws.
+      $Adoptable = null;
+
+      if ($thrown === false) {
+         /** @var null|Fiber<mixed,mixed,mixed,mixed> $Current */
+         $Current = Fiber::getCurrent();
+
+         // ! Only a destroyed Fiber's wait comes back with nothing thrown:
+         //   recorded, so a throw from the rest of its unwinding is told apart
+         //   from a failed work (see transact()).
+         if ($Current !== null) {
+            $this->Destroyed = WeakReference::create($Current);
+         }
+
+         if ($this->Transaction !== null && $this->Fiber?->get() === $Current) {
+            $Adoptable = $this->Transaction->Operation;
+         }
+
+         unset($Current);
+      }
+
       // @ Unfinished ones only, each once. An armed completion edge may fire
       //   as they fail: it only ever wakes this very context, which is running
       //   now, so wake() leaves it alone.
       $Unfinished = [];
 
       foreach ($Operations as $Operation) {
-         if ($Operation->finished === false) {
+         if ($Operation->finished === false && $Operation !== $Adoptable) {
             $Unfinished[spl_object_id($Operation)] = $Operation;
          }
       }
@@ -714,6 +844,225 @@ class Database extends Resource implements Awaiting, Scheduling
       }
 
       $this->Database->withdraw(...array_values($Unfinished));
+   }
+
+   /**
+    * Adopt the transaction a destroyed request Fiber left open.
+    *
+    * Nothing on the reserved connection is withdrawn: a detached Fiber,
+    * scheduled on the worker reactor the way deferred responses are, drives
+    * every operation still in flight there to completion — results discarded
+    * — and then, while the transaction is still open, its top-level
+    * `ROLLBACK`. Their own completion releases the reservation (`COMMIT` and
+    * `ROLLBACK` carry `unlock`), so the session survives and keeps its slot,
+    * and the connection is never lent with the transaction open. The session
+    * is tainted first (`Pool::taint()`): that release writes the session
+    * reset — advisory locks, LISTEN — before the connection is idle again.
+    * Bounded by each operation's own deadline: the pool fails an expired
+    * one, which ends the adoption.
+    *
+    * Synchronous and never suspends the caller: the adopter yields once
+    * before touching anything, so a scheduler that refuses it leaves nothing
+    * half-adopted. It captures neither this resource nor the request, so the
+    * destroyed context is not kept reachable through it.
+    *
+    * @param array<int,Operation> $Operations What the context left in flight
+    *    on the transaction (await() and drain() leave it to this method).
+    *
+    * @return bool False when nothing can adopt the transaction — no worker
+    *    reactor (synchronous usage), a BEGIN that never reached the server,
+    *    or an adopter the reactor refused — and the caller withdraws it.
+    */
+   private function adopt (Transaction $Transaction, array $Operations): bool
+   {
+      // ? No worker reactor (synchronous usage): nothing would ever resume it.
+      if (isSet(TCP_Server_CLI::$Event) === false) {
+         return false;
+      }
+
+      foreach ($Operations as $Operation) {
+         // ? A BEGIN that never reached the server opened nothing to end:
+         //   withdrawing it is exact and frees its slot at once, where
+         //   adopting it would borrow a session to open and close an empty
+         //   transaction.
+         if (
+            $Operation->lock
+            && $Operation->state !== OperationStates::Querying
+            && $Operation->state !== OperationStates::Reading
+         ) {
+            return false;
+         }
+      }
+
+      // ! Disarmed: a completion edge would only wake the destroyed context,
+      //   and it holds that context's lease.
+      foreach ($Operations as $Operation) {
+         $Operation->Waker = null;
+      }
+
+      $Event = TCP_Server_CLI::$Event;
+      $Database = $this->Database;
+      // ! Shared with the adopter: set once the reactor took it, after which
+      //   the adopter alone answers for the transaction.
+      $admitted = false;
+
+      $Adopter = new Fiber(static function () use ($Database, $Transaction, $Operations, &$admitted): void {
+         $resumed = false;
+
+         // ! Admission first: the adopter yields before touching anything, so
+         //   the scheduler decides on work that has not started.
+         try {
+            Fiber::suspend();
+
+            $resumed = true;
+         }
+         catch (Throwable) {
+            // ? A rejection delivered at the admission point
+         }
+         finally {
+            // ? Taken by the reactor, then dropped before it ever ran — a
+            //   later rejection, or a reactor torn down (worker shutdown):
+            //   nobody else is left to withdraw the transaction. Refused at
+            //   admission, the caller withdraws it instead.
+            // @phpstan-ignore booleanAnd.rightAlwaysFalse (written by adopt() through the reference)
+            if ($resumed === false && $admitted) {
+               self::sever($Database, $Transaction, $Operations);
+            }
+         }
+
+         if ($resumed) {
+            self::settle($Database, $Transaction, $Operations);
+         }
+      });
+
+      try {
+         $value = $Adopter->start();
+      }
+      catch (Throwable) {
+         // ? This context cannot switch Fibers: nothing was started.
+         return false;
+      }
+
+      // ! The adopted session may still carry state its owner left at the
+      //   session level — advisory locks, a LISTEN — which no ROLLBACK ends.
+      //   Tainted while the transaction still reserves it, before anything
+      //   can release it: the release that unlocks it (the teardown's) then
+      //   writes the session reset before the connection is idle, so the
+      //   next caller drains the reset ahead of its own answer. Every
+      //   fallback drops the session instead, and the taint with it.
+      $Tracked = $Transaction->Operation;
+      $Reserved = $Tracked?->Connection;
+
+      if ($Tracked !== null && $Reserved?->Protocol !== null && $Reserved->Protocol === $Tracked->Protocol) {
+         ($Tracked->Pool ?? $Database->Pool)->taint($Reserved);
+      }
+
+      $admitted = $Event->schedule($Adopter, $value);
+
+      // :
+      return $admitted;
+   }
+
+   /**
+    * Drive an adopted transaction to its end, inside the adopter Fiber.
+    *
+    * @param array<int,Operation> $Operations
+    */
+   private static function settle (SQL $Database, Transaction $Transaction, array $Operations): void
+   {
+      $settled = false;
+
+      try {
+         // @@ What the destroyed context left in flight finishes first, its
+         //    answer read and discarded: abort() discards an outstanding
+         //    statement, and one abandoned on a reserved connection severs the
+         //    session the ROLLBACK must ride.
+         foreach ($Operations as $Operation) {
+            self::drive($Database, $Operation);
+         }
+
+         // @ Then the transaction ends on its own session. abort() refuses —
+         //   an operation already failed, so nothing is driven — once it is no
+         //   longer open: a COMMIT that was in flight ended it, as did a BEGIN
+         //   the server refused or a session that dropped meanwhile.
+         $Rollback = $Transaction->abort();
+         $Operations[] = $Rollback;
+
+         self::drive($Database, $Rollback);
+
+         $settled = true;
+      }
+      catch (Throwable) {
+         // ? Withdrawn below: nothing may escape into the reactor loop.
+      }
+      finally {
+         // ? Failed, refused a wait by the selector, or destroyed with the
+         //   reactor (worker shutdown): what is still pending is withdrawn,
+         //   as if it had never been adopted.
+         if ($settled === false) {
+            self::sever($Database, $Transaction, $Operations);
+         }
+      }
+   }
+
+   /**
+    * Drive one adopted operation to completion, parking the adopter Fiber on
+    * its readiness the way await() parks a request.
+    */
+   private static function drive (SQL $Database, Operation $Operation): void
+   {
+      // @@
+      while ($Operation->finished === false) {
+         $Operation = $Database->advance($Operation);
+
+         if ($Operation->finished) {
+            break;
+         }
+
+         // ! A null readiness parks tick-based: resumed every iteration. A
+         //   wait the selector refuses (its descriptor budget) is delivered
+         //   here as an exception and escapes to settle(), which withdraws the
+         //   transaction: polling by ticks instead would spin the reactor for
+         //   as long as the answer takes — without end under no deadline.
+         Fiber::suspend($Operation->Readiness);
+      }
+   }
+
+   /**
+    * Withdraw an orphaned transaction the way it was before adoption existed:
+    * what it left in flight first, then its top-level `ROLLBACK`, withdrawn
+    * before the wire, which severs the session so the server rolls the work
+    * back and the pool reservation drops.
+    *
+    * @param array<int,Operation> $Operations
+    */
+   private static function sever (SQL $Database, Transaction $Transaction, array $Operations): void
+   {
+      // ? Nobody to report to: it runs in the finally of a dying Fiber or of
+      //   an adopter the reactor drives.
+      $Unfinished = [];
+
+      foreach ($Operations as $Operation) {
+         if ($Operation->finished === false) {
+            $Unfinished[spl_object_id($Operation)] = $Operation;
+         }
+      }
+
+      try {
+         if ($Unfinished !== []) {
+            $Database->withdraw(...array_values($Unfinished));
+         }
+      }
+      catch (Throwable) {
+         // ? Dropped
+      }
+
+      try {
+         $Database->withdraw($Transaction->abort());
+      }
+      catch (Throwable) {
+         // ? Dropped
+      }
    }
 
    /**

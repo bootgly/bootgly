@@ -14,6 +14,7 @@ namespace Bootgly\ADI\Databases\SQL\Drivers;
 use function array_key_first;
 use function array_shift;
 use function array_splice;
+use function array_unshift;
 use function count;
 use function fclose;
 use function feof;
@@ -65,6 +66,13 @@ use Bootgly\ADI\Databases\SQL\Operation;
  */
 class MySQL extends Driver
 {
+   /**
+    * What a kept session runs before anyone else does: named locks a command
+    * took once its caller was gone — GET_LOCK granted after the caller
+    * stopped waiting — must not outlive it on a pooled session.
+    */
+   private const string RESET = 'DO RELEASE_ALL_LOCKS()';
+
    // * Config
    public Authentication $Authentication;
    public Encoder $Encoder;
@@ -108,6 +116,16 @@ class MySQL extends Driver
    private null|Operation $writing = null;
    // @ The pool took the head away — its response is drained into a stand-in.
    private bool $abandoned = false;
+   /**
+    * Whether this session still owes the answer of a detached stand-in head,
+    * or of a session reset written behind it.
+    */
+   public bool $detached {
+      get => $this->abandoned || $this->Reset !== null;
+   }
+   // @ The session reset already on the wire, absorbed like a stand-in once
+   //   it reaches the head; null once drained. At most one is ever owed.
+   private null|Operation $Reset = null;
    // @ COM_STMT_PREPARE response in flight for the pipeline head.
    private bool $preparing = false;
    // @ SQL texts whose COM_STMT_PREPARE is already on the wire — a sibling
@@ -565,15 +583,70 @@ class MySQL extends Driver
    /**
     * Reconcile the wire when the pool abandons one operation.
     *
+    * Reached by the pool's own routes — an elapsed deadline, a cancel that
+    * never reached the server, a transaction teardown — where nobody is left
+    * to hand the connection to the next caller until a sibling reads it. A
+    * head whose command is whole on the wire therefore keeps its session only
+    * while a sibling is queued behind it to pump the answer, and a sibling
+    * leaving the FIFO behind a stand-in head keeps it only while another
+    * sibling stays behind that head. With none, the session is dropped. Every
+    * other case reconciles exactly as `detach()` does.
+    */
+   public function abandon (DatabaseOperation $Operation): void
+   {
+      $index = null;
+
+      foreach ($this->pipeline as $id => $Queued) {
+         if ($Queued === $Operation) {
+            $index = $id;
+
+            break;
+         }
+      }
+
+      // ? Draining needs a reader: the pool has already released this
+      //   operation, so only a sibling advance still pumps this socket. Only
+      //   a live sibling reads: never the stand-in head, nor an entry already
+      //   finished, which nobody advances again.
+      if ($index !== null && ($index === 0 ? $this->flushed : $this->abandoned)) {
+         $readers = 0;
+
+         foreach ($this->pipeline as $position => $Queued) {
+            if (
+               $Queued !== $Operation
+               && $Queued->finished === false
+               && $Queued !== $this->Reset
+               && ($position !== 0 || $this->abandoned === false)
+            ) {
+               $readers++;
+            }
+         }
+
+         if ($readers === 0) {
+            /** @var Operation $Operation */
+            $this->abort($Operation, 'MySQL abandoned command has no reader left to drain its response.');
+
+            return;
+         }
+      }
+
+      $this->detach($Operation);
+   }
+
+   /**
+    * Reconcile the wire for one operation whose caller stopped waiting,
+    * keeping the session whenever its command is whole on the wire.
+    *
     * Only the FIFO head ever owns the wire, so a queued sibling is provably
     * clean and simply leaves the queue. The head is replaced by a detached
     * stand-in that drains the response the server is still sending — the
     * operation object belongs to the pool from here on, and a fallback retry
-    * may already be running it on another connection. When nothing can be
-    * reconciled — the command never made it whole onto the wire, or no
-    * sibling is left to pump the answer — the session is dropped instead.
+    * may already be running it on another connection. No reader is required:
+    * `check()` ignores a stand-in head, so the pool hands the connection to
+    * the next operation, which queues behind it and pumps it. Only a command
+    * that never made it whole onto the wire drops the session.
     */
-   public function abandon (DatabaseOperation $Operation): void
+   public function detach (DatabaseOperation $Operation): void
    {
       $index = null;
 
@@ -596,10 +669,6 @@ class MySQL extends Driver
       if ($index !== 0) {
          array_splice($this->pipeline, $index, 1);
 
-         if ($this->abandoned && count($this->pipeline) < 2) {
-            $this->abort($Operation, 'MySQL abandoned command has no reader left to drain its response.');
-         }
-
          return;
       }
 
@@ -607,14 +676,6 @@ class MySQL extends Driver
       //   never ends — the session can never be resynchronized.
       if ($this->flushed === false) {
          $this->abort($Operation, 'MySQL operation was abandoned before its command reached the wire.');
-
-         return;
-      }
-
-      // ? Draining needs a reader: the pool has already released this
-      //   operation, so only a sibling advance still pumps this socket.
-      if (count($this->pipeline) < 2) {
-         $this->abort($Operation, 'MySQL abandoned command has no reader left to drain its response.');
 
          return;
       }
@@ -633,7 +694,73 @@ class MySQL extends Driver
    }
 
    /**
-    * Check whether this connection still has queued operations.
+    * Write a session reset behind everything this session still owes.
+    *
+    * `DO RELEASE_ALL_LOCKS()` releases every named lock the session holds. The
+    * classic protocol lets it be written now: the server reads it once it
+    * finishes the response in progress, even if nobody reads, and its OK — or
+    * the ERR of a server without that function — is absorbed like a stand-in's
+    * before any queued command is written. The pool asks for it as it returns
+    * the session to idle, where nobody else owes work on it. A command half
+    * on the wire is never interleaved: the reset is refused instead. A reset
+    * still owed covers every later request: only the head writes, and a queued
+    * command becomes the head only once the reset is drained — whatever is
+    * queued behind it never reached the server.
+    */
+   public function reset (): bool
+   {
+      $socket = $this->Connection->socket;
+
+      // ? Nothing left to reset on: the session is gone.
+      if ($this->aborted || is_resource($socket) === false) {
+         return false;
+      }
+
+      // ?: Already owed — ahead of everything not yet written.
+      if ($this->Reset !== null) {
+         return true;
+      }
+
+      // ? A command is half on the wire: the reset would land inside it.
+      if ($this->writing !== null) {
+         return false;
+      }
+
+      $write = $this->Encoder->encode(Encoder::QUERY, self::RESET);
+      $written = @fwrite($socket, $write);
+
+      // ? Partly written, the reset leaves the server reading a packet that
+      //   never ends — the session can never be resynchronised. Not written
+      //   at all, the stream is full: the server is not reading, and nothing
+      //   tells when it will.
+      if ($written !== strlen($write)) {
+         return false;
+      }
+
+      $Stand = new Operation(null, self::RESET);
+      $Stand->state = OperationStates::Reading;
+      $this->Reset = $Stand;
+
+      // @ Its place in the FIFO is its place on the wire: behind a head whose
+      //   command is whole on the wire, ahead of every command not written yet.
+      if ($this->pipeline !== [] && $this->flushed) {
+         array_splice($this->pipeline, 1, 0, [$Stand]);
+
+         return true;
+      }
+
+      array_unshift($this->pipeline, $Stand);
+      $this->flushed = true;
+      $this->abandoned = true;
+      $this->draining = true;
+
+      // :
+      return true;
+   }
+
+   /**
+    * Check whether this connection still owes a reply to a queued operation
+    * somebody waits for.
     */
    public function check (): bool
    {
@@ -641,8 +768,15 @@ class MySQL extends Driver
       //    until the message that terminates it arrives, and it stays at its
       //    slot to absorb that message whoever reads next. Reading a non-empty
       //    FIFO as "still busy" gates release() off for the connection's life
-      //    when the command that failed was answered in two reads.
-      foreach ($this->pipeline as $Queued) {
+      //    when the command that failed was answered in two reads. A stand-in
+      //    head is not work in flight either: nobody waits for its response,
+      //    and the next operation handed this connection queues behind it and
+      //    drains it.
+      foreach ($this->pipeline as $index => $Queued) {
+         if (($index === 0 && $this->abandoned) || $Queued === $this->Reset) {
+            continue;
+         }
+
          if ($Queued->finished === false) {
             return true;
          }
@@ -847,9 +981,21 @@ class MySQL extends Driver
                   if ($this->abandoned === false) {
                      $this->completed[] = $Active;
                   }
+
+                  if ($Active === $this->Reset) {
+                     $this->Reset = null;
+                  }
                }
 
                $this->clear();
+
+               // ? The next head is the session reset, already on the wire: its
+               //   response is drained like a stand-in's.
+               if ($this->Reset !== null && ($this->pipeline[0] ?? null) === $this->Reset) {
+                  $this->flushed = true;
+                  $this->abandoned = true;
+                  $this->draining = true;
+               }
             }
          }
       }
@@ -996,6 +1142,7 @@ class MySQL extends Driver
       $this->clear();
       $this->closing = [];
       $this->writing = null;
+      $this->Reset = null;
       $this->statements = [];
       $this->pending = [];
       $this->Holders = [];

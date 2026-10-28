@@ -13,6 +13,7 @@ namespace Bootgly\ADI\Databases\SQL\Drivers;
 
 use const FILTER_VALIDATE_IP;
 use function array_key_first;
+use function array_key_last;
 use function array_shift;
 use function count;
 use function explode;
@@ -79,6 +80,13 @@ class PostgreSQL extends Driver
     * crackable offline as an MD5 response.
     */
    private const int ITERATIONS = 4096;
+   /**
+    * What a kept session runs before anyone else does: whatever a statement
+    * left behind once its caller was gone — an advisory lock granted after
+    * the caller stopped waiting, a LISTEN — must not outlive it on a pooled
+    * session.
+    */
+   private const string RESET = 'SELECT pg_advisory_unlock_all(); UNLISTEN *';
 
    // * Config
    public Authentication $Authentication;
@@ -178,12 +186,28 @@ class PostgreSQL extends Driver
    /** @var array<string,true> */
    private array $closing = [];
    // @ Operations that composed a warm Bind of a statement they do not Parse,
-   //   per statement name — a queued Close waits for their bytes.
-   /** @var array<string,array<int,Operation>> */
+   //   per statement name — a queued Close waits for their bytes. Weak: an
+   //   operation its caller dropped sends nothing, holds no name, and must
+   //   not be kept alive here — nor its claim on the pool's connection.
+   /** @var array<string,array<int,WeakReference<Operation>>> */
    private array $Holders = [];
    // @ Detached stand-ins draining the answers of abandoned operations.
    /** @var array<int,true> */
    private array $abandoned = [];
+   // @ Messages read past every queued entry while a batch was still being
+   //   flushed behind stand-ins: they answer that batch, which joins the FIFO
+   //   only once whole on the wire. They are delivered first, as soon as it
+   //   does — nothing more may arrive to announce them.
+   /** @var array<int,Message> */
+   private array $Backlog = [];
+   // @ The session reset last appended to the FIFO, drained like a stand-in.
+   private null|Operation $Reset = null;
+   /**
+    * Whether this session still owes answers to detached stand-ins.
+    */
+   public bool $detached {
+      get => $this->abandoned !== [];
+   }
    private null|Readiness $ReadReadiness = null;
    private null|Readiness $WriteReadiness = null;
    /** @var resource|null */
@@ -323,7 +347,7 @@ class PostgreSQL extends Driver
 
             // ! This batch Binds a statement it does not Parse — hold the name
             //   against any queued Close until these bytes reach the socket.
-            $this->Holders[$Operation->statement][spl_object_id($Operation)] = $Operation;
+            $this->Holders[$Operation->statement][spl_object_id($Operation)] = WeakReference::create($Operation);
 
             return $Operation;
          }
@@ -686,6 +710,15 @@ class PostgreSQL extends Driver
          }
 
          if ($this->flush($Operation) === false) {
+            // ? Stand-ins lead the FIFO: the backend may be blocked writing the
+            //   answer nobody waits for, reading none of this batch until it is
+            //   drained — waiting to write alone holds both ends until this
+            //   deadline. Absorb what is owed to them, and wait to read while
+            //   one still leads; the flush resumes on the next pass.
+            if ($this->writing === $Operation && $this->abandoned !== [] && $this->absorb($Operation)) {
+               return $this->await($Operation, Scheduler::SCHEDULE_READ);
+            }
+
             // @ A partial write keeps the stream held; on a hard failure the
             //   operation is finished and the guard above treats it as free.
             return $Operation;
@@ -712,6 +745,13 @@ class PostgreSQL extends Driver
 
          $Operation->state = OperationStates::Reading;
          $this->queue($Operation);
+
+         // ? Its answer began arriving while it flushed behind stand-ins
+         //   (absorb()): no readiness announces bytes already read, so they
+         //   are read now — the whole answer may be among them.
+         if ($this->Backlog !== []) {
+            return $this->advance($Operation);
+         }
 
          return $this->await($Operation, Scheduler::SCHEDULE_READ);
       }
@@ -779,16 +819,80 @@ class PostgreSQL extends Driver
    /**
     * Reconcile the wire when the pool abandons one operation.
     *
+    * Reached by the pool's own routes — an elapsed deadline, a cancel that
+    * never reached the server, a transaction teardown — where nobody is left
+    * to hand the connection to the next caller until a sibling reads it. A
+    * pipelined batch therefore keeps its session only while a reader is left
+    * to pump its remaining answer: a live sibling in the FIFO, or the batch
+    * still being written behind it. With none, the session is dropped. Every
+    * other case reconciles exactly as `detach()` does.
+    */
+   public function abandon (DatabaseOperation $Operation): void
+   {
+      $index = null;
+
+      foreach ($this->pipeline as $id => $Queued) {
+         if ($Queued === $Operation) {
+            $index = $id;
+
+            break;
+         }
+      }
+
+      if ($index !== null) {
+         /** @var Operation $Operation */
+
+         // ? Draining needs a reader: the pool has already released this
+         //   operation, so only a sibling advance still pumps this socket. A
+         //   finished entry is no reader — it only waits at its slot for the
+         //   message that terminates it, and nobody advances it again (PG-13).
+         $readers = 0;
+
+         foreach ($this->pipeline as $Queued) {
+            if (
+               $Queued !== $Operation
+               && $Queued->finished === false
+               && isset($this->abandoned[spl_object_id($Queued)]) === false
+            ) {
+               $readers++;
+            }
+         }
+
+         // @ The batch still being written is a reader too — it is the operation
+         //   its caller is actively advancing, and it joins the pipeline behind
+         //   this slot as soon as its bytes are whole on the wire.
+         $Writing = $this->writing;
+
+         if ($Writing !== null && $Writing !== $Operation && $Writing->finished === false) {
+            $readers++;
+         }
+
+         if ($readers === 0) {
+            $this->abort($Operation, 'PostgreSQL abandoned batch has no reader left to drain its answer.');
+
+            return;
+         }
+      }
+
+      $this->detach($Operation);
+   }
+
+   /**
+    * Reconcile the wire for one operation whose caller stopped waiting,
+    * keeping the session whenever its batch is whole on the wire.
+    *
     * A pipelined batch always ends in Sync, so the backend keeps answering an
     * operation the pool has already finished. The slot is handed to a
     * detached stand-in that absorbs the remaining messages up to its
     * ReadyForQuery — the driver keeps every session effect it owes itself
     * (ParseComplete, ParameterDescription, evictions) while the object the
-    * pool took back is never read, written or resolved here again. When
-    * nothing can be reconciled — the batch is half written, or no sibling is
-    * left to pump the answer — the session is dropped instead.
+    * pool took back is never read, written or resolved here again. No reader
+    * is required: `check()` ignores stand-ins, so the pool hands the
+    * connection to the next operation, which queues behind them and pumps
+    * them. Only a batch that cannot be reconciled — half written, or held by
+    * TLS as an uncredited record — drops the session.
     */
-   public function abandon (DatabaseOperation $Operation): void
+   public function detach (DatabaseOperation $Operation): void
    {
       $index = null;
 
@@ -828,31 +932,6 @@ class PostgreSQL extends Driver
 
       /** @var Operation $Operation */
 
-      // ? Draining needs a reader: the pool has already released this
-      //   operation, so only a sibling advance still pumps this socket.
-      $readers = 0;
-
-      foreach ($this->pipeline as $Queued) {
-         if ($Queued !== $Operation && isset($this->abandoned[spl_object_id($Queued)]) === false) {
-            $readers++;
-         }
-      }
-
-      // @ The batch still being written is a reader too — it is the operation
-      //   its caller is actively advancing, and it joins the pipeline behind
-      //   this slot as soon as its bytes are whole on the wire.
-      $Writing = $this->writing;
-
-      if ($Writing !== null && $Writing !== $Operation && $Writing->finished === false) {
-         $readers++;
-      }
-
-      if ($readers === 0) {
-         $this->abort($Operation, 'PostgreSQL abandoned batch has no reader left to drain its answer.');
-
-         return;
-      }
-
       // @ Detach the operation from the pipeline slot it still owns.
       $Stand = new Operation(null, $Operation->SQL);
       $Stand->state = OperationStates::Reading;
@@ -865,17 +944,96 @@ class PostgreSQL extends Driver
    }
 
    /**
-    * Check whether this connection still has pipelined operations.
+    * Write a session reset behind everything this session still owes.
+    *
+    * A simple Query that releases every advisory lock the session holds and
+    * stops every LISTEN. Pipelined bytes wait in the server's receive buffer,
+    * so the backend runs it right after the abandoned statement ends, even
+    * if nobody reads; its answer is absorbed like a stand-in's by whoever
+    * reads next. The pool asks for it as it returns the session to idle,
+    * where nobody else owes work on it. A batch holding the write stream is
+    * never interleaved: the reset is refused instead. One reset still ending
+    * the FIFO covers a repeated request — nothing was written after it.
+    */
+   public function reset (): bool
+   {
+      $socket = $this->Connection->socket;
+
+      // ? Nothing left to reset on: the session is gone.
+      if ($this->aborted || is_resource($socket) === false) {
+         return false;
+      }
+
+      // ? A batch holds the write stream: the reset would land inside it.
+      if ($this->writing !== null) {
+         return false;
+      }
+
+      // ?: Already owed, with nothing written after it.
+      $Tail = $this->pipeline === [] ? null : $this->pipeline[array_key_last($this->pipeline)];
+
+      if ($this->Reset !== null && $Tail === $this->Reset) {
+         return true;
+      }
+
+      $write = $this->Encoder->query(self::RESET);
+      $written = @fwrite($socket, $write);
+
+      // ? Partly written, the reset leaves the backend reading a message that
+      //   never ends — the session can never be resynchronised. Not written
+      //   at all, the stream is full: the server is not reading, and nothing
+      //   tells when it will.
+      if ($written !== strlen($write)) {
+         return false;
+      }
+
+      $Stand = new Operation(null, self::RESET);
+      $Stand->state = OperationStates::Reading;
+
+      $this->pipeline[] = $Stand;
+      $this->abandoned[spl_object_id($Stand)] = true;
+      $this->Reset = $Stand;
+
+      // :
+      return true;
+   }
+
+   /**
+    * Check whether this connection still owes work to a caller: a batch
+    * still being flushed, or a pipelined operation somebody waits for.
     */
    public function check (): bool
    {
+      // ? A batch mid-flush belongs to a caller still advancing it. Lending the
+      //   connection now would queue the next caller's batch behind a stream
+      //   another caller owns.
+      $Writing = $this->writing;
+
+      if ($Writing !== null && $Writing->finished === false) {
+         return true;
+      }
+
       // @@ A finished entry is not work in flight: the read loop keeps it only
       //    until the message that terminates it arrives, and it stays at its
       //    slot to absorb that message whoever reads next. Reading a non-empty
       //    FIFO as "still busy" gates release() off for the connection's life
-      //    when the batch that failed was answered in two reads.
+      //    when the batch that failed was answered in two reads. A stand-in is
+      //    not work in flight either: nobody waits for its answer, and the next
+      //    operation handed this connection queues behind it and drains it —
+      //    counting it pinned the connection busy with nobody left to pump it.
+      if ($this->abandoned === []) {
+         foreach ($this->pipeline as $Queued) {
+            if ($Queued->finished === false) {
+               return true;
+            }
+         }
+
+         // :
+         return false;
+      }
+
       foreach ($this->pipeline as $Queued) {
-         if ($Queued->finished === false) {
+         if ($Queued->finished === false && isset($this->abandoned[spl_object_id($Queued)]) === false) {
             return true;
          }
       }
@@ -931,6 +1089,8 @@ class PostgreSQL extends Driver
       $this->closing = [];
       $this->Holders = [];
       $this->abandoned = [];
+      $this->Backlog = [];
+      $this->Reset = null;
       $this->wrote = 0;
       $this->carrying = [];
       $this->Decoder = new Decoder;
@@ -1026,7 +1186,16 @@ class PostgreSQL extends Driver
       //    one. The first to reach the wire composes the Parse itself. A
       //    half-written batch is untouchable — it already owns bytes on the
       //    socket.
-      foreach ($this->Holders[$statement] ?? [] as $id => $Held) {
+      foreach ($this->Holders[$statement] ?? [] as $id => $Reference) {
+         $Held = $Reference->get();
+
+         // ? Collected: its caller dropped it, so its Bind is never sent.
+         if ($Held === null) {
+            unset($this->Holders[$statement][$id]);
+
+            continue;
+         }
+
          if ($Held->finished || $Held->write === '' || $this->writing === $Held) {
             continue;
          }
@@ -1125,8 +1294,11 @@ class PostgreSQL extends Driver
 
       // @@ Holders — a flushed or finished operation no longer holds anything:
       //    its Bind bytes are already ordered ahead of any later Close.
-      foreach ($Holders as $id => $Held) {
-         if ($Held->finished || $Held->write === '') {
+      foreach ($Holders as $id => $Reference) {
+         $Held = $Reference->get();
+
+         // ? Gone, flushed or finished — none of them still owes a Bind.
+         if ($Held === null || $Held->finished || $Held->write === '') {
             unset($this->Holders[$statement][$id]);
 
             continue;
@@ -1404,6 +1576,16 @@ class PostgreSQL extends Driver
          return $Operation->state;
       }
 
+      // ! What absorb() read ahead of this batch is the start of its answer:
+      //   delivered before anything the socket brings now — which may be
+      //   nothing more, with the whole answer already read.
+      if ($this->Backlog !== []) {
+         $Backlog = $this->Backlog;
+         $this->Backlog = [];
+
+         $this->deliver($Operation, $Backlog);
+      }
+
       $bytes = @fread($socket, 8192);
 
       if ($bytes === false || $bytes === '') {
@@ -1441,6 +1623,20 @@ class PostgreSQL extends Driver
          return $Operation->state;
       }
 
+      $this->deliver($Operation, $Messages);
+
+      return $Operation->state;
+   }
+
+   /**
+    * Deliver decoded backend messages to the operations they answer, in FIFO
+    * order.
+    *
+    * @param array<int,Message> $Messages
+    */
+   private function deliver (Operation $Operation, array $Messages): void
+   {
+      // @@
       foreach ($Messages as $Message) {
          $Active = $this->pipeline[0] ?? ($Operation->finished ? null : $Operation);
 
@@ -1453,24 +1649,106 @@ class PostgreSQL extends Driver
          }
 
          $this->apply($Active, $Message);
+         $this->retire($Active, $Message);
+      }
+   }
 
-         if ($Active->finished && ($Message->type === 'Z' || $Active->state === OperationStates::Finished)) {
-            array_shift($this->pipeline);
+   /**
+    * Absorb the answers owed to stand-ins leading the FIFO while a batch
+    * behind them is still being flushed, and report whether one still leads.
+    *
+    * Messages past every queued entry answer that batch, which is not queued
+    * yet: they wait in the backlog, delivered by read() first.
+    */
+   private function absorb (Operation $Operation): bool
+   {
+      $Head = $this->pipeline[0] ?? null;
 
-            // ? A stand-in is not an operation the pool ever assigned:
-            //   draining it must not release a connection a second time.
-            $id = spl_object_id($Active);
-
-            if (isset($this->abandoned[$id])) {
-               unset($this->abandoned[$id]);
-            }
-            else {
-               $this->completed[] = $Active;
-            }
-         }
+      // ?
+      if ($Head === null || isset($this->abandoned[spl_object_id($Head)]) === false) {
+         return false;
       }
 
-      return $Operation->state;
+      $socket = $this->Connection->socket;
+
+      if (is_resource($socket) === false) {
+         $this->abort($Operation, 'PostgreSQL socket is not available.');
+
+         return false;
+      }
+
+      $bytes = @fread($socket, 65536);
+
+      if ($bytes === false || $bytes === '') {
+         // ?: Nothing yet on a socket that is still open — the answer is owed.
+         if ($bytes === '' && feof($socket) === false) {
+            return true;
+         }
+
+         $this->abort($Operation, $bytes === false ? 'PostgreSQL socket read failed.' : 'PostgreSQL socket closed.');
+
+         return false;
+      }
+
+      $this->answered = true;
+
+      try {
+         $Messages = $this->Decoder->decode($bytes);
+      }
+      catch (Throwable $Throwable) {
+         // ? Framing corruption cannot be resynchronized — kill the session.
+         $this->abort($Operation, $Throwable->getMessage());
+
+         return false;
+      }
+
+      // @@
+      foreach ($Messages as $Message) {
+         $Active = $this->pipeline[0] ?? null;
+
+         if ($Active === null) {
+            $this->Backlog[] = $Message;
+
+            continue;
+         }
+
+         $this->apply($Active, $Message);
+         $this->retire($Active, $Message);
+      }
+
+      $Head = $this->pipeline[0] ?? null;
+
+      // :
+      return $Head !== null && isset($this->abandoned[spl_object_id($Head)]);
+   }
+
+   /**
+    * Retire the FIFO head once the message just applied to it terminated it.
+    */
+   private function retire (Operation $Active, Message $Message): void
+   {
+      // ?
+      if ($Active->finished === false || ($Message->type !== 'Z' && $Active->state !== OperationStates::Finished)) {
+         return;
+      }
+
+      // ! The entry retired is the one actually shifted off the FIFO —
+      //   `$Active` only when nothing was pipelined. apply() can tear the FIFO
+      //   down or a completion hook re-enter it, and a stand-in id left in
+      //   `abandoned` is recycled by the next live operation, which check()
+      //   would then skip as drained work.
+      $Retired = array_shift($this->pipeline) ?? $Active;
+
+      // ? A stand-in is not an operation the pool ever assigned: draining it
+      //   must not release a connection a second time.
+      $id = spl_object_id($Retired);
+
+      if (isset($this->abandoned[$id])) {
+         unset($this->abandoned[$id]);
+      }
+      else {
+         $this->completed[] = $Retired;
+      }
    }
 
    /**

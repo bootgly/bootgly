@@ -10,6 +10,7 @@ use Bootgly\ADI\Databases\KV\Drivers\Redis;
 use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Databases\SQL\Config as SQLConfig;
 use Bootgly\ADI\Databases\SQL\Drivers\MySQL;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL;
 
 
 return new Test(
@@ -145,7 +146,7 @@ return new Test(
             && count($Pool->busy) === 1
             && $Pool->idle === []
             && $Database->Connection->Protocol?->check() === true,
-         description: 'A stand-in owed a reply keeps the connection out of the pool'
+         description: 'A live sibling behind a stand-in is owed a reply, so the connection stays out of the pool'
       );
 
       fwrite($server, $result('value', '1', 'SELECT 1') . $result('value', '2', 'SELECT 1'));
@@ -160,6 +161,155 @@ return new Test(
 
       fclose($server);
       $Database->Connection->disconnect();
+
+      // # C2 — a stand-in behind a live head owes nobody anything (POOL-14)
+      //   The expired sibling's answer goes to a stand-in queued behind the
+      //   head. The head stops reading the moment its own answer arrives, so
+      //   counting the stand-in left the connection busy with nobody to pump
+      //   it — for the worker's life, unless the pool saturated onto it. The
+      //   gate ignores it instead: the connection goes idle, and the next
+      //   operation handed it queues behind the stand-in and drains it.
+      [$Database, $server] = $connect();
+
+      $Head = $Database->query('SELECT 1 AS value');
+      $Database->advance($Head);
+      fread($server, 8192);
+      $Sibling = $Database->query('SELECT 2 AS value');
+      $Database->advance($Sibling);
+      fread($server, 8192);
+
+      $elapse($Sibling);
+      $Database->advance($Sibling);
+
+      $Pool = $Database->Pool;
+      $owed = $Sibling->state === OperationStates::Failed
+         && $Head->finished === false
+         && $Database->Connection->Protocol?->check() === true
+         && count($Pool->busy) === 1;
+
+      // @ Only the head's answer arrives: the stand-in's is still owed.
+      fwrite($server, $result('value', '1', 'SELECT 1'));
+      $Database->advance($Head);
+
+      yield assert(
+         assertion: $owed
+            && $Head->state === OperationStates::Finished
+            && $Head->rows === [['value' => 1]]
+            && $Database->Connection->Protocol?->check() === false
+            && $Pool->busy === []
+            && count($Pool->idle) === 1,
+         description: 'A stand-in left behind a resolved head returns the connection to idle'
+      );
+
+      $Next = $Database->query('SELECT 3 AS value');
+      $Database->advance($Next);
+      $wire = (string) fread($server, 8192);
+      fwrite($server, $result('value', '2', 'SELECT 1') . $result('value', '3', 'SELECT 1'));
+      $Database->advance($Next);
+
+      yield assert(
+         assertion: str_contains($wire, 'SELECT 3 AS value')
+            && $Next->state === OperationStates::Finished
+            && $Next->rows === [['value' => 3]]
+            && $Sibling->rows === []
+            && count($Pool->idle) === 1,
+         description: 'The next operation drains the stand-in, then reads only its own answer'
+      );
+
+      fclose($server);
+      $Database->Connection->disconnect();
+
+      // # C2b — a finished, unretired head is no reader (PG-13)
+      //   The head failed on an ErrorResponse whose ReadyForQuery has not
+      //   arrived, so it keeps its slot to absorb it — but nobody advances a
+      //   finished operation again. A sibling behind it that the pool expires
+      //   has no reader left: counting the head installed a stand-in nobody
+      //   would pump, on a session the pool then lent on. The session goes.
+      //   Withdrawn instead, the sibling keeps the session for the next caller
+      //   to drain: that route needs no reader.
+      foreach (['expired', 'withdrawn'] as $route) {
+         [$Database, $server] = $connect();
+
+         $Head = $Database->query('SELECT bad syntax');
+         $Database->advance($Head);
+         fread($server, 8192);
+         fwrite($server, $failure('syntax error'));
+         $Database->advance($Head);
+         $Sibling = $Database->query('SELECT 2 AS value');
+         $Database->advance($Sibling);
+         fread($server, 8192);
+
+         if ($route === 'expired') {
+            $elapse($Sibling);
+            $Database->advance($Sibling);
+         }
+         else {
+            $Database->Pool->withdraw($Sibling);
+         }
+
+         $Pool = $Database->Pool;
+
+         if ($route === 'expired') {
+            yield assert(
+               assertion: $Head->state === OperationStates::Failed
+                  && $Sibling->state === OperationStates::Failed
+                  && $Database->Connection->connected === false
+                  && $Pool->created === 0
+                  && $Pool->busy === []
+                  && $Pool->idle === [],
+               description: 'An expired sibling behind a finished head awaiting its ReadyForQuery has no reader: the session drops'
+            );
+         }
+         else {
+            $Next = $Database->query('SELECT 3 AS value');
+            $Database->advance($Next);
+            $wire = (string) fread($server, 8192);
+            // @ The late ReadyForQuery, the withdrawn answer, the session reset
+            //   written behind it, then the next operation's own answer.
+            $unlocked = $message('C', "SELECT 1\0") . $message('C', "UNLISTEN\0") . $message('Z', 'I');
+            fwrite($server, $message('Z', 'I') . $result('value', '2', 'SELECT 1') . $unlocked . $result('value', '3', 'SELECT 1'));
+            $Database->advance($Next);
+
+            yield assert(
+               assertion: $Sibling->state === OperationStates::Failed
+                  && str_contains($wire, 'SELECT 3 AS value')
+                  && $Next->state === OperationStates::Finished
+                  && $Next->rows === [['value' => 3]]
+                  && count($Pool->idle) === 1,
+               description: 'A sibling withdrawn behind a finished head keeps the session: the next operation absorbs the late ReadyForQuery and the stand-in, then reads its own answer'
+            );
+         }
+
+         fclose($server);
+         $Database->Connection->disconnect();
+      }
+
+      // # C3 — a batch still being flushed holds the connection
+      //   It joins the pipeline only once its bytes are whole on the wire, so
+      //   the FIFO alone says nothing is owed. Lending the connection then
+      //   queues another caller's batch behind a stream this caller owns.
+      [$client, $peer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+      stream_set_blocking($client, false);
+      stream_set_blocking($peer, false);
+      $Config = new SQLConfig(['secure' => ['mode' => 'disable']]);
+      $PostgreSQLConnection = new Connection($Config);
+      $PostgreSQLConnection->attach($client);
+      $PostgreSQL = new PostgreSQL($Config, $PostgreSQLConnection);
+
+      $Jammed = $PostgreSQL->query('SELECT 1 /* ' . str_repeat('x', 4 * 1024 * 1024) . ' */');
+      $PostgreSQL->advance($Jammed);
+      $flushing = $Jammed->state === OperationStates::Querying && $Jammed->write !== '';
+      $writing = $PostgreSQL->check();
+
+      $Jammed->fail('Database operation timed out after 1 seconds.');
+
+      yield assert(
+         assertion: $flushing && $writing === true && $PostgreSQL->check() === false,
+         description: 'PostgreSQL owes the connection to a batch mid-flush, and nothing once it is finished'
+      );
+
+      fclose($peer);
+      $PostgreSQLConnection->disconnect();
 
       // # D — a socket that can never deliver must not be held by the gate
       //   Everything that frees the slot — the reservation, the busy entry,
@@ -221,6 +371,33 @@ return new Test(
          description: 'MySQL owes nothing once its only queued operation is finished'
       );
 
+      // ! MySQL — a stand-in head draining an abandoned command.
+      [$client, $peer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+      $sockets[] = $peer;
+      stream_set_blocking($client, false);
+      stream_set_blocking($peer, false);
+      $StandConnection = new Connection($Config);
+      $StandConnection->attach($client);
+      $Stand = new MySQL($Config, $StandConnection);
+
+      $Head = $Stand->query('SELECT 1');
+      $Sibling = $Stand->query('SELECT 2');
+      $Stand->advance($Head);
+      $Stand->advance($Sibling);
+      fread($peer, 8192);
+      $Head->fail('Database operation timed out after 1 seconds.');
+      $Stand->abandon($Head);
+
+      $owed = $Stand->check();
+      $Sibling->fail('Database operation timed out after 1 seconds.');
+
+      yield assert(
+         assertion: $owed === true
+            && $StandConnection->connected
+            && $Stand->check() === false,
+         description: 'MySQL owes a reply to a live sibling behind a stand-in head, and nothing to the stand-in alone'
+      );
+
       // ! Redis — the same shape, with a live sibling behind the failed head.
       [$client, $peer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
       $sockets[] = $peer;
@@ -246,11 +423,100 @@ return new Test(
          description: 'Redis owes a reply while a sibling is live, and nothing once it is not'
       );
 
+      // ! Redis — a stand-in left behind a head that has since resolved.
+      [$client, $peer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+      $sockets[] = $peer;
+      stream_set_blocking($client, false);
+      stream_set_blocking($peer, false);
+      $StandingConnection = new Connection($Config);
+      $StandingConnection->attach($client);
+      $Standing = new Redis($Config, $StandingConnection);
+
+      $Head = $Standing->command('GET', ['tenant-a']);
+      $Sibling = $Standing->command('GET', ['tenant-b']);
+      $Standing->advance($Head);
+      $Standing->advance($Sibling);
+      fread($peer, 8192);
+      $Sibling->fail('Database operation timed out after 1 seconds.');
+      $Standing->abandon($Sibling);
+
+      // @ Only the head's reply arrives: the stand-in's is still owed.
+      fwrite($peer, "\$1\r\na\r\n");
+      $Standing->advance($Head);
+
+      yield assert(
+         assertion: $Head->response === 'a'
+            && $StandingConnection->connected
+            && $Standing->check() === false,
+         description: 'Redis owes nothing to a stand-in left alone in its pipeline'
+      );
+
+      // # F — a finished entry is no reader, for every driver
+      //   An operation finished from outside stays at its slot until the
+      //   message that terminates it arrives, and nobody advances it again.
+      //   An abandoned head with only such an entry behind it has no reader
+      //   left to pump its answer, so the session drops instead of keeping a
+      //   stand-in nobody drains.
+
+      // ! MySQL — the sibling behind the head was failed from outside.
+      [$client, $peer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+      $sockets[] = $peer;
+      stream_set_blocking($client, false);
+      stream_set_blocking($peer, false);
+      $Config = new SQLConfig(['driver' => 'mysql', 'secure' => ['mode' => 'disable']]);
+      $ReaderlessConnection = new Connection($Config);
+      $ReaderlessConnection->attach($client);
+      $Readerless = new MySQL($Config, $ReaderlessConnection);
+
+      $Head = $Readerless->query('SELECT 1');
+      $Sibling = $Readerless->query('SELECT 2');
+      $Readerless->advance($Head);
+      $Readerless->advance($Sibling);
+      fread($peer, 8192);
+      $Sibling->fail('Database operation timed out after 1 seconds.');
+      $Head->fail('Database operation timed out after 1 seconds.');
+      $Readerless->abandon($Head);
+
+      yield assert(
+         assertion: $ReaderlessConnection->connected === false
+            && $Readerless->check() === false,
+         description: 'MySQL drops an abandoned head whose only sibling is already finished'
+      );
+
+      // ! Redis — the same shape.
+      [$client, $peer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+      $sockets[] = $peer;
+      stream_set_blocking($client, false);
+      stream_set_blocking($peer, false);
+      $Config = new KVConfig(['driver' => 'redis', 'secure' => ['mode' => 'disable']]);
+      $UnreadConnection = new Connection($Config);
+      $UnreadConnection->attach($client);
+      $Unread = new Redis($Config, $UnreadConnection);
+
+      $Head = $Unread->command('GET', ['tenant-a']);
+      $Sibling = $Unread->command('GET', ['tenant-b']);
+      $Unread->advance($Head);
+      $Unread->advance($Sibling);
+      fread($peer, 8192);
+      $Sibling->fail('Database operation timed out after 1 seconds.');
+      $Head->fail('Database operation timed out after 1 seconds.');
+      $Unread->abandon($Head);
+
+      yield assert(
+         assertion: $UnreadConnection->connected === false
+            && $Unread->check() === false,
+         description: 'Redis drops an abandoned head whose only sibling is already finished'
+      );
+
       foreach ($sockets as $socket) {
          fclose($socket);
       }
 
       $MySQLConnection->disconnect();
+      $StandConnection->disconnect();
       $RedisConnection->disconnect();
+      $StandingConnection->disconnect();
+      $ReaderlessConnection->disconnect();
+      $UnreadConnection->disconnect();
    }
 );

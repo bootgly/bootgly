@@ -12,12 +12,12 @@ namespace Bootgly\ADI\Database;
 
 
 use const E_WARNING;
-use function array_key_first;
 use function array_key_last;
 use function array_shift;
 use function count;
 use function is_callable;
 use function is_resource;
+use function max;
 use function microtime;
 use function mt_rand;
 use function restore_error_handler;
@@ -84,13 +84,41 @@ class Pool
    /** @var array<int,true> */
    private array $locked = [];
    // @ Slots still held by withdrawn statements the server may be running:
-   //   their session was dropped, but the server finishes what it was asked
-   //   before it notices. Each counts against `max` until the statement's own
-   //   deadline. Keyed by append order, never by the operation: an object id
-   //   is recycled once the withdrawn operation is freed, and a recycled key
-   //   would overwrite or erase a live entry.
+   //   their session was dropped — at the withdrawal, or later while it was
+   //   still draining them (see `lingering`) — but the server finishes what
+   //   it was asked before it notices. Each counts against `max` until the
+   //   statement's own deadline. Keyed by append order, never by the
+   //   operation: an object id is recycled once the withdrawn operation is
+   //   freed, and a recycled key would overwrite or erase a live entry.
    /** @var array<int,float> */
    private array $quarantine = [];
+   // @ Deadlines of withdrawn statements whose answers a surviving session
+   //   still owes to its stand-ins, per connection id. While that session
+   //   lives it holds their slot itself; if it goes before the stand-ins are
+   //   drained — the next operation on it expires, an I/O error, a teardown
+   //   sever — drop() turns a deadline still ahead into a quarantine entry, so
+   //   a later sever never opens sessions past `max` while the server still
+   //   runs them. release() forgets it once the session is drained: the server
+   //   answered them all. The id stays valid while the entry does: the pool
+   //   references a counted connection until drop() clears it.
+   /** @var array<int,float> */
+   private array $lingering = [];
+   // @ Operations handed each connection, per connection id, until their
+   //   claim settles in release(). A driver only sees what reached its
+   //   pipeline: an operation assigned but not yet flushed — still Queued, or
+   //   parked behind another caller's write — is invisible to `check()`, and an
+   //   exclusive operation handed that connection would carry its statement
+   //   behind the next caller's BEGIN, inside their transaction. Consulted
+   //   when an exclusive operation acquires, never to hold a connection out of
+   //   `idle`: a claimant its caller dropped must not pin the connection.
+   //   Weak, so a dropped claimant leaves no entry behind.
+   /** @var array<int,WeakMap<Operation,true>> */
+   private array $claims = [];
+   // @ Kept sessions whose owner was orphaned — a withdrawn statement that
+   //   reached the server, an adopted transaction — reset once before they
+   //   are lent again (see taint()).
+   /** @var array<int,true> */
+   private array $tainted = [];
    // @ Round-robin cursor for co-locating pipelined operations across connections.
    private int $cursor = 0;
 
@@ -429,7 +457,7 @@ class Pool
       // ? The cancel never reached the server: the operation is finished while
       //   the driver still owns the answer the server keeps sending. That is
       //   the same state an elapsed deadline leaves behind, so it takes the
-      //   same route — reconcile the wire, then take the connection back.
+      //   same route — reconcile the wire, then settle the claim.
       if ($Operation->finished && $Operation->cancelled === false) {
          $Protocol->abandon($Operation);
 
@@ -438,7 +466,7 @@ class Pool
          $this->drain($Protocol, $Operation);
 
          $this->forget($Operation);
-         $this->release($Operation);
+         $this->settle($Operation, sent: true);
       }
 
       // ? The cancel did reach the server, so the answer it provokes is what
@@ -469,9 +497,15 @@ class Pool
     *
     * Nothing is sent to the server: the operation fails, the driver reconciles
     * the wire, and the pool takes the slot back (a connection still connecting
-    * or authenticating is discarded). The operation is marked `revoked`, so no
-    * fallback pool ever re-dispatches it. An already finished operation keeps
-    * its result and is only forgotten.
+    * or authenticating is discarded). A statement whose batch is whole on the
+    * wire keeps its session (`Driver::detach()`): its remaining answer is
+    * drained by the next operation handed the connection, which returns to
+    * `idle` at once unless other callers still read there, and the session
+    * is reset before it is lent again (`taint()`). A connection reserved by a
+    * transaction is reconciled the pool's own way (`Driver::abandon()`). The
+    * operation is marked `revoked`, so no fallback pool ever re-dispatches
+    * it. An already finished operation keeps its result and is only
+    * forgotten.
     *
     * Synchronous and never suspends: it runs inside the `finally` of Fibers
     * being destroyed, where a suspension is a `FiberError`. Freeing a slot may
@@ -503,10 +537,13 @@ class Pool
 
       // ! A statement on the wire keeps running on the server after its session
       //   drops (SQL — `Driver::LINGERING`), so its slot stays counted until
-      //   its own deadline: a client's disconnect rate cannot open sessions
-      //   past `max` while those statements run within it. Registered before
-      //   retire(), whose release may already promote into the freed slot.
-      $running = $Operation->state === OperationStates::Querying || $Operation->state === OperationStates::Reading;
+      //   its own deadline whenever the session cannot be kept — a
+      //   half-written batch, a reserved connection with nobody left to read:
+      //   a client's disconnect rate cannot open sessions past `max` while
+      //   those statements run within it. Registered before retire(), whose
+      //   release may already promote into the freed slot.
+      $reading = $Operation->state === OperationStates::Reading;
+      $running = $reading || $Operation->state === OperationStates::Querying;
       $Connection = $Operation->Connection;
       $Protocol = $Operation->Protocol;
       $key = null;
@@ -516,14 +553,52 @@ class Pool
          $key = array_key_last($this->quarantine);
       }
 
+      // ! Read before fail() and retire(): release() unlocks a failed lock
+      //   operation, and the reservation decides how the wire is reconciled.
+      //   A transaction's reserved connection is never handed to the next
+      //   caller, so nobody would drain a stand-in left there — it is
+      //   reconciled the pool's own way, which drops a session with no reader.
+      $locked = $Connection !== null && isset($this->locked[spl_object_id($Connection)]);
+
+      // ! A statement that reached the server may leave its session carrying
+      //   what it does once its caller is gone — a lock granted after the
+      //   caller stopped waiting, a LISTEN. The session kept for it is tainted
+      //   (see taint()): the release that next returns it to idle writes the
+      //   reset. That release is retire()'s own when nobody else still reads
+      //   there, so the reset goes out at once and the server runs it right
+      //   after the withdrawn statement; with live callers pipelined on the
+      //   session, it is the last of theirs, so the reset never fails one of
+      //   them and never ends what one of them still runs. A session dropped
+      //   instead takes the taint with it (drop()).
+      if (
+         $reading
+         && $locked === false
+         && $Connection !== null
+         && $Protocol !== null
+         && $Connection->Protocol === $Protocol
+      ) {
+         $this->taint($Connection);
+      }
+
       $Operation->fail('Database operation was withdrawn: its caller stopped waiting.');
 
-      $this->retire($Operation, $sent);
+      $this->retire($Operation, $sent, detach: $locked === false);
 
-      // ? The session survived (a sibling still reads on it): the connection
-      //   itself still counts, so the slot is not held twice.
+      // ? The session survived — detached, or a sibling still reads on it: the
+      //   connection itself still counts, so the slot is not held twice.
       if ($key !== null && $Connection !== null && $Connection->Protocol === $Protocol) {
          unset($this->quarantine[$key]);
+
+         // ? Its answer is owed to a stand-in the session kept: the statement
+         //   reached the server whole (Reading) and is still being answered. It
+         //   keeps the statement's deadline, for drop() to quarantine if the
+         //   session goes before that answer is drained. A statement that never
+         //   reached the wire — a sibling spliced out of the queue, a batch
+         //   parked behind another writer — runs nowhere and is owed nothing.
+         if ($reading && $Protocol !== null && $Protocol->detached) {
+            $id = spl_object_id($Connection);
+            $this->lingering[$id] = max($this->lingering[$id] ?? 0.0, $Operation->deadline);
+         }
       }
 
       return $Operation;
@@ -531,14 +606,24 @@ class Pool
 
    /**
     * Retire one failed operation: reconcile the wire, then take its claim back.
+    *
+    * `detach` keeps a drainable session (`Driver::detach()`) — the withdrawal
+    * route; otherwise the driver abandons the operation (`Driver::abandon()`),
+    * dropping a session nobody is left to drain.
     */
-   private function retire (Operation $Operation, bool $sent): void
+   private function retire (Operation $Operation, bool $sent, bool $detach = false): void
    {
       // @ The driver still owns whatever the server is sending for this
       //   operation: let it reconcile the wire before the connection is
       //   handed to anyone else and before fallback() revives the object.
       $Protocol = $Operation->Protocol;
-      $Protocol?->abandon($Operation);
+
+      if ($detach) {
+         $Protocol?->detach($Operation);
+      }
+      else {
+         $Protocol?->abandon($Operation);
+      }
 
       // @ Reconciling may have torn the session down, which fails every
       //   sibling on it and hands them back through the driver. They must be
@@ -565,6 +650,10 @@ class Pool
     * for the worker's life and leaves the session open anyway. Dropping the
     * connection is the one outcome that matches what the caller was told: the
     * server rolls the transaction back, and the slot comes back with it.
+    *
+    * The mirror case is a BEGIN given up on after it reached the server while
+    * the session survives: it may have opened a transaction nobody will end,
+    * so that session is dropped too rather than unlocked and lent on.
     */
    private function settle (Operation $Operation, bool $sent): void
    {
@@ -574,11 +663,13 @@ class Pool
       // ? Only a teardown ends a transaction. An ordinary statement withdrawn
       //   inside one must leave it alone — the caller can still commit it.
       //   The `sent` half is defensive and, measured, changes nothing today:
-      //   the deadline route abandons first, and `abandon()` drops a session
-      //   with no reader left — which a reserved connection never has, since
-      //   the pool refuses to co-locate onto one. It stays because it states
-      //   the precondition the branch relies on, and a driver that keeps the
-      //   wire instead would need it.
+      //   a reserved connection is always reconciled through `abandon()` —
+      //   the deadline route abandons, and `withdraw()` detaches only an
+      //   unreserved connection — and `abandon()` drops a session with no
+      //   reader left, which a reserved connection never has, since the pool
+      //   refuses to co-locate onto one. It stays because it states the
+      //   precondition the branch relies on, and a driver that keeps the wire
+      //   instead would need it.
       // ? The session is still this driver's to sever. A stale teardown can
       //   outlive an abort while the pool rebuilds the same Connection object;
       //   calling the old driver's sever() then disconnects the replacement
@@ -599,6 +690,26 @@ class Pool
 
          // @ Severing fails every sibling on that session and hands them back;
          //   their release belongs to the connection they were on.
+         $this->drain($Protocol, $Operation);
+      }
+
+      // ? A BEGIN given up on after it reached the server may have opened a
+      //   transaction the session still carries: the driver kept the session,
+      //   with the BEGIN's answer owed to a stand-in. release() would hand the
+      //   reservation back — a failed lock operation does — and lend that open
+      //   transaction to the next caller, whose statements would then run, and
+      //   vanish, inside it. Nothing proves the BEGIN did not run, so the
+      //   session goes: the server rolls back whatever it opened.
+      if (
+         $sent
+         && $Operation->lock
+         && $Protocol !== null
+         && $Connection !== null
+         && $Connection->Protocol === $Protocol
+         && $Protocol->detached
+      ) {
+         $Protocol->sever($Operation, 'Database transaction start was abandoned after reaching the server.');
+
          $this->drain($Protocol, $Operation);
       }
 
@@ -681,6 +792,13 @@ class Pool
          return $this;
       }
 
+      // ! Its claim on the connection settles here — below the guard above, so
+      //   a release for a torn-down session never takes a claim from the one
+      //   rebuilt on the same Connection object.
+      if (isset($this->claims[$id])) {
+         unset($this->claims[$id][$Operation]);
+      }
+
       // ? The reservation is this operation's to release, and the intent lives
       //   on the object: deferring it because the driver still holds a sibling
       //   loses it for good — nobody re-runs this release, and the sibling's own
@@ -692,12 +810,22 @@ class Pool
       $alive = is_resource($Connection->socket);
       $usable = $alive && $Connection->state === ConnectionStates::Ready;
 
+      // ? The session drained the stand-ins it kept for withdrawn statements:
+      //   the server answered them all, so a later drop owes them no slot. A
+      //   dead session keeps the entry for drop() below, which decides it.
+      if ($usable && isset($this->lingering[$id]) && $Connection->Protocol?->detached === false) {
+         unset($this->lingering[$id]);
+      }
+
       // ? A pipelined reply is still owed, so the connection stays busy until
       //   whoever is reading drains the FIFO — but only while the socket can
       //   still deliver it. An unusable one owes an answer it can never bring,
       //   and everything that frees the slot lives below this gate: the
       //   reservation, the busy entry, drop() and promote(). Gating on it there
       //   left the pool counting a dead connection against `max` for good.
+      //   An operation that holds a claim but has not flushed does not keep
+      //   it here: its caller may never come back for it. acquire() keeps
+      //   exclusive operations off the connection while that claim is live.
       if ($usable && $Protocol !== null && $Protocol->check()) {
          return $this;
       }
@@ -727,6 +855,32 @@ class Pool
          $this->busy[$id] = $Connection;
 
          return $this;
+      }
+
+      // ? A session whose owner was orphaned — a withdrawn statement that
+      //   reached the server, an adopted transaction — is reset before it is
+      //   lent again, once, by the release that returns it to idle: nobody
+      //   still owes work on it (`check()`), so the reset fails no caller and
+      //   ends nothing a live caller still runs. Its answer is drained like a
+      //   stand-in's by whoever is handed the connection next. A session that
+      //   cannot take it whole goes instead — no live caller shares it any
+      //   more, and drop() quarantines what it still owed a withdrawn
+      //   statement.
+      if (isset($this->tainted[$id])) {
+         unset($this->tainted[$id]);
+
+         $Session = $Connection->Protocol;
+
+         if ($Session !== null && $Session->reset() === false) {
+            $Session->sever($Operation, 'Database session reset could not be written.');
+            $this->drain($Session, $Operation);
+
+            unset($this->idle[$id], $this->busy[$id], $this->locked[$id]);
+            $this->drop($Connection);
+            $this->promote();
+
+            return $this;
+         }
       }
 
       // ? The pool dropped this connection and a driver has since reconnected
@@ -818,6 +972,19 @@ class Pool
       $Operation->Connection = $Connection;
       $Operation->Protocol = $Protocol;
 
+      // ! Claimed until release() settles it, whichever way the connection
+      //   came — idle, dialled, co-located or pinned.
+      $id = spl_object_id($Connection);
+      $Claims = $this->claims[$id] ?? null;
+
+      if ($Claims === null) {
+         /** @var WeakMap<Operation,true> $Claims */
+         $Claims = new WeakMap();
+         $this->claims[$id] = $Claims;
+      }
+
+      $Claims[$Operation] = true;
+
       if ($Operation->lock) {
          $this->lock($Connection);
       }
@@ -890,6 +1057,31 @@ class Pool
    }
 
    /**
+    * Mark a lent session whose owner was orphaned — `withdraw()` marks the
+    * one a withdrawn statement reached the server on; an adopted transaction
+    * marks its reserved one — so its session state is reset before the
+    * connection is lent again.
+    *
+    * The next release that would return the connection to `idle` — the one
+    * after which nobody owes work on it (`Driver::check()`) — has the driver
+    * write its reset (`Driver::reset()`) behind everything the session still
+    * owes, once; a session that cannot take it is severed and dropped
+    * instead. Until then no new caller is co-located there: it would run
+    * before the reset. Meant for a connection the pool has lent, busy or
+    * reserved: one already idle is reset only after its next caller. A
+    * connection the pool does not count is ignored, and a dropped one loses
+    * its mark.
+    */
+   public function taint (Connection $Connection): void
+   {
+      $id = spl_object_id($Connection);
+
+      if (isset($this->counted[$id])) {
+         $this->tainted[$id] = true;
+      }
+   }
+
+   /**
     * Acquire an idle connection or reserve capacity for a new one.
     */
    private function acquire (null|Connection $Pinned = null, bool $pipelineable = true): null|Connection
@@ -907,12 +1099,43 @@ class Pool
          return $Pinned;
       }
 
-      $id = array_key_first($this->idle);
+      $fallback = null;
 
-      if ($id !== null) {
-         $Connection = $this->idle[$id];
+      // @@
+      foreach ($this->idle as $id => $Connection) {
+         // ? An exclusive operation never takes a connection somebody else was
+         //   handed and has not flushed yet: that statement would run behind
+         //   its BEGIN, inside its transaction. release() idles such a
+         //   connection anyway — the claimant's caller may be gone — so the
+         //   claim is weighed here, when it is still live or already settled.
+         if ($pipelineable === false && $this->hold($Connection)) {
+            continue;
+         }
+
+         // ? A session still owing the answers of withdrawn statements serves
+         //   only when no clean one is idle: its next caller waits behind
+         //   them for as long as the server still runs them.
+         if ($Connection->Protocol?->detached === true) {
+            $fallback ??= $id;
+
+            continue;
+         }
+
          unset($this->idle[$id]);
          $this->busy[$id] = $Connection;
+
+         return $Connection;
+      }
+
+      // ? Only sessions still draining are idle: one of them serves before a
+      //   new session is dialled. It already holds its slot, and draining it
+      //   is what returns it to service — passed over, its answers wait
+      //   unread, and one larger than the socket buffers blocks the server
+      //   mid-send for as long as the pool has room to dial around it.
+      if ($fallback !== null) {
+         $Connection = $this->idle[$fallback];
+         unset($this->idle[$fallback]);
+         $this->busy[$fallback] = $Connection;
 
          return $Connection;
       }
@@ -930,6 +1153,17 @@ class Pool
 
          foreach ($this->busy as $id => $Connection) {
             if (isset($this->locked[$id])) {
+               continue;
+            }
+
+            // ? A tainted session owes its reset to the release that idles it.
+            //   A caller co-located there now would run before that reset —
+            //   inside whatever the withdrawn statement left on the session —
+            //   and, under steady saturation, every next one would too: the
+            //   session would never drain, and the reset never go out. It
+            //   takes no new caller until then; they park, and are promoted
+            //   once it idles, behind its reset.
+            if (isset($this->tainted[$id])) {
                continue;
             }
 
@@ -991,10 +1225,53 @@ class Pool
       }
 
       unset($this->counted[$id]);
+      unset($this->claims[$id]);
+      unset($this->tainted[$id]);
+
+      // ? The session goes while withdrawn statements it was draining may
+      //   still run on the server: their slot stays counted until the latest
+      //   of their deadlines, as if they had been quarantined when withdrawn.
+      if (isset($this->lingering[$id])) {
+         $deadline = $this->lingering[$id];
+         unset($this->lingering[$id]);
+
+         if ($deadline > microtime(true)) {
+            $this->quarantine[] = $deadline;
+         }
+      }
 
       if ($this->created > 0) {
          $this->created--;
       }
+   }
+
+   /**
+    * Check whether an unfinished operation still holds a claim on a connection:
+    * handed it through this pool and not yet settled. A finished operation
+    * never writes again, and one re-dispatched elsewhere no longer points here.
+    */
+   private function hold (Connection $Connection): bool
+   {
+      $Claims = $this->claims[spl_object_id($Connection)] ?? null;
+
+      // ?
+      if ($Claims === null) {
+         return false;
+      }
+
+      // @@
+      foreach ($Claims as $Claimant => $claimed) {
+         if (
+            $Claimant->finished === false
+            && $Claimant->Connection === $Connection
+            && $Claimant->Pool === $this
+         ) {
+            return true;
+         }
+      }
+
+      // :
+      return false;
    }
 
    /**
@@ -1089,7 +1366,14 @@ class Pool
     */
    private function promote (): void
    {
-      while ($this->pending !== [] && ($this->idle !== [] || $this->tally() < $this->max)) {
+      // ! One pass over what is parked now. An exclusive operation re-parks
+      //   when the only idle connection is still claimed, and `idle` stays
+      //   non-empty: looping on it would spin the worker until its deadline.
+      $turns = count($this->pending);
+
+      // @@
+      while ($turns > 0 && $this->pending !== [] && ($this->idle !== [] || $this->tally() < $this->max)) {
+         $turns--;
          $Operation = array_shift($this->pending);
 
          if ($Operation->expire()) {
@@ -1097,6 +1381,12 @@ class Pool
          }
 
          $this->assign($Operation);
+
+         // ? Re-parked: assign() queued it again for a later release.
+         if ($Operation->state === OperationStates::Pending) {
+            continue;
+         }
+
          $this->advance($Operation);
       }
    }

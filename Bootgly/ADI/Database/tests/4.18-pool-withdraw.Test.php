@@ -15,7 +15,9 @@ use const STREAM_IPPROTO_IP;
 use const STREAM_PF_UNIX;
 use const STREAM_SOCK_STREAM;
 use function array_unique;
+use function array_values;
 use function assert;
+use function chr;
 use function count;
 use function fclose;
 use function feof;
@@ -157,18 +159,78 @@ return new Test(
 
          return "T{$described}{$column}D{$sized}{$row}{$completed}";
       };
+      // ! One MySQL packet: 3-byte little-endian length, sequence id, payload.
+      $Frame = static function (string $payload, int $sequence): string {
+         $length = substr(pack('V', strlen($payload)), 0, 3);
+         $id = chr($sequence);
+
+         return "{$length}{$id}{$payload}";
+      };
+      // ! A MySQL text result set for `SELECT <n> AS value`: one LONG column,
+      //   one row, each section closed by an EOF packet.
+      $Value = static function (int $value) use ($Frame): string {
+         $text = (string) $value;
+         $attributes = pack('vVCvCCC', 45, 255, 3, 0, 0, 0, 0);
+         $column = "\x03def\x02db\x05table\x05table\x05value\x05value\x0C{$attributes}";
+         $eof = "\xFE\x00\x00\x00\x00";
+         $width = chr(strlen($text));
+
+         return $Frame("\x01", 1)
+            . $Frame($column, 2)
+            . $Frame($eof, 3)
+            . $Frame("{$width}{$text}", 4)
+            . $Frame($eof, 5);
+      };
+      // ! The session reset each driver writes behind a session it keeps, and
+      //   the answer the server gives it: PostgreSQL releases advisory locks
+      //   and LISTENs in one simple Query; MySQL releases named locks.
+      $ResetPG = (new Encoder)->query('SELECT pg_advisory_unlock_all(); UNLISTEN *');
+      $ResetMY = $Frame("\x03DO RELEASE_ALL_LOCKS()", 0);
+      $UnlockedPG = (static function (): string {
+         $one = pack('n', 1);
+         $attributes = pack('NnNnNn', 0, 0, 2278, 4, 0xFFFFFFFF, 0);
+         $column = "{$one}pg_advisory_unlock_all\0{$attributes}";
+         $described = pack('N', strlen($column) + 4);
+         $value = pack('N', 0);
+         $row = "{$one}{$value}";
+         $sized = pack('N', strlen($row) + 4);
+         $selected = pack('N', strlen('SELECT 1') + 5);
+         $unlistened = pack('N', strlen('UNLISTEN') + 5);
+         $ready = pack('N', 5);
+
+         return "T{$described}{$column}D{$sized}{$row}C{$selected}SELECT 1\0C{$unlistened}UNLISTEN\0Z{$ready}I";
+      })();
+      $UnlockedMY = $Frame("\x00\x00\x00\x02\x00\x00\x00", 1);
+      /**
+       * The pool's quarantined slots and lingering deadlines, as they stand.
+       *
+       * @return array{array<int,float>, array<int,float>}
+       */
+      $Slots = static function (Pool $Pool): array {
+         $Quarantine = new ReflectionProperty(Pool::class, 'quarantine');
+         $Lingering = new ReflectionProperty(Pool::class, 'lingering');
+
+         /** @var array<int,float> $quarantine */
+         $quarantine = $Quarantine->getValue($Pool);
+         /** @var array<int,float> $lingering */
+         $lingering = $Lingering->getValue($Pool);
+
+         return [$quarantine, $lingering];
+      };
       /**
        * Reads whatever the peer still holds and reports whether the client
-       * hung up. Bounded: at most 100 readiness waits of 10 ms each.
+       * hung up. Bounded: at most `$turns` readiness waits of 10 ms each — a
+       * leg that expects the session to stay up passes a few, since every
+       * one of them is waited out.
        *
        * @param resource $peer
        * @return array{string, bool}
        */
-      $Hangup = static function ($peer): array {
+      $Hangup = static function ($peer, int $turns = 100): array {
          $bytes = '';
 
          // @@
-         for ($turn = 0; $turn < 100; $turn++) {
+         for ($turn = 0; $turn < $turns; $turn++) {
             $read = [$peer];
             $write = [];
             $except = [];
@@ -413,9 +475,13 @@ return new Test(
                . json_encode($Census($Pool)) . ', error=' . json_encode($Dialing->error)
          );
 
-         // # 2. A sole reader takes its session down with it
-         //   Nobody is left to drain the answer the server still owes, so the
-         //   session cannot be resynchronised and the slot comes back with it.
+         // # 2. A sole reader keeps its session for the next caller to drain
+         //   Nobody is left to read the answer the server still owes, but the
+         //   command is whole on the wire, so nothing is lost by keeping the
+         //   session: the answer goes to a stand-in head, the connection goes
+         //   idle, and the next operation handed it queues behind the stand-in
+         //   and drains it before its own command goes out. Dropping it instead
+         //   held the slot for the statement's whole deadline (POOL-35).
          [$SQL, $peer] = $Open('mysql', 1);
          $Pool = $SQL->Pool;
          $Alone = $SQL->query('SELECT 1');
@@ -426,20 +492,90 @@ return new Test(
             && $Census($Pool) === $census(1, 0, 1, 0, 0);
 
          $Pool->withdraw($Alone);
-         [$rest, $closed] = $Hangup($peer);
+         [$rest, $closed] = $Hangup($peer, 5);
 
          yield assert(
             assertion: $reading
                && $Withdrawn($Alone)
-               && $Census($Pool) === $census(0, 0, 0, 0, 0)
-               && $SQL->Connection->connected === false
-               && $closed
-               && $rest === '',
-            description: 'MySQL: a withdrawn sole reader drops its connection; census='
-               . json_encode($Census($Pool))
+               && $Census($Pool) === $census(1, 1, 0, 0, 0)
+               && $SQL->Connection->connected
+               && is_resource($SQL->Connection->socket)
+               && $closed === false
+               && $rest === $ResetMY,
+            description: 'MySQL: a withdrawn sole reader keeps its session, the reset reaches the server at once, and the connection goes idle; census='
+               . json_encode($Census($Pool)) . ', closed=' . json_encode($closed)
+         );
+
+         // @ The next query is handed the kept connection: it queues behind the
+         //   stand-in head and sends nothing while that answer is owed.
+         $Next = $SQL->query('SELECT 2 AS value');
+         $SQL->advance($Next);
+         $early = (string) fread($peer, 8192);
+         $queued = $Next->Connection === $SQL->Connection
+            && $Next->state === OperationStates::Querying
+            && $early === ''
+            && $Census($Pool) === $census(1, 0, 1, 0, 0);
+
+         // @ The server answers the withdrawn command and the reset behind it,
+         //   then the next one.
+         [, $owing] = $Slots($Pool);
+         $first = $Value(1);
+         fwrite($peer, "{$first}{$UnlockedMY}");
+         $wire = $Settle($SQL, $Next, $peer, $Value(2));
+         [, $drained] = $Slots($Pool);
+
+         yield assert(
+            assertion: $queued
+               && $owing === [spl_object_id($SQL->Connection) => $Alone->deadline]
+               && $drained === []
+               && str_contains($wire, 'SELECT 2 AS value')
+               && $Next->finished
+               && $Next->error === null
+               && $Next->rows === [['value' => 2]]
+               && $Alone->Result === null
+               && $Census($Pool) === $census(1, 1, 0, 0, 0),
+            description: 'MySQL: the next query drains the withdrawn answer and the reset, then reads only its own, and the drained statement is owed no slot; rows='
+               . json_encode($Next->rows) . ', error=' . json_encode($Next->error) . ', lingering=' . json_encode([$owing, $drained])
+               . ', census=' . json_encode($Census($Pool))
+         );
+
+         // @ A sibling queued behind a withdrawn head never wrote a byte: it
+         //   just leaves the FIFO, and the stand-in head keeps the session.
+         $Head = $SQL->query('SELECT 3 AS value');
+         $SQL->advance($Head);
+         $wire = (string) fread($peer, 8192);
+         $Behind = $SQL->query('SELECT 4 AS value');
+         $SQL->advance($Behind);
+         $staged = $Head->state === OperationStates::Reading
+            && $Behind->state === OperationStates::Querying
+            && $Behind->Connection === $Head->Connection
+            && str_contains($wire, 'SELECT 3 AS value')
+            && $Census($Pool) === $census(1, 0, 1, 0, 0);
+
+         $Pool->withdraw($Head);
+         $Pool->withdraw($Behind);
+         [$rest, $closed] = $Hangup($peer, 5);
+         [, $lingering] = $Slots($Pool);
+
+         // ! Only the head reached the server: the sibling's later deadline
+         //   must not be kept for a statement that never ran.
+         yield assert(
+            assertion: $staged
+               && $Withdrawn($Head)
+               && $Withdrawn($Behind)
+               && $SQL->Connection->connected
+               && $closed === false
+               && $rest === $ResetMY
+               && $Behind->deadline > $Head->deadline
+               && $lingering === [spl_object_id($SQL->Connection) => $Head->deadline]
+               && $Census($Pool) === $census(1, 1, 0, 0, 0),
+            description: 'MySQL: a sibling withdrawn behind a stand-in head leaves the FIFO, keeps no deadline, writes no second reset, and the session stays up; lingering='
+               . json_encode($lingering) . ', census='
+               . json_encode($Census($Pool)) . ', closed=' . json_encode($closed)
          );
 
          fclose($peer);
+         $SQL->Connection->disconnect();
 
          // # 3. A reader with a live sibling pipelined behind it keeps the session
          //   The sibling still reads this socket, so the withdrawn answer is
@@ -883,83 +1019,121 @@ return new Test(
          );
 
          // # 10. A withdrawn statement keeps its slot until its own deadline
-         //   Dropping the session does not stop the server: it runs what it was
-         //   sent until it notices the hangup. The slot stays counted against
-         //   `max` until the statement's deadline, so a client's disconnect
-         //   rate never lets the pool run more than `max` statements at once.
-         //   The census shows only connections; the quarantine shows as work
-         //   that parks, and as dials that never reach the trap. Deadlines here
-         //   are far away — no stall of this process lapses one while a leg
-         //   still asserts the slot held — and a leg that needs one gone
-         //   passes it by hand ($Lapse) instead of sleeping it out.
+         //   A session that can be kept holds the slot itself (a). One that
+         //   drops does not stop the server: it runs what it was sent until it
+         //   notices the hangup. The slot stays counted against `max` until the
+         //   statement's deadline, so a client's disconnect rate never lets the
+         //   pool run more than `max` statements at once. A reserved connection
+         //   is reconciled the pool's own way — nobody but its transaction may
+         //   drain it, so a reader with nothing behind it drops the session —
+         //   which is how the legs below reach the quarantine on purpose
+         //   (`$Pool->lock()` before the withdrawal). The census shows only
+         //   connections; the quarantine shows as work that parks, and as dials
+         //   that never reach the trap. Deadlines here are far away — no stall
+         //   of this process lapses one while a leg still asserts the slot held
+         //   — and a leg that needs one gone passes it by hand ($Lapse) instead
+         //   of sleeping it out.
 
-         // @ (a) A sole reader withdrawn: the next query parks, nothing dials,
-         //   until the withdrawn reader's own deadline passes.
+         // @ (a) Withdrawn readers whose batches are whole on the wire keep
+         //   their session: it holds the slot itself, so nothing is
+         //   quarantined and the connection goes idle. The next caller — a
+         //   BEGIN, which never co-locates — is handed that session, writes
+         //   behind the stand-ins and drains them; it never dials. Severing it
+         //   instead held the slot for the statements' 30 s deadline and parked
+         //   every later caller for it (POOL-35). Named through the facade, as
+         //   a deferred response withdraws what its caller left behind.
          [$SQL, $peer] = $Open('pgsql', 1);
          $Pool = $SQL->Pool;
-         $Sole = $SQL->query('SELECT 4 AS value');
-         $SQL->advance($Sole);
+         $A = $SQL->query('SELECT 41 AS value');
+         $B = $SQL->query('SELECT 42 AS value');
+         $SQL->advance($A);
+         $SQL->advance($B);
          $wire = (string) fread($peer, 8192);
-         $reading = $Sole->state === OperationStates::Reading
-            && str_contains($wire, 'SELECT 4 AS value');
+         $pipelined = $A->state === OperationStates::Reading
+            && $B->state === OperationStates::Reading
+            && $A->Connection === $B->Connection
+            && str_contains($wire, 'SELECT 41 AS value')
+            && str_contains($wire, 'SELECT 42 AS value');
 
-         $Pool->withdraw($Sole);
-         [$rest, $closed] = $Hangup($peer);
-         fclose($peer);
+         $SQL->withdraw($A, $B);
+         [$rest, $closed] = $Hangup($peer, 5);
+         [$quarantine] = $Slots($Pool);
 
-         $Next = $SQL->query('SELECT 5 AS value');
-         $SQL->advance($Next);
-         $SQL->advance($Next);
-         $held = microtime(true) < $Sole->deadline;
-         $parked = $Next->state === OperationStates::Pending
-            && $Next->Connection === null
-            && $Census($Pool) === $census(0, 0, 0, 1, 0);
+         yield assert(
+            assertion: $pipelined
+               && $Withdrawn($A)
+               && $Withdrawn($B)
+               && $closed === false
+               && $rest === $ResetPG
+               && $quarantine === []
+               && $SQL->Connection->connected
+               && $Census($Pool) === $census(1, 1, 0, 0, 0),
+            description: 'Withdrawn pipelined readers keep their session: one reset reaches the server at once, nothing is quarantined and the connection goes idle; census='
+               . json_encode($Census($Pool)) . ', closed=' . json_encode($closed) . ', quarantine=' . json_encode($quarantine)
+         );
+
+         // @ BEGIN rides the kept session: written behind both stand-ins.
+         $Transaction = $SQL->begin();
+         $Opening = $Transaction->Operation;
+         $wire = '';
+
+         if ($Opening !== null) {
+            $SQL->advance($Opening);
+            $wire = (string) fread($peer, 8192);
+         }
+
          $read = [$Trap];
          $write = [];
          $except = [];
          $dialled = @stream_select($read, $write, $except, 0, 20_000);
 
-         yield assert(
-            assertion: $reading
-               && $Withdrawn($Sole)
-               && $closed
-               && $rest === ''
-               && $held
-               && $parked
-               && $dialled === 0,
-            description: 'A withdrawn sole reader drops its session but holds its slot: the next query parks and no session is dialled; census='
-               . json_encode($Census($Pool)) . ', held=' . json_encode($held) . ', dialled=' . json_encode($dialled)
-         );
+         // @ The server answers both withdrawn readers and the reset, then
+         //   the BEGIN.
+         $first = $Select(41);
+         $second = $Select(42);
+         $begin = $Complete('BEGIN');
+         fwrite($peer, "{$first}{$second}{$UnlockedPG}{$begin}");
 
-         // @ The reader's deadline passes — moved there, never waited out.
-         $lapsed = $Lapse($Pool, $Sole) === 1;
-         [$session, $startup] = $Dial($SQL, $Next);
+         // @@ Bounded: all three answers sit in one socketpair buffer.
+         for ($turn = 0; $turn < 50 && $Opening !== null && $Opening->finished === false; $turn++) {
+            $SQL->advance($Opening);
 
-         yield assert(
-            assertion: $lapsed
-               && $Next->state === OperationStates::Authenticating
-               && $Next->Connection === $SQL->Connection
-               && is_resource($session)
-               && substr($startup, 4, 4) === pack('N', 196608)
-               && $Census($Pool) === $census(1, 0, 1, 0, 0),
-            description: 'Once the withdrawn reader\'s deadline passes, the parked query dials the freed slot; census='
-               . json_encode($Census($Pool)) . ', lapsed=' . json_encode($lapsed)
-         );
-
-         $Pool->withdraw($Next);
-
-         if (is_resource($session)) {
-            fclose($session);
+            if ($Opening->finished === false) {
+               usleep(1_000);
+            }
          }
 
-         // @ (b) Readers withdrawn one after another inside one deadline never
-         //   open more than `max` sessions: each one on the wire holds its slot.
+         yield assert(
+            assertion: $Opening !== null
+               && $Opening->Connection === $SQL->Connection
+               && str_contains($wire, 'BEGIN')
+               && $dialled === 0
+               && $Opening->finished
+               && $Opening->error === null
+               && $Opening->status === 'BEGIN'
+               && $Opening->rows === []
+               && $Opening->Protocol?->detached === false
+               && $A->Result === null
+               && $B->Result === null
+               && $Census($Pool) === $census(1, 0, 1, 0, 1),
+            description: 'BEGIN is handed the kept session, drains both withdrawn answers into their stand-ins and resolves with its own; nothing dials; status='
+               . json_encode($Opening?->status) . ', rows=' . json_encode($Opening?->rows) . ', census='
+               . json_encode($Census($Pool)) . ', dialled=' . json_encode($dialled) . ', begin=' . json_encode($Opening?->error)
+         );
+
+         fclose($peer);
+         $SQL->Connection->disconnect();
+
+         // @ (b) Reserved readers withdrawn one after another inside one
+         //   deadline never open more than `max` sessions: each one on the wire
+         //   drops its session and holds its slot.
          [$SQL, $peer] = $Open('pgsql', 2);
          $Pool = $SQL->Pool;
          $First = $SQL->query('SELECT 11 AS value');
          $SQL->advance($First);
          $received = [(string) fread($peer, 8192)];
          $wired = [$First->state === OperationStates::Reading];
+         $Pool->lock($SQL->Connection);
          $Pool->withdraw($First);
          [, $closed] = $Hangup($peer);
          $hangups = [$closed];
@@ -970,6 +1144,11 @@ return new Test(
          [$session, , $wire] = $Dial($SQL, $Second, true);
          $received[] = $wire;
          $wired[] = $Second->state === OperationStates::Reading;
+
+         if ($Second->Connection !== null) {
+            $Pool->lock($Second->Connection);
+         }
+
          $Pool->withdraw($Second);
 
          if (is_resource($session)) {
@@ -1001,7 +1180,7 @@ return new Test(
                && $Withdrawn($Third)
                && $Third->Connection === null
                && $Census($Pool) === $census(0, 0, 0, 0, 0),
-            description: 'Three readers withdrawn inside one deadline open at most pool.max = 2 sessions; the third never dials; census='
+            description: 'Three reserved readers withdrawn inside one deadline open at most pool.max = 2 sessions; the third never dials; census='
                . json_encode($Census($Pool)) . ', wired=' . json_encode($wired) . ', dialled=' . json_encode($dialled)
          );
 
@@ -1130,8 +1309,8 @@ return new Test(
                . json_encode($assigned) . ', census=' . json_encode($Census($Pool))
          );
 
-         // @ (e) A reader with no deadline has none to wait out: its slot is
-         //   free the moment its session drops.
+         // @ (e) A reserved reader with no deadline has none to wait out: its
+         //   slot is free the moment its session drops.
          [$SQL, $peer] = $Open('pgsql', 1);
          $Pool = $SQL->Pool;
          $SQL->Config->timeout = 0.0;
@@ -1141,7 +1320,9 @@ return new Test(
          fread($peer, 8192);
          $reading = $Unbounded->state === OperationStates::Reading
             && $Unbounded->deadline === 0.0;
+         $Pool->lock($SQL->Connection);
          $Pool->withdraw($Unbounded);
+         $dropped = $SQL->Connection->connected === false;
          fclose($peer);
 
          $After = $SQL->query('SELECT 7 AS value');
@@ -1153,15 +1334,17 @@ return new Test(
          yield assert(
             assertion: $reading
                && $Withdrawn($Unbounded)
+               && $dropped
                && $free
                && $Withdrawn($After)
                && $Census($Pool) === $census(0, 0, 0, 0, 0),
-            description: 'A withdrawn reader without a deadline frees its slot at once; census='
+            description: 'A withdrawn reserved reader without a deadline drops its session and frees its slot at once; census='
                . json_encode($Census($Pool))
          );
 
          // @ (f) Quarantines alone fill `max`, and a parked BEGIN still waits:
-         //   both readers drop their sessions, so no connection is counted.
+         //   both reserved readers drop their sessions, so no connection is
+         //   counted.
          //   Each withdrawal's release() promotes with the BEGIN pending; if
          //   promote() counted connections only, it would keep shifting it
          //   into an assign() that re-parks it, and return only once the
@@ -1190,6 +1373,11 @@ return new Test(
          // ! Timed against a bound no stall reaches: a spinning promote() holds
          //   the withdrawals for the BEGIN's whole 30 s deadline, and leaves it
          //   expired — which $parked sees as well.
+         if ($First->Connection !== null && $Second->Connection !== null) {
+            $Pool->lock($First->Connection);
+            $Pool->lock($Second->Connection);
+         }
+
          $started = microtime(true);
          $Pool->withdraw($First);
          $Pool->withdraw($Second);
@@ -1224,7 +1412,7 @@ return new Test(
                && $held
                && $parked
                && $dialled === 0,
-            description: 'Two withdrawn readers quarantine both slots with no connection left: the withdrawals return and the parked BEGIN stays parked; elapsed='
+            description: 'Two withdrawn reserved readers quarantine both slots with no connection left: the withdrawals return and the parked BEGIN stays parked; elapsed='
                . json_encode($elapsed) . ', census=' . json_encode($Census($Pool)) . ', held=' . json_encode($held) . ', dialled=' . json_encode($dialled)
          );
 
@@ -1257,8 +1445,9 @@ return new Test(
             fclose($session);
          }
 
-         // @ (g) A withdrawn statement's caller leaves, and the operation is
-         //   freed with it: PHP hands its object id to the next operation.
+         // @ (g) A withdrawn reserved statement's caller leaves, and the
+         //   operation is freed with it: PHP hands its object id to the next
+         //   operation.
          //   Keyed by that id, every withdrawal would overwrite the entry of
          //   the statement before it — each round dialling one more session
          //   while the server still runs them all. Six rounds of query, wire,
@@ -1292,6 +1481,10 @@ return new Test(
                $deadlines[] = $Round->deadline;
                [$session, , $wire] = $Dial($SQL, $Round, true);
                $received[] = $wire;
+
+               if ($Round->Connection !== null) {
+                  $Pool->lock($Round->Connection);
+               }
             }
 
             $Pool->withdraw($Round);
@@ -1347,7 +1540,7 @@ return new Test(
                && $held
                && $dialled === 0
                && $Census($Pool) === $census(0, 0, 0, 0, 0),
-            description: 'Freed withdrawn readers whose ids are recycled still hold their slots: six rounds open pool.max = 2 sessions; parks='
+            description: 'Freed withdrawn reserved readers whose ids are recycled still hold their slots: six rounds open pool.max = 2 sessions; parks='
                . json_encode($parks) . ', ids=' . json_encode($ids) . ', freed=' . json_encode($freed)
                . ', held=' . json_encode($held) . ', dialled=' . json_encode($dialled) . ', census=' . json_encode($Census($Pool))
          );
@@ -1538,13 +1731,273 @@ return new Test(
             fclose($session);
          }
 
-         // # 11. The facade withdraws a writer before the reader ahead of it
-         //   The writer holds the write stream with nothing credited, so the
-         //   driver counts it as the reader who will drain the answer ahead.
-         //   Withdrawn reader-first, that answer goes to a stand-in — then the
-         //   writer leaves with nothing sent, and nobody ever reads the
-         //   stand-in: the slot stays busy for good. Named reader-first on
-         //   purpose; Database::withdraw() must reorder it.
+         // @ (j) A kept session that drops before its stand-in drained still
+         //   holds the withdrawn statement's slot.
+         //   A withdrawn reader keeps its session, which holds the slot while
+         //   it lives. The next query handed it writes behind the stand-in and
+         //   its own deadline elapses there: the pool abandons it, nobody is
+         //   left to read, and the session drops — while the server may still
+         //   run the withdrawn statement. The deadline the pool kept for it
+         //   becomes a quarantine then: the next caller parks and nothing dials
+         //   until it passes. Without it, one disconnect and one expiry would
+         //   open a session past `max` while that statement still runs.
+         [$SQL, $peer] = $Open('pgsql', 1);
+         $Pool = $SQL->Pool;
+         $Slow = $SQL->query('SELECT 16 AS value');
+         $SQL->advance($Slow);
+         $wire = (string) fread($peer, 8192);
+         $reading = $Slow->state === OperationStates::Reading
+            && str_contains($wire, 'SELECT 16 AS value');
+
+         $Pool->withdraw($Slow);
+         [$quarantine, $lingering] = $Slots($Pool);
+         $kept = $Withdrawn($Slow)
+            && $SQL->Connection->connected
+            && $quarantine === []
+            && $lingering === [spl_object_id($SQL->Connection) => $Slow->deadline]
+            && $Census($Pool) === $census(1, 1, 0, 0, 0);
+
+         // @ The next query rides the kept session, then expires there.
+         $Late = $SQL->query('SELECT 17 AS value');
+         $SQL->advance($Late);
+         $wire = (string) fread($peer, 8192);
+         $queued = $Late->Connection === $SQL->Connection
+            && $Late->state === OperationStates::Reading
+            && str_contains($wire, 'SELECT 17 AS value');
+
+         (new ReflectionProperty(Operation::class, 'deadline'))->setValue($Late, microtime(true) - 1.0);
+         $SQL->advance($Late);
+         [, $closed] = $Hangup($peer);
+         fclose($peer);
+         [$quarantine, $lingering] = $Slots($Pool);
+
+         $Next = $SQL->query('SELECT 18 AS value');
+         $SQL->advance($Next);
+         $held = microtime(true) < $Slow->deadline;
+         $parked = $Next->state === OperationStates::Pending
+            && $Next->Connection === null
+            && $Census($Pool) === $census(0, 0, 0, 1, 0);
+         $read = [$Trap];
+         $write = [];
+         $except = [];
+         $dialled = @stream_select($read, $write, $except, 0, 20_000);
+
+         yield assert(
+            assertion: $reading
+               && $kept
+               && $queued
+               && $Late->state === OperationStates::Failed
+               && str_contains((string) $Late->error, 'timed out')
+               && $closed
+               && array_values($quarantine) === [$Slow->deadline]
+               && $lingering === []
+               && $held
+               && $parked
+               && $dialled === 0,
+            description: 'A kept session dropped by a later expiry quarantines the withdrawn statement\'s deadline: the next query parks and nothing dials; kept='
+               . json_encode($kept) . ', quarantine=' . json_encode($quarantine) . ', census=' . json_encode($Census($Pool))
+               . ', dialled=' . json_encode($dialled)
+         );
+
+         // @ The withdrawn statement's deadline passes — moved there, never
+         //   waited out — and the parked query dials the freed slot.
+         $lapsed = $Lapse($Pool, $Slow) === 1;
+         [$session, $startup] = $Dial($SQL, $Next);
+
+         yield assert(
+            assertion: $lapsed
+               && $Next->state === OperationStates::Authenticating
+               && $Next->Connection === $SQL->Connection
+               && is_resource($session)
+               && substr($startup, 4, 4) === pack('N', 196608)
+               && $Census($Pool) === $census(1, 0, 1, 0, 0),
+            description: 'Once the withdrawn statement\'s deadline passes, the parked query dials; census='
+               . json_encode($Census($Pool)) . ', lapsed=' . json_encode($lapsed)
+         );
+
+         $Pool->withdraw($Next);
+
+         if (is_resource($session)) {
+            fclose($session);
+         }
+
+         // @ (k) Once the session has drained the stand-in, the server has
+         //   answered the withdrawn statement: a later drop of that session — a
+         //   network cut, a terminated backend — owes it no slot, and the next
+         //   caller dials at once instead of waiting out a statement that
+         //   finished long ago.
+         [$SQL, $peer] = $Open('pgsql', 1);
+         $Pool = $SQL->Pool;
+         $Gone = $SQL->query('SELECT 19 AS value');
+         $SQL->advance($Gone);
+         fread($peer, 8192);
+         $Pool->withdraw($Gone);
+         [, $owing] = $Slots($Pool);
+
+         $Drainer = $SQL->query('SELECT 20 AS value');
+         $first = $Select(19);
+         $second = $Select(20);
+         $Settle($SQL, $Drainer, $peer, "{$first}{$UnlockedPG}{$second}");
+         [, $lingering] = $Slots($Pool);
+         $drained = $Drainer instanceof SQLOperation
+            && $Drainer->rows === [['value' => 20]]
+            && $lingering === []
+            && $Census($Pool) === $census(1, 1, 0, 0, 0);
+
+         // @ The peer hangs up while the next query reads, well inside the
+         //   withdrawn statement's deadline.
+         $Cut = $SQL->query('SELECT 21 AS value');
+         $SQL->advance($Cut);
+         fread($peer, 8192);
+         fclose($peer);
+
+         // @@ Bounded: the hangup is read on the first turn.
+         for ($turn = 0; $turn < 50 && $Cut->finished === false; $turn++) {
+            $SQL->advance($Cut);
+         }
+
+         [$quarantine] = $Slots($Pool);
+         $After = $SQL->query('SELECT 22 AS value');
+         $free = $After->state === OperationStates::Queued
+            && $After->Connection === $SQL->Connection
+            && microtime(true) < $Gone->deadline
+            && $Census($Pool) === $census(1, 0, 1, 0, 0);
+
+         yield assert(
+            assertion: $owing === [spl_object_id($SQL->Connection) => $Gone->deadline]
+               && $drained
+               && $Cut->state === OperationStates::Failed
+               && $quarantine === []
+               && $free,
+            description: 'A session that drained its stand-in owes the withdrawn statement nothing: a later drop quarantines no slot and the next query is assigned at once; owing='
+               . json_encode($owing) . ', quarantine=' . json_encode($quarantine) . ', census=' . json_encode($Census($Pool))
+         );
+
+         $Pool->withdraw($After);
+
+         // @ (l) Two withdrawn statements owed on one kept session: the later
+         //   deadline is the one kept, whichever withdrawal came last.
+         [$SQL, $peer] = $Open('pgsql', 1);
+         $Pool = $SQL->Pool;
+         $SQL->Config->timeout = 60.0;
+         $Long = $SQL->query('SELECT 23 AS value');
+         $SQL->Config->timeout = 30.0;
+         $Short = $SQL->query('SELECT 24 AS value');
+         $SQL->advance($Long);
+         $SQL->advance($Short);
+         fread($peer, 8192);
+         $staged = $Long->state === OperationStates::Reading
+            && $Short->state === OperationStates::Reading
+            && $Long->deadline > $Short->deadline;
+
+         $SQL->withdraw($Long, $Short);
+         [, $lingering] = $Slots($Pool);
+
+         yield assert(
+            assertion: $staged
+               && $Withdrawn($Long)
+               && $Withdrawn($Short)
+               && $lingering === [spl_object_id($SQL->Connection) => $Long->deadline]
+               && $Census($Pool) === $census(1, 1, 0, 0, 0),
+            description: 'Two withdrawn statements on one kept session keep the later deadline, not the last one withdrawn; lingering='
+               . json_encode($lingering) . ', deadlines=' . json_encode([$Long->deadline, $Short->deadline])
+         );
+
+         fclose($peer);
+         $SQL->Connection->disconnect();
+
+         // @ (m) The next caller drains a large abandoned answer instead of
+         //   deadlocking on it. The withdrawn statement's answer is far larger
+         //   than the socket buffers, so the backend is blocked writing it and
+         //   reads nothing; the next caller's batch is larger than the buffers
+         //   too. Waiting only to write, both ends wait on each other until the
+         //   caller's deadline: the caller drains the stand-in while it flushes.
+         [$SQL, $peer] = $Open('pgsql', 1);
+         $Pool = $SQL->Pool;
+         $Large = $SQL->query('SELECT 25 AS value');
+         $SQL->advance($Large);
+         fread($peer, 8192);
+         $Pool->withdraw($Large);
+
+         // ! The answer owed: one text column, 4096 rows of 1000 bytes.
+         $one = pack('n', 1);
+         $attributes = pack('NnNnNn', 0, 0, 25, 0xFFFF, 0xFFFFFFFF, 0);
+         $column = "{$one}value\0{$attributes}";
+         $described = pack('N', strlen($column) + 4);
+         $text = str_repeat('x', 1000);
+         $width = pack('N', 1000);
+         $row = "{$one}{$width}{$text}";
+         $sized = pack('N', strlen($row) + 4);
+         $rows = str_repeat("D{$sized}{$row}", 4096);
+         $completed = $Complete('SELECT 4096');
+         $owed = "T{$described}{$column}{$rows}{$completed}{$UnlockedPG}";
+
+         // @@ Bounded: the backend writes until its socket is full, then blocks.
+         for ($turn = 0; $turn < 1024 && $owed !== ''; $turn++) {
+            $written = (int) @fwrite($peer, $owed);
+
+            if ($written <= 0) {
+               break;
+            }
+
+            $owed = substr($owed, $written);
+         }
+
+         $blocked = $owed !== '';
+         $padding = str_repeat('y', 4 * 1024 * 1024);
+         $Next = $SQL->query("SELECT 26 AS value /* {$padding} */");
+         $length = $Next instanceof SQLOperation ? strlen($Next->write) + strlen($ResetPG) : 0;
+         $received = 0;
+         $answered = false;
+         $started = microtime(true);
+
+         // @@ Bounded: the backend sends what it owes before it reads again.
+         while ($Next->finished === false && microtime(true) - $started < 10.0) {
+            $SQL->advance($Next);
+
+            if ($owed !== '') {
+               $written = (int) @fwrite($peer, $owed);
+
+               if ($written > 0) {
+                  $owed = substr($owed, $written);
+               }
+            }
+            elseif ($answered === false) {
+               $received += strlen((string) fread($peer, 1_048_576));
+
+               if ($received >= $length) {
+                  fwrite($peer, $Select(26));
+                  $answered = true;
+               }
+            }
+
+            usleep(100);
+         }
+
+         $elapsed = microtime(true) - $started;
+
+         yield assert(
+            assertion: $blocked
+               && $Withdrawn($Large)
+               && $Next instanceof SQLOperation
+               && $Next->error === null
+               && $Next->rows === [['value' => 26]]
+               && $owed === ''
+               && $Large->Result === null
+               && $Census($Pool) === $census(1, 1, 0, 0, 0),
+            description: 'A large batch handed a session that owes a large abandoned answer drains it while it flushes, instead of deadlocking until its deadline; elapsed='
+               . json_encode($elapsed) . ', error=' . json_encode($Next->error) . ', census=' . json_encode($Census($Pool))
+         );
+
+         fclose($peer);
+         $SQL->Connection->disconnect();
+
+         // # 11. A zero-credit writer withdrawn with the reader ahead of it
+         //   The writer holds the write stream with nothing credited, so it
+         //   leaves with nothing sent; the reader's answer goes to a stand-in.
+         //   Nothing holds the stream afterwards, so the session stays and the
+         //   connection goes idle for the next caller to drain it — and only
+         //   the reader, which reached the server, keeps its deadline.
          [$SQL, $peer] = $Open('pgsql', 1);
          $Pool = $SQL->Pool;
          $Reader = $SQL->query('SELECT 8 AS value');
@@ -1576,6 +2029,116 @@ return new Test(
             && str_contains($wire, 'SELECT 8 AS value')
             && $Census($Pool) === $census(1, 0, 1, 0, 0);
 
+         // @ The server reads the junk again: the writer stays at zero credit
+         //   — nobody advances it — and the stream has room for the reset.
+         // @@ Bounded: the peer holds a few hundred KiB at most.
+         for ($turn = 0; $turn < 512 && (string) fread($peer, 65536) !== ''; $turn++) {
+            // drain the junk
+         }
+
+         $SQL->withdraw($Reader, $Writer);
+         [$rest, $closed] = $Hangup($peer, 5);
+         [, $lingering] = $Slots($Pool);
+
+         yield assert(
+            assertion: $staged
+               && $Withdrawn($Reader)
+               && $Withdrawn($Writer)
+               && $SQL->Connection->connected
+               && $closed === false
+               && $rest === $ResetPG
+               && $Writer->deadline > $Reader->deadline
+               && $lingering === [spl_object_id($SQL->Connection) => $Reader->deadline]
+               && $Census($Pool) === $census(1, 1, 0, 0, 0),
+            description: 'A zero-credit writer withdrawn with the reader ahead of it never reaches the wire: the session stays with only the reset behind the reader, the connection goes idle, and only the reader keeps its deadline; lingering='
+               . json_encode($lingering) . ', credit='
+               . json_encode($credit) . ', census=' . json_encode($Census($Pool)) . ', closed=' . json_encode($closed)
+         );
+
+         fclose($peer);
+         $SQL->Connection->disconnect();
+
+         // # 11c. A kept session that cannot take its reset goes
+         //   The reader's statement is whole on the wire, but the stream has no
+         //   room for the reset — the server reads nothing of it. A session
+         //   whose state cannot be reset is not lent on: it is severed, and its
+         //   slot is held for the statement the server may still be running.
+         [$SQL, $peer] = $Open('pgsql', 1);
+         $Pool = $SQL->Pool;
+         $Reader = $SQL->query('SELECT 9 AS value');
+         $SQL->advance($Reader);
+         fread($peer, 8192);
+         $socket = $SQL->Connection->socket;
+         $junk = str_repeat('j', 65536);
+
+         // @@ Bounded: a socketpair buffer takes a few hundred KiB.
+         for ($turn = 0; $turn < 64 && is_resource($socket) && @fwrite($socket, $junk) > 0; $turn++) {
+            // fill the socket buffer
+         }
+
+         $Pool->withdraw($Reader);
+         $closed = false;
+
+         // @@ Bounded: read the junk back, then the hangup.
+         for ($turn = 0; $turn < 512; $turn++) {
+            $chunk = (string) fread($peer, 65536);
+
+            if ($chunk === '' && feof($peer)) {
+               $closed = true;
+
+               break;
+            }
+
+            if ($chunk === '') {
+               usleep(1_000);
+            }
+         }
+
+         [$quarantine] = $Slots($Pool);
+
+         yield assert(
+            assertion: $Withdrawn($Reader)
+               && $SQL->Connection->connected === false
+               && $closed
+               && array_values($quarantine) === [$Reader->deadline]
+               && $Census($Pool) === $census(0, 0, 0, 0, 0),
+            description: 'A kept session whose reset cannot be written is severed, and the withdrawn statement keeps its slot; quarantine='
+               . json_encode($quarantine) . ', census=' . json_encode($Census($Pool))
+         );
+
+         fclose($peer);
+
+         // # 11b. On a reserved connection the writer still leaves first
+         //   A transaction's connection is reconciled the pool's way: a reader
+         //   keeps its session only while somebody is left to read. Withdrawn
+         //   first, the zero-credit writer leaves with nothing sent, so the
+         //   reader has nobody and the session drops. Reader-first, the writer
+         //   still holding the stream would count as that somebody — and then
+         //   leave, stranding a stand-in on a reserved session. Named
+         //   reader-first on purpose; Database::withdraw() must reorder it.
+         [$SQL, $peer] = $Open('pgsql', 1);
+         $Pool = $SQL->Pool;
+         $Reader = $SQL->query('SELECT 8 AS value');
+         $SQL->advance($Reader);
+         $wire = (string) fread($peer, 8192);
+         $Pool->lock($SQL->Connection);
+         $socket = $SQL->Connection->socket;
+         $junk = str_repeat('j', 65536);
+
+         // @@ Bounded: a socketpair buffer takes a few hundred KiB.
+         for ($turn = 0; $turn < 64 && is_resource($socket) && @fwrite($socket, $junk) > 0; $turn++) {
+            // fill the socket buffer
+         }
+
+         $Writer = new SQLOperation($SQL->Connection, 'UPDATE w SET v = 1', [], 30.0);
+         $Pool->assign($Writer);
+         $SQL->advance($Writer);
+         $staged = $Reader->state === OperationStates::Reading
+            && $Writer->state === OperationStates::Querying
+            && $Writer->Connection === $Reader->Connection
+            && str_contains($wire, 'SELECT 8 AS value')
+            && $Census($Pool) === $census(1, 0, 1, 0, 1);
+
          $SQL->withdraw($Reader, $Writer);
          [$rest, $closed] = $Hangup($peer);
 
@@ -1583,14 +2146,302 @@ return new Test(
             assertion: $staged
                && $Withdrawn($Reader)
                && $Withdrawn($Writer)
-               && $SQL->Connection->connected === false
                && $closed
                && str_contains($rest, 'UPDATE w') === false
                && $Census($Pool) === $census(0, 0, 0, 0, 0),
-            description: 'Database::withdraw() takes a zero-credit writer out before the reader named ahead of it, so the session drops; credit='
-               . json_encode($credit) . ', census=' . json_encode($Census($Pool))
+            description: 'On a reserved connection Database::withdraw() takes the zero-credit writer out first, so the reader has nobody left and the session drops; census='
+               . json_encode($Census($Pool)) . ', closed=' . json_encode($closed)
          );
 
+         fclose($peer);
+
+         // # 12. A BEGIN given up on the wire never leaves a transaction open
+         //   A statement failed and its ReadyForQuery is still in flight, so
+         //   the connection went idle with that finished entry at the FIFO
+         //   head. A BEGIN takes it and is flushed, then its caller gives up —
+         //   withdrawn, cancelled, or expired before its first read. The
+         //   finished head reads nothing, so no stand-in may keep the session:
+         //   the server may have opened the transaction, and lending that
+         //   session on runs the next caller's statements inside it, where they
+         //   vanish with it.
+         $boom = "SERROR\0C22012\0Mdivision by zero\0\0";
+         $size = pack('N', strlen($boom) + 4);
+         $failure = "E{$size}{$boom}";
+
+         foreach (['withdrawn', 'cancelled', 'expired'] as $route) {
+            [$SQL, $peer] = $Open('pgsql', 1);
+            $Pool = $SQL->Pool;
+            $Failed = $SQL->query('SELECT 1/0 AS boom');
+            $SQL->advance($Failed);
+            fread($peer, 8192);
+            fwrite($peer, $failure);
+            $SQL->advance($Failed);
+            $idle = $Failed->state === OperationStates::Failed
+               && $Census($Pool) === $census(1, 1, 0, 0, 0);
+
+            $Transaction = $SQL->begin();
+            $Begin = $Transaction->Operation;
+            $wire = '';
+
+            if ($Begin !== null) {
+               $SQL->advance($Begin);
+               $wire = (string) fread($peer, 8192);
+            }
+
+            $Session = $SQL->Connection->Protocol;
+            $flushed = $Begin !== null
+               && $Begin->state === OperationStates::Reading
+               && $Begin->Connection === $SQL->Connection
+               && str_contains($wire, 'BEGIN')
+               && $Census($Pool) === $census(1, 0, 1, 0, 1);
+
+            if ($Begin !== null) {
+               if ($route === 'withdrawn') {
+                  $SQL->withdraw($Begin);
+               }
+               elseif ($route === 'cancelled') {
+                  $Pool->cancel($Begin);
+               }
+               else {
+                  (new ReflectionProperty(Operation::class, 'deadline'))->setValue($Begin, microtime(true) - 1.0);
+                  $SQL->advance($Begin);
+               }
+            }
+
+            [$rest, $closed] = $Hangup($peer);
+            $Next = $SQL->query('INSERT INTO t VALUES (1)');
+            $SQL->advance($Next);
+            $late = (string) fread($peer, 8192);
+
+            yield assert(
+               assertion: $idle
+                  && $flushed
+                  && $Begin?->state === OperationStates::Failed
+                  && $closed
+                  && $SQL->Connection->Protocol !== $Session
+                  && $Next->Protocol !== $Session
+                  && str_contains("{$rest}{$late}", 'INSERT') === false
+                  && $Census($Pool)['locked'] === 0,
+               description: "A BEGIN {$route} on the wire behind a finished head drops its session: the next statement never runs on it; census="
+                  . json_encode($Census($Pool)) . ', closed=' . json_encode($closed) . ', begin=' . json_encode($Begin?->error)
+            );
+
+            $Pool->withdraw($Next);
+            fclose($peer);
+
+            // @@ Bounded: accept the dial a rebuilt session made, so no later
+            //    leg meets it in the trap's backlog.
+            for ($turn = 0; $turn < 4; $turn++) {
+               $read = [$Trap];
+               $write = [];
+               $except = [];
+
+               if (@stream_select($read, $write, $except, 0, 20_000) !== 1) {
+                  break;
+               }
+
+               $stray = @stream_socket_accept($Trap, 0.0);
+
+               if (is_resource($stray)) {
+                  fclose($stray);
+               }
+            }
+         }
+
+         // @ Even when a live statement behind the BEGIN still reads — so the
+         //   driver keeps the session for it — a BEGIN given up on the wire
+         //   takes the session down: nothing proves it did not open the
+         //   transaction, and the reservation it held would otherwise go.
+         //   Withdrawn, cancelled or expired alike: the finished head above is
+         //   caught by the driver's reader count, this one only here.
+         foreach (['withdrawn', 'cancelled', 'expired'] as $route) {
+            [$SQL, $peer] = $Open('pgsql', 1);
+            $Pool = $SQL->Pool;
+            $Transaction = $SQL->begin();
+            $Begin = $Transaction->Operation;
+            $Behind = new SQLOperation($SQL->Connection, 'SELECT 27 AS value', [], 30.0);
+            $wire = '';
+
+            if ($Begin !== null) {
+               $SQL->advance($Begin);
+               $Pool->assign($Behind);
+               $SQL->advance($Behind);
+               $wire = (string) fread($peer, 8192);
+            }
+
+            $staged = $Begin !== null
+               && $Begin->state === OperationStates::Reading
+               && $Behind->state === OperationStates::Reading
+               && $Behind->Connection === $Begin->Connection
+               && str_contains($wire, 'BEGIN')
+               && str_contains($wire, 'SELECT 27 AS value');
+
+            if ($Begin !== null) {
+               if ($route === 'withdrawn') {
+                  $SQL->withdraw($Begin);
+               }
+               elseif ($route === 'cancelled') {
+                  $Pool->cancel($Begin);
+               }
+               else {
+                  (new ReflectionProperty(Operation::class, 'deadline'))->setValue($Begin, microtime(true) - 1.0);
+                  $SQL->advance($Begin);
+               }
+            }
+
+            [, $closed] = $Hangup($peer);
+
+            yield assert(
+               assertion: $staged
+                  && $Begin !== null
+                  && $Begin->state === OperationStates::Failed
+                  && ($route !== 'withdrawn' || $Withdrawn($Begin))
+                  && $closed
+                  && $Behind->state === OperationStates::Failed
+                  && $Census($Pool) === $census(0, 0, 0, 0, 0),
+               description: "A BEGIN {$route} on the wire drops its session even while a live statement behind it still reads; census="
+                  . json_encode($Census($Pool)) . ', closed=' . json_encode($closed) . ', behind=' . json_encode($Behind->error)
+                  . ', begin=' . json_encode($Begin?->error)
+            );
+
+            fclose($peer);
+         }
+
+         // # 13. A clean idle session serves before one still draining
+         //   Two sessions are idle: the first still owes the answer of a
+         //   withdrawn statement the server may run for a long time yet, the
+         //   second owes nothing. The next caller is handed the clean one,
+         //   never queued behind an abandoned statement while a clean session
+         //   sits idle. With only the draining one idle, it still serves
+         //   before a new session is dialled: it holds its slot already, and
+         //   draining it is what returns it to service.
+         [$First, $peerFirst] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+         [$Other, $peerOther] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+         stream_set_blocking($First, false);
+         stream_set_blocking($peerFirst, false);
+         stream_set_blocking($Other, false);
+         stream_set_blocking($peerOther, false);
+         $SQL = new SQL([
+            'driver' => 'pgsql',
+            'host' => '127.0.0.1',
+            'port' => $port,
+            'timeout' => 30.0,
+            'secure' => ['mode' => 'disable'],
+            'pool' => ['min' => 0, 'max' => 3],
+         ]);
+         $SQL->Connection->attach($First);
+         $Pool = $SQL->Pool;
+         $Slow = $SQL->query('SELECT 28 AS value');
+         $SQL->advance($Slow);
+         fread($peerFirst, 8192);
+         $Clean = new Connection($SQL->Config);
+         $Clean->attach($Other);
+         $Pool->attach($Clean);
+         $Quick = $SQL->query('SELECT 29 AS value');
+         $SQL->advance($Quick);
+         $quick = (string) fread($peerOther, 8192);
+
+         // @ The slow one's caller leaves first, so its session is idle first.
+         $Pool->withdraw($Slow);
+         fread($peerFirst, 8192);
+         fwrite($peerOther, $Select(29));
+
+         // @@ Bounded: the answer sits in one socketpair buffer.
+         for ($turn = 0; $turn < 50 && $Quick->finished === false; $turn++) {
+            $SQL->advance($Quick);
+         }
+
+         $staged = $Quick->Connection === $Clean
+            && $Quick->finished
+            && str_contains($quick, 'SELECT 29 AS value')
+            && $SQL->Connection->Protocol?->detached === true
+            && $Clean->Protocol?->detached === false
+            && array_values($Pool->idle) === [$SQL->Connection, $Clean];
+
+         $Next = $SQL->query('SELECT 30 AS value');
+         $SQL->advance($Next);
+         $wire = (string) fread($peerOther, 8192);
+         $clean = $Next->Connection === $Clean
+            && str_contains($wire, 'SELECT 30 AS value');
+
+         // @ Only the draining session is idle now: it serves, nothing dials.
+         $Last = $SQL->query('SELECT 31 AS value');
+         $SQL->advance($Last);
+         $read = [$Trap];
+         $write = [];
+         $except = [];
+         $dialled = @stream_select($read, $write, $except, 0, 20_000);
+
+         yield assert(
+            assertion: $staged
+               && $clean
+               && $Last->Connection === $SQL->Connection
+               && $dialled === 0
+               && $Census($Pool) === $census(2, 0, 2, 0, 0),
+            description: 'A clean idle session serves before one still owing a withdrawn answer, which still serves before a dial; next='
+               . json_encode($Next->Connection === $Clean) . ', last=' . json_encode($Last->Connection === $SQL->Connection)
+               . ', dialled=' . json_encode($dialled) . ', census=' . json_encode($Census($Pool))
+         );
+
+         $Pool->withdraw($Next);
+         $Pool->withdraw($Last);
+         fclose($peerFirst);
+         fclose($peerOther);
+         $SQL->Connection->disconnect();
+         $Clean->disconnect();
+
+         // # 14. A rollback that overtakes a running statement keeps its slot
+         //   The top-level rollback discards the statement still in flight on
+         //   the reserved connection. Nobody is left to read it, so the session
+         //   drops — while the server may still run that statement. Its slot
+         //   stays counted until its deadline, as for any withdrawn statement:
+         //   the next caller parks and nothing dials. Discarded on the driver
+         //   alone, the slot came back at once and each such rollback opened
+         //   one more session past `max`.
+         [$SQL, $peer] = $Open('pgsql', 1);
+         $Pool = $SQL->Pool;
+         $Transaction = $SQL->begin();
+         $Opening = $Transaction->Operation;
+
+         if ($Opening !== null) {
+            $SQL->advance($Opening);
+            fread($peer, 8192);
+            fwrite($peer, $Complete('BEGIN'));
+            $SQL->advance($Opening);
+         }
+
+         $Running = $Transaction->query('SELECT 32 AS value');
+         $SQL->advance($Running);
+         $wire = (string) fread($peer, 8192);
+         $running = $Running->state === OperationStates::Reading
+            && str_contains($wire, 'SELECT 32 AS value')
+            && $Census($Pool) === $census(1, 0, 1, 0, 1);
+
+         $Rollback = $Transaction->rollback();
+         [$quarantine] = $Slots($Pool);
+         [, $closed] = $Hangup($peer);
+         $Next = $SQL->query('SELECT 33 AS value');
+         $SQL->advance($Next);
+         $read = [$Trap];
+         $write = [];
+         $except = [];
+         $dialled = @stream_select($read, $write, $except, 0, 20_000);
+
+         yield assert(
+            assertion: $running
+               && $Running->state === OperationStates::Failed
+               && $Rollback->state === OperationStates::Failed
+               && $closed
+               && array_values($quarantine) === [$Running->deadline]
+               && $Next->state === OperationStates::Pending
+               && $dialled === 0
+               && $Census($Pool) === $census(0, 0, 0, 1, 0),
+            description: 'A rollback that overtakes a running statement keeps its slot until the statement\'s deadline: the next caller parks and nothing dials; quarantine='
+               . json_encode($quarantine) . ', census=' . json_encode($Census($Pool)) . ', dialled=' . json_encode($dialled)
+               . ', running=' . json_encode($Running->error)
+         );
+
+         $Pool->withdraw($Next);
          fclose($peer);
       }
       finally {

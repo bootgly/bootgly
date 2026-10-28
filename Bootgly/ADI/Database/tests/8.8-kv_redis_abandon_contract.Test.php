@@ -132,9 +132,12 @@ return new Test(
       $Partial = $Redis->command('SET', ['big', str_repeat('x', 4 * 1024 * 1024)]);
       $Redis->advance($Partial);
 
+      // ? It has not joined the FIFO, but its caller still owns the write
+      //   stream: lending the connection now would queue the next command
+      //   behind a frame another caller is still flushing.
       yield assert(
-         assertion: $Partial->write !== '' && $Redis->check() === false,
-         description: 'The command is still going out and has not joined the FIFO'
+         assertion: $Partial->write !== '' && $Redis->check() === true,
+         description: 'The command is still going out: outside the FIFO, its write stream still holds the connection'
       );
 
       $Partial->fail($expired);

@@ -14,6 +14,7 @@ namespace Bootgly\ADI\Databases\KV\Drivers;
 use const SOL_TCP;
 use const TCP_NODELAY;
 use function array_shift;
+use function count;
 use function ctype_digit;
 use function extension_loaded;
 use function feof;
@@ -136,6 +137,12 @@ class Redis extends Driver
    //   abandon()'s reader count and kills a healthy session.
    /** @var WeakMap<Operation,true> */
    private WeakMap $abandoned;
+   /**
+    * Whether this session still owes replies to detached stand-ins.
+    */
+   public bool $detached {
+      get => count($this->abandoned) > 0;
+   }
    /** Operation currently holding the write stream (partial writes must not interleave). */
    private null|Operation $Writing = null;
    private null|Readiness $ReadReadiness = null;
@@ -562,11 +569,12 @@ class Redis extends Driver
       /** @var Operation $Operation */
 
       // ? Draining needs a reader: the pool has already released this operation,
-      //   so only a sibling advance still pumps this socket.
+      //   so only a sibling advance still pumps this socket. A finished entry is
+      //   no reader — it only waits for the reply that consumes its slot.
       $readers = 0;
 
       foreach ($this->pipeline as $Queued) {
-         if ($Queued !== $Operation && isset($this->abandoned[$Queued]) === false) {
+         if ($Queued !== $Operation && $Queued->finished === false && isset($this->abandoned[$Queued]) === false) {
             $readers++;
          }
       }
@@ -598,17 +606,29 @@ class Redis extends Driver
    }
 
    /**
-    * Check whether this connection still has pipelined commands in flight.
+    * Check whether this connection still owes work to a caller: a command
+    * still being written, or a pipelined command somebody waits for.
     */
    public function check (): bool
    {
+      // ? A frame mid-flush belongs to a caller still advancing it. Lending the
+      //   connection now would queue the next caller's command behind a stream
+      //   another caller owns.
+      $Writing = $this->Writing;
+
+      if ($Writing !== null && $Writing->finished === false) {
+         return true;
+      }
+
       // @@ A finished entry is not work in flight: the read loop keeps it only
       //    until the message that terminates it arrives, and it stays at its
       //    slot to absorb that message whoever reads next. Reading a non-empty
       //    FIFO as "still busy" gates release() off for the connection's life
-      //    when the command that failed was answered in two reads.
+      //    when the command that failed was answered in two reads. A stand-in
+      //    is not work in flight either: nobody waits for its reply, and the
+      //    next command handed this connection queues behind it and drains it.
       foreach ($this->pipeline as $Queued) {
-         if ($Queued->finished === false) {
+         if ($Queued->finished === false && isset($this->abandoned[$Queued]) === false) {
             return true;
          }
       }

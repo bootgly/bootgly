@@ -71,9 +71,11 @@ abstract class Database
     *
     * Parked operations go first, then the ones that are not reading yet, then
     * the pipelined readers: a slot freed early would promote a parked operation
-    * onto the wire, and a reader withdrawn before the writer queued behind it
-    * would leave nobody to take its answer. Every operation is attempted; the
-    * first failure is rethrown once all of them ran.
+    * onto the wire for a caller that already left. Writers leave before
+    * readers so a reader reconciled on a reserved connection — where the pool
+    * still requires a reader to keep the session — never counts a writer that
+    * is about to leave as the one that will drain its answer. Every operation
+    * is attempted; the first failure is rethrown once all of them ran.
     */
    public function withdraw (Operation ...$Operations): void
    {
