@@ -165,16 +165,10 @@ The canonical way to start: the installer clones the [bootgly.kit](https://githu
 curl -fsSL https://bootgly.com/install | bash
 ```
 
-Create more projects anytime — from scratch or importing a platform project (like the Demos):
+The platform's built-in projects (like the Demos) are already imported. Create more projects anytime — from scratch or from a git repository carrying the Bootgly project signature (a `*.Project.php` file at its root):
 
 ```bash
 php bootgly projects create
-```
-
-Or import any Project from Platforms or git repository carrying the Bootgly project signature (a `*.Project.php` file at its root):
-
-```bash
-php bootgly projects import
 ```
 
 ### 📟 Bootgly CLI
