@@ -1,6 +1,7 @@
 <?php
 
 use const Bootgly\CLI;
+use Bootgly\ACI\Process\State;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\commands\ProjectCommand;
 
@@ -8,6 +9,9 @@ $root = getenv('BOOTGLY_STOP_PROBE_ROOT');
 $base = getenv('BOOTGLY_STOP_PROBE_BASE');
 $verb = getenv('BOOTGLY_STOP_PROBE_VERB') ?: 'stop';
 $qualifier = getenv('BOOTGLY_STOP_PROBE_QUALIFIER') ?: '';
+// ! Optional: the Darwin stamp proof forced on ('1') or off ('0'); unset
+//   keeps the OS default
+$stamped = getenv('BOOTGLY_STOP_PROBE_STAMPED');
 if ($root === false || $base === false) {
    exit(2);
 }
@@ -20,6 +24,12 @@ define('BOOTGLY_STORAGE_BASE', "$base/storage");
 // This is an embedded fixture, not a Bootgly CLI command/script.
 $_SERVER['SCRIPT_FILENAME'] = '';
 require rtrim($root, '/') . '/autoboot.php';
+
+// ! The Darwin proof, forced: every lock this verb proves or takes is stamped
+//   (or, forced off, proven through procfs)
+if ($stamped === '1' || $stamped === '0') {
+   State::$stamped = $stamped === '1';
+}
 
 // @ Run the verb exactly as `bootgly project Scratch <verb> [<qualifier>]` would,
 //   capturing everything it renders so the caller can assert on the text

@@ -20,6 +20,7 @@ use const LOCK_EX;
 use const LOCK_NB;
 use const LOCK_UN;
 use const PHP_BINARY;
+use const PHP_OS_FAMILY;
 use const PHP_SAPI;
 use const SIG_BLOCK;
 use const SIG_IGN;
@@ -226,6 +227,25 @@ class UDP_Server_CLI implements Servers
    public static null|string $Application = null;
    public static null|Decoder $Decoder = null;
    public static null|Encoder $Encoder = null;
+   // # Listener
+   /**
+    * Every worker reads ONE socket the master binds exclusively before
+    * forking, instead of binding its own SO_REUSEPORT socket. Darwin's
+    * SO_REUSEPORT does not balance: XNU delivers every datagram to the LAST
+    * socket bound — of any account, a hijack — so there the master binds
+    * exclusively and shares. Derived from the OS family; read while the server
+    * starts, so a spec sets it before start() (in every image a reload
+    * replays) to run the Darwin path on Linux, and a change after start() is
+    * unsupported.
+    *
+    * Shared, a datagram goes to whichever worker reads it first: no peer keeps
+    * a worker (pooled, SO_REUSEPORT hashes each peer to one). A peer's state —
+    * its expire()/limit() windows, the blacklist limit() fills — lives apart
+    * in every worker it reaches, so one limit() budget spans up to `workers`
+    * windows, and a blacklisted IP is refused by each worker once it trips
+    * that worker's own window.
+    */
+   public static bool $shared = PHP_OS_FAMILY === 'Darwin';
    /** @var array<string,true> */
    protected array $Events = [];
 
@@ -268,8 +288,9 @@ class UDP_Server_CLI implements Servers
     */
    private array $address = [];
    /**
-    * The effective options of every worker socket: SO_REUSEPORT, and
-    * IPV6_V6ONLY off on IPv6. SO_REUSEADDR is never set.
+    * The effective options of every worker socket: SO_REUSEPORT unless
+    * shared (`$shared`), and IPV6_V6ONLY off on IPv6. SO_REUSEADDR is never
+    * set.
     *
     * @var array<array<bool|int|string>|string>
     */
@@ -1082,6 +1103,8 @@ class UDP_Server_CLI implements Servers
       $Transitioned = false;
       $Launched = false;
       $Masked = true;
+      // ! Whether this start kept the shared socket (`$shared`) its probe bound
+      $kept = false;
       $Release = Closure::bind(
          static function (object $Starting): void {
             if (Connections::$Starting === $Starting) {
@@ -1210,14 +1233,29 @@ class UDP_Server_CLI implements Servers
          $this->Logger->log(error: "@\;Could not bind to {$this->host}:{$this->port}: {$resolution}@.;");
          exit(1);
       }
-      if (($this->port ?? 0) > 0) {
+      // ? Shared (`$shared`), the probe IS the socket every worker reads — on
+      //   an ephemeral port (0) too, so they all read one
+      if (($this->port ?? 0) > 0 || self::$shared) {
          $Probe = $this->bind(false);
          if ($Probe instanceof Socket) {
-            socket_close($Probe);
+            // @ Pooled: each worker binds its own — release the probe. Shared:
+            //   the master keeps it, before detach() (the daemon master
+            //   inherits it) and before any fork
+            if (self::$shared === false) {
+               socket_close($Probe);
+            }
+            else if ($this->share($Probe) === false) {
+               $this->Logger->log(error: '@\;Could not create socket: the bound UDP socket could not be shared.@\;');
+               exit(1);
+            }
+            else {
+               $kept = true;
+            }
          }
          else if ($reloaded && $Probe === SOCKET_EADDRINUSE) {
             // ? A reload found the port taken in its gap: never exit — the
-            //   workers back off and serve once they can bind it.
+            //   workers back off and serve once they can bind it (shared:
+            //   once revive() binds it again for the master).
             $this->Logger->log(
                warning: "@\;Reload: UDP port {$this->port} is held by another socket; the workers retry until they can bind it.@.;"
             );
@@ -1292,34 +1330,47 @@ class UDP_Server_CLI implements Servers
          return false;
       }
 
-      // ? Every worker binds its own socket from this descriptor table, right
-      //   after the fork: prove the event backend retains one bound here
+      // ? Every worker reads its socket from this descriptor table, right
+      //   after the fork: prove the event backend retains it here
       //   (FD_SETSIZE), or refuse loudly now instead of reforking workers
-      //   that can never read.
-      $probeSocket = false;
-      try {
-         $probeSocket = @stream_socket_server(
-            'udp://' . ($this->host ?? '0.0.0.0') . ':0',
-            $probeCode,
-            $probeMessage,
-            STREAM_SERVER_BIND
-         );
-      }
-      catch (Throwable) {
-         $probeSocket = false;
-      }
-      if (
-         $probeSocket === false
-         || self::$Event->add($probeSocket, Select::EVENT_READ, null) === false
-         || self::$Event->del($probeSocket, Select::EVENT_READ) === false
-      ) {
-         if ($probeSocket !== false) {
-            fclose($probeSocket);
+      //   that can never read. Shared (`$shared`), that is the very socket
+      //   the probe kept; pooled, each worker binds its own — one bound here
+      //   stands for it.
+      if (self::$shared && is_resource($this->Socket)) {
+         if (
+            self::$Event->add($this->Socket, Select::EVENT_READ, null) === false
+            || self::$Event->del($this->Socket, Select::EVENT_READ) === false
+         ) {
+            $this->Logger->log(error: '@\;Listener rejected by the event backend during startup.@\;');
+            exit(1);
          }
-         $this->Logger->log(error: '@\;Listener rejected by the event backend during startup.@\;');
-         exit(1);
       }
-      fclose($probeSocket);
+      else {
+         $probeSocket = false;
+         try {
+            $probeSocket = @stream_socket_server(
+               'udp://' . ($this->host ?? '0.0.0.0') . ':0',
+               $probeCode,
+               $probeMessage,
+               STREAM_SERVER_BIND
+            );
+         }
+         catch (Throwable) {
+            $probeSocket = false;
+         }
+         if (
+            $probeSocket === false
+            || self::$Event->add($probeSocket, Select::EVENT_READ, null) === false
+            || self::$Event->del($probeSocket, Select::EVENT_READ) === false
+         ) {
+            if ($probeSocket !== false) {
+               fclose($probeSocket);
+            }
+            $this->Logger->log(error: '@\;Listener rejected by the event backend during startup.@\;');
+            exit(1);
+         }
+         fclose($probeSocket);
+      }
 
       // ! One beacon pair per slot, before the fork: schedule() tells a
       //   worker that died at boot from one that served by its byte. Test
@@ -1365,6 +1416,13 @@ class UDP_Server_CLI implements Servers
          fclose($Pair[1]);
          stream_set_blocking($Pair[0], false);
          $this->Beacons[$index] = $Pair[0];
+      }
+
+      // ? Test mode keeps the master inside the shared test-runner process and
+      //   never reforks: the shared socket stays with the workers alone, or
+      //   the master would pin the port for every later suite in that process
+      if (self::$shared && $this->Mode === Modes::Test && is_resource($this->Socket)) {
+         fclose($this->Socket);
       }
 
       // @ Set master process title
@@ -1414,6 +1472,11 @@ class UDP_Server_CLI implements Servers
                   $StatusProperty->setRawValue($this, Status::Configuring);
                }
             }
+            // ? A start cancelled after its probe kept the shared socket must
+            //   not hold the port behind it
+            if ($kept && $Launched === false && is_resource($this->Socket)) {
+               fclose($this->Socket);
+            }
             if ($Claimed) {
                $Release($Starting);
             }
@@ -1439,7 +1502,8 @@ class UDP_Server_CLI implements Servers
       self::$context['socket'] = [
          // Allows multiple bindings to a same ip:port pair, even from separate processes.
          // With UDP this lets the kernel distribute datagrams across worker processes.
-         'so_reuseport' => true,
+         // Shared, every worker reads the one socket the master bound exclusively.
+         'so_reuseport' => self::$shared === false,
 
          // Overrides the OS default regarding mapping IPv4 into IPv6.
          'ipv6_v6only' => false
@@ -1453,43 +1517,66 @@ class UDP_Server_CLI implements Servers
          );
          exit(1);
       }
-      // ? A direct call (no start()) resolves the host here
-      if ($this->address === []) {
-         $resolution = $this->resolve();
-         if ($resolution !== '') {
-            $this->Logger->log(error: "@\;Could not create socket: {$resolution}");
+
+      // ? Shared, forked while the master held no socket (a reload gap): this
+      //   worker never serves — schedule() backs its slot off, and revive()
+      //   binds the port for the master again before reforking it
+      if (self::$shared && is_resource($this->Socket) === false && $this->Process->level === 'child') {
+         $this->Logger->log(error: "@\;Could not serve the UDP port {$this->port}: the master holds no socket.@\;");
+         exit(1);
+      }
+
+      // @ Bind — unless shared and inherited: a forked worker reads the socket
+      //   its master bound before forking (already nonblocking: share())
+      if (self::$shared === false || is_resource($this->Socket) === false) {
+         // ? A direct call (no start()) resolves the host here
+         if ($this->address === []) {
+            $resolution = $this->resolve();
+            if ($resolution !== '') {
+               $this->Logger->log(error: "@\;Could not create socket: {$resolution}");
+               exit(1);
+            }
+         }
+
+         // @ Create server socket — SO_REUSEPORT (siblings join; any other
+         //   socket on the port refuses this bind, reforks included); shared,
+         //   a direct call (no master to inherit from) binds exclusively itself
+         $Bound = $this->bind(self::$shared === false);
+         if ($Bound instanceof Socket === false) {
+            $reason = socket_strerror($Bound);
+            if ($Bound === SOCKET_EADDRINUSE) {
+               $reason = "{$reason} — another socket holds it";
+            }
+            $this->Logger->log(error: "@\;Could not bind the UDP port {$this->port}: {$reason}.@\;");
             exit(1);
          }
-      }
 
-      // @ Create server socket — SO_REUSEPORT (siblings join; any other
-      //   socket on the port refuses this bind, reforks included)
-      $Bound = $this->bind(true);
-      if ($Bound instanceof Socket === false) {
-         $reason = socket_strerror($Bound);
-         if ($Bound === SOCKET_EADDRINUSE) {
-            $reason = "{$reason} — another socket holds it";
+         if (self::$shared) {
+            if ($this->share($Bound) === false) {
+               $this->Logger->log(error: '@\;Could not create socket: the bound UDP socket could not be shared.@\;');
+               exit(1);
+            }
          }
-         $this->Logger->log(error: "@\;Could not bind the UDP port {$this->port}: {$reason}.@\;");
-         exit(1);
-      }
-      $Socket = socket_export_stream($Bound);
-      if ($Socket === false) {
-         socket_close($Bound);
-         $this->Logger->log(error: '@\;Could not create socket: the bound UDP socket could not be exported.@\;');
-         exit(1);
-      }
+         else {
+            $Socket = socket_export_stream($Bound);
+            if ($Socket === false) {
+               socket_close($Bound);
+               $this->Logger->log(error: '@\;Could not create socket: the bound UDP socket could not be exported.@\;');
+               exit(1);
+            }
 
-      // ! Router::reading() drains a finite batch. The listener itself must
-      //   still be nonblocking so an empty queue returns immediately instead
-      //   of parking the worker outside signal/timer dispatch.
-      if (stream_set_blocking($Socket, false) === false) {
-         fclose($Socket);
-         $this->Logger->log(error: '@\;Could not make the UDP socket nonblocking.');
-         exit(1);
-      }
+            // ! Router::reading() drains a finite batch. The listener itself must
+            //   still be nonblocking so an empty queue returns immediately instead
+            //   of parking the worker outside signal/timer dispatch.
+            if (stream_set_blocking($Socket, false) === false) {
+               fclose($Socket);
+               $this->Logger->log(error: '@\;Could not make the UDP socket nonblocking.');
+               exit(1);
+            }
 
-      $this->Socket = $Socket;
+            $this->Socket = $Socket;
+         }
+      }
 
       // @ Drop privileges if configured
       $this->demote();
@@ -1548,11 +1635,12 @@ class UDP_Server_CLI implements Servers
 
    /**
     * Bind a UDP socket to the resolved address without SO_REUSEADDR:
-    * shared (SO_REUSEPORT) for a worker, exclusive for the start probe.
+    * pooled (SO_REUSEPORT) for a worker binding its own, exclusive for the
+    * start probe — and for the one socket every worker reads when `$shared`.
     *
     * @return Socket|int The bound socket, or the errno that refused it.
     */
-   private function bind (bool $shared): Socket|int
+   private function bind (bool $pooled): Socket|int
    {
       [$family, $IP, $port] = $this->address + [AF_INET, '0.0.0.0', 0];
 
@@ -1566,7 +1654,7 @@ class UDP_Server_CLI implements Servers
          return socket_last_error();
       }
       if (
-         ($shared && @socket_set_option($Bound, SOL_SOCKET, SO_REUSEPORT, 1) === false)
+         ($pooled && @socket_set_option($Bound, SOL_SOCKET, SO_REUSEPORT, 1) === false)
          || ($family === AF_INET6 && @socket_set_option($Bound, IPPROTO_IPV6, IPV6_V6ONLY, 0) === false)
          || @socket_bind($Bound, $IP, $port) === false
       ) {
@@ -1578,6 +1666,37 @@ class UDP_Server_CLI implements Servers
 
       // :
       return $Bound;
+   }
+
+   /**
+    * Share an exclusively bound socket: export it as the nonblocking stream
+    * this server reads (`$this->Socket`), held by the master before it forks
+    * so every worker — and every refork — inherits it.
+    *
+    * @return bool Whether the socket is shared; on false it is closed.
+    */
+   private function share (Socket $Bound): bool
+   {
+      $Socket = socket_export_stream($Bound);
+      if ($Socket === false) {
+         socket_close($Bound);
+
+         return false;
+      }
+
+      // ! Every worker drains this one queue (Router::reading()): a datagram a
+      //   sibling took first must end the drain at once, never park the worker
+      //   outside signal/timer dispatch
+      if (stream_set_blocking($Socket, false) === false) {
+         fclose($Socket);
+
+         return false;
+      }
+
+      $this->Socket = $Socket;
+
+      // :
+      return true;
    }
 
    /**
@@ -1769,6 +1888,22 @@ class UDP_Server_CLI implements Servers
 
       $now = (int) hrtime(true);
 
+      // ? Shared: no worker can serve before the master holds the port again
+      //   (a reload gap left it without one) — bind it now, or hold every
+      //   refork back another second. A refork otherwise inherits its copy.
+      if (self::$shared && $this->casualties !== [] && is_resource($this->Socket) === false) {
+         $Bound = $this->bind(false);
+         if ($Bound instanceof Socket === false || $this->share($Bound) === false) {
+            foreach ($this->casualties as $index => $due) {
+               $this->casualties[$index] = max($due, $now + 1_000_000_000);
+            }
+
+            return;
+         }
+
+         $this->Logger->log(notice: "UDP port {$this->port} bound again by the master: reforking its workers...@.;");
+      }
+
       // @@ Refork every slot whose time has come
       foreach ($this->casualties as $deadIndex => $due) {
          // ? Backing off a crash loop or a refused fork
@@ -1918,6 +2053,12 @@ class UDP_Server_CLI implements Servers
          $this->daemonized = true;
          fclose($Pair[1]);
          stream_set_blocking($Pair[0], false);
+         // ! The launcher never serves: drop its copy of the socket the start
+         //   probe kept (`$shared`) at once, so nothing it leaves behind
+         //   keeps the port bound
+         if (is_resource($this->Socket)) {
+            fclose($this->Socket);
+         }
 
          $ready = '';
          $deadline = microtime(true) + 30.0;
@@ -2373,6 +2514,12 @@ class UDP_Server_CLI implements Servers
 
             $this->Process->Children->terminate();
 
+            // @ The master's copy of the shared socket: with its workers gone,
+            //   the port is free
+            if (self::$shared && is_resource($this->Socket)) {
+               fclose($this->Socket);
+            }
+
             // @ The beacons of the stopped workers (a Test-mode master lives on)
             foreach ($this->Beacons as $End) {
                fclose($End);
@@ -2450,6 +2597,13 @@ class UDP_Server_CLI implements Servers
 
       // @ Stop the workers (connectionless — no drain), then reap.
       $this->Process->Children->terminate();
+      // ! The master's copy of the shared socket never crosses exec: Darwin
+      //   has no SOCK_CLOEXEC, and a copy the fresh image inherited would
+      //   refuse its own exclusive probe (EADDRINUSE) for good. Linux would
+      //   close it on exec anyway — one path on both.
+      if (self::$shared && is_resource($this->Socket)) {
+         fclose($this->Socket);
+      }
       // @ The beacons never cross exec
       foreach ($this->Beacons as $End) {
          fclose($End);

@@ -14,11 +14,14 @@ namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 
 use function count;
+use function error_clear_last;
+use function error_get_last;
 use function explode;
 use function fclose;
 use function is_resource;
 use function max;
 use function min;
+use function str_ends_with;
 use function str_starts_with;
 use function stream_set_blocking;
 use function stream_set_read_buffer;
@@ -202,10 +205,26 @@ class Connections implements WPI\Connections
       $Socket = false;
 
       try {
+         // ! Timeout 0 on the nonblocking listener (`prepare()`): `null` means
+         //   `default_socket_timeout`, which PHP polls before accept() — a
+         //   worker that lost the connection to a sibling sharing its listener
+         //   would stall its whole event loop until the next one arrived.
          /** @var resource|false $Socket */
-         $Socket = @stream_socket_accept($this->Server->Socket, null);
+         $Socket = @stream_socket_accept($this->Server->Socket, 0);
          if ($Socket === false) {
-            self::$errors['connection']++;
+            // ? A miss is no error: a sibling sharing the listener (`$shared`,
+            //   or a reload that raised the workers) accepted it first —
+            //   nothing was pending once PHP polled ("timed out"), or accept()
+            //   found the queue empty (EAGAIN). Any other failure (EMFILE,
+            //   ENFILE, ECONNABORTED...) is a connection error, in every mode.
+            $failure = error_get_last()['message'] ?? '';
+            error_clear_last();
+            if (
+               str_ends_with($failure, 'timed out') === false
+               && str_ends_with($failure, 'temporarily unavailable') === false
+            ) {
+               self::$errors['connection']++;
+            }
 
             return false;
          }

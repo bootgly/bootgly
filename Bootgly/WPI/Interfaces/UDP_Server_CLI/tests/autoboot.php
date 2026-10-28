@@ -74,5 +74,7 @@ return new Suite(
       '1.26-port_windows',
       // # 1.0.x (UDP-22): another account can neither take a running UDP port nor have a launch start on top of it
       '1.27-port_cross_uid',
+      // # 1.1.0 (macOS): the Darwin shared socket — exclusive, read by every worker, rebound across reload, regained after the reload gap
+      '1.28-shared_socket',
    ]
 );

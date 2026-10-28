@@ -79,6 +79,12 @@ if (
    $_SERVER['SCRIPT_FILENAME'] = '';
    require "{$root}/autoboot.php";
 
+   // ! The windows this spec proves are the pooled ones — one SO_REUSEPORT
+   //   socket per worker — on every OS: the one socket a shared server's
+   //   master keeps (`$shared`, the macOS default) never empties the port
+   //   with its workers (1.28 proves that)
+   UDP_Server_CLI::$shared = false;
+
    // ! A spec-only class: its state inodes are this spec's alone to remove
    final class PortWindowsProbe extends UDP_Server_CLI
    {
@@ -128,7 +134,8 @@ if (
 
 
 /**
- * The port is empty in two windows: a refork after the only worker died, and
+ * Pooled (forced, so the macOS cell runs it too), the port is empty in two
+ * windows: a refork after the only worker died, and
  * the reload gap between the stopped workers and the fresh image. A socket
  * that takes the port there is refused to the workers — loudly, with the
  * revive backoff — and the server serves again once it leaves; the reloaded

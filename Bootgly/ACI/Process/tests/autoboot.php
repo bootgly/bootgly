@@ -31,5 +31,8 @@ return new Suite(
       '1.15-service-render',
       '1.16-state-lock-seal',
       '1.17-state-lock-holders',
+      // # Darwin: the procfs-free proof (stamp + process table), forced here
+      '1.18-state-stamp-proof',
+      '1.19-census-read',
    ]
 );

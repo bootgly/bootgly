@@ -105,6 +105,21 @@ return new Test(
             description: 'LOCK_UN releases the claim'
          );
 
+         // @ LOCK_UN | LOCK_NB unlocks as well — flock() reads LOCK_UN's two
+         //   bits — and must never leave a claim on the lock it released
+         $Released = new State($id, $qualifier);
+         $released = $Released->lock(LOCK_EX | LOCK_NB) && $Released->lock(LOCK_UN | LOCK_NB);
+         $claimed = $Released->held;
+         $exported = $Released->export() !== null;
+         $Successor = new State($id, $qualifier);
+         $succeeded = $Successor->lock(LOCK_EX | LOCK_NB);
+         $Successor->lock(LOCK_UN);
+
+         yield assert(
+            assertion: $released && $claimed === false && $exported === false && $succeeded,
+            description: 'LOCK_UN | LOCK_NB releases as LOCK_UN does: no claim, no hand-off, the lock free for the next holder'
+         );
+
          // @ A holder dropped without an unlock takes its descriptor — and
          //   its kernel lock — with it: its claim proves nothing anymore
          $Dropped = new State($id, $qualifier);

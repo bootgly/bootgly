@@ -18,6 +18,7 @@ use const BOOTGLY_WORKING_DIR;
 use const INI_SCANNER_RAW;
 use const LOCK_EX;
 use const LOCK_NB;
+use const LOCK_SH;
 use const LOCK_UN;
 use const PHP_BINARY;
 use const PHP_EOL;
@@ -616,12 +617,15 @@ class ProjectCommand extends Command
 
             // @ Force-kill only the same kernel-bound master identity. A reused
             //   numeric PID does not hold the qualified lock and is never hit.
+            // ? Never strand a service in SIGSTOP: the master this pass froze
+            //   is resumed when it can no longer be proven (a `ps` that could
+            //   not run fails the stamped proof) or SIGKILL is denied. Proven
+            //   before the freeze, a stopped master runs nothing, so only an
+            //   outside SIGKILL could have freed its PID meanwhile.
             if (
-               $this->authenticate($projectName, $instance, $masterPID)
-               && posix_kill($masterPID, SIGKILL) === false
+               $this->authenticate($projectName, $instance, $masterPID) === false
+               || posix_kill($masterPID, SIGKILL) === false
             ) {
-               // ? Do not strand a verified service in SIGSTOP if SIGKILL was
-               //   denied or failed for an external reason.
                posix_kill($masterPID, SIGCONT);
                $skipped[] = (string) $instance;
                continue;
@@ -2429,7 +2433,8 @@ class ProjectCommand extends Command
          // ! Liveness is the instance LOCK, never the document: a free (or
          //   absent) lock means nobody runs that instance, whatever the JSON
          //   claims — a crash, a zombie or a reused PID all leave it free.
-         //   The probe never seals or keeps the lock; it only asks.
+         //   The probe never seals or keeps the lock; it only asks — shared,
+         //   so a concurrent proof's own shared probe never reads it as held.
          $lock = BOOTGLY_STORAGE_DIR . "pids/{$encoded}" . ($instance === '' ? '' : ".{$instance}") . '.lock';
          if (is_link($lock) === false) {
             $Probe = @fopen($lock, 'r+b');
@@ -2439,7 +2444,7 @@ class ProjectCommand extends Command
                }
             }
             else {
-               $free = flock($Probe, LOCK_EX | LOCK_NB);
+               $free = flock($Probe, LOCK_SH | LOCK_NB);
                $free && flock($Probe, LOCK_UN);
                fclose($Probe);
                if ($free) {

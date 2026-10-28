@@ -22,7 +22,9 @@ use Bootgly\WPI\Interfaces\UDP_Server_CLI\Events;
 // ! Embedded fixture: the spec relaunches this exact file as a server in its
 //   own session — `pin` reports the worker socket options (and O_CLOEXEC)
 //   of instance(), `serve` starts a Foreground server that answers
-//   "<input> <worker PID>".
+//   "<input> <worker PID>". The listener mode is the OS default unless
+//   forced: `pooled` (one SO_REUSEPORT socket per worker) or `shared` (one
+//   socket every worker reads — the Darwin path).
 if (
    realpath((string) ($_SERVER['SCRIPT_FILENAME'] ?? '')) === realpath(__FILE__)
    && ($_SERVER['argv'][1] ?? null) === '--udp-exclusivity-probe'
@@ -33,9 +35,11 @@ if (
    $host = (string) ($_SERVER['argv'][5] ?? '');
    $port = (int) ($_SERVER['argv'][6] ?? 0);
    $workers = (int) ($_SERVER['argv'][7] ?? 0);
+   $listener = (string) ($_SERVER['argv'][8] ?? '');
    if (
       realpath("{$root}/autoboot.php") === false
       || in_array($mode, ['pin', 'serve'], true) === false
+      || in_array($listener, ['default', 'pooled', 'shared'], true) === false
       || in_array($class, ['ExclusivityProbe', 'ExclusivityRival'], true) === false
       || (
          in_array($host, ['127.0.0.1', '0.0.0.0', '[::]', 'localhost'], true) === false
@@ -55,6 +59,11 @@ if (
 
    $_SERVER['SCRIPT_FILENAME'] = '';
    require "{$root}/autoboot.php";
+
+   // ? A forced listener mode, set before the server exists
+   if ($listener !== 'default') {
+      UDP_Server_CLI::$shared = $listener === 'shared';
+   }
 
    // ! Spec-only classes: two State identities whose inodes are this spec's
    //   alone to remove
@@ -158,7 +167,7 @@ return new Test(
       };
       /** Launch the embedded fixture: [process, session leader PID, log file]. */
       $Launch = static function (
-         string $mode, string $class, string $host, int $port, int $workers, array $INI = []
+         string $mode, string $class, string $host, int $port, int $workers, array $INI = [], string $listener = 'default'
       ) use ($directory, &$sessions): array {
          $nonce = bin2hex(random_bytes(3));
          $log = "{$directory}/{$mode}.{$class}.{$port}.{$nonce}.log";
@@ -166,7 +175,7 @@ return new Test(
             [
                PHP_BINARY, '-d', 'opcache.jit=0', ...$INI,
                __FILE__, '--udp-exclusivity-probe', BOOTGLY_ROOT_BASE,
-               $mode, $class, $host, (string) $port, (string) $workers,
+               $mode, $class, $host, (string) $port, (string) $workers, $listener,
             ],
             [0 => ['file', '/dev/null', 'r'], 1 => ['file', $log, 'a'], 2 => ['file', $log, 'a']],
             $Pipes,
@@ -254,20 +263,24 @@ return new Test(
       // ! Whether every fixture session this run started is gone
       $groups = true;
       try {
-         // @ L1 — a worker socket carries SO_REUSEPORT and never SO_REUSEADDR,
-         //   and closes on exec: a process a handler starts never inherits it
-         foreach (['127.0.0.1', '[::]'] as $host) {
-            [$Process, $leader, $log] = $Launch('pin', 'ExclusivityProbe', $host, $Reserve(), 1);
-            $exit = $Settle($Process, 5.0);
-            $groups = $Teardown($Process, $leader) && $groups;
-            $output = $Text($log);
-            $options = preg_match('/^PIN (\{.*\})$/m', $output, $match) === 1
-               ? json_decode($match[1], true)
-               : ['exit' => $exit, 'output' => substr($output, -300)];
-            $observed["L1 worker options on {$host}"] = $options;
-            $expected["L1 worker options on {$host}"] = $host === '[::]'
-               ? ['SO_REUSEADDR' => 0, 'SO_REUSEPORT' => 1, 'IPV6_V6ONLY' => 0, 'O_CLOEXEC' => true]
-               : ['SO_REUSEADDR' => 0, 'SO_REUSEPORT' => 1, 'O_CLOEXEC' => true];
+         // @ L1 — a pooled worker socket carries SO_REUSEPORT; the one socket a
+         //   shared server's workers read (`$shared`, the Darwin path) does
+         //   not. Neither ever carries SO_REUSEADDR, and both close on exec: a
+         //   process a handler starts never inherits them
+         foreach (['pooled' => 1, 'shared' => 0] as $listener => $reuse) {
+            foreach (['127.0.0.1', '[::]'] as $host) {
+               [$Process, $leader, $log] = $Launch('pin', 'ExclusivityProbe', $host, $Reserve(), 1, listener: $listener);
+               $exit = $Settle($Process, 5.0);
+               $groups = $Teardown($Process, $leader) && $groups;
+               $output = $Text($log);
+               $options = preg_match('/^PIN (\{.*\})$/m', $output, $match) === 1
+                  ? json_decode($match[1], true)
+                  : ['exit' => $exit, 'output' => substr($output, -300)];
+               $observed["L1 {$listener} worker options on {$host}"] = $options;
+               $expected["L1 {$listener} worker options on {$host}"] = $host === '[::]'
+                  ? ['SO_REUSEADDR' => 0, 'SO_REUSEPORT' => $reuse, 'IPV6_V6ONLY' => 0, 'O_CLOEXEC' => true]
+                  : ['SO_REUSEADDR' => 0, 'SO_REUSEPORT' => $reuse, 'O_CLOEXEC' => true];
+            }
          }
 
          // @ L2 — a running server: plain same-uid binds on its port are refused

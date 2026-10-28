@@ -16,8 +16,10 @@ use const LOCK_EX;
 use const LOCK_NB;
 use const LOCK_SH;
 use const LOCK_UN;
+use const PHP_OS_FAMILY;
 use function bin2hex;
 use function chmod;
+use function clearstatcache;
 use function closedir;
 use function ctype_digit;
 use function fclose;
@@ -67,6 +69,8 @@ use function unlink;
 use RuntimeException;
 use WeakReference;
 
+use Bootgly\ACI\Process\Census;
+
 
 class State
 {
@@ -77,9 +81,25 @@ class State
     * file and acquiring its lock, so a process still starting is never swept.
     */
    public const int ORPHAN_TTL = 300;
+   /**
+    * Seconds a stamped holder's reported birth may trail its stamp's mtime
+    * (`attest()`). procps derives the birth from the boot time plus the start
+    * ticks, so it can read a second late; Darwin reports it exactly.
+    */
+   private const int SKEW = 2;
    // ...
 
    // * Data
+   /**
+    * Instance locks carry their holder's stamp, and `authenticate()` proves a
+    * holder through it and the process table (`Census`) instead of procfs —
+    * the proof where the kernel has none (Darwin). Derived from the OS family,
+    * never from `/proc` being absent: a Linux container hiding it keeps the
+    * procfs proof and fails closed. Specs set it to run the Darwin proof on
+    * Linux; a server and the commands that control it must agree (a
+    * stamp-less lock never attests).
+    */
+   public static bool $stamped = PHP_OS_FAMILY === 'Darwin';
    private string $id;
    public string $pidFile;
    public string $pidLockFile;
@@ -180,16 +200,27 @@ class State
    /**
     * Lock the process to prevent multiple instances.
     *
-    * @param int<0,7> $flag The lock flag (default: LOCK_EX).
+    * With `$stamped` (Darwin), an exclusive acquisition also stamps this
+    * process's PID into the lock — the holder evidence `authenticate()`
+    * reads where there is no procfs. A lock this State already holds for
+    * this PID (adopted across an exec, or locked again) keeps a stamp that
+    * already names it.
     *
-    * @return bool false when the lock is held by another process (LOCK_NB).
+    * @param int<0,7> $flag The lock flag (default: LOCK_EX): LOCK_SH, LOCK_EX
+    *                       or LOCK_UN, each with or without LOCK_NB.
+    *
+    * @return bool false when the lock is held by another process (LOCK_NB),
+    *              or when its inode cannot be opened, sealed or stamped safely.
     */
    public function lock (int $flag = LOCK_EX): bool
    {
       $file = $this->pidLockFile;
       $currentPID = posix_getpid();
+      // ! flock() reads the two low bits: LOCK_SH (1), LOCK_EX (2) or
+      //   LOCK_UN (3, both) — so LOCK_UN | LOCK_NB unlocks as well
+      $operation = $flag & LOCK_UN;
 
-      if ($flag === LOCK_UN) {
+      if ($operation === LOCK_UN) {
          if ($this->lockHandle === null) {
             $this->locked = false;
             $this->ownerPID = null;
@@ -217,6 +248,10 @@ class State
       if ($this->lockHandle !== null && $this->ownerPID !== $currentPID) {
          return false;
       }
+
+      // ! This State already owns the exclusive lock for this PID: a hand-off
+      //   it adopted across an exec, or a repeated lock()
+      $owned = $this->locked && $this->ownerPID === $currentPID;
 
       $this->lockHandle = $this->lockHandle ?: $this->open($file);
 
@@ -252,9 +287,39 @@ class State
          $this->lockHandle = null;
          $this->ownerPID = null;
       }
+      // ! No procfs to name a lock's holder (Darwin): the exclusive holder
+      //   stamps itself through the locked descriptor — its PID, and by the
+      //   write the inode mtime `attest()` binds that PID's birth to. A
+      //   holder that cannot stamp would serve unverifiable: fail closed, as
+      //   seal() does. A lock this State already owned keeps a stamp that
+      //   names this PID: rewriting it would only move the mtime under a
+      //   running proof, pass through an empty file and, should the write
+      //   fail, drop a lock handed over across an exec — the service with it.
+      else if (
+         self::$stamped
+         && $operation === LOCK_EX
+         && (
+            $owned === false
+            || @stream_get_contents($this->lockHandle, 24, 0) !== "{$currentPID}\n"
+         )
+         && $this->stamp($this->lockHandle) === false
+      ) {
+         flock($this->lockHandle, LOCK_UN);
+         fclose($this->lockHandle);
+
+         $this->lockHandle = null;
+         $this->locked = false;
+         $this->ownerPID = null;
+         // ? A re-lock drops a claim this State made before
+         if ((self::$holders[$file] ?? null)?->get() === $this) {
+            unset(self::$holders[$file]);
+         }
+
+         return false;
+      }
       // Only the exclusive instance lock is eligible for exec handoff; a
       // shared/read lock must never be promoted into serving authority.
-      $this->locked = $locked && ($flag & LOCK_EX) === LOCK_EX;
+      $this->locked = $locked && $operation === LOCK_EX;
       $this->ownerPID = $locked ? $currentPID : null;
       // @ Claim the instance lock for this process
       if ($this->locked) {
@@ -489,6 +554,15 @@ class State
     * applied to the PHP binary — the proof falls back to `confirm()`, which
     * reads the same bookkeeping from the system-wide `/proc/locks` table.
     *
+    * Where the kernel has no procfs at all (Darwin, `$stamped`), the proof is
+    * `attest()`: the PID the exclusive holder stamped into the held lock,
+    * bound by the process table (`Census`) to a live process of the lock
+    * owner's UIDs, born before that stamp. It stays passive — a stopped or
+    * hung master still verifies, so `stop` can freeze and kill it. One gap
+    * remains against the procfs proof: the lock owner's account can forge
+    * the stamp and the document together to name another of ITS OWN
+    * processes, which grants it nothing it could not already signal.
+    *
     * @param int $PID Process to authenticate.
     * @param null|int $parent Required direct parent PID for worker checks.
     */
@@ -512,6 +586,11 @@ class State
          || ((int) $before['mode'] & 0777) !== 0600
       ) {
          return false;
+      }
+
+      // ? Darwin has no procfs: the holder's stamp and the process table prove it
+      if (self::$stamped) {
+         return $this->attest($PID, $parent);
       }
 
       $status = @file_get_contents("/proc/{$PID}/status");
@@ -662,6 +741,158 @@ class State
             . '\s+[0-9a-f]+:[0-9a-f]+:' . $inode . '\s+0\s+EOF\s*$/mi',
          $locks,
       ) === 1;
+   }
+
+   /**
+    * Attest a process against this instance's lock without procfs: through
+    * the stamp its exclusive holder wrote under the lock (`lock()`) and the
+    * kernel process table (`Census`).
+    *
+    * Every step reads state the kernel keeps for a stopped or hung process
+    * too, so the proof is passive. In order:
+    *
+    * - the lock path is a fresh regular 0600 inode, opened as that exact
+    *   inode, and its lock is held — a shared probe is refused even to the
+    *   holder's own process, because flock belongs to the open-file
+    *   description; only a refusal that would block counts as held;
+    * - its stamp names the master (`$parent ?? $PID`): a worker, a child that
+    *   became a session leader or the Auto-TLS helper never stamps;
+    * - the master runs with the lock owner's real, effective and saved UIDs,
+    *   was born no later than the stamp's mtime (+ `SKEW`) — a recycled PID
+    *   is born after the holder that stamped it died — and is no zombie; a
+    *   worker is its direct child with consistent UIDs and no zombie either;
+    * - the stamp and the inode are re-read: a swap or a re-stamp in between
+    *   fails closed.
+    *
+    * One window stays open: a process holding the lock without its own stamp
+    * yet — `lock()` between its flock and its stamp, or `sweep()`'s
+    * exclusive probe of a free lock — shows the previous holder's stamp as
+    * held for that instant. A document naming that earlier holder alive can
+    * only be forged: `clean()` tombstones the document before it unlocks.
+    *
+    * @param int $PID Process to attest.
+    * @param null|int $parent Required direct parent PID for worker checks.
+    */
+   private function attest (int $PID, null|int $parent): bool
+   {
+      $file = $this->pidLockFile;
+
+      // ! PHP caches lstat() per path: a stale `before` would bind the mtime
+      //   and size of a stamp another process already replaced
+      clearstatcache(true, $file);
+      $before = @lstat($file);
+      if (
+         is_array($before) === false
+         || ((int) $before['mode'] & 0170000) !== 0100000
+         || ((int) $before['mode'] & 0777) !== 0600
+      ) {
+         return false;
+      }
+
+      // @ Liveness: the exact inode, exclusively held
+      $Probe = @fopen($file, 'rb');
+      if ($Probe === false) {
+         return false;
+      }
+      try {
+         $opened = @fstat($Probe);
+         if (
+            is_array($opened) === false
+            || $opened['dev'] !== $before['dev']
+            || $opened['ino'] !== $before['ino']
+         ) {
+            return false;
+         }
+         // ? A free (or only shared) lock proves nothing: whoever the stamp
+         //   names no longer serves this instance
+         if (@flock($Probe, LOCK_SH | LOCK_NB, $blocked)) {
+            @flock($Probe, LOCK_UN);
+
+            return false;
+         }
+         // ? Held is a refusal that would block — any other (ENOLCK, a
+         //   filesystem without flock) proves nothing either
+         if ($blocked !== 1) {
+            return false;
+         }
+
+         $stamp = @stream_get_contents($Probe, 24, 0);
+      }
+      finally {
+         fclose($Probe);
+      }
+
+      // @ Holder: the stamp names the master
+      if (
+         is_string($stamp) === false
+         || preg_match('/^([1-9][0-9]{0,9})\n$/D', $stamp, $match) !== 1
+         || (int) $match[1] !== ($parent ?? $PID)
+      ) {
+         return false;
+      }
+      $holder = (int) $match[1];
+
+      // @ Process table
+      $rows = $parent === null
+         ? Census::read($PID)
+         : Census::read($PID, $parent);
+      $master = $rows[$holder] ?? null;
+      $process = $rows[$PID] ?? null;
+      $owner = (int) $before['uid'];
+      if (
+         $master === null
+         || $process === null
+         // ? Zombies (and procps' transient dead state) run nothing
+         || str_starts_with($master['state'], 'Z')
+         || str_starts_with($master['state'], 'X')
+         || str_starts_with($process['state'], 'Z')
+         || str_starts_with($process['state'], 'X')
+         // ? The master runs as the lock owner — the runtime UID itself, so a
+         //   forged stamp can never steer a root operator into another
+         //   account's process
+         || $master['uid'] !== $owner
+         || $master['ruid'] !== $owner
+         || $master['svuid'] !== $owner
+         || $process['uid'] !== $process['ruid']
+         || $process['ruid'] !== $process['svuid']
+         // ? Born after its stamp: a recycled PID, not the holder
+         || $master['birth'] > (int) $before['mtime'] + self::SKEW
+         // ? A worker is the master's direct child
+         || ($parent !== null && $process['ppid'] !== $parent)
+      ) {
+         return false;
+      }
+
+      // ! Post-check: the stamp, re-read from the inode at the path — a new
+      //   holder stamping within the same second, with a PID of the same
+      //   length, leaves the mtime and size alone — then the same inode,
+      //   mode, owner, mtime and size as before
+      $Again = @fopen($file, 'rb');
+      if ($Again === false) {
+         return false;
+      }
+      try {
+         $reopened = @fstat($Again);
+         $restamp = @stream_get_contents($Again, 24, 0);
+      }
+      finally {
+         fclose($Again);
+      }
+      clearstatcache(true, $file);
+      $after = @lstat($file);
+
+      // :
+      return is_array($reopened)
+         && $reopened['dev'] === $before['dev']
+         && $reopened['ino'] === $before['ino']
+         && $restamp === $stamp
+         && is_array($after)
+         && $after['dev'] === $before['dev']
+         && $after['ino'] === $before['ino']
+         && $after['mode'] === $before['mode']
+         && $after['uid'] === $before['uid']
+         && $after['mtime'] === $before['mtime']
+         && $after['size'] === $before['size'];
    }
 
    /**
@@ -1089,6 +1320,25 @@ class State
 
       // :
       return is_array($sealed) && ((int) $sealed['mode'] & 0777) === 0600;
+   }
+
+   /**
+    * Stamp this process as the exclusive holder of the lock it just
+    * acquired, through the locked descriptor: its PID — and, by the write,
+    * the inode mtime `attest()` binds that PID's birth to.
+    *
+    * @param resource $Handle
+    */
+   private function stamp (mixed $Handle): bool
+   {
+      $PID = posix_getpid();
+      $stamp = "{$PID}\n";
+
+      // :
+      return rewind($Handle)
+         && @ftruncate($Handle, 0)
+         && @fwrite($Handle, $stamp) === strlen($stamp)
+         && @fflush($Handle);
    }
 
    /** @param resource $Handle */

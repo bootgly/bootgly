@@ -15,8 +15,9 @@ use Bootgly\WPI\Nodes\WS_Server_CLI\Channels\Channel;
 
 
 /**
- * Per-worker room registry. Single-worker only: each fork+SO_REUSEPORT worker
- * holds its own set, so a broadcast reaches only same-worker connections.
+ * Per-worker room registry. Single-worker only: each forked worker (with its
+ * own SO_REUSEPORT listener, or sharing one) holds its own set, so a broadcast
+ * reaches only same-worker connections.
  */
 class Channels
 {

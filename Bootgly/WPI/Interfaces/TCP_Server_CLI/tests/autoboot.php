@@ -43,5 +43,7 @@ return new Suite(
       '1.17-worker_ledger_shares_fit',
       // # 1.0.x (H-HSC-5): an array begun as a list keeps the table PHP grows and converts it to (Buffers\Table, tally)
       '1.18-buffers_table_fill',
+      // # 1.1.0 (macOS): the Darwin shared listener — exclusive, spread, never stalled by a lost accept, kept across reload and refork
+      '1.19-shared-listener',
    ]
 );

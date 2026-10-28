@@ -255,6 +255,9 @@ class Connection extends Packages
    }
    /**
     * Enforce one per-peer package window and blacklist abusive source IPs.
+    * Both live in this worker: when every worker reads one shared socket
+    * (`UDP_Server_CLI::$shared`, the macOS default) a peer reaches them all,
+    * each counting its own window and keeping its own blacklist.
     *
     * @param int $packages Maximum writes allowed in the current window.
     */

@@ -85,5 +85,11 @@ return new Suite(
       //   private staging directory; kit screens its releases remote
       '1.13-project-import-url',
       '8.11-kit-remote-screen',
+      // # project controls over the Darwin instance proof (lock stamp +
+      //   process table), forced on Linux (appended last)
+      '9.2-project-stamp-proof',
+      // # a real TCP daemon in both Darwin modes (shared listener, stamped
+      //   lock) through start, show, reload and stop
+      '9.3-project-darwin-lifecycle',
    ]
 );

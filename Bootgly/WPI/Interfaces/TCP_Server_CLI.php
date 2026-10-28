@@ -14,7 +14,9 @@ namespace Bootgly\WPI\Interfaces;
 use const BOOTGLY_ENVIRONMENT;
 use const LOCK_EX;
 use const LOCK_NB;
+use const LOCK_UN;
 use const PHP_BINARY;
+use const PHP_OS_FAMILY;
 use const PHP_SAPI;
 use const SCM_RIGHTS;
 use const SIG_DFL;
@@ -37,8 +39,10 @@ use const SIGUSR1;
 use const SIGUSR2;
 use const SIGWINCH;
 use const SO_KEEPALIVE;
+use const SO_REUSEPORT;
 use const SO_TYPE;
 use const SOCK_STREAM;
+use const SOCKET_EADDRINUSE;
 use const SOL_SOCKET;
 use const SOL_TCP;
 use const STDERR;
@@ -143,6 +147,7 @@ use function socket_import_stream;
 use function socket_recvmsg;
 use function socket_sendmsg;
 use function socket_set_option;
+use function socket_strerror;
 use function str_contains;
 use function stream_context_create;
 use function stream_context_get_options;
@@ -230,6 +235,10 @@ class TCP_Server_CLI implements Servers
    // Linux caps one SCM_RIGHTS control message at 253 descriptors. Keep room
    // for node-owned listeners (for example Auto-TLS' HTTP-01 gate).
    private const int RELOAD_HANDOFF_MAX_RESOURCES = 240;
+   // The longest hand-off socket path AF_UNIX binds whole: Darwin's sun_path
+   // holds 103 bytes and the NUL (Linux 107). PHP only notices a longer one
+   // and binds it truncated, where neither chmod() nor the fresh image finds it.
+   private const int RELOAD_HANDOFF_MAX_PATH = 103;
    // Bound each Monitor turn so continuous logging cannot starve signals,
    // worker supervision, input handling or redraws.
    private const int LOG_DRAIN_FRAMES = 16;
@@ -272,7 +281,7 @@ class TCP_Server_CLI implements Servers
    // !
    /** @var resource */
    protected $Socket;
-   /** @var array<int,resource> Master-owned SO_REUSEPORT listener pool. */
+   /** @var array<int,resource> Master-owned listener pool: one SO_REUSEPORT listener per worker, or the one listener every worker shares (`$shared`). */
    protected array $Listeners = [];
    /** @var array<int,int> Worker index reaped by the SIGCHLD dispatch => hrtime (ns) from which revive() may refork it. */
    private array $casualties = [];
@@ -341,6 +350,17 @@ class TCP_Server_CLI implements Servers
    //   before a generation-bound monotonic timer closes the connection.
    //   Replaces the previous synchronous `stream_select(..., 200_000)` retry.
    public static int $maxWriteWallTime = 30;
+   // # Listener
+   /**
+    * Every worker accepts on ONE listener the master binds before forking,
+    * instead of one SO_REUSEPORT listener per worker. Darwin's SO_REUSEPORT
+    * does not balance: XNU routes every connection to the LAST socket bound —
+    * of any account, a hijack — so there the master binds exclusively and
+    * shares. Derived from the OS family; read while the server starts, so a
+    * spec sets it before start() (in every image a reload replays) to run the
+    * Darwin path on Linux, and a change after start() is unsupported.
+    */
+   public static bool $shared = PHP_OS_FAMILY === 'Darwin';
    // # Connection-exhaustion caps (audit F-2)
    //   Maximum simultaneously-admitted connections per worker, including
    //   pending TLS peers. New connections accepted past this ceiling are
@@ -945,7 +965,24 @@ class TCP_Server_CLI implements Servers
       if ($this->Listeners === []) {
          $probeCode = 0;
          $probeMessage = '';
-         $probeContext = stream_context_create(['socket' => ['so_reuseport' => true, 'ipv6_v6only' => false]]);
+         // ! Shared: the probe IS the listener every worker accepts on — bound
+         //   exclusively (no SO_REUSEPORT) with the context open() builds, and
+         //   before detach(), so the daemon master inherits it
+         if (self::$shared) {
+            self::$context = [
+               'socket' => [
+                  'backlog' => 102400,
+                  'so_reuseport' => false,
+                  'ipv6_v6only' => false
+               ]
+            ];
+            if ( ! empty($this->secure) ) {
+               self::$context['ssl'] = $this->secure;
+            }
+         }
+         $probeContext = stream_context_create(
+            self::$shared ? self::$context : ['socket' => ['so_reuseport' => true, 'ipv6_v6only' => false]]
+         );
          try {
             $probeSocket = @stream_socket_server(
                'tcp://' . ($this->host ?? '0.0.0.0') . ':' . ($this->port ?? 0),
@@ -963,10 +1000,47 @@ class TCP_Server_CLI implements Servers
             if ($probeCode === 13 || str_contains($probeMessage ?? '', 'Permission denied')) {
                $message .= '@\;Ports below 1024 require elevated privileges. Try running with `sudo`.@.;';
             }
+            // ? Shared: the same instance relaunched is refused by this
+            //   exclusive bind before its lock — keep the lock's own message.
+            //   Only on EADDRINUSE (matched in the C library's own words: the
+            //   stream layer seldom reports the errno); any other refusal
+            //   keeps its own. The lock is read only when it exists (a refused
+            //   start creates nothing), and the peek holds a free lock for an
+            //   instant: a launch racing it may read "already running" — the
+            //   window UDP's probe has too.
+            else if (
+               self::$shared
+               && function_exists('socket_strerror')
+               && $probeMessage === socket_strerror(SOCKET_EADDRINUSE)
+               && is_file($State->pidLockFile)
+            ) {
+               if ($State->lock(LOCK_EX | LOCK_NB) === false) {
+                  $port = $this->port ?? 0;
+                  $message = "@\;Another instance is already running on port {$port}.@\;Use `project stop <name> <port>` to stop it or start this one on another port (PORT env).@.;";
+               }
+               else {
+                  $State->lock(LOCK_UN);
+               }
+            }
             $this->Logger->log(error: $message);
             exit(1);
          }
-         fclose($probeSocket);
+         if (self::$shared === false) {
+            fclose($probeSocket);
+         }
+         else if ($this->prepare($probeSocket) === false) {
+            fclose($probeSocket);
+            $this->Logger->log(error: '@\;Failed to prepare stream socket!@\;');
+            exit(1);
+         }
+         else if ($this->admit($probeSocket) === false) {
+            fclose($probeSocket);
+            $this->Logger->log(error: '@\;Listener rejected by the event backend during startup.@\;');
+            exit(1);
+         }
+         else {
+            $this->Listeners = [$probeSocket];
+         }
       }
 
       // ! Daemonize BEFORE any worker or auxiliary fork. The child that
@@ -1010,10 +1084,12 @@ class TCP_Server_CLI implements Servers
       // @ Pre-fork setup hook (e.g. HTTP upload counter, WS broadcast bus).
       $this->booting();
 
-      // ! Pre-bind one SO_REUSEPORT listener per worker in the master while it
-      //   still has the launch privileges. Each worker inherits only its own
-      //   accept queue; the demoted master retains the pool for crash recovery
-      //   and a privilege-safe reload handoff.
+      // ! Pre-bind the listener pool in the master while it still has the
+      //   launch privileges: one SO_REUSEPORT listener per worker, each
+      //   inheriting only its own accept queue — or, shared, the one listener
+      //   the start probe kept (a handoff fills the pool either way). The
+      //   demoted master retains the pool for crash recovery and a
+      //   privilege-safe reload handoff.
       if ($this->Listeners === [] && $this->listen() === false) {
          exit(1);
       }
@@ -1280,7 +1356,7 @@ class TCP_Server_CLI implements Servers
       $Emitter = Emitter::$Instance;
       $Emitter->check(Worker::Boot) && $Emitter->emit(Worker::Boot, $index);
 
-      // @ Adopt this worker's pre-bound SO_REUSEPORT listener.
+      // @ Adopt this worker's pre-bound listener (its own, or the shared one).
       $this->instance();
 
       // ! The master probes every listener before forking, but the worker is
@@ -1384,7 +1460,7 @@ class TCP_Server_CLI implements Servers
       return $this->Socket;
    }
 
-   /** Bind the master-owned SO_REUSEPORT pool used by workers and reload. */
+   /** Bind the master-owned SO_REUSEPORT pool used by workers and reload (pooled mode only: a shared listener is the start probe). */
    private function listen (): bool
    {
       $this->Listeners = [];
@@ -1410,7 +1486,7 @@ class TCP_Server_CLI implements Servers
       self::$context = [
          'socket' => [
             'backlog' => 102400,
-            'so_reuseport' => true,
+            'so_reuseport' => self::$shared === false,
             'ipv6_v6only' => false
          ]
       ];
@@ -1465,7 +1541,7 @@ class TCP_Server_CLI implements Servers
          self::$context = [
             'socket' => [
                'backlog' => 102400,
-               'so_reuseport' => true,
+               'so_reuseport' => self::$shared === false,
                'ipv6_v6only' => false
             ]
          ];
@@ -1474,6 +1550,13 @@ class TCP_Server_CLI implements Servers
          }
       }
       if (stream_context_set_options($Listener, self::$context) === false) { // @phpstan-ignore identical.alwaysFalse
+         return false;
+      }
+      // ! Nonblocking, so an accept a sibling won returns at once (EAGAIN)
+      //   instead of parking the worker: O_NONBLOCK lives on the open-file
+      //   description, so it covers every inherited copy and the descriptor
+      //   a reload hands over.
+      if (stream_set_blocking($Listener, false) === false) {
          return false;
       }
       if ( ! empty($this->secure) ) {
@@ -1760,6 +1843,14 @@ class TCP_Server_CLI implements Servers
          }
          fclose($Pair[1]);
          stream_set_blocking($Pair[0], false);
+         // ! The launcher never serves: drop its copy of the listener the
+         //   start probe kept (`$shared`) at once — a socket carries no
+         //   close-on-exec, so a process the advertised hook starts would
+         //   keep the port bound past the service's stop
+         foreach ($this->Listeners as $Listener) {
+            fclose($Listener);
+         }
+         $this->Listeners = [];
 
          $ready = '';
          $deadline = microtime(true) + 30.0;
@@ -2918,11 +3009,13 @@ class TCP_Server_CLI implements Servers
    }
 
    /**
-    * Gracefully drain a worker for reload: stop accepting new connections (leave
-    * the SO_REUSEPORT group so nothing new is routed here), let the in-flight
-    * connections finish, then break the event loop so the worker exits cleanly
-    * via work() → stop(). Bounded by `self::$drainTimeout` so a stuck peer can
-    * never pin the reload open.
+    * Gracefully drain a worker for reload: stop accepting new connections (close
+    * this worker's duplicate of its listener — the description stays open in
+    * the master and the reload relay, so the backlog survives for the fresh
+    * image's workers, pooled or shared), let the in-flight connections finish,
+    * then break the event loop so the worker exits cleanly via work() → stop().
+    * Bounded by `self::$drainTimeout` so a stuck peer can never pin the reload
+    * open.
     */
    protected function drain (): void
    {
@@ -2933,8 +3026,8 @@ class TCP_Server_CLI implements Servers
 
       $this->Status = Status::Stopping;
 
-      // @ Leave the accept set and close this worker's SO_REUSEPORT descriptor:
-      //   no new connection is routed here; established sockets remain open.
+      // @ Leave the accept set and close this worker's listener duplicate:
+      //   it accepts nothing new; established sockets remain open.
       self::$Event->del($this->Socket, self::$Event::EVENT_CONNECT);
       @fclose($this->Socket);
 
@@ -3056,7 +3149,18 @@ class TCP_Server_CLI implements Servers
       }
       $master = posix_getpid();
       $prefix = substr($token, 0, 16);
-      $directory = sys_get_temp_dir() . "/bootgly-reload-{$master}-{$prefix}";
+      $directory = sys_get_temp_dir() . "/bootgly-reload-{$prefix}";
+      $path = "{$directory}/relay.sock";
+      // ? A path sun_path cannot hold whole is never bound truncated: the
+      //   reload aborts before any change and the service stays intact
+      if (strlen($path) > self::RELOAD_HANDOFF_MAX_PATH) {
+         $limit = self::RELOAD_HANDOFF_MAX_PATH;
+         $this->Logger->log(
+            error: "@\;Reload aborted: the hand-off socket path exceeds the {$limit}-byte AF_UNIX limit ({$path}); use a shorter TMPDIR.@\;"
+         );
+
+         return false;
+      }
       if (mkdir($directory, 0700) === false) {
          return false;
       }
@@ -3064,7 +3168,6 @@ class TCP_Server_CLI implements Servers
          @rmdir($directory);
          return false;
       }
-      $path = "{$directory}/handoff.sock";
       $code = 0;
       $message = '';
       $Relay = @stream_socket_server(
@@ -3375,9 +3478,36 @@ class TCP_Server_CLI implements Servers
             return false;
          }
       }
+      // ? Shared (`$shared`): a listener carrying SO_REUSEPORT comes from a
+      //   pooled image (an upgrade, or the switch changed). On Darwin any
+      //   account binding beside it would take every new connection, and a
+      //   demoted image cannot bind one exclusively itself: fail closed, like
+      //   a contract change — only a stop and start binds it exclusively.
+      if (self::$shared) {
+         foreach ($Listeners as $Listener) {
+            try {
+               $Socket = socket_import_stream($Listener);
+               $reused = $Socket === false || socket_get_option($Socket, SOL_SOCKET, SO_REUSEPORT) !== 0;
+            }
+            catch (Throwable) {
+               $reused = true;
+            }
+            if ($reused) {
+               $this->Logger->log(
+                  error: '@\;Reload aborted: the listener handed over carries SO_REUSEPORT (a pooled image), which a shared listener never keeps — the server stops; start it again to bind the listener exclusively.@\;'
+               );
+               fclose($Client);
+               foreach ([$StateLock, ...$Listeners, ...$Resources] as $Descriptor) {
+                  is_resource($Descriptor) && fclose($Descriptor);
+               }
+               return false;
+            }
+         }
+      }
       // A reload may lower the worker count. Descriptors with no consumer
       // must be closed before the fork; retaining an unused SO_REUSEPORT
       // queue in the master would black-hole a share of incoming connections.
+      // (Shared, a reload only ever carries the one exclusive listener.)
       $needed = max(1, $this->workers);
       if (count($Listeners) > $needed) {
          foreach (array_slice($Listeners, $needed) as $Unused) {
@@ -3389,7 +3519,7 @@ class TCP_Server_CLI implements Servers
       self::$context = [
          'socket' => [
             'backlog' => 102400,
-            'so_reuseport' => true,
+            'so_reuseport' => self::$shared === false,
             'ipv6_v6only' => false
          ]
       ];
@@ -3450,16 +3580,13 @@ class TCP_Server_CLI implements Servers
          }
          usleep(10000);
       } while (microtime(true) < $deadline);
+      // ? Still unreaped: WNOHANG returned 0, which proves $PID a live child
+      //   of this very process (any other PID is ECHILD, -1) — and a PID is
+      //   never recycled before its parent reaps it, so the kill reaches the
+      //   relay and nothing else. No procfs lineage read: Darwin has none.
       if ($reaped === 0) {
-         $process = @file_get_contents("/proc/{$PID}/status");
-         if (
-            is_string($process)
-            && preg_match('/^PPid:\t(\d+)$/m', $process, $matches) === 1
-            && (int) $matches[1] === posix_getpid()
-         ) {
-            posix_kill($PID, SIGKILL);
-            pcntl_waitpid($PID, $status);
-         }
+         posix_kill($PID, SIGKILL);
+         pcntl_waitpid($PID, $status);
       }
 
       return true;

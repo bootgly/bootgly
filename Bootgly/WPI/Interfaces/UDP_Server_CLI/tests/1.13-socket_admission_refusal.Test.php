@@ -16,7 +16,7 @@ use Bootgly\ACI\Tests\Suite\Test;
 
 
 return new Test(
-   description: 'A UDP socket the event backend refuses is refused loudly, at startup and in the worker',
+   description: 'A UDP socket the event backend refuses is refused loudly, at startup and in the worker — pooled, and shared (the macOS default)',
    skip: function_exists('posix_kill') === false
       || function_exists('posix_setsid') === false
       || function_exists('posix_getrlimit') === false
@@ -30,6 +30,9 @@ return new Test(
       // ! PAD: descriptors the launcher holds before start() (master probe).
       //   PADW: descriptors the worker opens before it binds (worker refusal).
       //   1100 either way pushes the bound socket past FD_SETSIZE (1024).
+      //   SHARED: the listener mode, forced either way — pooled (one socket
+      //   each worker binds) or shared (`$shared`: the one socket the
+      //   master binds and every worker reads, the macOS default).
       $Script = <<<'PHP'
 $Session = posix_setsid();
 if ($Session === false || $Session === -1) {
@@ -80,6 +83,7 @@ final class RefusalProbe extends UDP_Server_CLI
    }
 }
 
+UDP_Server_CLI::$shared = getenv('UDP_REFUSAL_SHARED') === '1';
 for ($i = 0, $n = (int) getenv('UDP_REFUSAL_PAD'); $i < $n; $i++) {
    RefusalProbe::$Pad[] = fopen('/dev/null', 'r');
 }
@@ -100,7 +104,7 @@ PHP;
        *
        * @return array{exit:null|int,served:bool,output:string,clean:bool}
        */
-      $Run = static function (int $pad, int $padw, float $seconds) use ($Script): array {
+      $Run = static function (int $pad, int $padw, float $seconds, bool $shared = false) use ($Script): array {
          $Reservation = stream_socket_server('udp://127.0.0.1:0', $code, $message, STREAM_SERVER_BIND);
          $name = is_resource($Reservation) ? (string) stream_socket_get_name($Reservation, false) : '';
          $port = (int) substr($name, (int) strrpos($name, ':') + 1);
@@ -113,6 +117,7 @@ PHP;
          $Environment['UDP_REFUSAL_PORT'] = (string) $port;
          $Environment['UDP_REFUSAL_PAD'] = (string) $pad;
          $Environment['UDP_REFUSAL_PADW'] = (string) $padw;
+         $Environment['UDP_REFUSAL_SHARED'] = $shared ? '1' : '0';
          // ! The boundary legs place the worker socket at an exact descriptor:
          //   the server must not inherit the runner's open descriptors (PHP
          //   opens them without close-on-exec), which would sit anywhere in
@@ -182,6 +187,7 @@ PHP;
          ];
       };
 
+      // # Pooled — every worker binds its own socket
       // @ Control: no padding — serves, and reports its worker descriptor.
       $Control = $Run(0, 0, 3.0);
       $descriptor = preg_match('/WORKER-FD=(\d+)/', $Control['output'], $Match) === 1 ? (int) $Match[1] : -1;
@@ -197,7 +203,7 @@ PHP;
       $Below = $descriptor >= 0 ? $Run(1023 - $descriptor, 0, 2.5) : null;
       $Edge = $descriptor >= 0 ? $Run(1024 - $descriptor, 0, 2.5) : null;
 
-      yield new Assertion(description: 'refused registrations never leave a silent worker')
+      yield new Assertion(description: 'pooled: refused registrations never leave a silent worker')
          ->expect(
             [
                'control served' => $Control['served'],
@@ -221,6 +227,49 @@ PHP;
                'worker refusal logged' => true,
                'worker never served' => true,
                'worker descriptor reported' => true,
+               'FD_SETSIZE - 1 serves' => true,
+               'FD_SETSIZE refused at startup' => true,
+               'FD_SETSIZE never reforked' => true,
+               'groups clean' => true,
+            ],
+         )
+         ->assert();
+
+      // # Shared — every worker reads the one socket the master bound: the
+      //   startup check proves THAT socket (the master's descriptor table),
+      //   never a fresh one a descriptor above it
+      // @ Control: the descriptor every worker inherited is the master's.
+      $SharedControl = $Run(0, 0, 3.0, shared: true);
+      $inherited = preg_match('/WORKER-FD=(\d+)/', $SharedControl['output'], $Match) === 1 ? (int) $Match[1] : -1;
+      // @ The launcher holds 1100 descriptors: the shared socket lands past
+      //   FD_SETSIZE, refused before any fork.
+      $SharedStartup = $Run(1100, 0, 3.0, shared: true);
+      // @ The boundary, exact: the shared socket at FD_SETSIZE - 1 serves —
+      //   the check must not refuse it for a descriptor it would open above
+      //   it; at FD_SETSIZE the start is refused, and never reforked.
+      $SharedBelow = $inherited >= 0 ? $Run(1023 - $inherited, 0, 2.5, shared: true) : null;
+      $SharedEdge = $inherited >= 0 ? $Run(1024 - $inherited, 0, 2.5, shared: true) : null;
+
+      yield new Assertion(description: 'shared: the startup check proves the socket every worker reads')
+         ->expect(
+            [
+               'control served' => $SharedControl['served'],
+               'inherited descriptor reported' => $inherited >= 0,
+               'startup exit' => $SharedStartup['exit'],
+               'startup refusal logged' => str_contains($SharedStartup['output'], 'Listener rejected by the event backend during startup.'),
+               'FD_SETSIZE - 1 serves' => $SharedBelow !== null && $SharedBelow['served'],
+               'FD_SETSIZE refused at startup' => $SharedEdge !== null && $SharedEdge['exit'] === 1
+                  && str_contains($SharedEdge['output'], 'Listener rejected by the event backend during startup.'),
+               'FD_SETSIZE never reforked' => $SharedEdge !== null && str_contains($SharedEdge['output'], 'recovered') === false,
+               'groups clean' => $SharedControl['clean'] && $SharedStartup['clean']
+                  && ($SharedBelow['clean'] ?? false) && ($SharedEdge['clean'] ?? false),
+            ],
+            Op::Identical,
+            [
+               'control served' => true,
+               'inherited descriptor reported' => true,
+               'startup exit' => 1,
+               'startup refusal logged' => true,
                'FD_SETSIZE - 1 serves' => true,
                'FD_SETSIZE refused at startup' => true,
                'FD_SETSIZE never reforked' => true,

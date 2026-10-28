@@ -28,8 +28,9 @@ use Bootgly\WPI\Nodes\WS_Server_CLI\Channels;
 /**
  * Cross-worker broadcast bus.
  *
- * Channels live per worker (each fork+SO_REUSEPORT process has its own
- * registry), so a same-worker `broadcast()` reaches only local members. The
+ * Channels live per worker (each forked process has its own registry,
+ * whether it accepts on its own SO_REUSEPORT listener or on a shared one), so
+ * a same-worker `broadcast()` reaches only local members. The
  * Relay closes that gap: the node creates one datagram socketpair per worker
  * before forking, and each worker keeps its own receive mailbox plus the send
  * ends of every peer mailbox. Publishing a broadcast sends a framed envelope
