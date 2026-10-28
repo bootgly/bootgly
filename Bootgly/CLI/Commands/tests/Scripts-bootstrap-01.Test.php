@@ -82,7 +82,6 @@ return new Test(
       require '{$root}autoboot.php';
       \$Scripts = new \\Bootgly\\CLI\\Scripts();
       \$Property = new \\ReflectionProperty(\$Scripts, 'scripts');
-      \$Property->setAccessible(true);
       echo json_encode(\$Property->getValue(\$Scripts));
       PROBE;
 
