@@ -15,6 +15,7 @@ use function fwrite;
 use function gc_disable;
 use function gc_enable;
 use function gc_enabled;
+use function ini_set;
 use function is_resource;
 use function json_encode;
 use function microtime;
@@ -1432,6 +1433,12 @@ return new Test(
          $SQL = $open($Peer);
          $Resource = new Database($SQL)->schedule($suspend);
 
+         // ! The work's exception is held across the rollback park, and when
+         //   traces keep their arguments it makes the Fiber cyclic, so its
+         //   teardown waits for a GC run (RSRC-12, tracked on its own). This
+         //   leg pins the adoption, not that cycle: the trace keeps none.
+         $arguments = ini_set('zend.exception_ignore_args', '1');
+
          $Caught = null;
          $Fiber = new Fiber(static function () use ($Resource, &$Caught): void {
             try {
@@ -1446,6 +1453,8 @@ return new Test(
 
          $held = $drive($Fiber, $Fiber->start(), $Peer, static fn (): bool => $Peer->queries === ['BEGIN', 'ROLLBACK']);
          $state = ['held' => $held instanceof Readiness] + $orphan($Fiber, $SQL, $Peer) + ['caught' => $Caught === null];
+
+         ini_set('zend.exception_ignore_args', $arguments === false ? '0' : $arguments);
 
          yield assert(
             assertion: $state === [
