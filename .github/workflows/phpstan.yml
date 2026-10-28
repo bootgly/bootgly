@@ -30,11 +30,9 @@ jobs:
           - php: '8.4'
             target: 80400
             experimental: false
-          # ! Required once its first CI run is green (PHP 8.5's chr() and
-          #   null-offset deprecations are fixed; the leg must confirm it).
           - php: '8.5'
             target: 80500
-            experimental: true
+            experimental: false
 
     steps:
       -

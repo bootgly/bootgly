@@ -65,10 +65,10 @@ jobs:
     name: test (${{ matrix.os }}, php ${{ matrix.php }}${{ matrix.experimental && ', experimental' || '' }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
-    # ! The Ubuntu runner cells block (green in three runs in a row). Every
-    #   other cell is experimental: it reports but never blocks. Promote a
-    #   cell (`experimental: false`) once the known failures noted on its row
-    #   are fixed and it has a green streak, one cell at a time.
+    # ! The Ubuntu runner cells, Debian, Fedora and the published image block
+    #   (each green in three runs in a row). The others are experimental: they
+    #   report but never block. Promote a cell (`experimental: false`) once the
+    #   known failures noted on its row are fixed and it has a green streak.
     continue-on-error: ${{ matrix.experimental }}
 
     strategy:
@@ -139,18 +139,18 @@ jobs:
             budget: 1800
             experimental: true
           # # Container cells (image: the cell's base; mirrors avoid Docker Hub's anonymous pull limit)
-          # ! Every container cell fails 7.1-project-startup: with docker-init
-          #   as PID 1 it takes the non-systemd branch, which expects the bare
-          #   project name while the command prints it through escapeshellarg().
+          # ! docker-init is PID 1: the suite takes its non-systemd branches.
           - os: debian-13            # glibc · deb · 8.4 native, 8.5 deb.sury.org
             kind: container
             runner: ubuntu-24.04
             image: public.ecr.aws/docker/library/debian:13
             budget: 900
-            experimental: true
+            experimental: false
           # ! musl and BusyBox: no GLOB_BRACE, its own strerror() wording, a
           #   setlocale() that accepts any name, BusyBox find and ls — the
           #   suite and the global wrapper keep to what all of them share.
+          #   Still experimental: one green run, and WS_Client 5.6
+          #   (pong_coalescing, lock-step under backpressure) has flaked once.
           - os: alpine-3.24          # musl · BusyBox · apk · 8.4 and 8.5 native
             kind: container
             runner: ubuntu-24.04
@@ -162,7 +162,7 @@ jobs:
             runner: ubuntu-24.04
             image: quay.io/fedora/fedora:44
             budget: 900
-            experimental: true
+            experimental: false
           # ! glibc 2.34 (the oldest userland) · EL · Remi. Its libedit
           #   (20210216) keeps a ^V read blocked through SIGCHLD, so the
           #   console prompt's supervision stalls there. The image also ships
@@ -175,16 +175,15 @@ jobs:
             experimental: true
           # ! The published image's runtime: ./Dockerfile `base` stage. It is
           #   the only cell on GNU readline (the php images build ext-readline
-          #   against it), where the console-prompt tests' ^V leg (written for
-          #   libedit) does not end the session, and on the tracing JIT (its
-          #   own zz-bootgly.ini). It loads no php.ini: PHP's built-in defaults
-          #   plus the CI drop-in (short_open_tag On, variables_order EGPCS).
+          #   against it) and on the tracing JIT (its own zz-bootgly.ini). It
+          #   loads no php.ini: PHP's built-in defaults plus the CI drop-in
+          #   (short_open_tag On, variables_order EGPCS).
           - os: docker-image
             kind: container
             runner: ubuntu-24.04
             image: bootgly-matrix-base
             budget: 900
-            experimental: true
+            experimental: false
 
     steps:
       -
