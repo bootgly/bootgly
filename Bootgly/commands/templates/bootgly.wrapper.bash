@@ -15,8 +15,21 @@
 # Opt out with BOOTGLY_JIT=0 (required by the native coverage driver).
 BINARY=__BOOTGLY_PHP_BINARY__
 SCRIPT=__BOOTGLY_FALLBACK_LAUNCHER__
-CALLER_UID="$EUID"
+# ? Root is refused before any program runs: nothing found through PATH may
+#   execute as root first
+if [ "${EUID:-0}" = 0 ] || [ "${UID:-0}" = 0 ]; then
+   echo 'Refusing to run the Bootgly global wrapper as root.' >&2
+   echo 'Use Linux capabilities, a reverse proxy, or invoke an entirely root-controlled deployment explicitly.' >&2
+   exit 126
+fi
+# ! Then the kernel's answer: bash imports an exported EUID from the
+#   environment (even with -p), so $EUID alone could hide a real root
+CALLER_UID="$(id -u 2>/dev/null)"
 
+if ! [[ "$CALLER_UID" =~ ^[0-9]+$ ]]; then
+   echo 'Refusing to run the Bootgly global wrapper: the caller UID is unknown.' >&2
+   exit 126
+fi
 if [ "$CALLER_UID" -eq 0 ]; then
    echo 'Refusing to run the Bootgly global wrapper as root.' >&2
    echo 'Use Linux capabilities, a reverse proxy, or invoke an entirely root-controlled deployment explicitly.' >&2
@@ -27,16 +40,40 @@ canonical () {
    readlink -f -- "$1" 2>/dev/null
 }
 
+# ! One `ls -nd` line per path — its type, mode and NUMERIC owner — read the
+#   same from GNU, BSD (macOS) and BusyBox (Alpine) tools: find's -uid is
+#   GNU-only, and -user resolves a login NAME before the number. Sets the
+#   caller's KIND, MODE and OWNER; anything unexpected fails closed.
+inspect () {
+   local LINE
+
+   LINE="$(ls -nd -- "$1" 2>/dev/null)" || return 1
+   [[ "$LINE" =~ ^([-d])([-rwxsStT]{9})([.+@]?)[[:space:]]+[0-9]+[[:space:]]+([0-9]+)[[:space:]] ]] || return 1
+   KIND="${BASH_REMATCH[1]}"
+   MODE="${BASH_REMATCH[2]}"
+   OWNER="${BASH_REMATCH[4]}"
+   # ? Darwin's extended ACLs grant writes no mode bit shows
+   if [ "${BASH_REMATCH[3]}" = '+' ] && [[ "$OSTYPE" == darwin* ]]; then
+      return 1
+   fi
+}
+
 trusted () {
    local TARGET="$1"
-   local MATCH=''
    local CURRENT=''
    local DIRECT_PARENT=1
+   local KIND=''
+   local MODE=''
+   local OWNER=''
 
-   [ -n "$TARGET" ] && [ -f "$TARGET" ] || return 1
+   [ -n "$TARGET" ] || return 1
 
-   MATCH="$(find "$TARGET" -maxdepth 0 -type f \( -uid "$CALLER_UID" -o -uid 0 \) ! -perm /022 -print -quit 2>/dev/null)"
-   [ -n "$MATCH" ] || return 1
+   # @ A regular file, owned by the caller or root, writable by neither group
+   #   nor other
+   inspect "$TARGET" || return 1
+   [ "$KIND" = '-' ] || return 1
+   [ "$OWNER" = 0 ] || [ "$OWNER" = "$CALLER_UID" ] || return 1
+   [ "${MODE:4:1}" != w ] && [ "${MODE:7:1}" != w ] || return 1
 
    # @ The direct parent may contain executable sibling bootstraps, so it is
    #   never allowed to be writable. Higher root-owned sticky directories
@@ -44,12 +81,12 @@ trusted () {
    CURRENT="${TARGET%/*}"
    [ -n "$CURRENT" ] || CURRENT='/'
    while :; do
-      if [ "$DIRECT_PARENT" -eq 1 ]; then
-         MATCH="$(find "$CURRENT" -maxdepth 0 -type d \( -uid "$CALLER_UID" -o -uid 0 \) ! -perm /022 -print -quit 2>/dev/null)"
-      else
-         MATCH="$(find "$CURRENT" -maxdepth 0 -type d \( -uid "$CALLER_UID" -o -uid 0 \) \( ! -perm /022 -o \( -uid 0 -perm -1000 \) \) -print -quit 2>/dev/null)"
+      inspect "$CURRENT" || return 1
+      [ "$KIND" = d ] || return 1
+      [ "$OWNER" = 0 ] || [ "$OWNER" = "$CALLER_UID" ] || return 1
+      if [ "${MODE:4:1}" = w ] || [ "${MODE:7:1}" = w ]; then
+         [ "$DIRECT_PARENT" -eq 0 ] && [ "$OWNER" = 0 ] && [[ "${MODE:8:1}" == [tT] ]] || return 1
       fi
-      [ -n "$MATCH" ] || return 1
       [ "$CURRENT" = '/' ] && return 0
 
       DIRECT_PARENT=0
