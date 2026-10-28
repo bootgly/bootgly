@@ -65,6 +65,7 @@ use function time;
 use function umask;
 use function unlink;
 use RuntimeException;
+use WeakReference;
 
 
 class State
@@ -94,6 +95,34 @@ class State
    private bool $locked = false;
    /** PID that acquired or adopted the local lock descriptor. */
    private null|int $ownerPID = null;
+   /**
+    * The instance locks this process acquired or adopted, by lock file: the
+    * State holding each one. A forked child inherits the map, never the
+    * claim — `$held` checks the holder's PID and its live descriptor.
+    *
+    * @var array<string,WeakReference<State>>
+    */
+   private static array $holders = [];
+   /**
+    * This process holds this instance's lock — through this State or any
+    * other over the same lock file: a live holder, owned by this PID, whose
+    * descriptor is still the inode at the lock path. It proves a
+    * same-process holder without procfs (Darwin has none); a foreign holder
+    * is `authenticate()`'s.
+    */
+   public bool $held {
+      get {
+         $Holder = (self::$holders[$this->pidLockFile] ?? null)?->get();
+
+         // :
+         return $Holder !== null
+            && $Holder->locked
+            && $Holder->ownerPID === posix_getpid()
+            && $Holder->pidLockFile === $this->pidLockFile
+            && $Holder->lockHandle !== null
+            && $Holder->verify($Holder->lockHandle);
+      }
+   }
 
 
    public function __construct (string $id, null|string $instance = null)
@@ -177,6 +206,10 @@ class State
          $this->lockHandle = null;
          $this->locked = false;
          $this->ownerPID = null;
+         // ? The claim goes with this descriptor
+         if ((self::$holders[$file] ?? null)?->get() === $this) {
+            unset(self::$holders[$file]);
+         }
 
          return true;
       }
@@ -204,6 +237,7 @@ class State
          fclose($this->lockHandle);
 
          $this->lockHandle = null;
+         $this->locked = false;
          $this->ownerPID = null;
 
          return false;
@@ -222,6 +256,10 @@ class State
       // shared/read lock must never be promoted into serving authority.
       $this->locked = $locked && ($flag & LOCK_EX) === LOCK_EX;
       $this->ownerPID = $locked ? $currentPID : null;
+      // @ Claim the instance lock for this process
+      if ($this->locked) {
+         self::$holders[$file] = WeakReference::create($this);
+      }
 
       // :
       return $locked;
@@ -241,6 +279,10 @@ class State
       if ($this->lockHandle !== null) {
          fclose($this->lockHandle);
          $this->lockHandle = null;
+      }
+      // ? The holder's own descriptor is gone: so is its claim
+      if ((self::$holders[$this->pidLockFile] ?? null)?->get() === $this) {
+         unset(self::$holders[$this->pidLockFile]);
       }
       $this->locked = false;
       $this->ownerPID = null;
@@ -297,6 +339,7 @@ class State
       $this->lockHandle = $Handle;
       $this->locked = true;
       $this->ownerPID = posix_getpid();
+      self::$holders[$this->pidLockFile] = WeakReference::create($this);
 
       return true;
    }

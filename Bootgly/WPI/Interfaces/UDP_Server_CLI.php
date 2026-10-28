@@ -40,7 +40,6 @@ use const SIGTSTP;
 use const SIGUSR1;
 use const SIGUSR2;
 use const SO_REUSEPORT;
-use const SOCK_CLOEXEC;
 use const SOCK_DGRAM;
 use const SOCKET_EADDRINUSE;
 use const SOL_SOCKET;
@@ -1558,8 +1557,11 @@ class UDP_Server_CLI implements Servers
       [$family, $IP, $port] = $this->address + [AF_INET, '0.0.0.0', 0];
 
       // ! SOCK_CLOEXEC: a process a handler starts never inherits the socket
-      //   (it would stay in the SO_REUSEPORT group after the worker exits)
-      $Bound = @socket_create($family, SOCK_DGRAM | SOCK_CLOEXEC, SOL_UDP);
+      //   (it would stay in the SO_REUSEPORT group after the worker exits).
+      //   Darwin defines no such flag, and PHP has no fcntl() to set
+      //   FD_CLOEXEC after: there a spawned process inherits the socket.
+      $type = defined('SOCK_CLOEXEC') ? SOCK_DGRAM | constant('SOCK_CLOEXEC') : SOCK_DGRAM;
+      $Bound = @socket_create($family, $type, SOL_UDP);
       if ($Bound === false) {
          return socket_last_error();
       }
@@ -2465,8 +2467,12 @@ class UDP_Server_CLI implements Servers
       // ? A stop that arrived while this dispatch held every signal blocked
       //   is still pending: unblocking it below would hand it to this image,
       //   and the exec would discard it — honour it instead of re-executing.
+      //   Darwin has no sigtimedwait(): there such a stop is lost, and the
+      //   fresh image starts.
       $Info = [];
-      $pending = @pcntl_sigtimedwait([SIGHUP, SIGINT, SIGQUIT, SIGTERM], $Info, 0, 1);
+      $pending = function_exists('pcntl_sigtimedwait')
+         ? @pcntl_sigtimedwait([SIGHUP, SIGINT, SIGQUIT, SIGTERM], $Info, 0, 1)
+         : false;
       if (is_int($pending) && $pending > 0) {
          $this->stop();
          return;

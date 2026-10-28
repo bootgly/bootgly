@@ -511,8 +511,10 @@ class Input
       if ($registered === false) {
          // ? The launcher (`project start`) may already hold this very instance's lock
          //   (console projects register on start): adopt its entry and let it keep
-         //   lifecycle ownership. A foreign holder still fails closed.
-         if ($State->authenticate($masterPID) === false) {
+         //   lifecycle ownership. This process's own claim proves it without
+         //   procfs (Darwin has none); a foreign holder still fails closed.
+         $adopted = $State->held || $State->authenticate($masterPID);
+         if ($adopted === false) {
             throw new RuntimeException('Can not acquire the terminal process state lock.');
          }
       }

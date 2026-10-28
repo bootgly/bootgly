@@ -30,5 +30,6 @@ return new Suite(
       '1.14-inits-detect',
       '1.15-service-render',
       '1.16-state-lock-seal',
+      '1.17-state-lock-holders',
    ]
 );
