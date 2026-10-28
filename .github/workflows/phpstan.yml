@@ -8,24 +8,60 @@ on:
     paths-ignore:
       - '**/README.md'
 
+permissions:
+  contents: read
+
 jobs:
+  # One leg per supported PHP minor, each on its own runtime. @/phpstan.neon
+  # pins phpVersion to the floor (80400), so a local run on any PHP matches
+  # the required leg. Each leg re-pins it to its own target, because a
+  # {min: 80400, max: 80599} range does not report the newer minor's
+  # deprecations.
   phpstan:
+    name: phpstan (php ${{ matrix.php }}${{ matrix.experimental && ', experimental' || '' }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    continue-on-error: ${{ matrix.experimental }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - php: '8.4'
+            target: 80400
+            experimental: false
+          # ! 26 findings in 15 files at HEAD 9b2b958f:
+          #   - 24 PHP 8.5 deprecations: chr() outside [0, 255] and null array
+          #     offsets.
+          #   - 2 `$argv might not be defined` in ACI/Tests/Benchmark/
+          #     provenance.php. The PHP 8.5 CLI reports register_argc_argv=0
+          #     (it still sets $argv), and PHPStan trusts the ini value.
+          #   Promote to required once they are fixed.
+          - php: '8.5'
+            target: 80500
+            experimental: true
 
     steps:
       -
         name: Checkout code
         uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       -
-        name: Setup PHP 8.4
+        name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
+          php-version: ${{ matrix.php }}
           ini-file: 'development'
           extensions: mbstring
       -
         name: Install dependencies with Composer
-        run: composer install --prefer-dist --no-progress --no-suggest
+        run: composer install --prefer-dist --no-progress
       -
         name: Run PHPStan
-        run: vendor/bin/phpstan analyze -c @/phpstan.neon
+        env:
+          PHPSTAN_TARGET: ${{ matrix.target }}
+        run: |
+          printf 'includes:\n   - %s/@/phpstan.neon\nparameters:\n   phpVersion: %s\n' \
+            "$GITHUB_WORKSPACE" "$PHPSTAN_TARGET" > "$RUNNER_TEMP/phpstan.neon"
+          vendor/bin/phpstan analyze -c "$RUNNER_TEMP/phpstan.neon"

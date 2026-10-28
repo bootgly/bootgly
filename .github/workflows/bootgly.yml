@@ -7,16 +7,28 @@ on:
       - 'main'
     paths-ignore:
       - '**/README.md'
+  # ! The distro, Sury and Remi packages the container cells install move
+  #   without a push: a weekly run catches that drift on its own (on the
+  #   cell's job while the cell is experimental, not on the run's status).
+  schedule:
+    - cron: '23 5 * * 1'
+
+permissions:
+  contents: read
 
 jobs:
-  test:
+  # The style rules are OS- and PHP-independent (token-level checks): one job.
+  lint:
+    name: lint
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
 
     steps:
       -
         name: Checkout code
         uses: actions/checkout@v5
-
+        with:
+          persist-credentials: false
       -
         name: Set up PHP
         uses: shivammathur/setup-php@v2
@@ -35,48 +47,222 @@ jobs:
             php bootgly lint "$submodule" Bootgly/ || status=1
           done
           exit "$status"
+
+  # OS x PHP matrix. Two kinds of cells:
+  #   runner    — PHP from setup-php on the hosted VM (x64 and arm64).
+  #   container — a distro image provisioned by .github/scripts/install.sh, run
+  #               with `docker run` from an ubuntu-24.04 host (not `container:`:
+  #               the runner would make `tail -f /dev/null` PID 1, refuses
+  #               JS actions in Alpine on arm64, and runs steps as root).
+  # Both run .github/scripts/test.sh: preflight, session isolation, budget
+  # and diagnostics are one script for every cell.
+  test:
+    name: test (${{ matrix.os }}, php ${{ matrix.php }}${{ matrix.experimental && ', experimental' || '' }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    # ! Only the original lane (ubuntu-24.04, PHP 8.4) blocks. Every other
+    #   cell is experimental: it reports but never blocks. Promote a cell
+    #   (`experimental: false`) once the known failures noted on its row are
+    #   fixed and it has a green streak, one cell at a time. Every PHP 8.5
+    #   cell also fails Scripts-bootstrap-01, whose probe calls the
+    #   deprecated ReflectionProperty::setAccessible().
+    continue-on-error: ${{ matrix.experimental }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+          - ubuntu-26.04
+          - debian-13
+          - alpine-3.24
+          - fedora-44
+          - almalinux-9
+          - docker-image
+        php: ['8.4', '8.5']
+        # ! ./Dockerfile does not build on PHP 8.5 (`docker-php-ext-install
+        #   opcache` exits 2: OPcache is built into 8.5), and the published
+        #   image ships 8.4 only. Add the cell back with that Dockerfile fix.
+        exclude:
+          - os: docker-image
+            php: '8.5'
+        include:
+          # # Runner cells (coverage: the Xdebug state; preflight asserts it)
+          # ! 8.5 keeps 900s until a runner run is timed (519s locally,
+          #   without Xdebug).
+          - os: ubuntu-24.04
+            kind: runner
+            runner: ubuntu-24.04
+            coverage: none
+            budget: 900
+            experimental: true
+          # ! The required lane: the original job, Xdebug in coverage mode
+          #   included (what setup-php leaves on there by default), so the
+          #   XDebug branch of 7.1.2-Coverage-detect_xdebug_mode_guard keeps
+          #   running. 600s: the original budget (504s green, 506s at 9b2b958f).
+          - os: ubuntu-24.04
+            php: '8.4'
+            coverage: xdebug
+            budget: 600
+            experimental: false
+          # ! arm64 is a shipped target (the image is multi-arch), but these
+          #   cells cannot be reproduced on an x86_64 host.
+          - os: ubuntu-24.04-arm
+            kind: runner
+            runner: ubuntu-24.04-arm
+            coverage: none
+            budget: 900
+            experimental: true
+          # ! setup-php supports this image only since 2.40.0, and its VM
+          #   kernel (7.0) is not reproduced locally.
+          - os: ubuntu-26.04
+            kind: runner
+            runner: ubuntu-26.04
+            coverage: none
+            budget: 900
+            experimental: true
+          # # Container cells (image: the cell's base; mirrors avoid Docker Hub's anonymous pull limit)
+          # ! Every container cell fails 7.1-project-startup: with docker-init
+          #   as PID 1 it takes the non-systemd branch, which expects the bare
+          #   project name while the command prints it through escapeshellarg().
+          - os: debian-13            # glibc · deb · 8.4 native, 8.5 deb.sury.org
+            kind: container
+            runner: ubuntu-24.04
+            image: public.ecr.aws/docker/library/debian:13
+            budget: 900
+            experimental: true
+          # ! musl and BusyBox: GLOB_BRACE is undefined on 8.4 (three suite
+          #   harnesses glob with it), 1.26-port_windows expects glibc's
+          #   strerror wording, 8.17-kv_redis_tls_prefer_attempt reads a
+          #   successful setlocale() as translated messages, and BusyBox find
+          #   has no `-uid`, which bootgly.wrapper.bash calls (a product defect).
+          - os: alpine-3.24          # musl · BusyBox · apk · 8.4 and 8.5 native
+            kind: container
+            runner: ubuntu-24.04
+            image: public.ecr.aws/docker/library/alpine:3.24
+            budget: 900
+            experimental: true
+          - os: fedora-44            # glibc · rpm · 8.5 native, 8.4 Remi
+            kind: container
+            runner: ubuntu-24.04
+            image: quay.io/fedora/fedora:44
+            budget: 900
+            experimental: true
+          # ! glibc 2.34 (the oldest userland) · EL · Remi. Its libedit
+          #   (20210216) keeps a ^V read blocked through SIGCHLD, so the
+          #   console prompt's supervision stalls there. The image also ships
+          #   journalctl without a running journald (9.6-syslog-handler).
+          - os: almalinux-9
+            kind: container
+            runner: ubuntu-24.04
+            image: public.ecr.aws/docker/library/almalinux:9
+            budget: 900
+            experimental: true
+          # ! The published image's runtime: ./Dockerfile `base` stage. It is
+          #   the only cell on GNU readline (the php images build ext-readline
+          #   against it), where the console-prompt tests' ^V leg (written for
+          #   libedit) does not end the session, and on the tracing JIT (its
+          #   own zz-bootgly.ini). It loads no php.ini: PHP's built-in defaults
+          #   plus the CI drop-in (short_open_tag On, variables_order EGPCS).
+          - os: docker-image
+            kind: container
+            runner: ubuntu-24.04
+            image: bootgly-matrix-base
+            budget: 900
+            experimental: true
+
+    steps:
+      -
+        name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      # # Runner cells
+      -
+        name: Set up PHP
+        if: matrix.kind == 'runner'
+        uses: shivammathur/setup-php@v2
+        env:
+          # ! ubuntu-26.04 ships a distro PHP 8.5.4: without `update` setup-php
+          #   keeps that patch level instead of the current 8.5 release.
+          update: ${{ matrix.os == 'ubuntu-26.04' }}
+        with:
+          php-version: ${{ matrix.php }}
+          ini-file: 'development'
+          ini-values: disable_functions=""
+          # ! The baseline .github/scripts/preflight.php asserts, all built in
+          #   or installed by default. setup-php installs what the image
+          #   lacks but does not fail on a miss: preflight fails the cell.
+          extensions: mbstring, pcntl, posix, sockets, readline, session, sqlite3, fileinfo, ctype, iconv, tokenizer, zlib, sysvsem, sysvshm, simplexml, openssl
+          # ! Xdebug is set per cell, not left to the image (setup-php's PHP
+          #   loads it in coverage mode unless told `none`).
+          coverage: ${{ matrix.coverage }}
       -
         name: Run Bootgly Test command
+        if: matrix.kind == 'runner'
         env:
           BOOTGLY_TEST_TRACE: 1
+          BOOTGLY_CI_BUDGET: ${{ matrix.budget }}
+          BOOTGLY_CI_PHP: ${{ matrix.php }}
+          BOOTGLY_CI_XDEBUG: ${{ matrix.coverage == 'xdebug' && '1' || '0' }}
+        run: bash .github/scripts/test.sh
+
+      # # Container cells
+      -
+        name: Build the cell image
+        if: matrix.kind == 'container'
+        env:
+          CELL_OS: ${{ matrix.os }}
+          CELL_PHP: ${{ matrix.php }}
+          CELL_BASE: ${{ matrix.image }}
         run: |
-          php bootgly
-          set +e
-          started=$SECONDS
-          # The run gets its own session, so a process-group signal raised inside
-          # it cannot reach this shell: the step reports the run instead of dying
-          # with it. setsid does not relay a signal death (it returns the bare
-          # signal number), so the inner shell records the real status itself; a
-          # missing file means the run's own shell was killed under it.
-          STATUS="$RUNNER_TEMP/bootgly-test.status"
-          rm -f "$STATUS"
-          # A test child that signals its whole process group reaches `timeout`
-          # when both share one; `timeout` then treats the stray SIGTERM as its
-          # own and SIGKILLs the run --kill-after seconds later. The runner gets
-          # a session of its own inside the budget, so a group signal raised by
-          # any descendant stops at the runner (which already survives SIGTERM).
-          STATUS="$STATUS" setsid --wait bash -c \
-            'timeout --signal=TERM --kill-after=30 600 setsid --wait php bootgly test --bootgly; echo $? > "$STATUS"'
-          code=$(cat "$STATUS" 2>/dev/null)
-          if [ -z "$code" ]; then
-            echo '::error::the run session was killed from the outside — no status recorded'
-            code=137
+          if [ "$CELL_OS" = docker-image ]; then
+            # The PHP runtime bootgly/bootgly ships, built as the release does.
+            docker build --target base \
+              --build-arg PHP_IMAGE="public.ecr.aws/docker/library/php:${CELL_PHP}-cli-bookworm" \
+              --tag "$CELL_BASE" .
           fi
-          elapsed=$(( SECONDS - started ))
-          set -e
-          if [ "$code" -ne 0 ]; then
-            echo "::error::bootgly test exited ${code} after ${elapsed}s"
-            if [ "$code" -eq 124 ]; then
-              echo '::error::the 600s budget expired — the run stalled'
-            elif [ "$code" -gt 128 ]; then
-              echo "::error::killed by signal $(( code - 128 )) — not the budget"
-            fi
-            ps auxf || true
-            ss -tlnp || true
-            free -m || true
-            sudo dmesg -T 2>/dev/null | tail -40 || true
-          fi
-          exit "$code"
+          docker build --file .github/scripts/cell.Dockerfile \
+            --build-arg BASE="$CELL_BASE" \
+            --build-arg DISTRO="$CELL_OS" \
+            --build-arg PHP="$CELL_PHP" \
+            --build-arg CI_UID="$(id -u)" \
+            --build-arg CI_GID="$(id -g)" \
+            --tag bootgly-matrix-cell .github/scripts
+      -
+        name: Run Bootgly Test command
+        if: matrix.kind == 'container'
+        env:
+          BOOTGLY_TEST_TRACE: 1
+          BOOTGLY_CI_BUDGET: ${{ matrix.budget }}
+          BOOTGLY_CI_PHP: ${{ matrix.php }}
+        # ! --init: docker-init is PID 1 and reaps orphans (TEST-11).
+        #   --user: the runner's uid/gid, so the suite runs unprivileged and
+        #   owns the bind-mounted checkout. The rest gives the container what
+        #   the runner VM has: IPv6 loopback and the VM's open-file limit.
+        #   The checkout keeps the runner's short workspace path: the unix
+        #   sockets the suite binds under storage/pids/ must fit in sun_path
+        #   (108 bytes), and a deep mount silently truncates them.
+        #   GITHUB_ACTIONS stays out on purpose: the suite takes a user's
+        #   paths here (a Foreground server master that stops exits instead
+        #   of returning), the runner cells take the CI ones.
+        run: |
+          docker run --rm --init --name bootgly-matrix-cell \
+            --user "$(id -u):$(id -g)" \
+            --sysctl net.ipv6.conf.lo.disable_ipv6=0 \
+            --ulimit nofile=65536:65536 \
+            --env BOOTGLY_TEST_TRACE --env BOOTGLY_CI_BUDGET --env BOOTGLY_CI_PHP \
+            --volume "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" \
+            --workdir "$GITHUB_WORKSPACE" \
+            bootgly-matrix-cell bash .github/scripts/test.sh
+      -
+        name: Dump the kernel log
+        if: failure() && matrix.kind == 'container'
+        run: sudo dmesg -T 2>/dev/null | tail -40 || true
+
+      # # Every cell
       -
         name: Dump benchmark run artifacts
         if: failure()
@@ -86,3 +272,7 @@ jobs:
             cat -v "$file" || true
             echo
           done
+      -
+        name: Remove the cell container
+        if: always() && matrix.kind == 'container'
+        run: docker rm -f bootgly-matrix-cell >/dev/null 2>&1 || true
