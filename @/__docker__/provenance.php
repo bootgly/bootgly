@@ -3,7 +3,7 @@
 
 use Bootgly\ACI\Tests\Benchmark\Provenance;
 
-require __DIR__ . '/Provenance.php';
+require dirname(__DIR__, 2) . '/Bootgly/ACI/Tests/Benchmark/Provenance.php';
 
 $docker = isset($argv[3]) && $argv[3] === '--docker-build-args';
 if ((count($argv) !== 3 && count($argv) !== 4) || (isset($argv[3]) && $docker === false)) {

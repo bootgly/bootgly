@@ -33,8 +33,8 @@ jobs:
           # ! 26 findings in 15 files at HEAD 9b2b958f:
           #   - 24 PHP 8.5 deprecations: chr() outside [0, 255] and null array
           #     offsets.
-          #   - 2 `$argv might not be defined` in ACI/Tests/Benchmark/
-          #     provenance.php. The PHP 8.5 CLI reports register_argc_argv=0
+          #   - 2 `$argv might not be defined` in @/__docker__/provenance.php. The
+          #     PHP 8.5 CLI reports register_argc_argv=0
           #     (it still sets $argv), and PHPStan trusts the ini value.
           #   Promote to required once they are fixed.
           - php: '8.5'

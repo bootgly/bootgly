@@ -17,6 +17,7 @@ parameters:
    paths:
       - ../Bootgly/
       - ../scripts/
+      - __docker__/provenance.php
    ignoreErrors:
       - identifier: property.uninitializedReadonly
       - identifier: property.private

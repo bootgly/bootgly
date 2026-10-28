@@ -60,7 +60,14 @@ jobs:
         id: source
         run: |
           set -euo pipefail
-          PROVENANCE="$(php bootgly/Bootgly/ACI/Tests/Benchmark/provenance.php bootgly bootgly_benchmarks)"
+          # ! The producer moved to @/__docker__/ in 1.1.0 (it collided with
+          #   Provenance.php on case-insensitive checkouts); a dispatch that
+          #   republishes an older tag still finds it at its old path.
+          PRODUCER=bootgly/@/__docker__/provenance.php
+          if [ ! -f "$PRODUCER" ]; then
+            PRODUCER=bootgly/Bootgly/ACI/Tests/Benchmark/provenance.php
+          fi
+          PROVENANCE="$(php "$PRODUCER" bootgly bootgly_benchmarks)"
           while IFS= read -r ENTRY; do
             echo "$ENTRY" >> "$GITHUB_OUTPUT"
           done <<< "$PROVENANCE"

@@ -63,7 +63,7 @@ services:
   #
   # ! The secrets case of that suite needs a provenance-stamped build and SKIPS
   #   without one (visibly, in the run summary). Export the stamp to run it:
-  #     eval "$(php Bootgly/ACI/Tests/Benchmark/provenance.php . ../bootgly_benchmarks \
+  #     eval "$(php @/__docker__/provenance.php . ../bootgly_benchmarks \
   #       --docker-build-args | sed 's/--build-arg /export /g')" \
   #       && docker compose --profile test up --build
   test:

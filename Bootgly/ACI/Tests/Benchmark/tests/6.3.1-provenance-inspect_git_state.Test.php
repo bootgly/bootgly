@@ -97,7 +97,7 @@ return new Test(
       rmdir($programs);
 
       $binary = escapeshellarg(PHP_BINARY);
-      $producer = escapeshellarg(dirname(__DIR__) . '/provenance.php');
+      $producer = escapeshellarg(BOOTGLY_ROOT_DIR . '@/__docker__/provenance.php');
       $fixtureRoot = escapeshellarg($dir);
       $dockerArguments = (string) shell_exec(
          "{$binary} {$producer} {$fixtureRoot} {$fixtureRoot} --docker-build-args"
