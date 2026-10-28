@@ -23,6 +23,9 @@ $extensions = [
    'session', 'simplexml', 'sockets', 'sqlite3', 'sysvsem', 'sysvshm', 'tokenizer', 'zlib',
 ];
 $failures = [];
+// ! Darwin has no procfs and no /etc/os-release: the same checks read `ps`
+//   and `sw_vers` there. launchd is PID 1 and reaps orphans.
+$darwin = PHP_OS_FAMILY === 'Darwin';
 
 // ---
 
@@ -82,8 +85,13 @@ else if ($declared !== '1' && extension_loaded('xdebug')) {
 if (posix_geteuid() === 0) {
    $failures[] = 'running as root: the suite must run unprivileged';
 }
-$init = trim((string) @file_get_contents('/proc/1/comm'));
-if (in_array($init, ['systemd', 'init', 'docker-init', 'tini', 'dumb-init', 'catatonit'], true) === false) {
+$init = $darwin
+   ? basename(trim((string) shell_exec('ps -o comm= -p 1 2>/dev/null')))
+   : trim((string) @file_get_contents('/proc/1/comm'));
+$inits = $darwin
+   ? ['launchd']
+   : ['systemd', 'init', 'docker-init', 'tini', 'dumb-init', 'catatonit'];
+if (in_array($init, $inits, true) === false) {
    $failures[] = "PID 1 is '{$init}', not an init: orphans would never be reaped";
 }
 
@@ -103,9 +111,21 @@ foreach (['tcp', 'udp'] as $transport) {
 // ---
 
 // @ Report what the cell runs on
-$release = @parse_ini_file('/etc/os-release');
-$system = is_array($release) ? ($release['PRETTY_NAME'] ?? 'unknown') : 'unknown';
-$libc = glob('/lib/ld-musl-*.so.1') !== [] ? 'musl' : 'glibc';
+if ($darwin) {
+   $product = trim((string) shell_exec('sw_vers -productVersion 2>/dev/null'));
+   $system = "macOS {$product}";
+   $libc = 'libSystem';
+   // Kernel limits the macOS port works against (SysV shm, accept backlog,
+   // AF_UNIX and UDP datagram caps)
+   $sysctls = 'kern.sysv.shmmax kern.sysv.shmall kern.ipc.somaxconn kern.maxfilesperproc net.local.dgram.maxdgram net.local.dgram.recvspace net.inet.udp.maxdgram';
+   $tunables = trim((string) shell_exec("sysctl {$sysctls} 2>/dev/null"));
+   echo 'preflight: ', str_replace("\n", ' · ', $tunables), "\n";
+}
+else {
+   $release = @parse_ini_file('/etc/os-release');
+   $system = is_array($release) ? ($release['PRETTY_NAME'] ?? 'unknown') : 'unknown';
+   $libc = glob('/lib/ld-musl-*.so.1') !== [] ? 'musl' : 'glibc';
+}
 $kernel = php_uname('r');
 $machine = php_uname('m');
 $version = PHP_VERSION;

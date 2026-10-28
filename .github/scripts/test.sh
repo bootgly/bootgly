@@ -11,20 +11,38 @@
 #           BOOTGLY_CI_XDEBUG  1 when the cell runs Xdebug in coverage mode (default 0: absent)
 set -eo pipefail
 
+# ! Darwin ships no util-linux, procps nor iproute2. The macOS cell installs
+#   Homebrew's util-linux (keg-only `setsid`, with --wait) and coreutils
+#   (`gtimeout`); both are called by absolute path, never put first on PATH,
+#   so the suite still meets the BSD userland a Mac user has. The suite's
+#   descriptor demand matches the container cells' `--ulimit nofile`.
+if [ "$(uname -s)" = Darwin ]; then
+   DARWIN=1
+   SETSID="$(brew --prefix util-linux)/bin/setsid"
+   TIMEOUT="$(brew --prefix coreutils)/bin/gtimeout"
+   TOOLS=(ps netstat vm_stat git)
+   ulimit -n 65536 2>/dev/null || ulimit -n "$(sysctl -n kern.maxfilesperproc)" || true
+else
+   DARWIN=0
+   SETSID=setsid
+   TIMEOUT=timeout
+   TOOLS=(ps ss free git)
+fi
+
 # ? The wrapper and the diagnostics need the GNU/util-linux tools, not their
 #   BusyBox forms: BusyBox setsid has no --wait, BusyBox timeout no
 #   --kill-after, BusyBox ps no auxf.
-for tool in setsid timeout ps ss free git; do
+for tool in "$SETSID" "$TIMEOUT" "${TOOLS[@]}"; do
    if ! command -v "$tool" >/dev/null; then
       echo "::error::preflight: $tool is missing"
       exit 1
    fi
 done
-if ! setsid --wait true; then
+if ! "$SETSID" --wait true; then
    echo '::error::preflight: setsid has no --wait (util-linux setsid required)'
    exit 1
 fi
-if ! timeout --signal=TERM --kill-after=1 5 true; then
+if ! "$TIMEOUT" --signal=TERM --kill-after=1 5 true; then
    echo '::error::preflight: timeout has no --kill-after (GNU coreutils or uutils required)'
    exit 1
 fi
@@ -53,9 +71,10 @@ rm -f "$STATUS"
 # own and SIGKILLs the run --kill-after seconds later. The runner gets
 # a session of its own inside the budget, so a group signal raised by
 # any descendant stops at the runner (which already survives SIGTERM).
-# shellcheck disable=SC2016  # the inner shell expands $BUDGET, $STATUS and $@
-STATUS="$STATUS" BUDGET="$BUDGET" setsid --wait bash -c \
-   'timeout --signal=TERM --kill-after=30 "$BUDGET" setsid --wait php bootgly test "$@"; echo $? > "$STATUS"' \
+export STATUS BUDGET SETSID TIMEOUT
+# shellcheck disable=SC2016  # the inner shell expands $BUDGET, $STATUS, $SETSID, $TIMEOUT and $@
+"$SETSID" --wait bash -c \
+   '"$TIMEOUT" --signal=TERM --kill-after=30 "$BUDGET" "$SETSID" --wait php bootgly test "$@"; echo $? > "$STATUS"' \
    bash "$@"
 code=$(cat "$STATUS" 2>/dev/null)
 if [ -z "$code" ]; then
@@ -71,12 +90,18 @@ if [ "$code" -ne 0 ]; then
    elif [ "$code" -gt 128 ]; then
       echo "::error::killed by signal $(( code - 128 )) — not the budget"
    fi
-   ps auxf || true
-   ss -tlnp || true
-   free -m || true
-   # ! A container cell cannot read the kernel ring: its job prints it from the host.
-   if sudo -n true 2>/dev/null; then
-      sudo dmesg -T 2>/dev/null | tail -40 || true
+   if [ "$DARWIN" -eq 1 ]; then
+      ps -axo user,pid,ppid,pgid,stat,etime,command || true
+      netstat -anv -p tcp | grep -i listen || true
+      vm_stat || true
+   else
+      ps auxf || true
+      ss -tlnp || true
+      free -m || true
+      # ! A container cell cannot read the kernel ring: its job prints it from the host.
+      if sudo -n true 2>/dev/null; then
+         sudo dmesg -T 2>/dev/null | tail -40 || true
+      fi
    fi
 fi
 exit "$code"

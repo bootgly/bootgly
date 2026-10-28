@@ -47,6 +47,17 @@ jobs:
             php bootgly lint "$submodule" Bootgly/ || status=1
           done
           exit "$status"
+      -
+        # ! macOS (APFS) and Windows check out case-insensitively: two
+        #   tracked files whose paths differ only by case collapse into one
+        #   (directories that differ by case merge, and are let through).
+        name: Refuse case-colliding paths
+        run: |
+          collisions=$(git ls-files | tr '[:upper:]' '[:lower:]' | sort | uniq -d)
+          if [ -n "$collisions" ]; then
+            echo "::error::case-colliding paths: $collisions"
+            exit 1
+          fi
 
   # OS x PHP matrix. Two kinds of cells:
   #   runner    — PHP from setup-php on the hosted VM (x64 and arm64).
@@ -80,6 +91,7 @@ jobs:
           - fedora-44
           - almalinux-9
           - docker-image
+          - macos-15
         php: ['8.4', '8.5']
         # ! ./Dockerfile does not build on PHP 8.5 (`docker-php-ext-install
         #   opcache` exits 2: OPcache is built into 8.5), and the published
@@ -122,6 +134,17 @@ jobs:
             runner: ubuntu-26.04
             coverage: none
             budget: 900
+            experimental: true
+          # ! Darwin (arm64, APFS case-insensitive, BSD userland, no procfs):
+          #   the macOS port's proving ground. Expected red until the port
+          #   lands: the /proc-only specs fail, instance discovery needs a
+          #   procfs-free proof, and SO_REUSEPORT does not balance. 1800s:
+          #   3 vCPU and no timed run yet.
+          - os: macos-15
+            kind: runner
+            runner: macos-15
+            coverage: none
+            budget: 1800
             experimental: true
           # # Container cells (image: the cell's base; mirrors avoid Docker Hub's anonymous pull limit)
           # ! Every container cell fails 7.1-project-startup: with docker-init
@@ -201,6 +224,17 @@ jobs:
           #   loads it in coverage mode unless told `none`).
           coverage: ${{ matrix.coverage }}
       -
+        # ! macOS has no util-linux setsid nor GNU timeout: test.sh calls
+        #   Homebrew's (keg-only setsid, gtimeout) by absolute path, so the
+        #   suite itself still runs on the BSD userland a Mac user has.
+        name: Install the session tools (macOS)
+        if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+          HOMEBREW_NO_ENV_HINTS: 1
+        run: brew install util-linux coreutils
+      -
         name: Run Bootgly Test command
         if: matrix.kind == 'runner'
         env:
@@ -219,23 +253,51 @@ jobs:
           CELL_PHP: ${{ matrix.php }}
           CELL_BASE: ${{ matrix.image }}
         run: |
-          # ! Public registries throttle bursts (ECR answered 429 to six cells
-          #   starting together): retry with a growing, jittered pause.
-          retry () {
-            for attempt in 1 2 3 4; do
-              "$@" && return 0
-              sleep $(( attempt * 30 + RANDOM % 30 ))
+          # ! Public registries throttle the runners' shared addresses (ECR
+          #   answered 429 to every cell, for minutes): pull each base with a
+          #   growing, jittered pause, falling back to Google's and Docker's
+          #   copies of the same library image. The builds use the local copy.
+          fetch () {
+            local sources=("$1") source attempt
+            case "$1" in
+              public.ecr.aws/docker/library/*)
+                sources+=("mirror.gcr.io/library/${1#public.ecr.aws/docker/library/}")
+                sources+=("docker.io/library/${1#public.ecr.aws/docker/library/}")
+                ;;
+            esac
+            for attempt in 1 2 3; do
+              for source in "${sources[@]}"; do
+                if docker pull --quiet "$source" >&2; then
+                  echo "$source"
+                  return 0
+                fi
+              done
+              if [ "$attempt" -lt 3 ]; then
+                sleep $(( attempt * 30 + RANDOM % 30 ))
+              fi
             done
+            echo "::error::cannot pull $1 from any registry" >&2
+            return 1
+          }
+          # ! install.sh's own network steps retry; a build that still fails
+          #   gets one more pass after a pause.
+          retry () {
+            "$@" && return 0
+            sleep $(( 30 + RANDOM % 30 ))
             "$@"
           }
           if [ "$CELL_OS" = docker-image ]; then
             # The PHP runtime bootgly/bootgly ships, built as the release does.
+            PHP_IMAGE=$(fetch "public.ecr.aws/docker/library/php:${CELL_PHP}-cli-bookworm")
             retry docker build --target base \
-              --build-arg PHP_IMAGE="public.ecr.aws/docker/library/php:${CELL_PHP}-cli-bookworm" \
-              --tag "$CELL_BASE" .
+              --build-arg PHP_IMAGE="$PHP_IMAGE" \
+              --tag bootgly-matrix-base .
+          else
+            BASE=$(fetch "$CELL_BASE")
+            docker tag "$BASE" bootgly-matrix-base
           fi
           retry docker build --file .github/scripts/cell.Dockerfile \
-            --build-arg BASE="$CELL_BASE" \
+            --build-arg BASE=bootgly-matrix-base \
             --build-arg DISTRO="$CELL_OS" \
             --build-arg PHP="$CELL_PHP" \
             --build-arg CI_UID="$(id -u)" \
@@ -271,6 +333,16 @@ jobs:
         name: Dump the kernel log
         if: failure() && matrix.kind == 'container'
         run: sudo dmesg -T 2>/dev/null | tail -40 || true
+      -
+        # ! A PHP child that dies by SIGSEGV/SIGABRT on Darwin (fork safety,
+        #   PCRE JIT) leaves an .ips report, not a kernel-log line.
+        name: Dump crash reports (macOS)
+        if: failure() && runner.os == 'macOS'
+        run: |
+          find ~/Library/Logs/DiagnosticReports -name 'php*' -mmin -60 2>/dev/null | head -3 | while read -r report; do
+            echo "===== $report"
+            head -80 "$report" || true
+          done
 
       # # Every cell
       -
