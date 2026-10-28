@@ -62,12 +62,29 @@ return new Test(
          );
 
 
+      // @ Unnamed snapshots are numbered in their file: two never share a
+      //   key, so one never restores the other's value; a named one keys by
+      //   its name
+      $First = new Snapshots\MemoryDefaultSnapshot;
+      $Second = new Snapshots\MemoryDefaultSnapshot;
+      $Named = new Snapshots\MemoryDefaultSnapshot('namedSnapshot');
+      $one = 1;
+      $two = 2;
+      $kept = [$First->assert($one, $one), $Second->assert($two, $two)];
+      $keys = [$First->key !== $Second->key, $Named->key];
+      yield new Assertion(
+         description: 'Unnamed snapshots keep their own keys and values',
+         fallback: 'Unnamed snapshots share a key!'
+      )
+         ->assert(
+            actual: [$kept, $keys],
+            expected: [[true, true], [true, 'namedSnapshot']],
+         );
+
+
       // ! The `using: Snapshot` cases below were silent no-ops until the
       //   Assertion::assert() expectations fix. Enabling them exposes an
       //   incomplete design in Snapshot-as-using:
-      //   - Snapshot::assert() keys unnamed snapshots by test FILE, so every
-      //     case in this file shares one key (an object case restores the
-      //     array captured by a previous case);
       //   - with `expected: new ClosedInterval(...)` the restored value is
       //     compared to the Asserting object itself via `===`.
       //   Snapshot-as-using needs a redesign before these can assert anything.

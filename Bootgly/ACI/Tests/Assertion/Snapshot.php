@@ -39,6 +39,11 @@ abstract class Snapshot implements Asserting
     * @var array<string, int>
     */
    protected static array $indexes = [];
+   /**
+    * The key it captures and restores under: its name, or — unnamed — its
+    * file and its creation order in that file.
+    */
+   public private(set) string $key;
    // ---
    // (protected(set): concrete Snapshots — subclasses — flip these flags,
    //  which readonly forbids outside the declaring class)
@@ -52,11 +57,17 @@ abstract class Snapshot implements Asserting
       $this->name = $name ?? new Backtrace()->file;
 
       // * Metadata
-      // indexes
+      // ? Named: its own key
       if ($name !== null) {
-         self::$indexes[$this->name] ??= 0;
-         self::$indexes[$this->name]++;
+         $this->key = $name;
+
+         return;
       }
+      // @ Unnamed: numbered in its file, so two never share a key
+      self::$indexes[$this->name] ??= 0;
+      self::$indexes[$this->name]++;
+      $index = self::$indexes[$this->name];
+      $this->key = "{$this->name}.{$index}";
    }
 
    /**
@@ -80,13 +91,7 @@ abstract class Snapshot implements Asserting
 
    public function assert (mixed &$actual, mixed &$expected): bool
    {
-      if ($this->name !== null) {
-         $snapshot = $this->name;
-      }
-      else {
-         $index = (string) self::$indexes[$this->name];
-         $snapshot = "{$this->name}.{$index}";
-      }
+      $snapshot = $this->key;
 
       $this->restore($snapshot, $actual);
 
