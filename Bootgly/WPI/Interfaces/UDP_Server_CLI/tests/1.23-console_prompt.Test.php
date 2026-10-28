@@ -381,8 +381,11 @@ PHP;
          //   meet the kernel's line discipline
          $Until(static fn (): bool => false, 1.0, $Pipes, $output);
 
-         // # Clear the line (Ctrl-U), then Ctrl-D on the empty line
-         fwrite($Pipes[0], "\x15\x04");
+         // # Clear the line (Ctrl-U), then Ctrl-D on the empty line. GNU
+         //   readline never blocks in callback mode, so its quoted-insert
+         //   outlives the death and takes the first Ctrl-U literally: the
+         //   second one clears the line there (a no-op on libedit)
+         fwrite($Pipes[0], "\x15\x15\x04");
          $Observed['Ctrl-D stops with exit 0'] = $Until(static fn (): bool => $Running($Process) === false, 2.0, $Pipes, $output)
             && proc_get_status($Process)['exitcode'] === 0;
          $Observed['Ctrl-D stopped the workers'] = str_contains($output, 'worker(s) stopped!');
