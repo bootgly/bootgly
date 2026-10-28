@@ -89,7 +89,8 @@ final class Table
                $this->filled .= str_repeat("\0", max(0, ($this->slots >> 3) - strlen($this->filled)));
             }
             if ($key < $this->slots) {
-               $this->filled[$key >> 3] = chr(ord($this->filled[$key >> 3]) | 1 << ($key & 7));
+               // @ Mark its slot filled (a byte OR one bit is a byte: `& 0xFF` is a no-op)
+               $this->filled[$key >> 3] = chr((ord($this->filled[$key >> 3]) | 1 << ($key & 7)) & 0xFF);
                $this->used = $key + 1;
                $this->count++;
 

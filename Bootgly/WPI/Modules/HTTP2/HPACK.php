@@ -480,21 +480,23 @@ class HPACK
     */
    protected static function write (int $value, int $prefix, int $first): string
    {
+      // ! An N-bit prefix (N <= 8) under the pattern bits of `$first`: every
+      //   octet is a byte, so each `& 0xFF` below is a no-op
       $mask = (1 << $prefix) - 1;
 
       // ?: Fits in the prefix
       if ($value < $mask) {
-         return chr($first | $value);
+         return chr(($first | $value) & 0xFF);
       }
 
       // @ Continuation octets
-      $output = chr($first | $mask);
+      $output = chr(($first | $mask) & 0xFF);
       $value -= $mask;
       while ($value >= 0x80) {
          $output .= chr(($value & 0x7f) | 0x80);
          $value >>= 7;
       }
-      $output .= chr($value);
+      $output .= chr($value & 0xFF);
 
       // :
       return $output;

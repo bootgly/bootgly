@@ -199,7 +199,8 @@ enum Keystrokes : string
       }
 
       // ? Non-ASCII keys keep their legacy encoding — nothing to reconstruct
-      if ($code > 127) {
+      //   (`\d+` never parses a negative code: the floor only bounds ASCII)
+      if ($code < 0 || $code > 127) {
          // :
          return $sequence;
       }

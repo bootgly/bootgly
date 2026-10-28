@@ -137,6 +137,8 @@ class KeysJWK
 
    /**
     * Encode an ASN.1 DER length.
+    *
+    * @param int<0, max> $length The byte length of the value.
     */
    private static function measure (int $length): string
    {
@@ -144,7 +146,8 @@ class KeysJWK
          return chr($length);
       }
 
+      // ! Long form: `N` packs 4 bytes, so the lead is 0x81..0x84 (`& 0xFF` is a no-op)
       $bytes = ltrim(pack('N', $length), "\x00");
-      return implode('', [chr(0x80 | strlen($bytes)), $bytes]);
+      return implode('', [chr((0x80 | strlen($bytes)) & 0xFF), $bytes]);
    }
 }

@@ -82,7 +82,7 @@ class Report
    {
       $sweeping = $run['sweep'] !== [];
       $sweepKey = $sweeping ? array_key_first($run['sweep']) : null;
-      $x = $sweeping ? $run['sweep'][$sweepKey] : [];
+      $x = $sweepKey !== null ? $run['sweep'][$sweepKey] : [];
       $baseline = $run['opponents'][0] ?? '';
       $Format = static function (mixed $nanoseconds): string {
          if (is_int($nanoseconds) === false || $nanoseconds < 0) {

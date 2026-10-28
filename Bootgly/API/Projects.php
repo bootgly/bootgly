@@ -225,8 +225,9 @@ abstract class Projects
          $project = self::$index;
       }
 
-      // @ Select by project index
-      $Project = self::$projects[$project] ?? false;
+      // @ Select by project index (an unknown name, null, looks up '' — the key
+      //   PHP read for null before 8.5)
+      $Project = self::$projects[$project ?? ''] ?? false;
 
       return $Project;
    }
@@ -747,17 +748,20 @@ abstract class Projects
                return chr(((int) octdec($escape[2])) & 255);
             }
             if ($escape[3] !== '') {
-               return chr((int) hexdec($escape[3]));
+               // : Two hex digits at most (`& 0xFF` is a no-op)
+               return chr(((int) hexdec($escape[3])) & 0xFF);
             }
 
-            // : `\u{…}` — UTF-8, encoded the way PHP does (surrogates included)
+            // : `\u{…}` — UTF-8, encoded the way PHP does (surrogates included);
+            //   the parser already refused codepoints past U+10FFFF, so each
+            //   `& 0xFF` is a no-op
             $code = (int) hexdec($escape[4]);
 
             return match (true) {
-               $code < 0x80    => chr($code),
+               $code < 0x80    => chr($code & 0xFF),
                $code < 0x800   => chr(0xC0 | $code >> 6) . chr(0x80 | $code & 0x3F),
                $code < 0x10000 => chr(0xE0 | $code >> 12) . chr(0x80 | $code >> 6 & 0x3F) . chr(0x80 | $code & 0x3F),
-               default         => chr(0xF0 | $code >> 18) . chr(0x80 | $code >> 12 & 0x3F)
+               default         => chr((0xF0 | $code >> 18) & 0xFF) . chr(0x80 | $code >> 12 & 0x3F)
                   . chr(0x80 | $code >> 6 & 0x3F) . chr(0x80 | $code & 0x3F),
             };
          },

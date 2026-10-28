@@ -242,11 +242,12 @@ class Theme
    {
       $name ??= $this->active;
 
-      if (isSet(self::$themes[$name])) {
+      // ? No name (none given, none active) looks up '' — the key PHP read for null before 8.5
+      if (isSet(self::$themes[$name ?? ''])) {
          // * Data
          $this->active = $name;
          // * Metadata
-         $this->theme = self::$themes[$name];
+         $this->theme = self::$themes[$name ?? ''];
 
          /** @var array<string,array<string,mixed>> */
          $options = $this->theme['options'];

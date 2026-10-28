@@ -2448,8 +2448,8 @@ class ProjectsCommand extends Command
             break;
          }
       }
-      // ?
-      if ($file === null || is_file($file) === false) {
+      // ? No registry to read (`$key` is set together with `$file`)
+      if ($file === null || $key === null || is_file($file) === false) {
          return null;
       }
 

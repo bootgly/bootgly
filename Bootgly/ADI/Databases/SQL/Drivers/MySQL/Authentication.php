@@ -107,9 +107,9 @@ class Authentication
       $window = strlen($nonce);
       $masked = '';
 
-      // @@
+      // @@ A byte XOR a byte is a byte (`& 0xFF` is a no-op)
       for ($index = 0; $index < $length; $index++) {
-         $masked .= chr(ord($password[$index]) ^ ord($nonce[$index % $window]));
+         $masked .= chr((ord($password[$index]) ^ ord($nonce[$index % $window])) & 0xFF);
       }
 
       $encrypted = '';
@@ -131,9 +131,9 @@ class Authentication
       $length = strlen($hashed);
       $mixed = '';
 
-      // @@
+      // @@ A byte XOR a byte is a byte (`& 0xFF` is a no-op)
       for ($index = 0; $index < $length; $index++) {
-         $mixed .= chr(ord($hashed[$index]) ^ ord($mask[$index]));
+         $mixed .= chr((ord($hashed[$index]) ^ ord($mask[$index])) & 0xFF);
       }
 
       // :

@@ -242,7 +242,8 @@ class Encoder
          // @@
          foreach ($parameters as $parameter) {
             if ($parameter === null) {
-               $bitmap[intdiv($index, 8)] = chr(ord($bitmap[intdiv($index, 8)]) | (1 << ($index % 8)));
+               // @ Set its NULL bit (a byte OR one bit is a byte: `& 0xFF` is a no-op)
+               $bitmap[intdiv($index, 8)] = chr((ord($bitmap[intdiv($index, 8)]) | (1 << ($index % 8))) & 0xFF);
                $types .= chr(Decoder::TYPE_NULL) . "\0";
             }
             elseif (is_bool($parameter)) {
@@ -297,6 +298,8 @@ class Encoder
 
    /**
     * Pack one length-encoded integer.
+    *
+    * @param int<0, max> $value The unsigned integer (a byte length).
     */
    private function pack (int $value): string
    {

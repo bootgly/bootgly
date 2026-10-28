@@ -226,7 +226,8 @@ final class Huffman
                      $failed = true;
                      break;
                   }
-                  $output .= chr($sym);
+                  // @ A byte: leaves hold symbols 0..256 and EOS left above (`& 0xFF` is a no-op)
+                  $output .= chr($sym & 0xFF);
                   $node = 0;
                }
             }

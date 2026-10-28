@@ -156,8 +156,9 @@ class Authentication
       $proof = '';
       $length = strlen($clientKey);
 
+      // @@ A byte XOR a byte is a byte (`& 0xFF` is a no-op)
       for ($index = 0; $index < $length; $index++) {
-         $proof .= chr(ord($clientKey[$index]) ^ ord($clientSignature[$index]));
+         $proof .= chr((ord($clientKey[$index]) ^ ord($clientSignature[$index])) & 0xFF);
       }
 
       $serverKey = hash_hmac('sha256', 'Server Key', $salted, true);

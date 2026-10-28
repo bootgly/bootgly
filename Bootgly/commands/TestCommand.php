@@ -1258,7 +1258,8 @@ class TestCommand extends Command
                return;
             }
             $records = $Notified->records;
-            $record = $records[array_key_last($records)] ?? null;
+            // ! No record yet looks up '' — the key PHP read for null before 8.5
+            $record = $records[array_key_last($records) ?? ''] ?? null;
             if ($record === null) {
                return;
             }
