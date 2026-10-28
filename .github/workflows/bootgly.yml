@@ -65,12 +65,10 @@ jobs:
     name: test (${{ matrix.os }}, php ${{ matrix.php }}${{ matrix.experimental && ', experimental' || '' }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
-    # ! Only the original lane (ubuntu-24.04, PHP 8.4) blocks. Every other
-    #   cell is experimental: it reports but never blocks. Promote a cell
-    #   (`experimental: false`) once the known failures noted on its row are
-    #   fixed and it has a green streak, one cell at a time. Every PHP 8.5
-    #   cell also fails Scripts-bootstrap-01, whose probe calls the
-    #   deprecated ReflectionProperty::setAccessible().
+    # ! The Ubuntu runner cells block (green in three runs in a row). Every
+    #   other cell is experimental: it reports but never blocks. Promote a
+    #   cell (`experimental: false`) once the known failures noted on its row
+    #   are fixed and it has a green streak, one cell at a time.
     continue-on-error: ${{ matrix.experimental }}
 
     strategy:
@@ -102,7 +100,7 @@ jobs:
             runner: ubuntu-24.04
             coverage: none
             budget: 900
-            experimental: true
+            experimental: false
           # ! The required lane: the original job, Xdebug in coverage mode
           #   included (what setup-php leaves on there by default), so the
           #   XDebug branch of 7.1.2-Coverage-detect_xdebug_mode_guard keeps
@@ -120,7 +118,7 @@ jobs:
             runner: ubuntu-24.04-arm
             coverage: none
             budget: 900
-            experimental: true
+            experimental: false
           # ! setup-php supports this image only since 2.40.0, and its VM
           #   kernel (7.0) is not reproduced locally.
           - os: ubuntu-26.04
@@ -128,7 +126,7 @@ jobs:
             runner: ubuntu-26.04
             coverage: none
             budget: 900
-            experimental: true
+            experimental: false
           # ! Darwin (arm64, APFS case-insensitive, BSD userland, no procfs):
           #   the macOS port's proving ground. Expected red until the port
           #   lands: the /proc-only specs fail, instance discovery needs a
