@@ -100,11 +100,12 @@ jobs:
           # ! The required lane: the original job, Xdebug in coverage mode
           #   included (what setup-php leaves on there by default), so the
           #   XDebug branch of 7.1.2-Coverage-detect_xdebug_mode_guard keeps
-          #   running. 600s: the original budget (504s green, 506s at 9b2b958f).
+          #   running. 900s: its first matrix run took 582s of the original
+          #   600s (504s green, 506s at 9b2b958f) — too close to tell a stall.
           - os: ubuntu-24.04
             php: '8.4'
             coverage: xdebug
-            budget: 600
+            budget: 900
             experimental: false
           # ! arm64 is a shipped target (the image is multi-arch), but these
           #   cells cannot be reproduced on an x86_64 host.
@@ -218,13 +219,22 @@ jobs:
           CELL_PHP: ${{ matrix.php }}
           CELL_BASE: ${{ matrix.image }}
         run: |
+          # ! Public registries throttle bursts (ECR answered 429 to six cells
+          #   starting together): retry with a growing, jittered pause.
+          retry () {
+            for attempt in 1 2 3 4; do
+              "$@" && return 0
+              sleep $(( attempt * 30 + RANDOM % 30 ))
+            done
+            "$@"
+          }
           if [ "$CELL_OS" = docker-image ]; then
             # The PHP runtime bootgly/bootgly ships, built as the release does.
-            docker build --target base \
+            retry docker build --target base \
               --build-arg PHP_IMAGE="public.ecr.aws/docker/library/php:${CELL_PHP}-cli-bookworm" \
               --tag "$CELL_BASE" .
           fi
-          docker build --file .github/scripts/cell.Dockerfile \
+          retry docker build --file .github/scripts/cell.Dockerfile \
             --build-arg BASE="$CELL_BASE" \
             --build-arg DISTRO="$CELL_OS" \
             --build-arg PHP="$CELL_PHP" \
