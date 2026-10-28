@@ -15,6 +15,7 @@ use const E_ALL;
 use const E_WARNING;
 use const LC_ALL;
 use const OPENSSL_KEYTYPE_EC;
+use const SOCKET_ECONNRESET;
 use const STREAM_CRYPTO_METHOD_TLS_SERVER;
 use const STREAM_IPPROTO_IP;
 use const STREAM_PEEK;
@@ -31,6 +32,7 @@ use function fclose;
 use function file_put_contents;
 use function fread;
 use function fsockopen;
+use function function_exists;
 use function fwrite;
 use function getenv;
 use function getmypid;
@@ -62,6 +64,7 @@ use function pcntl_waitpid;
 use function rmdir;
 use function round;
 use function setlocale;
+use function socket_strerror;
 use function str_contains;
 use function str_repeat;
 use function stream_context_create;
@@ -845,6 +848,18 @@ return new Test(
       //    and `prefer` must still read it as the refusal it is
       $previous = setlocale(LC_ALL, '0');
       $localized = setlocale(LC_ALL, 'pt_BR.UTF-8', 'pt_BR.utf8', 'de_DE.utf8', 'de_DE.UTF-8', 'fr_FR.utf8');
+      // ? musl accepts any locale name, with no messages behind it: the leg
+      //   needs the C library's diagnostics really translated
+      if (
+         $localized !== false
+         && (
+            function_exists('socket_strerror') === false
+            || str_contains(socket_strerror(SOCKET_ECONNRESET), 'Connection reset by peer')
+         )
+      ) {
+         setlocale(LC_ALL, $previous === false ? 'C' : $previous);
+         $localized = false;
+      }
       if ($localized === false) {
          // ! Named, not skipped in silence: a host without a translated locale
          //   cannot run this leg, and the report must say so

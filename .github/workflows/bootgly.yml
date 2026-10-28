@@ -150,11 +150,9 @@ jobs:
             image: public.ecr.aws/docker/library/debian:13
             budget: 900
             experimental: true
-          # ! musl and BusyBox: GLOB_BRACE is undefined on 8.4 (three suite
-          #   harnesses glob with it), 1.26-port_windows expects glibc's
-          #   strerror wording, 8.17-kv_redis_tls_prefer_attempt reads a
-          #   successful setlocale() as translated messages, and BusyBox find
-          #   has no `-uid`, which bootgly.wrapper.bash calls (a product defect).
+          # ! musl and BusyBox: no GLOB_BRACE, its own strerror() wording, a
+          #   setlocale() that accepts any name, BusyBox find and ls — the
+          #   suite and the global wrapper keep to what all of them share.
           - os: alpine-3.24          # musl · BusyBox · apk · 8.4 and 8.5 native
             kind: container
             runner: ubuntu-24.04

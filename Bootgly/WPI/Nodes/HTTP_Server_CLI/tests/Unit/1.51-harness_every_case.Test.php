@@ -305,7 +305,11 @@ return new Test(
       }
       finally {
          // @ Tear the tree down
-         $paths = glob("{$directory}/{,*/,*/*/,*/*/*/,*/*/*/*/,*/*/*/*/*/}*", GLOB_BRACE) ?: [];
+         // ! One glob per depth: GLOB_BRACE is not portable (musl has none)
+         $paths = [];
+         foreach (['', '*/', '*/*/', '*/*/*/', '*/*/*/*/', '*/*/*/*/*/'] as $depth) {
+            $paths = [...$paths, ...(glob("{$directory}/{$depth}*") ?: [])];
+         }
          rsort($paths);
          foreach ($paths as $path) {
             is_dir($path) && is_link($path) === false ? @rmdir($path) : @unlink($path);

@@ -150,6 +150,9 @@ return new Test(
       if (is_dir(BOOTGLY_STORAGE_DIR) === false) {
          @mkdir(BOOTGLY_STORAGE_DIR, 0755, true);
       }
+      // ! The refusal carries the C library's own words for EADDRINUSE
+      //   (glibc: 'Address already in use'; musl: 'Address in use')
+      $inUse = socket_strerror(SOCKET_EADDRINUSE);
 
       /** A free loopback UDP port. */
       $Reserve = static function (): int {
@@ -345,7 +348,7 @@ return new Test(
          }
          $refork['refork refusal logged'] = $Await(
             $port,
-            "Could not bind the UDP port {$port}: Address already in use — another socket holds it.",
+            "Could not bind the UDP port {$port}: {$inUse} — another socket holds it.",
             3.0
          );
          $refork['backoff logged'] = $Await($port, 'times in a row', 2.0);
@@ -397,7 +400,7 @@ return new Test(
          );
          $reload['worker refusal logged'] = $Await(
             $port,
-            "Could not bind the UDP port {$port}: Address already in use — another socket holds it.",
+            "Could not bind the UDP port {$port}: {$inUse} — another socket holds it.",
             2.0
          );
          $reload['master alive while the squatter holds'] = $master > 0
