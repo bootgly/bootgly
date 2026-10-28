@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\ACME_Client;
 
 
+use const BOOTGLY_TEMPORARY_DIR;
 use const OPENSSL_KEYTYPE_RSA;
 use function base64_decode;
 use function file_put_contents;
@@ -23,7 +24,6 @@ use function openssl_pkey_new;
 use function preg_match;
 use function preg_replace;
 use function strlen;
-use function sys_get_temp_dir;
 use function tempnam;
 use function unlink;
 use OpenSSLCertificateSigningRequest;
@@ -145,7 +145,7 @@ class CSR
       }
       $SAN = implode(',', $names);
 
-      $configuration = tempnam(sys_get_temp_dir(), 'bootgly-acme-csr-');
+      $configuration = tempnam(BOOTGLY_TEMPORARY_DIR, 'bootgly-acme-csr-');
       if ($configuration === false) {
          throw new RuntimeException('ACME CSR temporary configuration could not be created.');
       }

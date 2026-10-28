@@ -11,6 +11,7 @@
 namespace Bootgly\ACI\Tests;
 
 
+use const BOOTGLY_TEMPORARY_DIR;
 use function basename;
 use function bin2hex;
 use function filemtime;
@@ -27,7 +28,6 @@ use function rmdir;
 use function rtrim;
 use function strpos;
 use function substr;
-use function sys_get_temp_dir;
 use function time;
 use function unlink;
 use FilesystemIterator;
@@ -125,7 +125,7 @@ class Temporaries
       }
 
       // !
-      $root = rtrim(sys_get_temp_dir(), '/') . '/' . self::ROOT;
+      $root = BOOTGLY_TEMPORARY_DIR . self::ROOT;
       if (is_dir($root) === false && @mkdir($root, 0o777, true) === false && is_dir($root) === false) {
          throw new RuntimeException("Cannot create the test temporaries root: {$root}");
       }
@@ -157,7 +157,7 @@ class Temporaries
    {
       $removed = 0;
       $now = time();
-      $temp = rtrim($temp ?? sys_get_temp_dir(), '/');
+      $temp = rtrim($temp ?? BOOTGLY_TEMPORARY_DIR, '/');
 
       // @ Owned root — `<pid>-<name>-<nonce>` entries
       $entries = glob("{$temp}/" . self::ROOT . '/*') ?: [];

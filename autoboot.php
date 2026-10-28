@@ -33,6 +33,10 @@ if (defined('BOOTGLY_UPLOADS_DIR') === true) {
    throw new LogicException('BOOTGLY_UPLOADS_DIR cannot be pre-defined: it derives from BOOTGLY_STORAGE_DIR, and the server deletes the files in it.');
 }
 define('BOOTGLY_UPLOADS_DIR', BOOTGLY_STORAGE_DIR . 'temp/files/downloaded/');
+// ? The system's temporary directory, canonical: macOS keeps it under the
+//   /var → /private/var symlink, which the path checks that refuse symbolic
+//   links reject. Resolved once, here; the checks stay strict.
+define('BOOTGLY_TEMPORARY_DIR', (realpath(sys_get_temp_dir()) ?: rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)) . DIRECTORY_SEPARATOR);
 
 define('BOOTGLY_VERSION', '1.1.0-dev');
 

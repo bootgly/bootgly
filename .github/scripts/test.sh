@@ -22,6 +22,10 @@ if [ "$(uname -s)" = Darwin ]; then
    TIMEOUT="$(brew --prefix coreutils)/bin/gtimeout"
    TOOLS=(ps netstat vm_stat git)
    ulimit -n 65536 2>/dev/null || ulimit -n "$(sysctl -n kern.maxfilesperproc)" || true
+   # ! The suite's own fixtures under sys_get_temp_dir() get the canonical
+   #   path too, as BOOTGLY_TEMPORARY_DIR does (/var is a symlink on macOS)
+   TMPDIR="$(cd "${TMPDIR:-/tmp}" && pwd -P)/"
+   export TMPDIR
 else
    DARWIN=0
    SETSID=setsid

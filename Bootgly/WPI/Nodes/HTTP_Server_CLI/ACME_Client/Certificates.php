@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\ACME_Client;
 
 
+use const BOOTGLY_TEMPORARY_DIR;
 use const JSON_PRETTY_PRINT;
 use const JSON_THROW_ON_ERROR;
 use const OPENSSL_KEYTYPE_RSA;
@@ -73,7 +74,6 @@ use function str_starts_with;
 use function strlen;
 use function strtolower;
 use function substr;
-use function sys_get_temp_dir;
 use function tempnam;
 use function time;
 use function trim;
@@ -433,7 +433,7 @@ class Certificates
       }
       $SAN = implode(',', $names);
 
-      $configuration = tempnam(sys_get_temp_dir(), 'bootgly-acme-bootstrap-');
+      $configuration = tempnam(BOOTGLY_TEMPORARY_DIR, 'bootgly-acme-bootstrap-');
       if ($configuration === false) {
          throw new RuntimeException('ACME bootstrap temporary configuration could not be created.');
       }

@@ -13,6 +13,7 @@ namespace Bootgly\commands;
 
 use const BOOTGLY_ROOT_DIR;
 use const BOOTGLY_STORAGE_DIR;
+use const BOOTGLY_TEMPORARY_DIR;
 use const BOOTGLY_TTY;
 use const BOOTGLY_WORKING_DIR;
 use const GLOB_ONLYDIR;
@@ -81,7 +82,6 @@ use function strlen;
 use function strtolower;
 use function strtoupper;
 use function substr;
-use function sys_get_temp_dir;
 use function time;
 use function trim;
 use function unlink;
@@ -556,7 +556,7 @@ class ProjectsCommand extends Command
       // ! Staging nobody else can name or enter: an unguessable name that
       //   mkdir() refuses to reuse (a planted entry fails the import, never
       //   receives the clone), mode 0700 — git creates the clone one level in
-      $temp = sys_get_temp_dir();
+      $temp = rtrim(BOOTGLY_TEMPORARY_DIR, '/');
       $process = getmypid();
       $nonce = bin2hex(random_bytes(16));
       $staging = "{$temp}/bootgly-import-{$process}-{$nonce}";
