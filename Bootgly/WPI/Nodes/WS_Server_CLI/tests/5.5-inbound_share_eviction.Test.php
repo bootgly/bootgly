@@ -235,7 +235,7 @@ return new Test(
       yield assert(
          assertion: $Evidence['error'] === ''
             // ! 102,414 B (26 pages) pays a 1/18 chunk share: 19 fit, one is lost to fragmentation
-            && $Evidence['weigh'] === [0, 128, 1_280, 116_509, 2_097_152, 2_097_152, 8_392_704],
+            && $Evidence['weigh'] === [0, 160, 1_280, 116_509, 2_097_152, 2_097_152, 8_392_704],
          description: 'M4 a held string must be weighed at its allocator footprint: ' . json_encode($Evidence)
       );
       yield assert(

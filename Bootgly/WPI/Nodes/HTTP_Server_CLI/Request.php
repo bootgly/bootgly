@@ -396,7 +396,7 @@ class Request
          parse_str($this->query, $queries);
          // ? A deferred snapshot pays for what it parses (`capture()`)
          if ($this->Bodies !== null) {
-            $this->charge(Buffers::tally($queries));
+            $this->charge(Buffers::tally($queries, Buffers::NESTED));
          }
 
          /** @var array<string,string|string[]> $queries */
@@ -944,7 +944,7 @@ class Request
          + Buffers::weigh(strlen($this->authToken))
          + Buffers::weigh(strlen($this->authUsername))
          + Buffers::weigh(strlen($this->authPassword))
-         + Buffers::tally($this->_queries ?? [])
+         + Buffers::tally($this->_queries ?? [], Buffers::NESTED)
          + Buffers::tally($this->exclusions)
          + Buffers::tally($this->_fields)
          + Buffers::tally($this->_files)
@@ -1280,7 +1280,7 @@ class Request
                   $objects[$depth] => $size * 40,
                   default => $size * 16 + 8
                };
-               $bytes += 56 + Buffers::weigh(max(1, $table - 25));
+               $bytes += 56 + Buffers::weigh(max(1, $table - 32));
             }
          }
 

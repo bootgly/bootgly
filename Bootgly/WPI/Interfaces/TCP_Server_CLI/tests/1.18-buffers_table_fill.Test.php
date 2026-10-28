@@ -55,14 +55,18 @@ use Random\Randomizer;
  *   times it;
  * - (c) exact `tally()` of the empty array, of lists, of maps begun by a
  *   name and by an index, and of nested arrays (string keys and values at
- *   `weigh()`).
+ *   `weigh()`), nested singletons included;
+ * - (d) the running PHP's layout: `weigh()` covers a string cut from a
+ *   larger one (PHP 8.4.27 / 8.5.12 give it a 32-byte header), and `tally()`
+ *   with `Buffers::NESTED` covers what `parse_str()` builds, within 1.5
+ *   times it (its nested levels start as singletons since those releases).
  */
 return new Test(
    description: 'H-HSC-5: Buffers\Table follows the table PHP builds key by key, and tally() prices by it',
    test: new Assertions(Case: function (): Generator {
-      // ! The table a sequence of keys builds: [list, slots, bytes]
-      $Trace = static function (array $keys): array {
-         $Table = new Table;
+      // ! The table a sequence of keys builds from `$slots`: [list, slots, bytes]
+      $Trace = static function (array $keys, int $slots = 8): array {
+         $Table = new Table($slots);
          foreach ($keys as $key) {
             $Table->fill($key);
          }
@@ -136,13 +140,31 @@ return new Test(
          'list 0..3, 8 converts, 9, 10, repeat 9, 10' => [[...range(0, 3), 8, 9, 10, 9, 10], [false, 16, 640]],
          'map 8 names, repeat a' => [[...array_slice($names, 0, 8), 'a'], [false, 16, 640]],
       ];
+      // ! Singletons (a nested level `parse_str()` builds since PHP 8.4.27
+      //   and 8.5.12), traced against its real tables: a list of 1 slot
+      //   doubling, a map of its slots — twice them when the list is full
+      $Singletons = [
+         'singleton 0' => [[0], [true, 1, 24]],
+         'singleton 0, 1' => [[0, 1], [true, 2, 40]],
+         'singleton 0, hole 2' => [[0, 2], [false, 2, 80]],
+         'singleton 0, 1, 3' => [[0, 1, 3], [true, 4, 72]],
+         'singleton 0..4' => [range(0, 4), [true, 8, 136]],
+         'singleton 0, a name' => [[0, 'a'], [false, 2, 80]],
+         'singleton 0, a negative' => [[0, -1], [false, 2, 80]],
+         'singleton 0, 2, hole 1' => [[0, 2, 1], [false, 4, 160]],
+         'singleton 0, repeat 0' => [[0, 0], [true, 1, 24]],
+      ];
       $traced = [];
       $expected = [];
       foreach ($Traces as $shape => [$keys, $table]) {
          $traced[$shape] = $Trace($keys);
          $expected[$shape] = $table;
       }
-      $hand = count($Traces);
+      foreach ($Singletons as $shape => [$keys, $table]) {
+         $traced[$shape] = $Trace($keys, 1);
+         $expected[$shape] = $table;
+      }
+      $hand = count($traced);
 
       yield new Assertion(
          description: "(a) fill() builds the list, slots and bytes PHP builds for each of {$hand} hand-traced sequences"
@@ -153,8 +175,13 @@ return new Test(
       // # (b) Seeded sequences, built as PHP arrays in their order
       // ! The allocator footprint of `$bytes`: a small bin, or whole pages
       $Footprint = static fn (int $bytes): int => $bytes <= 3_072
-         ? Buffers::weigh(max(1, $bytes - 25))
+         ? Buffers::weigh(max(1, $bytes - 32))
          : intdiv($bytes + 4_095, 4_096) * 4_096;
+      // ! What a name of `$bytes` built by interpolation spends: its 24-byte
+      //   header and the NUL, 8-aligned, in the bin that fits — `weigh()`
+      //   prices 7 bytes more (a 32-byte header), and under 8 bytes the
+      //   name takes the 32-byte bin
+      $Name = static fn (int $bytes): int => $bytes < 8 ? 32 : Buffers::weigh($bytes - 7);
       // ! An array of `$keys` built in their order: an int is an index, a
       //   string is a name built fresh — with its own allocation
       $Build = static function (array $keys): array {
@@ -407,12 +434,15 @@ return new Test(
          foreach ($keys as $key) {
             $Table->fill(is_string($key) ? "k{$key}" : $key);
          }
+         // ! The names: what they spend and what `tally()` weighs them at
          $Kept = new Table;
          $strings = 0;
+         $weighed = 0;
          foreach (array_keys($built) as $key) {
             $Kept->fill($key);
             if (is_string($key)) {
-               $strings += Buffers::weigh(strlen($key));
+               $strings += $Name(strlen($key));
+               $weighed += Buffers::weigh(strlen($key));
             }
          }
          $table = $real - ($built === [] ? 0 : 56) - $strings;
@@ -494,7 +524,7 @@ return new Test(
             $over[] = "{$sample} tally {$tally} > 1.25 x real {$real}";
          }
          // ? An array begun as a list is priced by the table of its keys
-         if ($begun && $tally !== 56 + Buffers::weigh($Kept->bytes) + $strings) {
+         if ($begun && $tally !== 56 + Buffers::weigh($Kept->bytes) + $weighed) {
             $untabled[] = "{$sample} tally {$tally} != table {$Kept->bytes}";
          }
          unset($built);
@@ -568,24 +598,32 @@ return new Test(
          'empty' => Buffers::tally([]),
          // ? A list of 3 ints: 56 + weigh(8 x 16 = 128) = 56 + 160
          'int list' => Buffers::tally([1, 2, 3]),
-         // ? 9 strings of 100 bytes: 56 + weigh(16 x 16) 320 + 9 x 128
+         // ? 9 strings of 100 bytes: 56 + weigh(16 x 16) 320 + 9 x 160
          'string list' => Buffers::tally(array_fill(0, 9, str_repeat('v', 100))),
          // ? Begun by a name — 9 names: 56 + weigh(16 x 40) 768 + 9 x
-         //   (name 32 + value 32)
+         //   (name 40 + value 40)
          'map by name' => Buffers::tally(array_fill_keys($names, 'x')),
          // ? The R5 object: 56 + weigh(128 x 40 = 5,120) — two pages, 254
          //   to a chunk — 8,257
          'map by index' => Buffers::tally($sparse),
          // ? Nested — the outer map of 3 names: 56 + weigh(8 x 40) 384 +
-         //   3 x 32 = 536; user, a map of 2 names and a value: 536; tags, a
-         //   list of 2: 56 + 160 + 2 x 32 = 280; grid [5..8], begun as a full
-         //   list: a map of 16, 56 + 768 + 4 x 32 = 952; held [0, 2, 1], a
-         //   hole: a map of 8, 56 + 384 + 3 x 32 = 536
+         //   3 x 40 = 560; user, a map of 2 names and a value: 560; tags, a
+         //   list of 2: 56 + 160 + 2 x 40 = 296; grid [5..8], begun as a full
+         //   list: a map of 16, 56 + 768 + 4 x 40 = 984; held [0, 2, 1], a
+         //   hole: a map of 8, 56 + 384 + 3 x 40 = 560
          'nested' => Buffers::tally([
             'user' => ['name' => 'alice', 'tags' => ['a', 'b']],
             'grid' => [5 => 'p', 6 => 'q', 7 => 'r', 8 => 's'],
             'held' => [0 => 'x', 2 => 'y', 1 => 'z'],
          ]),
+         // ? Nested singletons (`parse_str()` since PHP 8.4.27 / 8.5.12) —
+         //   the outer map of 1 name: 56 + 384 + 40 = 480; its level, a map
+         //   of 1 slot: 56 + weigh(1 x 40) 80 + name 40 + value 40 = 216
+         'singleton nested' => Buffers::tally(['a' => ['b' => 'c']], 1),
+         // ? A nested singleton begun as a list, then a hole: the outer
+         //   480; its level a map of 2 slots, 56 + weigh(2 x 40) 112 + 2 x
+         //   40 = 248
+         'singleton list, hole' => Buffers::tally(['a' => [0 => 'x', 2 => 'y']], 1),
       ];
 
       yield new Assertion(
@@ -594,11 +632,55 @@ return new Test(
          ->expect($tallies, Op::Identical, [
             'empty' => 0,
             'int list' => 216,
-            'string list' => 1_528,
-            'map by name' => 1_400,
+            'string list' => 1_816,
+            'map by name' => 1_544,
             'map by index' => 8_313,
-            'nested' => 2_840,
+            'nested' => 2_960,
+            'singleton nested' => 696,
+            'singleton list, hole' => 728,
          ])
+         ->assert();
+
+      // # (d) This runtime's layout: a string cut from a larger one (substr(),
+      //   explode(), preg_* captures) spends at most weigh() — 24 + its
+      //   bytes + 1 before PHP 8.4.27 / 8.5.12, its bytes + 32 since — and
+      //   what parse_str() builds is covered by tally() with
+      //   `Buffers::NESTED`, within 1.5 times it
+      //   — one string at a time (nothing else allocates beside it), and
+      //   the parse by dropping it, as the snapshots of 1.9 are (what the
+      //   engine allocates around a parse varies with the run: under a
+      //   child runner, 160 KiB more)
+      $source = str_repeat('abcdefgh', 200);
+      $cuts = [];
+      $short = [];
+      // @@ Strings of 3 to 1,000 bytes
+      foreach ([3, 10, 100, 1_000] as $length) {
+         $before = memory_get_usage();
+         $cut = substr($source, 1, $length);
+         $cuts[$length] = [memory_get_usage() - $before, Buffers::weigh($length)];
+         if ($cuts[$length][0] > $cuts[$length][1]) {
+            $short[] = $length;
+         }
+         unset($cut);
+      }
+      $query = implode('&', array_map(static fn (int $at): string => "a{$at}%5Bb{$at}%5D=v{$at}", range(1, 120)));
+      parse_str($query, $parsed);
+      $nested = Buffers::tally($parsed, Buffers::NESTED);
+      $held = memory_get_usage();
+      unset($parsed);
+      $parse = $held - memory_get_usage();
+      $layout = json_encode([
+         'cut (spent, weighed)' => $cuts, 'parsed' => $parse, 'tallied' => $nested, 'NESTED' => Buffers::NESTED,
+      ]);
+
+      yield new Assertion(
+         description: "(d) weigh() covers the strings this runtime cuts, and tally() with Buffers::NESTED what its parse_str() builds, within 1.5x: {$layout}"
+      )
+         ->expect(
+            [$short, $nested >= $parse, $nested <= 1.5 * $parse],
+            Op::Identical,
+            [[], true, true]
+         )
          ->assert();
    }),
 );

@@ -48,7 +48,11 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Frame;
  *   charges what the snapshot holds (`weigh()`), and after the deferred work
  *   parsed cookies, languages and query vars the snapshot's share covers
  *   what the snapshot keeps — measured by dropping it — and stays within
- *   twice that, so a crafted head cannot reserve the budget it does not use;
+ *   twice that, so a crafted head cannot reserve the budget it does not use
+ *   (what it keeps follows the runtime's layout: PHP 8.4.27 and 8.5.12 give
+ *   a string cut from a larger one a 32-byte header and start each nested
+ *   level `parse_str()` builds as a singleton — `weigh()` and
+ *   `Buffers::NESTED` follow both);
  * - a parse the budget cannot hold is refused inside the work and keeps
  *   nothing; an HTTP/2 stream keeps its head charged itself; a snapshot that
  *   does not fit the Inbound share is refused and moves nothing; `clean()`

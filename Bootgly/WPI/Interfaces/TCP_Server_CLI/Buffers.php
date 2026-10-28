@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 
 use const PHP_INT_MAX;
+use const PHP_VERSION_ID;
 use function array_is_list;
 use function array_key_first;
 use function count;
@@ -47,6 +48,12 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers\Table;
  */
 final class Buffers
 {
+   /**
+    * The slots PHP's variable parser (`parse_str()`) starts each nested
+    * array with: one since PHP 8.4.27 and 8.5.12 (`array_init_singleton()`),
+    * the 8-slot minimum before.
+    */
+   public const int NESTED = PHP_VERSION_ID >= 80512 || (PHP_VERSION_ID >= 80427 && PHP_VERSION_ID < 80500) ? 1 : 8;
    /** Zend MM small-allocation bin sizes, in bytes. */
    private const array BINS = [
       8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256,
@@ -186,11 +193,14 @@ final class Buffers
          return PHP_INT_MAX;
       }
 
-      // ? Small: the smallest bin slot that fits the zend_string header (24
-      //   bytes) and the trailing NUL, 8-aligned — a padded string past 3,040
-      //   bytes already takes a page
+      // ? Small: the smallest bin slot that fits an unaligned 32-byte header
+      //   and the string, 8-aligned — what a string cut from a larger one
+      //   (substr(), explode(), preg_* captures) spends since PHP 8.4.27 and
+      //   8.5.12, and never less than a 24-byte header plus the NUL spends
+      //   on any version; a padded string past 3,040 bytes already takes a
+      //   page
       if ($bytes <= 3_040) {
-         $size = ($bytes + 25 + 7) & ~7;
+         $size = ($bytes + 32 + 7) & ~7;
          if (isSet(self::$slots[$size])) {
             return self::$slots[$size];
          }
@@ -225,15 +235,18 @@ final class Buffers
 
    /**
     * The memory PHP's allocator spends to keep an array of parsed values:
-    * the array, its table (at least 8 slots, doubling — a 16-byte value per
-    * slot for a list, a 32-byte bucket and two 4-byte hash slots for a map)
-    * and every string key and value at its `weigh()`, nested arrays in full.
-    * A map whose first key is `0` to `7` began as a list: its table is the
-    * one its keys build (`Buffers\Table`).
+    * the array, its table (at least `$least` slots, doubling — a 16-byte
+    * value per slot for a list, a 32-byte bucket and two 4-byte hash slots
+    * for a map) and every string key and value at its `weigh()`, nested
+    * arrays in full. A map whose first key is below `$least` began as a
+    * list: its table is the one its keys build (`Buffers\Table`).
     *
     * @param array<mixed> $values
+    * @param int $nested The slots each nested array starts with:
+    *   `Buffers::NESTED` for what `parse_str()` builds.
+    * @param int $least The slots this array starts with.
     */
-   public static function tally (array $values): int
+   public static function tally (array $values, int $nested = 8, int $least = 8): int
    {
       // ? The empty array is shared, never allocated
       $count = count($values);
@@ -241,12 +254,12 @@ final class Buffers
          return 0;
       }
 
-      // ! A map whose first key is `0` to `7` began as a list: its table is
-      //   followed key by key
+      // ! A map whose first key is below `$least` began as a list: its table
+      //   is followed key by key
       $list = array_is_list($values);
       $first = array_key_first($values);
-      $Table = $list === false && is_int($first) && $first >= 0 && $first < 8
-         ? new Table
+      $Table = $list === false && is_int($first) && $first >= 0 && $first < $least
+         ? new Table($least)
          : null;
       $bytes = 56;
 
@@ -262,16 +275,16 @@ final class Buffers
             $bytes += self::weigh(strlen($value));
          }
          else if (is_array($value)) {
-            $bytes += self::tally($value);
+            $bytes += self::tally($value, $nested, $nested);
          }
       }
 
-      // @ The table: at least 8 slots, doubling to fit the values
+      // @ The table: at least `$least` slots, doubling to fit the values
       if ($Table !== null) {
          $table = $Table->bytes;
       }
       else {
-         $size = 8;
+         $size = max(1, $least);
          while ($size < $count) {
             $size <<= 1;
          }

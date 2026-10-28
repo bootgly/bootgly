@@ -1051,7 +1051,7 @@ return new Test(
          // @@ 8) `check()` leaves `pcre.backtrack_limit` as it found it
          //   `["` + 1,500,000 × `\n` + `"]` (3,000,004 bytes): shape `[""]`,
          //   content 3,000,000 → price 400 + 64 + 48 + 6,000,000 + 4 =
-         //   6,000,516, walk 48 + 6,000,000 + 4 + (56 + weigh(111) = 216) =
+         //   6,000,516, walk 48 + 6,000,000 + 4 + (56 + weigh(104) = 216) =
          //   6,000,268: at a share of 6,000,268 the walk accepts it, one byte
          //   below refuses it. Valid, invalid, keyed and plain bodies leave
          //   the limit where it was set
@@ -1102,9 +1102,9 @@ return new Test(
 
          // @@ 9) The walk boundary: `[` + pad + N × `[0]` (commas between) + `]`
          //   No string: the shape is the body, 4N + 1 + pad bytes. Each `[0]`:
-         //   8 slots × 16 + 8 = 136, 56 + weigh(111) = 56 + 160 = 216. The
+         //   8 slots × 16 + 8 = 136, 56 + weigh(104) = 56 + 160 = 216. The
          //   outer list of N ∈ (131,072, 262,144] values: 262,144 slots ×
-         //   16 + 8 = 4,194,312, 56 + weigh(4,194,287) = 56 + 4,198,400
+         //   16 + 8 = 4,194,312, 56 + weigh(4,194,280) = 56 + 4,198,400
          //   (1,025 pages) = 4,198,456. walk = 220N + 1 + pad + 4,198,456:
          //   N = ⌊(33,554,432 − 4,198,457) / 220⌋ = 133,436, pad = 55.
          //   price = 400(N + 1) + 64 × 2N + 4N + 1 + pad = 70,988,408 (over
