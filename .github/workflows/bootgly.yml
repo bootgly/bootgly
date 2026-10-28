@@ -48,16 +48,10 @@ jobs:
           done
           exit "$status"
       -
-        # ! macOS (APFS) and Windows check out case-insensitively: two
-        #   tracked files whose paths differ only by case collapse into one
-        #   (directories that differ by case merge, and are let through).
+        # ! macOS (APFS) and Windows check out case-insensitively: colliding
+        #   files are refused, a file colliding with a directory is reported.
         name: Refuse case-colliding paths
-        run: |
-          collisions=$(git ls-files | tr '[:upper:]' '[:lower:]' | sort | uniq -d)
-          if [ -n "$collisions" ]; then
-            echo "::error::case-colliding paths: $collisions"
-            exit 1
-          fi
+        run: git ls-files | php .github/scripts/collisions.php
 
   # OS x PHP matrix. Two kinds of cells:
   #   runner    — PHP from setup-php on the hosted VM (x64 and arm64).
@@ -235,8 +229,22 @@ jobs:
           HOMEBREW_NO_ENV_HINTS: 1
         run: brew install util-linux coreutils
       -
+        # ! The tree tracks the launcher `bootgly` beside the framework's
+        #   `Bootgly/`: a case-insensitive APFS checkout keeps only one of
+        #   them (`php bootgly` then cannot find Bootgly/autoboot.php). Until
+        #   the names stop colliding, the cell clones the checked-out commit
+        #   onto a case-sensitive APFS volume — what a Mac user needs today —
+        #   and runs the suite there.
+        name: Check out on a case-sensitive volume (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          hdiutil create -quiet -size 4g -type SPARSE -fs 'Case-sensitive APFS' -volname bootgly "$RUNNER_TEMP/bootgly.sparseimage"
+          hdiutil attach -quiet -nobrowse -mountpoint /Volumes/bootgly "$RUNNER_TEMP/bootgly.sparseimage"
+          git -c protocol.file.allow=always clone --quiet --depth 1 "file://$GITHUB_WORKSPACE" /Volumes/bootgly/bootgly
+      -
         name: Run Bootgly Test command
         if: matrix.kind == 'runner'
+        working-directory: ${{ runner.os == 'macOS' && '/Volumes/bootgly/bootgly' || github.workspace }}
         env:
           BOOTGLY_TEST_TRACE: 1
           BOOTGLY_CI_BUDGET: ${{ matrix.budget }}
@@ -348,6 +356,7 @@ jobs:
       -
         name: Dump benchmark run artifacts
         if: failure()
+        working-directory: ${{ runner.os == 'macOS' && '/Volumes/bootgly/bootgly' || github.workspace }}
         run: |
           find storage/tests/benchmarks -type f 2>/dev/null | while read -r file; do
             echo "===== $file"
