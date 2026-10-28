@@ -74,11 +74,13 @@ curl -fsSL https://bootgly.com/install | bash
 | --- | --- | --- |
 | ✅ Linux | ✅ | ✅ |
 | ✅ WSL2 | ✅ | ✅ |
-| ❔ macOS | ❌ | ✅ |
-| ❔ Windows | ❌ | ✅ |
+| 🧪 macOS | 🚧 in progress | ✅ on a case-sensitive volume |
+| ❔ Windows | ❌ | ❌ (use WSL2) |
 
-Linux is first-class: the servers rely on `pcntl`/`posix`, so on macOS and Windows only the
-CLI tooling runs natively — use Docker for everything else.
+Linux is first-class. The kit keeps the launcher `bootgly` beside the platform folder `Bootgly/`,
+names that differ only by case: on macOS install it on a case-sensitive APFS volume (see the
+[getting started guide](https://docs.bootgly.com/guide/getting-started/overview/)); the servers'
+macOS port is in progress. On Windows, use WSL2 or Docker.
 
 ### ⚙️ Dependencies
 
