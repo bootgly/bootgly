@@ -37,5 +37,7 @@ return new Suite(
       '1.16-kv_resource_withdraw',
       // # 1.0.x (M3): redirects stay on the upstream origin by default
       '1.17-http_resource_redirect_pin',
+      // # 1.1.x (PERF-DEFER): fetch() after release() cleans exactly the built-ins that let their response go
+      '1.18-releasable_builtins',
    ]
 );

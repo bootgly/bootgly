@@ -78,7 +78,9 @@ class Resources
    private static null|Closure $Substitute = null;
    // ! The framework built-ins whose clean() is what lets their response go
    //   (see fetch()). Exact classes: a subclass keeps the strong edge it
-   //   always had, and its own clean() never runs at build time
+   //   always had, and its own clean() never runs at build time. Kept in
+   //   step by Resources/tests/1.18-releasable_builtins.Test.php, which
+   //   derives it from the definitions the constructor below registers
    /** @var array<class-string<Resource>,true> */
    private const array RELEASABLE = [
       Database::class => true,

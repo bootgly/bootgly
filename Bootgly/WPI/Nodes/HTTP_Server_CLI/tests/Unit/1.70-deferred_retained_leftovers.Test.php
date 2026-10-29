@@ -34,11 +34,6 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource\Scheduling;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\JSON;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\JSONP;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Negotiation;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Plaintext;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Pre;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\SSE;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\View;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\XML;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
@@ -61,15 +56,18 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
  *   writes its headers on it, `defer()` is refused (its work never runs), a
  *   late SSE head is refused, `wait()` returns at once, and nothing reaches
  *   the wire; a clone of it carries the same tombstone and refuses `defer()`
- *   too; a definition the job never built, fetched first on it, answers on
+ *   too; a definition the job never built, fetched first on it — one for
+ *   every built-in the registry's constructor registers, read from its
+ *   definitions rather than listed, and a configured Database — answers on
  *   it as well — a send of every built-in formatter and a pagination land on
  *   it, an SSE head is refused — while a project resource whose clean()
- *   wipes what its construction set up is handed over as built, with its
- *   state;
+ *   wipes what its construction set up, and a subclass of a built-in whose
+ *   clean() does the same, are handed over as built, with their state;
  * - once that clone is let go, refcounting frees it — nothing a late call
  *   left behind holds it, every built-in first built after the job (each
- *   formatter, Database, SSE) included — and the formatter built that way,
- *   kept past it, answers for a detached stand-in; nothing reaches the wire;
+ *   one the constructor registers, and Database) included — and the
+ *   formatter built that way, kept past it, answers for a detached stand-in;
+ *   nothing reaches the wire;
  * - resources, and the registry, retained without their clone (which did
  *   not outlive the job): every late call — a send of every built-in
  *   formatter, an SSE head, a pagination, a query, a wait through the
@@ -175,6 +173,30 @@ if (! class_exists('U170JSON', false)) {
       public function peek (): Response
       {
          return $this->Response;
+      }
+   }
+}
+if (! class_exists('U170StatefulJSON', false)) {
+   /**
+    * A project JSON formatter whose clean() wipes the state its construction
+    * set up.
+    */
+   class U170StatefulJSON extends JSON
+   {
+      // * Data
+      public private(set) string $state;
+
+
+      public function __construct (Response $Response)
+      {
+         parent::__construct($Response);
+
+         $this->state = 'seeded';
+      }
+
+      public function clean (): void
+      {
+         $this->state = '';
       }
    }
 }
@@ -305,15 +327,23 @@ return new Test(
 
          return $wire;
       };
-      // ! The context a built-in factory is handed
+      // ! The context a project factory is handed
       $Within = static fn (object $Context): Response => $Context instanceof Response
          ? $Context
          : throw new RuntimeException('U170 expects a Response context.');
+      // ! One `Late` definition per built-in the registry's constructor
+      //   registers, built by that built-in's own factory — read from the
+      //   registry, never listed here: a built-in added there is first built
+      //   on the kept clone below (leg A) as well
+      $Late = [];
+      foreach (new Response()->Resources->definitions as $name => $Factory) {
+         $Late["Late{$name}"] = $Factory;
+      }
       // ! The worker's persistent Response for one live request, with the
       //   configured resources a project registers — the `Lazy` and `Late`
-      //   ones (one per framework built-in) and `Stateful` are never built
-      //   by a job
-      $respond = static function (array $definitions = [], null|Response $Response = null) use ($Open, $Decode, $Within): array {
+      //   ones, `LateSub` (a subclass of a built-in) and `Stateful` are never
+      //   built by a job
+      $respond = static function (array $definitions = [], null|Response $Response = null) use ($Open, $Decode, $Within, $Late): array {
          [$Connection, $Client] = $Open();
 
          $Response ??= new Response;
@@ -322,14 +352,8 @@ return new Test(
             'Waiter' => static fn (object $Context): U170Waiter => new U170Waiter,
             'LazyDatabase' => static fn (object $Context): Database => new Database(new U170SQL),
             'LazyWaiter' => static fn (object $Context): U170Waiter => new U170Waiter,
-            'LazyXML' => static fn (object $Context): XML => new XML($Within($Context)),
-            'LateJSON' => static fn (object $Context): JSON => new JSON($Within($Context)),
-            'LateJSONP' => static fn (object $Context): JSONP => new JSONP($Within($Context)),
-            'LateNegotiation' => static fn (object $Context): Negotiation => new Negotiation($Within($Context)),
-            'LatePlaintext' => static fn (object $Context): Plaintext => new Plaintext($Within($Context)),
-            'LatePre' => static fn (object $Context): Pre => new Pre($Within($Context)),
-            'LateSSE' => static fn (object $Context): SSE => new SSE($Within($Context)),
-            'LateView' => static fn (object $Context): View => new View($Within($Context)),
+            ...$Late,
+            'LateSub' => static fn (object $Context): U170StatefulJSON => new U170StatefulJSON($Within($Context)),
             'Stateful' => static fn (object $Context): U170Stateful => new U170Stateful,
             ...$definitions,
          ]);
@@ -462,21 +486,31 @@ return new Test(
             unset($Copy, $Tombstone);
 
             // @ Definitions the job never built, fetched first on the kept
-            //   clone: every framework built-in lands on it as the job's own
-            //   do, while a project resource is handed over as built — its
-            //   clean(), which wipes what its construction set up, never run
-            //   early
-            $Lazy = $Kept->LazyXML;
+            //   clone: every built-in the registry's constructor registers
+            //   (its `Late` definition) and a configured Database land on it
+            //   as the job's own do, while a project resource — a subclass of
+            //   a built-in too — is handed over as built: its clean(), which
+            //   wipes what its construction set up, never run early
+            $built = [];
+            foreach (array_keys($Late) as $name) {
+               $built[$name] = $Kept->{$name} instanceof Resource;
+            }
+            $Lazy = $Kept->LateXML;
             $landed = [];
             foreach ($sends as $name => $Send) {
-               $landed[$name] = $Send($name === 'XML' ? $Lazy : $Kept->{"Late{$name}"}) === $Kept;
+               $landed[$name] = $Send($Kept->{"Late{$name}"}) === $Kept;
             }
             $late['lazy'] = [
+               'built' => $built,
                'sends' => $landed,
                'paginate' => $page($Kept->LazyDatabase->paginate(U170Item::class)) === $expected,
                'sse' => $Kept->LateSSE->open() === $Kept->LateSSE && $Kept->LateSSE->opened === false,
             ];
             $late['stateful'] = $Kept->Stateful->state;
+            $late['subclass'] = $Kept->LateSub->state;
+            // ! The subclass keeps the strong edge it always had: unmounted
+            //   here, so the clone let go below is freed by refcount
+            $Kept->Resources->set('LateSub', new U170Plain);
          }
          $late['wire'] = $Receive($Client);
 
@@ -492,14 +526,16 @@ return new Test(
                   'wait' => true,
                   'copy' => true,
                   'lazy' => [
+                     'built' => array_fill_keys(array_keys($Late), true),
                      'sends' => array_fill_keys(array_keys($sends), true),
                      'paginate' => true,
                      'sse' => true,
                   ],
                   'stateful' => 'seeded',
+                  'subclass' => 'seeded',
                   'wire' => '',
                ],
-            description: 'a retained clone keeps its finished tombstone and the very resources the job built: a late send of every built-in formatter lands on it, a late pagination writes its headers on it, defer() and an SSE head are refused, wait() returns, a clone of it refuses defer() too, every built-in the job never built lands on it (a send of each formatter, a pagination, a refused SSE head), a project resource first built after the job keeps the state its construction set — and nothing reaches the wire — observed: '
+            description: 'a retained clone keeps its finished tombstone and the very resources the job built: a late send of every built-in formatter lands on it, a late pagination writes its headers on it, defer() and an SSE head are refused, wait() returns, a clone of it refuses defer() too, every built-in the job never built — each one the registry\'s constructor registers, and Database — is built on it and lands on it (a send of each formatter, a pagination, a refused SSE head), a project resource and a subclass of a built-in first built after the job keep the state their construction set — and nothing reaches the wire — observed: '
                . json_encode(['answered' => str_contains($wire, '{"leg":"A"}'), 'same' => $same, 'late' => $late])
          );
 
@@ -516,7 +552,7 @@ return new Test(
 
          yield assert(
             assertion: $freed === ['freed' => true, 'standin' => true, 'wire' => ''],
-            description: 'a retained clone let go is freed by refcount — every built-in first fetched on it after its job (each formatter, Database, SSE) holds it weakly — and the formatter built that way, kept past it, answers for a detached stand-in; nothing reaches the wire — observed: '
+            description: 'a retained clone let go is freed by refcount — every built-in first fetched on it after its job (each one the registry\'s constructor registers, and Database) holds it weakly — and the formatter built that way, kept past it, answers for a detached stand-in; nothing reaches the wire — observed: '
                . json_encode($freed)
          );
          unset($Response, $Connection, $Client, $Built, $Lazy, $Clone);
@@ -552,7 +588,7 @@ return new Test(
             'bridge' => static fn (): bool => $Inert($Left['Waiter']->await()),
             'mounted' => static fn (): bool => $Left['Resources']->fetch('Database') === $Left['Database'],
             'lazy' => static function () use ($Left, $Inert): bool {
-               $Lazy = $Left['Resources']->fetch('LazyXML');
+               $Lazy = $Left['Resources']->fetch('LateXML');
                if ($Lazy instanceof XML === false) {
                   return false;
                }
@@ -564,7 +600,7 @@ return new Test(
                   && $Inert($Second)
                   && $First !== $Second
                   && [$First->Body->raw, $Second->Body->raw] === ['<first/>', '<second/>']
-                  && $Left['Resources']->fetch('LazyXML') === $Lazy;
+                  && $Left['Resources']->fetch('LateXML') === $Lazy;
             },
             'lazy database' => static fn (): bool => $page($Left['Resources']->fetch('LazyDatabase')->paginate(U170Item::class)) === $expected,
             'lazy bridge' => static fn (): bool => $Inert($Left['Resources']->fetch('LazyWaiter')->await()),

@@ -44,7 +44,10 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
  *   throws, and nothing it is given ever reaches the wire;
  * - built by the one builder every stand-in comes from (the Response's own,
  *   reached bound to its scope), it refers to nothing that leads back to it:
- *   refcounting frees it the moment its caller lets go.
+ *   refcounting frees it the moment its caller lets go — its Header with it
+ *   only while no late call has built that Header's Cookies, which refer
+ *   back to the Header once a read builds them: that pair is then left to
+ *   the cycle collector.
  *
  * Only the exact built-in class releases: a subclass may read `$Response`
  * itself, so it keeps the strong edge it always had.

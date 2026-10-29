@@ -690,8 +690,11 @@ class Response extends Server\Response
     * it declines (see rescue()); with no transport it hints, defers and
     * streams nothing. It refers to nothing that leads back to it — no Owner,
     * a released registry, a Header that builds its Cookies only when read —
-    * so refcounting frees it, its Header included, the moment its caller lets
-    * go: a weak edge to it never outlives that.
+    * so refcounting frees it the moment its caller lets go: a weak edge to it
+    * never outlives that. Its Header goes with it only while no late call has
+    * built that Header's Cookies: the first read builds them
+    * (`Header::__get()`), and they refer back to the Header — that pair is
+    * then left to the cycle collector.
     */
    private static function substitute (): self
    {
@@ -1551,10 +1554,19 @@ class Response extends Server\Response
    /**
     * Offer a deferred failure to the error boundaries the route onion could
     * no longer reach: the route's middleware snapshot innermost first, then
-    * the global pipeline. The first Response wins — a detached stand-in is
-    * no answer and declines; a boundary that throws replaces the offered
-    * Throwable for the next one outward, the way a rethrow inside process()
-    * reaches the enclosing middleware.
+    * the global pipeline. The first Response wins; a boundary that throws
+    * replaces the offered Throwable for the next one outward, the way a
+    * rethrow inside process() reaches the enclosing middleware.
+    *
+    * A Response that is deferred and bound to no request is no answer: it
+    * declines, and the next boundary outward is offered the same Throwable —
+    * past the outermost one, the Catcher answers. That is the detached
+    * stand-in a resource kept past its deferred job answers for, and equally
+    * a Response the boundary built and flagged deferred itself: `defer()` on
+    * a Response without a transport runs nothing and only sets the flag. It
+    * is the predicate both encoders and Router::complete() apply to a
+    * Response a handler returns: none of them adopts such a Response as the
+    * worker's Response, and the encoders write nothing for it.
     *
     * Only `SAPI::$Middlewares->stack` is read: a pipeline subtype that
     * overrides process() with another composition is not visible here.
@@ -1588,12 +1600,13 @@ class Response extends Server\Response
                continue;
             }
 
-            // ?: The first answer wins. A detached deferred Response — the
-            //    stand-in a resource kept past its deferred job answers for —
-            //    answers no request: it declines, as neither encoder nor the
-            //    router ever serializes or adopts one, so it is never bound
-            //    to this generation and the next boundary outward is offered
-            //    the same Throwable
+            // ?: The first answer wins. A deferred Response bound to no
+            //    request — the stand-in a resource kept past its deferred job
+            //    answers for, or one the boundary built and flagged deferred
+            //    itself — answers no request: it declines, as neither encoder
+            //    nor the router ever serializes or adopts one, so it is never
+            //    bound to this generation and the next boundary outward is
+            //    offered the same Throwable
             if ($Recovered !== null && ($Recovered->deferred === false || $Recovered->Request !== null)) {
                return $Recovered;
             }

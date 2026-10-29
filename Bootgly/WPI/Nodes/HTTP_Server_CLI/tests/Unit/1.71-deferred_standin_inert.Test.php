@@ -78,8 +78,11 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Recovering;
  *   HTTP/1.1 client pairing answers in order reads it as the first
  *   request's;
  * - a recovery boundary that answers a deferred failure with a stand-in
- *   declines: the stand-in never reaches the wire, and the request gets the
- *   Catcher's 500 — reported once, as a declined failure is;
+ *   declines: the stand-in never reaches the wire, and the walk moves on to
+ *   the next boundary outward — whose own Response answers 200, each
+ *   boundary offered the failure once and nothing reported — or, past the
+ *   outermost one, the request gets the Catcher's 500 — reported once, as a
+ *   declined failure is;
  * - two late calls never share a stand-in or a body: each send answers with
  *   its own fresh stand-in, carrying its own body, deferred and bound to no
  *   request;
@@ -505,6 +508,28 @@ return new Test(
             $rows["{$short} rescue"]['probe'] = $Probe($Exchange('/probe'));
             unset($Boundary);
 
+            // # The same stand-in with a boundary outward of it: the decline
+            //   moves the walk on to that one, whose own Response answers —
+            //   the Catcher stays out, and nothing is reported
+            $Seat();
+            $Outer = new U171Boundary(static fn (): Response => new Response(body: 'outer'));
+            $Boundary = new U171Boundary(static fn (): Response => $sources['json']());
+            SAPI::$Middlewares = new Middlewares()->pipe($Outer)->pipe($Boundary);
+            $reports = [];
+            $wire = $Exchange('/standin/rescue');
+            $rows["{$short} rescue outward"] = [
+               'status' => strstr($wire, "\r\n", true),
+               'body' => explode("\r\n\r\n", $wire, 2)[1] ?? null,
+               'leaked' => str_contains($wire, 'SECRET'),
+               'recoveries' => ['inner' => $Boundary->recoveries, 'outer' => $Outer->recoveries],
+               'reports' => $reports,
+               'worker' => $Leave(),
+            ];
+            SAPI::$Middlewares = new Middlewares;
+            $reports = [];
+            $rows["{$short} rescue outward"]['probe'] = $Probe($Exchange('/probe'));
+            unset($Boundary, $Outer);
+
             // # Returned while a Received listener admits the request
             $Seat();
             Emitter::$Instance->listen(RequestEvents::Received, static function (Emission $Emission): void {});
@@ -640,6 +665,15 @@ return new Test(
                'worker' => $kept,
                'probe' => $probed,
             ];
+            $expected["{$short} rescue outward"] = [
+               'status' => 'HTTP/1.1 200 OK',
+               'body' => 'outer',
+               'leaked' => false,
+               'recoveries' => ['inner' => 1, 'outer' => 1],
+               'reports' => [],
+               'worker' => $kept,
+               'probe' => $probed,
+            ];
             $expected["{$short} observed"] = $handled;
             $expected["{$short} h2"] = $streamed;
             $expected["{$short} route static"] = $handled;
@@ -658,7 +692,7 @@ return new Test(
             assertion: $job === ['answered' => true, 'freed' => true]
                && $rows === $expected
                && $reports === [],
-            description: "A stand-in returned by a handler or a route — from the formatter, a lazily built resource or the wait bridge, observed or on an HTTP/2 stream — answers nothing, the worker's Response stays the original in both slots, and the next request is answered 200 with its configured resource and preset, on its own connection, after it on the same one and pipelined behind it; the cached route stores nothing for it though it stamped its TTL (reset by the next request), while the same route answering for real is stored; a recovery boundary returning a stand-in declines, and the Catcher answers: {$evidence}",
+            description: "A stand-in returned by a handler or a route — from the formatter, a lazily built resource or the wait bridge, observed or on an HTTP/2 stream — answers nothing, the worker's Response stays the original in both slots, and the next request is answered 200 with its configured resource and preset, on its own connection, after it on the same one and pipelined behind it; the cached route stores nothing for it though it stamped its TTL (reset by the next request), while the same route answering for real is stored; a recovery boundary returning a stand-in declines — the next boundary outward answers 200 unreported, or, past the outermost one, the Catcher answers: {$evidence}",
          );
 
          // @ Two late calls never share a stand-in or a body
