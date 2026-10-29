@@ -27,6 +27,7 @@ use function preg_replace;
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource\Releasable;
 
 
 /**
@@ -41,6 +42,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
  */
 class XML extends Resource
 {
+   use Releasable;
+
+
    // * Config
    // ...
 
@@ -60,25 +64,35 @@ class XML extends Resource
    }
 
    /**
+    * Let the response go when the deferred job it served ends (Releasable).
+    */
+   public function clean (): void
+   {
+      $this->release();
+   }
+
+   /**
     * Send XML content through the canonical Response sender.
     */
    public function send (mixed $body = null): Response
    {
+      $Response = $this->Response ?? $this->resolve(); // @phpstan-ignore nullCoalesce.initializedProperty
+
       // ! Set the default media type instead of a header field — mirrors JSON:
       //   leaves fields/prepared empty so build() keeps its fast path + the Raw
       //   wire-cache. An explicit Content-Type still wins.
-      $this->Response->Header->type = 'application/xml';
+      $Response->Header->type = 'application/xml';
 
       // ? Pre-encoded XML string passes through untouched.
       if (is_string($body) && $body !== '') {
-         return $this->Response->send($body);
+         return $Response->send($body);
       }
 
       $xml = '<?xml version="1.0" encoding="UTF-8"?>'
          . '<response>' . self::encode($body) . '</response>';
 
       // :
-      return $this->Response->send($xml);
+      return $Response->send($xml);
    }
 
    /**

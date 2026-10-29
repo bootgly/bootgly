@@ -20,6 +20,7 @@ use function strlen;
 use const Bootgly\WPI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource\Releasable;
 
 
 /**
@@ -27,6 +28,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
  */
 class JSONP extends Resource
 {
+   use Releasable;
+
+
    // * Config
    //   Maximum accepted JSONP callback name length in bytes (audit F-7):
    //   bounds the attacker-shaped response prefix. Over-length names fall back
@@ -49,18 +53,28 @@ class JSONP extends Resource
    }
 
    /**
+    * Let the response go when the deferred job it served ends (Releasable).
+    */
+   public function clean (): void
+   {
+      $this->release();
+   }
+
+   /**
     * Send JSONP content through the canonical Response sender.
     */
    public function send (mixed $body = null): Response
    {
+      $Response = $this->Response ?? $this->resolve(); // @phpstan-ignore nullCoalesce.initializedProperty
+
       // @ JSONP emits JavaScript (`callback(...)`), not JSON — label it
       //   honestly as `text/javascript` and forbid content sniffing (audit
       //   F-7). The wrong `application/json` label both misrepresents the
       //   payload and lets a directly-navigated response be sniffed into
       //   another type. JSONP is, by construction, a cross-origin read; never
       //   expose session/identity-scoped data through it.
-      $this->Response->Header->set('Content-Type', 'text/javascript');
-      $this->Response->Header->set('X-Content-Type-Options', 'nosniff');
+      $Response->Header->set('Content-Type', 'text/javascript');
+      $Response->Header->set('X-Content-Type-Options', 'nosniff');
 
       $callbackSource = WPI->Request->queries['callback'] ?? null;
 
@@ -80,6 +94,6 @@ class JSONP extends Resource
 
       $json = json_encode($body);
 
-      return $this->Response->send($callback . '(' . ($json === false ? 'null' : $json) . ')');
+      return $Response->send($callback . '(' . ($json === false ? 'null' : $json) . ')');
    }
 }

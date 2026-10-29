@@ -179,11 +179,31 @@ class Header extends HeaderBase
    }
    public function __clone ()
    {
-      $this->Cookies = new Cookies($this);
+      // ? A subclass may hook the property, which unset() refuses: its copy
+      //   builds the Cookies here, as before
+      if (static::class !== self::class) {
+         $this->Cookies = new Cookies($this);
+
+         return;
+      }
+
+      // ! A copy builds its own Cookies on first use (`__get`), for every
+      //   reader exactly as eagerly as before. Built here, it referred back
+      //   to this Header — a cycle every cloned response left to the
+      //   collector, even one that never touched a cookie.
+      unset($this->Cookies); // @phpstan-ignore unset.possiblyHookedProperty
    }
    public function __get (string $name): mixed
    {
       switch ($name) {
+         // / Cookies — lazy on a copy (see __clone())
+         case 'Cookies':
+            $Cookies = new Cookies($this);
+            // @ Lands in the property: it is declared, only unset
+            $this->Cookies = $Cookies;
+
+            return $Cookies;
+
          // * Config
          // ...
 
@@ -214,6 +234,13 @@ class Header extends HeaderBase
    public function __set (string $name, mixed $value): void
    {
       switch ($name) {
+         // / Cookies — a write while still lazy (see __clone()) lands as a
+         //   write to a built one does: the property's own type check
+         //   refuses anything but a Cookies, with the same TypeError
+         case 'Cookies':
+            $this->Cookies = $value; // @phpstan-ignore assign.propertyType
+            break;
+
          // * Config
          // ...
 
@@ -235,6 +262,11 @@ class Header extends HeaderBase
    }
    public function __isSet (string $name): bool
    {
+      // ?: A lazy Cookies (see __clone()) exists for every reader
+      if ($name === 'Cookies') {
+         return true;
+      }
+
       // ?: In lockstep with get() — isset() must never contradict it, and
       //    the `'' == absent` convention is load-bearing at the consumers
       return $this->get($name) !== '';

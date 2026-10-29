@@ -27,6 +27,7 @@ use Bootgly\ABI\IO\FS\File;
 use Bootgly\ABI\Templates\Template;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource\Releasable;
 
 
 /**
@@ -34,6 +35,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
  */
 class View extends Resource
 {
+   use Releasable;
+
+
    // * Config
    /**
     * Default layout wrapping every rendered view that declares no `@extends`.
@@ -66,10 +70,19 @@ class View extends Resource
     * one request's `export()` survives into the next request on the same
     * worker and is merged into its render — handing request A's user, tenant
     * or CSRF value to request B's template.
+    *
+    * It also lets the response go (Releasable), on every clean — between
+    * requests (`Resources::reset()`, the persistent response's included),
+    * when it is replaced or removed (`Resources::detach()`), and when a
+    * forked response's deferred job ends (`Resources::release()`): from the
+    * first one on, the response is held weakly and read through that edge
+    * for as long as it lives.
     */
    public function clean (): void
    {
       $this->uses = [];
+
+      $this->release();
    }
 
    /**
@@ -101,7 +114,7 @@ class View extends Resource
          throw new Error('HTTP_Server_CLI must be started through a Project. BOOTGLY_PROJECT is not defined.');
       }
 
-      $Response = $this->Response;
+      $Response = $this->Response ?? $this->resolve(); // @phpstan-ignore nullCoalesce.initializedProperty
 
       // ? Normalize + whitelist the view name locally (audit F-12). `render()`
       //   is include-based, so a traversal here is RCE, not mere LFI. The
@@ -186,7 +199,9 @@ class View extends Resource
    public function send (mixed $view = null, null|array $data = null, null|Closure $callback = null): Response
    {
       if (is_string($view) === false) {
-         return $this->Response->code(403)->send('');
+         $Response = $this->Response ?? $this->resolve(); // @phpstan-ignore nullCoalesce.initializedProperty
+
+         return $Response->code(403)->send('');
       }
 
       return $this->render($view, $data, $callback)->send();

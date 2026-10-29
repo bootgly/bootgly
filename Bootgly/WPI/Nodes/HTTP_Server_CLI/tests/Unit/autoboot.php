@@ -110,5 +110,10 @@ return new Suite(
       '1.67-refusal_unavailable',
       // # 1.0.x (ENC-12): a throwing Received listener refuses the request, never kills the worker
       '1.68-received_listener_refuses',
+      // # 1.1.x (PERF-DEFER): a completed deferred generation is freed by refcounting
+      '1.69-deferred_generation_refcount',
+      '1.70-deferred_retained_leftovers',
+      '1.71-deferred_standin_inert',
+      '1.72-header_lazy_cookies',
    ]
 );

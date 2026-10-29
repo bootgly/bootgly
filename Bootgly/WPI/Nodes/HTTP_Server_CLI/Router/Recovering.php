@@ -46,7 +46,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
  *   Throwable and, past the outermost one, the Catcher answers.
  * - Return `$Response` after answering in place, or a new Response; a fresh
  *   one is bound to this request's transport, request, exchange and
- *   cancellation generation before serialization.
+ *   cancellation generation before serialization. A deferred Response bound
+ *   to no request — the detached stand-in a resource kept past its own
+ *   deferred job answers for — is no answer: it counts as a decline.
  * - Throwing hands the NEW Throwable to the next boundary outward, exactly as
  *   a rethrow inside `process()` reaches the enclosing middleware.
  * - `Response\Timeout` is offered as well. It is a server budget, not an

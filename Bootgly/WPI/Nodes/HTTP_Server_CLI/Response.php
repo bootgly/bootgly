@@ -147,8 +147,16 @@ class Response extends Server\Response
     * Immediate clone source. A clone can promote the source response to a
     * lifecycle without putting any registry lookup on requests that never
     * clone, defer or mount SSE.
+    *
+    * Null once the deferred job this response ran ended without being
+    * abandoned, for a request that built no Session (see loop()): with its
+    * registry released, this self reference was the last edge of a completed
+    * clone that only the cycle collector could break. Its lifecycle is
+    * settled by then, so __clone() reads the Exchange the copy already
+    * carries instead. Null from birth for a detached stand-in (substitute()),
+    * which carries no Exchange at all.
     */
-   private self $Owner;
+   private null|self $Owner;
    private bool $capturing;
    /** @var array<int,array{Request:Request,Response:self,Router:Router,Route:Route}> */
    private array $Contexts;
@@ -293,8 +301,14 @@ class Response extends Server\Response
       $this->Header = new Header;
       $this->Body = new Body;
       // / Resources
+      // ! The attach hook holds this response weakly: it rides on the
+      //   registry this response owns, so a hook bound to `$this` closed a
+      //   cycle back to it. Once this response is gone (its registry was kept
+      //   without it), what is still mounted there attaches to a detached
+      //   stand-in instead (see substitute()).
+      $Reference = WeakReference::create($this);
       $this->Resources = new Resources(
-         fn (ResponseResource $Resource): ResponseResource => $this->attach($Resource),
+         static fn (ResponseResource $Resource): ResponseResource => ($Reference->get() ?? self::substitute())->attach($Resource),
          $this
       );
 
@@ -317,7 +331,16 @@ class Response extends Server\Response
       $SourceRequest = $this->Request;
       $Cancellation = $this->Cancellation;
       $capturing = $this->capturing;
-      $Exchange = $SourceResponse->promote();
+      // ! A source without an Owner is a deferred clone whose job ended (see
+      //   loop()) or a detached stand-in (see substitute()). The clone was
+      //   promoted before it was cloned for that job and its lifecycle is
+      //   settled, so promote() would return exactly the Exchange this copy
+      //   carries — or null, for a request-less one — and its cacheable flag
+      //   is already false: a late copy keeps the finished tombstone. A
+      //   stand-in carries no Exchange to keep.
+      $Exchange = $SourceResponse === null
+         ? $this->Exchange
+         : $SourceResponse->promote();
 
       // ! Capture before this clone refers to itself (`Owner`): a refused
       //   capture throws out of `__clone`, and PHP never frees a clone that
@@ -366,8 +389,10 @@ class Response extends Server\Response
       $this->Contexts = [];
 
       // / Resources
+      // ! Weak, as in the constructor: the fork belongs to this clone
+      $Reference = WeakReference::create($this);
       $this->Resources = $this->Resources->fork(
-         fn (ResponseResource $Resource): ResponseResource => $this->attach($Resource),
+         static fn (ResponseResource $Resource): ResponseResource => ($Reference->get() ?? self::substitute())->attach($Resource),
          $this
       );
    }
@@ -637,10 +662,51 @@ class Response extends Server\Response
       }
 
       if ($Resource instanceof Scheduling) {
-         $Resource->schedule(fn (mixed $value = null): self => $this->wait($value));
+         // ! Weak: the bridge rides on a resource this response owns, so a
+         //   bridge bound to `$this` closed a cycle back to it. The response
+         //   outlives every wait its own work makes — the job holds it. A
+         //   bridge called once the response is gone (its resource was kept
+         //   without it) suspends nothing, as a wait from outside the job
+         //   never did, and answers for a fresh detached stand-in on every
+         //   call (see substitute()).
+         $Reference = WeakReference::create($this);
+         $Resource->schedule(static function (mixed $value = null) use ($Reference): self {
+            return ($Reference->get() ?? self::substitute())->wait($value);
+         });
       }
 
       return $Resource;
+   }
+   /**
+    * Build the detached stand-in answered for once the response a hook, a
+    * resource or a registry was bound to is gone — the contract
+    * `Resource\Releasable` describes. The one builder: `Resource\Releasable`
+    * and `Resources` reach it bound to this scope, so every stand-in has
+    * this shape.
+    *
+    * Fresh on every call: nothing one late call writes reaches another.
+    * Deferred and bound to no request, so neither encoder serializes it or
+    * adopts it as the worker's Response, and a recovery boundary that returns
+    * it declines (see rescue()); with no transport it hints, defers and
+    * streams nothing. It refers to nothing that leads back to it — no Owner,
+    * a released registry, a Header that builds its Cookies only when read —
+    * so refcounting frees it, its Header included, the moment its caller lets
+    * go: a weak edge to it never outlives that.
+    */
+   private static function substitute (): self
+   {
+      $Inert = new self;
+      $Inert->deferred = true;
+
+      // ! Undo every edge the constructor built back into the stand-in
+      $Inert->Owner = null;
+      $Inert->Resources->release();
+      // ! The constructor built the exact Header class, whose Cookies refer
+      //   back to it: unset, they are built again on first read (`__get`)
+      unset($Inert->Header->Cookies); // @phpstan-ignore unset.possiblyHookedProperty
+
+      // :
+      return $Inert;
    }
 
    // # Authentication
@@ -1485,9 +1551,10 @@ class Response extends Server\Response
    /**
     * Offer a deferred failure to the error boundaries the route onion could
     * no longer reach: the route's middleware snapshot innermost first, then
-    * the global pipeline. The first Response wins; a boundary that throws
-    * replaces the offered Throwable for the next one outward, the way a
-    * rethrow inside process() reaches the enclosing middleware.
+    * the global pipeline. The first Response wins — a detached stand-in is
+    * no answer and declines; a boundary that throws replaces the offered
+    * Throwable for the next one outward, the way a rethrow inside process()
+    * reaches the enclosing middleware.
     *
     * Only `SAPI::$Middlewares->stack` is read: a pipeline subtype that
     * overrides process() with another composition is not visible here.
@@ -1521,8 +1588,13 @@ class Response extends Server\Response
                continue;
             }
 
-            // ?: The first answer wins
-            if ($Recovered !== null) {
+            // ?: The first answer wins. A detached deferred Response — the
+            //    stand-in a resource kept past its deferred job answers for —
+            //    answers no request: it declines, as neither encoder nor the
+            //    router ever serializes or adopts one, so it is never bound
+            //    to this generation and the next boundary outward is offered
+            //    the same Throwable
+            if ($Recovered !== null && ($Recovered->deferred === false || $Recovered->Request !== null)) {
                return $Recovered;
             }
          }
@@ -1935,10 +2007,10 @@ class Response extends Server\Response
             $Request = $Response->Request;
             $Request?->clean();
 
-            // @ This generation's own resources end their request with it:
-            //   the clone is self-referencing, so they would otherwise wait
-            //   for a GC run — a KV resource hands back its unfinished
-            //   commands here (H-HSC-2). Guarded: the cleanup below must run.
+            // @ This generation's own resources end their request with it — a
+            //   KV resource hands back its unfinished commands here (H-HSC-2)
+            //   — and the registry, with the instances it built, stops holding
+            //   this clone strongly. Guarded: the cleanup below must run.
             try {
                $Response->Resources->release();
             }
@@ -1951,6 +2023,27 @@ class Response extends Server\Response
                   'URI' => explode('?', $Snapshot->URI ?? '', 2)[0],
                   'peer' => $Snapshot->peer ?? '',
                ]);
+            }
+
+            // ! Last framework edge back to the clone: with its registry and
+            //   the instances it built released above, the completed
+            //   generation is freed by refcounting the moment its frames let
+            //   go — never left to the cycle collector, whose pass would also
+            //   run every destructor it reaches (Exchange, the snapshot's
+            //   ledger token). Only what the application keeps bound to it
+            //   still holds it — a resource it mounted itself (a Database or
+            //   SSE instance is bound strongly on attach), a subclass of a
+            //   built-in, or anything that captured the response — and such a
+            //   generation waits for the collector, as before. A retained
+            //   clone stays usable: it keeps its finished Exchange, and
+            //   __clone() reads that instead of promoting.
+            // ? Kept for an abandoned generation and for one whose request
+            //   built a Session: the Session destructor is the collector-time
+            //   safety net of an abandoned write (BG-15) — freed here, it
+            //   would land the write the server deliberately does not
+            //   persist, and a Session-bearing generation keeps that timing.
+            if ($Cancellation->cancelled === false && $Request?->sessioned !== true) {
+               $Response->Owner = null;
             }
 
             // @ Drop this job's locale binding before the Fiber is pooled

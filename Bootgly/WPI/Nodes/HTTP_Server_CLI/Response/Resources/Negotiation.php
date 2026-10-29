@@ -19,6 +19,7 @@ use function substr;
 use const Bootgly\WPI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource\Releasable;
 
 
 /**
@@ -34,6 +35,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
  */
 class Negotiation extends Resource
 {
+   use Releasable;
+
+
    // * Config
    // ...
 
@@ -53,6 +57,14 @@ class Negotiation extends Resource
    }
 
    /**
+    * Let the response go when the deferred job it served ends (Releasable).
+    */
+   public function clean (): void
+   {
+      $this->release();
+   }
+
+   /**
     * Send one payload in the representation the client prefers.
     *
     * @param mixed $payload The single payload rendered as JSON/XML/HTML.
@@ -60,7 +72,7 @@ class Negotiation extends Resource
     */
    public function send (mixed $payload = null, null|string $view = null): Response
    {
-      $Response = $this->Response;
+      $Response = $this->Response ?? $this->resolve(); // @phpstan-ignore nullCoalesce.initializedProperty
 
       // ! The representation varies by Accept — shared caches must store each
       //   one separately (RFC 9110 §12.5.5); emitted on every branch, 406 too.

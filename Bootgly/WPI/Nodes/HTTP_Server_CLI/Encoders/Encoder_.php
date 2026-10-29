@@ -668,6 +668,15 @@ class Encoder_ extends Encoders
                   : $core($Request, $Response);
 
                if ($Result instanceof Response && $Result !== $Response) {
+                  // ! A detached deferred Response — the stand-in a resource
+                  //   kept past its deferred job answers for — answers no
+                  //   request. Break the alias first: it is suppressed below
+                  //   as any deferred Response is, and never becomes the
+                  //   worker's Response, which keeps its configured
+                  //   resources and presets.
+                  if ($Result->deferred && $Result->Request === null) {
+                     unset($Response);
+                  }
                   $Response = $Result;
                }
                if (self::$mediated) {

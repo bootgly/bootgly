@@ -18,8 +18,10 @@ use Closure;
 use InvalidArgumentException;
 use ReflectionProperty;
 use RuntimeException;
+use WeakReference;
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response as ServerResponse;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\JSON;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\JSONP;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Negotiation;
@@ -63,6 +65,32 @@ class Resources
    //   constructor deliberately skips parent::__construct(). The exact base
    //   constructor resolves its idle state once, outside the request loop.
    public private(set) bool $resettable = true;
+   // ! The response context once release() ended its deferred job, held
+   //   weakly: that response owns this registry, so the strong edge was a
+   //   cycle only the collector could break. Null while the context is held
+   //   strongly — or not at all — and every context read falls back to it
+   //   (see resolve()).
+   /** @var null|WeakReference<ServerResponse> */
+   private null|WeakReference $Reference = null;
+   // ! The Response's private stand-in builder, bound to its scope on the
+   //   first stand-in a registry answers for (see resolve())
+   /** @var null|Closure():ServerResponse */
+   private static null|Closure $Substitute = null;
+   // ! The framework built-ins whose clean() is what lets their response go
+   //   (see fetch()). Exact classes: a subclass keeps the strong edge it
+   //   always had, and its own clean() never runs at build time
+   /** @var array<class-string<Resource>,true> */
+   private const array RELEASABLE = [
+      Database::class => true,
+      JSON::class => true,
+      JSONP::class => true,
+      Negotiation::class => true,
+      Plaintext::class => true,
+      Pre::class => true,
+      SSE::class => true,
+      View::class => true,
+      XML::class => true,
+   ];
 
 
    /**
@@ -104,6 +132,7 @@ class Resources
       $Resources = clone $this;
       $Resources->Attach = $Attach;
       $Resources->Context = $Context;
+      $Resources->Reference = null;
 
       // @ Carry user-mounted instances (those without a definition) into the
       //   fork, re-attaching their scheduler bridge to the new context.
@@ -130,10 +159,12 @@ class Resources
     */
    public function define (string $name, Closure $Factory): static
    {
-      if ($this->Context === null) {
+      $Context = $this->Context ?? $this->resolve();
+
+      if ($Context === null) {
          throw new RuntimeException('Response resource definitions require a context.');
       }
-      self::reserve($this->Context, $name);
+      self::reserve($Context, $name);
 
       $this->register($name, $Factory);
 
@@ -160,7 +191,7 @@ class Resources
     */
    public function load (array $definitions): static
    {
-      $Context = $this->Context;
+      $Context = $this->Context ?? $this->resolve();
 
       if ($Context === null) {
          throw new RuntimeException('Response resource definitions require a context.');
@@ -198,8 +229,10 @@ class Resources
     */
    public function set (string $name, Resource $Resource): Resource
    {
-      if ($this->Context !== null) {
-         self::reserve($this->Context, $name);
+      $Context = $this->Context ?? $this->resolve();
+
+      if ($Context !== null) {
+         self::reserve($Context, $name);
       }
 
       return $this->replace($name, $Resource, true);
@@ -274,8 +307,13 @@ class Resources
       }
 
       // ! Hot path: first resource read of a request — construct from the
-      //   factory and mount inline, without create()/set() call hops
+      //   factory and mount inline, without create()/set() call hops. A
+      //   strong context is the only read it pays.
       $Context = $this->Context;
+      $released = $Context === null;
+      if ($released) {
+         $Context = $this->resolve();
+      }
 
       if ($Context === null) {
          throw new RuntimeException('Response resource factory expects a context, but none was configured.');
@@ -287,8 +325,20 @@ class Resources
          throw new RuntimeException('Response resource factory must return a Resource.');
       }
 
+      $Resource = $this->resources[$name] = $this->attach($Resource);
+
+      // ? Built after release(): a framework built-in whose clean() is what
+      //   lets its response go is cleaned as release() cleaned every
+      //   instance built before it, so it holds its response weakly too —
+      //   and nothing at all of a stand-in (see resolve()). Any other
+      //   resource is handed over as built, as before: its clean() may wipe
+      //   what its construction set up
+      if ($released && isSet(self::RELEASABLE[$Resource::class])) {
+         $Resource->clean();
+      }
+
       // :
-      return $this->resources[$name] = $this->attach($Resource);
+      return $Resource;
    }
 
    /**
@@ -337,17 +387,76 @@ class Resources
     * reached through the response). User-mounted instances, which other
     * contexts share, are left alone.
     *
-    * A deferred job's forked response references itself, so its resources
-    * would only go at a garbage-collection run; a resource that holds work in
-    * flight (a KV command nobody awaited) hands it back here instead.
+    * A resource that holds work in flight (a KV command nobody awaited) hands
+    * it back here instead of when its response is destroyed. From here on
+    * this registry holds its response weakly, and so does every built-in
+    * that binds it — built before this call, or after it (see fetch()):
+    * then only what the application keeps bound to that response (an
+    * instance it mounted itself, a subclass of a built-in, a resource of its
+    * own that holds its context, a capture) still leads back to it, and
+    * without such an edge refcounting — not the cycle collector — frees it
+    * once nothing else holds it. While something does, every read reaches it
+    * as before (see resolve()).
     */
    public function release (): void
    {
+      // ! Before any cleanup can throw. Only the framework's own Response
+      //   is held weakly: once it is gone, resolve() stands a detached one in
+      //   for it — which it could not build for any other context.
+      $Context = $this->Context;
+      if ($Context !== null && $Context::class === ServerResponse::class) {
+         $this->Reference = WeakReference::create($Context);
+         $this->Context = null;
+      }
+
       foreach ($this->resources as $name => $Resource) {
          if (isset($this->definitions[$name])) {
             $Resource->clean();
          }
       }
+   }
+
+   /**
+    * Resolve the context release() holds weakly.
+    *
+    * The response itself while it lives — read through the weak edge, never
+    * held again. Once it is gone, this registry outlived it (it was kept
+    * without its response): every call that needs a context gets a fresh
+    * detached stand-in — the one `Resource\Releasable` describes, never
+    * serialized and never adopted as the worker's Response, built by the
+    * Response's own builder, so refcounting frees it once the call lets go
+    * — and what is still built, mounted or defined here lands on a response
+    * as it did before, and no call shares anything with another. The attach
+    * hook does the same for what it attaches. Null only for a registry that
+    * never had a context.
+    */
+   private function resolve (): null|object
+   {
+      $Reference = $this->Reference;
+
+      // ? Held strongly, or never configured
+      if ($Reference === null) {
+         return $this->Context;
+      }
+
+      // ?: Still alive
+      $Context = $Reference->get();
+      if ($Context !== null) {
+         return $Context;
+      }
+
+      // ! Gone: a fresh stand-in for this call alone, from the Response's
+      //   own builder — bound once, never re-declared here
+      self::$Substitute ??= Closure::bind(
+         static function (): ServerResponse {
+            return ServerResponse::substitute();
+         },
+         null,
+         ServerResponse::class,
+      );
+
+      // :
+      return (self::$Substitute)();
    }
 
    /**

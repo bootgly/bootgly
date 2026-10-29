@@ -109,6 +109,11 @@ class Database extends Resource implements Awaiting, Scheduling
    //   weakly, for the same reason as $Fiber.
    /** @var null|WeakReference<Fiber<mixed,mixed,mixed,mixed>> */
    private null|WeakReference $Destroyed = null;
+   // ! The bound response once clean() let it go — its deferred job ended —
+   //   held weakly: the response owns this instance, so the strong edge was a
+   //   cycle only the collector could break. paginate() reads it from here.
+   /** @var null|WeakReference<Response> */
+   private null|WeakReference $Reference = null;
 
 
    public function __construct (SQL $Database)
@@ -221,8 +226,30 @@ class Database extends Resource implements Awaiting, Scheduling
    public function bind (Response $Response): static
    {
       $this->Response = $Response;
+      $this->Reference = null;
 
       return $this;
+   }
+
+   /**
+    * Let the bound response go when the deferred job it served ends.
+    *
+    * Reached from `Resources::release()` — or from `Resources::fetch()`, for
+    * an instance built after it: this instance stays mounted and keeps
+    * answering for the same response, held weakly from here on, for as long
+    * as that response lives.
+    */
+   public function clean (): void
+   {
+      $Response = $this->Response;
+
+      // ? Unbound, or already released
+      if ($Response === null) {
+         return;
+      }
+
+      $this->Reference = WeakReference::create($Response);
+      $this->Response = null;
    }
 
    /**
@@ -289,9 +316,12 @@ class Database extends Resource implements Awaiting, Scheduling
     */
    public function paginate (string|Repository $Entity, null|Selection $Selection = null): array
    {
-      // ?
-      $Response = $this->Response
-         ?? throw new RuntimeException('Database response resource is not bound.');
+      // ? A response released at its job's end is read through the weak
+      //   edge; once it is gone, the headers below have nowhere to land
+      $Response = $this->Response ?? $this->Reference?->get();
+      if ($Response === null && $this->Reference === null) {
+         throw new RuntimeException('Database response resource is not bound.');
+      }
       $Request = WPI->Request;
 
       // ! Client input: clamped limit and page, cursor presence wins.
@@ -325,7 +355,7 @@ class Database extends Resource implements Awaiting, Scheduling
          ];
       }
       else {
-         $Response->Header->set('X-Total-Count', (string) $Pagination->total);
+         $Response?->Header->set('X-Total-Count', (string) $Pagination->total);
 
          if ($page < ($Pagination->pages ?? 0)) {
             $links[] = $this->link($Request, ['page' => $page + 1, 'limit' => $limit], 'next');
@@ -344,7 +374,7 @@ class Database extends Resource implements Awaiting, Scheduling
       }
 
       if ($links !== []) {
-         $Response->Header->set('Link', implode(', ', $links));
+         $Response?->Header->set('Link', implode(', ', $links));
       }
 
       // : Negotiable pagination body.

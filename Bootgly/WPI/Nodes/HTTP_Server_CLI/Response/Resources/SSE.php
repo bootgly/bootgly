@@ -28,6 +28,7 @@ use function trim;
 use Closure;
 use Fiber;
 use Throwable;
+use WeakReference;
 
 use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ACI\Events\Timer;
@@ -92,6 +93,11 @@ class SSE extends Resource implements Disconnecting
    //   emits the END_STREAM tail or the stall deadline resets the stream
    private bool $draining = false;
    private null|Response $Response = null;
+   // ! The response once clean() let it go — its deferred job ended without
+   //   this stream opening — held weakly: the response owns this instance, so
+   //   the strong edge was a cycle only the collector could break.
+   /** @var null|WeakReference<Response> */
+   private null|WeakReference $Reference = null;
    private null|Exchange $Exchange = null;
    private null|Cancellation $Cancellation = null;
    private null|Connection $Connection = null;
@@ -136,6 +142,7 @@ class SSE extends Resource implements Disconnecting
       //   mount styles behave differently for identical user code.
       if ($Owner !== null) {
          $this->Response = $Owner;
+         $this->Reference = null;
       }
 
       // ! Transport
@@ -143,7 +150,7 @@ class SSE extends Resource implements Disconnecting
       // ! Prefer the owning Response snapshot. Active Request aliases are
       //   removed at terminal completion, while a retained Response must keep
       //   enough tombstone state to reject a late SSE head on a reused socket.
-      $Response = $this->Response;
+      $Response = $this->Response ?? $this->Reference?->get();
       $this->Exchange = $Response === null
          ? null
          : Exchange::fetch($Response);
@@ -178,6 +185,27 @@ class SSE extends Resource implements Disconnecting
    }
 
    /**
+    * Let the response go when the deferred job it served ends.
+    *
+    * Reached from `Resources::release()` — or from `Resources::fetch()`, for
+    * an instance built after it: this instance stays mounted and keeps
+    * answering for the same response, held weakly from here on, for as long
+    * as that response lives. A stream that opened already let it go.
+    */
+   public function clean (): void
+   {
+      $Response = $this->Response;
+
+      // ? Never bound, already released, or an open stream let it go
+      if ($Response === null) {
+         return;
+      }
+
+      $this->Reference = WeakReference::create($Response);
+      $this->Response = null;
+   }
+
+   /**
     * Open the event stream: write the head, defer the Response and install
     * the supervisor. `$Tick` runs every `$interval` seconds until the
     * stream ends; `$Close` runs exactly once on teardown.
@@ -191,7 +219,9 @@ class SSE extends Resource implements Disconnecting
       if ($this->opened || $this->closed) {
          return $this;
       }
-      $Response = $this->Response;
+      // ! A response released at its job's end is read through the weak edge;
+      //   once it is gone, there is no live request to open a stream for
+      $Response = $this->Response ?? $this->Reference?->get();
       $Connection = $this->Connection;
       if ($Response === null || $Connection === null) {
          return $this;

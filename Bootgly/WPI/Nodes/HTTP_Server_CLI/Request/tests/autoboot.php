@@ -23,5 +23,6 @@ return new Suite(
       '1.7-copy_cookies_own_head',
       '1.8-shed_head',
       '1.9-capture_charges_head',
+      '1.10-clean_frees_snapshot_token',
    ]
 );

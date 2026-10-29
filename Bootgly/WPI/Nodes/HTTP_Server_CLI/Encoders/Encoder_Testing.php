@@ -330,6 +330,12 @@ class Encoder_Testing extends Encoders
             );
 
             if ($Result instanceof Response && $Result !== $Response) {
+               // ! Mirror production: a detached deferred Response (a
+               //   stand-in) answers no request and never becomes the
+               //   persistent test worker's Response
+               if ($Result->deferred && $Result->Request === null) {
+                  unset($Response);
+               }
                $Response = $Result;
             }
             if ($mediated) {

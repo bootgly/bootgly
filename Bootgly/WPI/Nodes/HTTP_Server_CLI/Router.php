@@ -206,7 +206,8 @@ class Router
     * - With middlewares: returns the folded onion pipeline closure.
     *
     * The post-call `WPI->Response` swap (only needed when a handler returns a
-    * NEW Response instance — rare in practice) is handled inline by `resolve()`.
+    * NEW Response instance — rare in practice) is decided by `complete()`,
+    * which `resolve()` calls for it.
     *
     * @param array<Middleware> $Middlewares
     */
@@ -320,8 +321,14 @@ class Router
    {
       if ($Result instanceof Response) {
          if ($Result !== $Response) {
-            $WPI = WPI;
-            $WPI->Response = $Result;
+            // ? A detached deferred Response — the stand-in a resource kept
+            //   past its deferred job answers for — answers no request: it is
+            //   never adopted as the worker's Response (see Encoder_::encode())
+            if ($Result->deferred === false || $Result->Request !== null) {
+               $WPI = WPI;
+               $WPI->Response = $Result;
+            }
+
             return $Result;
          }
 
@@ -386,9 +393,9 @@ class Router
             if ($Result === $Response) {
                return $Response;
             }
+            // ? A NEW Response — rare: complete() decides its adoption
             if ($Result instanceof Response) {
-               $WPI->Response = $Result;
-               return $Result;
+               return $this->complete($Result, $Response);
             }
             return $Response;
          }
@@ -416,9 +423,9 @@ class Router
                return $Response;
             }
 
+            // ? A NEW Response — rare: complete() decides its adoption
             if ($Result instanceof Response) {
-               $WPI->Response = $Result;
-               return $Result;
+               return $this->complete($Result, $Response);
             }
 
             return $Response;

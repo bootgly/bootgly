@@ -2467,8 +2467,32 @@ class Request
       // @ Give back the worker-ledger bytes a deferred snapshot was holding.
       //   Only a Request built by `capture()` ever owns one, so this is a
       //   single null read for every other caller.
-      $this->Bodies?->release();
-      $this->Bodies = null;
+      $Bodies = $this->Bodies;
+      if ($Bodies !== null) {
+         $Bodies->release();
+         $this->Bodies = null;
+
+         // ! Both strong edges to the token must drop — this Request's and
+         //   the one `capture()` gave the snapshot's own `Cookies` — so the
+         //   token and its `Buffers` are freed by refcount here, outside the
+         //   cycle collector: the snapshot's Header and Cookies refer to each
+         //   other, and their destructors would make a collector run take a
+         //   second pass.
+         //   - The identity check leaves a token that is not this snapshot's
+         //     own untouched.
+         //   - Released, the token charges nothing more: a cookie parse after
+         //     this point stays free either way, and the destructors remain
+         //     the safety net of a snapshot dropped without `clean()`, which
+         //     credit nothing twice (`release()` is idempotent).
+         //   - Only a snapshot reaches this read — a live Request (cleaned for
+         //     its uploads) never builds its Cookies here. A snapshot whose
+         //     head was cleared (`Header::clear()`) builds a fresh one with no
+         //     token: the identity check fails and nothing else changes.
+         $Cookies = $this->Header->Cookies;
+         if ($Cookies->Bodies === $Bodies) {
+            $Cookies->Bodies = null;
+         }
+      }
 
       // ? No uploads — fast path (callers gate on $this->hasFiles)
       if ($this->_files === []) {
