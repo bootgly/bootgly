@@ -215,6 +215,28 @@ return new Test(
          ->assert();
 
       yield new Assertion(
+         description: 'A stripped result carries no raw telemetry into the document',
+         fallback: 'JSON export serialized raw telemetry for a stripped result!'
+      )
+         ->expect(
+            (static function () use ($Result): bool {
+               $stripped = Summary::export('X', 'req/s', [], [], [
+                  [
+                     'options' => [],
+                     'results' => ['Bootgly' => ['Plaintext' => $Result->strip()]],
+                     'marks' => 'storage/tests/benchmarks/X/x-r01_bench.marks',
+                  ],
+               ]);
+
+               return str_contains($stripped, '"latency_histogram"')
+                  || str_contains($stripped, '"time_series"');
+            })(),
+            Op::Identical,
+            false
+         )
+         ->assert();
+
+      yield new Assertion(
          description: 'Empty sweep serializes as a JSON object',
          fallback: 'Empty sweep not an object!'
       )

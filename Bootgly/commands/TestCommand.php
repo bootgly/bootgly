@@ -129,6 +129,7 @@ use Bootgly\ACI\Tests\Benchmark\Microbenchmark;
 use Bootgly\ACI\Tests\Benchmark\Outcome;
 use Bootgly\ACI\Tests\Benchmark\Provenance;
 use Bootgly\ACI\Tests\Benchmark\Report;
+use Bootgly\ACI\Tests\Benchmark\Result;
 use Bootgly\ACI\Tests\Benchmark\Runner;
 use Bootgly\ACI\Tests\Benchmark\Runtime;
 use Bootgly\ACI\Tests\Benchmark\Summary;
@@ -2344,7 +2345,24 @@ class TestCommand extends Command
             Artifacts: $Artifacts,
          );
 
-         $exports[] = ['options' => $round, 'results' => $results, 'marks' => $marks, 'config' => $config];
+         // ! The round's raw telemetry (latency histograms, one-second series)
+         //   now lives in its sidecars: retain only the aggregates the report,
+         //   the charts and the JSON document read, and drop the full results
+         //   before the next round runs, so a sweep's memory no longer grows
+         //   with each round's distributions.
+         $exports[] = [
+            'options' => $round,
+            'results' => array_map(
+               static fn (array $loads): array => array_map(
+                  static fn (Result $Result): Result => $Result->strip(),
+                  $loads,
+               ),
+               $results,
+            ),
+            'marks' => $marks,
+            'config' => $config,
+         ];
+         unset($results);
       }
 
       // @ Telemetry sidecars are first-class run artifacts even when marks are

@@ -83,5 +83,8 @@ return new Suite(
       '6.18.3-http_tracker-reclaim_timestamps',
       // Configs — load discovery (.lua + .php)
       '4.3.1-loads-load-lua_and_php',
+      // Retention — raw telemetry leaves memory once its sidecars are written
+      '6.23.1-result-strip-raw_telemetry',
+      '6.23.2-command-retain-round_aggregates',
    ],
 );

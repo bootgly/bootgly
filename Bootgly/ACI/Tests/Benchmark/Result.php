@@ -164,4 +164,44 @@ class Result
       $this->latencyHistogram = $latencyHistogram;
       $this->timeSeries = $timeSeries;
    }
+
+   /**
+    * Copy this result without its raw telemetry.
+    *
+    * The copy keeps every aggregate — throughput, accounting counters, status
+    * and failure maps, censors and the latency summary — and drops the
+    * mergeable latency histogram and the one-second time series, whose size
+    * grows with the measured distribution and duration. The benchmark command
+    * retains this copy once the round's telemetry sidecars hold the raw data,
+    * so the memory of a long sweep no longer grows with each round's
+    * distributions.
+    */
+   public function strip (): self
+   {
+      return new self(
+         time: $this->time,
+         memory: $this->memory,
+         rps: $this->rps,
+         latency: $this->latency,
+         transfer: $this->transfer,
+         scheduled: $this->scheduled,
+         sent: $this->sent,
+         responses: $this->responses,
+         informational: $this->informational,
+         outstanding: $this->outstanding,
+         failed: $this->failed,
+         writeFailed: $this->writeFailed,
+         connectionFailed: $this->connectionFailed,
+         partialWrites: $this->partialWrites,
+         accounting: $this->accounting,
+         statuses: $this->statuses,
+         failures: $this->failures,
+         writeFailures: $this->writeFailures,
+         censored: $this->censored,
+         writeCensored: $this->writeCensored,
+         censors: $this->censors,
+         writeCensors: $this->writeCensors,
+         latencySummary: $this->latencySummary,
+      );
+   }
 }

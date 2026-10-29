@@ -962,6 +962,15 @@ class Summary
     * The supervised `--format=json` command validates this complete document
     * and makes it the only content written to its public stdout descriptor.
     *
+    * Each result carries its aggregates, latency summary included. The raw
+    * telemetry — the mergeable latency histogram and the one-second time
+    * series — is written only for a result that still carries it. The
+    * benchmark command exports results stripped (Result::strip()) after
+    * save() wrote them to the per-result sidecars listed in `$artifacts` and
+    * linked from each round's marks, so its rounds stay small whatever the
+    * measured distribution or duration; a direct caller that exports full
+    * results keeps them in the document.
+    *
     * @param string $caseName
     * @param string $metric
     * @param array<string,scalar|array<int,scalar>> $config Non-swept run configuration.
@@ -1026,9 +1035,18 @@ class Summary
                   'censors' => $Result->censors,
                   'write_censors' => $Result->writeCensors,
                   'latency_summary' => $Result->latencySummary,
-                  'latency_histogram' => $Result->latencyHistogram,
-                  'time_series' => $Result->timeSeries,
                ];
+
+               // ? Raw telemetry rides along only on a result that still
+               //   carries it: a direct caller keeps the full document, while
+               //   the command exports results stripped after save() wrote
+               //   their sidecars
+               if ($Result->latencyHistogram !== null) {
+                  $results[$opponent][$label]['latency_histogram'] = $Result->latencyHistogram;
+               }
+               if ($Result->timeSeries !== null) {
+                  $results[$opponent][$label]['time_series'] = $Result->timeSeries;
+               }
             }
          }
 
