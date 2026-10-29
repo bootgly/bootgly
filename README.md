@@ -32,9 +32,9 @@ Install Bootgly and create your first project with one command — the installer
 curl -fsSL https://bootgly.com/install | bash
 ```
 
-> **⚡ Over 1,000,000 req/s — in pure PHP.** On the TechEmpower `/plaintext` route, the HTTP Server CLI peaks at **1,076,709 req/s** — ahead of **Swoole** (964,908) and roughly **150× a Laravel + PHP-FPM** stack — with **no C extension** and no third-party runtime in its core. It leads Swoole on `/plaintext`, `/json`, `/query` (+126%) and `/updates` (+60%), and beats every other PHP framework benchmarked on every route.
+> **⚡ Over 1,000,000 req/s — in pure PHP.** On the TechEmpower `/plaintext` route, the HTTP Server CLI peaks at **1,100,393 req/s** — level with **Swoole** (1,086,952) and roughly **158× a Laravel + PHP-FPM** stack — with **no C extension** and no third-party runtime in its core. Against Swoole it leads the database routes — `/db` (+86%), `/query` (+105%) and `/fortunes` (+50%) — ties `/json` and `/updates`, and trails on cached queries (−8%); in the multi-framework sweep it beat every other PHP framework benchmarked on every route.
 >
-> _Measured on 24 logical CPUs, PHP 8.4.22, 514 connections, 10 s per route, symmetric DB pool._ → **Full comparison & reproducible runs:** [Bootgly vs Swoole, Hyperf, ReactPHP, AMPHP & Laravel](https://docs.bootgly.com/manual/WPI/HTTP/HTTP_Server_CLI/vs/)
+> _Measured 2026-10-29 on 24 logical CPUs (Fedora 44), PHP 8.5.12, 514 connections, 10 s per route, symmetric DB pool._ → **Full comparison & reproducible runs:** [Bootgly vs Swoole, Hyperf, ReactPHP, AMPHP & Laravel](https://docs.bootgly.com/manual/WPI/HTTP/HTTP_Server_CLI/vs/)
 >
 > Check [Benchmark Detailed Results](https://github.com/bootgly/bootgly_benchmarks/tree/main/HTTP_Server_CLI/)
 
