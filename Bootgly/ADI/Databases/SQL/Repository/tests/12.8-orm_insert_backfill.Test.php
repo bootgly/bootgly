@@ -103,7 +103,7 @@ return new Test(
          description: 'Inserts without a reported id stay untouched'
       );
 
-      // # PostgreSQL dialect — RETURNING keeps the pre-existing hydration path
+      // # PostgreSQL dialect — the RETURNING row hydrates into the entity passed to save()
       $PostgreSQL = new RecordingSQL(['driver' => 'pgsql', 'pool' => ['min' => 0, 'max' => 0]]);
       $PostgreSQLRepository = $PostgreSQL->map(User::class);
       $Returned = new User;
@@ -113,8 +113,19 @@ return new Test(
       $Mapped = $PostgreSQLRepository->hydrate($PostgreSQLRepository->save($Returned));
 
       yield assert(
-         assertion: $Mapped->entity instanceof User && $Mapped->entity->id === 9,
-         description: 'Dialects with RETURNING keep hydrating entities from rows'
+         assertion: $Mapped->entity === $Returned && $Returned->id === 9,
+         description: 'Dialects with RETURNING hydrate the returned row into the entity passed to save()'
+      );
+
+      // @ The passed entity is identity-tracked: the next save() updates its row
+      $Returned->name = 'Grace Hopper';
+      $PostgreSQL->Next = new Result('UPDATE 1', [['id' => 9, 'name' => 'Grace Hopper']], ['id', 'name'], 1);
+      $Mapped = $PostgreSQLRepository->hydrate($PostgreSQLRepository->save($Returned));
+
+      yield assert(
+         assertion: str_starts_with($PostgreSQL->queries[1], 'UPDATE "backfill_users"')
+            && $Mapped->entity === $Returned,
+         description: 'The RETURNING-hydrated entity updates on the next save instead of inserting again'
       );
 
       // # SQLite E2E — the real driver backfills through Result->inserted

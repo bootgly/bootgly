@@ -75,7 +75,7 @@ class Repository
    // * Data
    public private(set) Identity $Identity;
    private null|object $Scope;
-   /** @var WeakMap<Operation,array{loads:array<int,string>,lazies:array<int,string>,Scope:null|object,Entity?:object,Pagination?:Pagination,Count?:null|Operation,Query?:null|Query,orders?:array<int,array{column:string,order:Orders}>}> */
+   /** @var WeakMap<Operation,array{loads:array<int,string>,lazies:array<int,string>,Scope:null|object,Entity?:object,Held?:object,Pagination?:Pagination,Count?:null|Operation,Query?:null|Query,orders?:array<int,array{column:string,order:Orders}>}> */
    private WeakMap $contexts;
    /** @var array<string,Closure> */
    private array $scopes = [];
@@ -171,6 +171,13 @@ class Repository
       $Builder = $this->build()->delete()->filter(new Identifier($this->Model->key), Operators::Equal, $id);
       $Operation = $this->Querying->query($Builder, Scope: $Scope ?? $this->Scope);
 
+      // ! A DELETE returns no row and names no relation.
+      $this->contexts[$Operation] = [
+         'loads' => [],
+         'lazies' => [],
+         'Scope' => $Scope ?? $this->Scope,
+      ];
+
       $this->emit(Hooks::Deleted, $Operation, $Entity);
 
       return $Operation;
@@ -240,6 +247,7 @@ class Repository
       $lazies = $this->detect($loads);
       $Scope = $this->Scope;
       $Saved = null;
+      $Held = null;
       $Pagination = null;
       $Count = null;
       $CountQuery = null;
@@ -251,6 +259,7 @@ class Repository
          $lazies = $context['lazies'];
          $Scope = $context['Scope'];
          $Saved = $context['Entity'] ?? null;
+         $Held = $context['Held'] ?? null;
          $Pagination = $context['Pagination'] ?? null;
          $Count = $context['Count'] ?? null;
          $CountQuery = $context['Query'] ?? null;
@@ -265,6 +274,16 @@ class Repository
 
       // @ Hydration and deferred/eager relation operations.
       $this->emit(Hooks::Hydrating, $Result);
+
+      // ? A RETURNING row of a saved entity hydrates into that entity, not a copy —
+      //   unless the entity refuses the row, which then hydrates into a new one.
+      $row = $Result->rows[0] ?? [];
+      $returned = $row[$this->Model->key] ?? null;
+
+      if ($Saved !== null && $returned !== null && $this->Hydrator->check($Saved, $row)) {
+         $this->Identity->store($this->Model->class, $returned, $Saved);
+      }
+
       $entities = $this->Hydrator->hydrate($Result);
 
       // ? Generated-key backfill — dialects without RETURNING report the
@@ -281,6 +300,19 @@ class Repository
       //   trimmed before relation batches, so the probe entity never joins them.
       if ($Pagination !== null) {
          $this->settle($Pagination, $Count, $CountQuery, $orders, $Scope, $Result, $entities);
+      }
+
+      // ? A relation the caller already holds on the entity it saved keeps its value.
+      if ($Held !== null && $entities === [$Held]) {
+         $pending = [];
+
+         foreach ($lazies as $relation) {
+            if ($this->Model->read($Held, $this->Model->relationProperties[$relation]) === null) {
+               $pending[] = $relation;
+            }
+         }
+
+         $lazies = $pending;
       }
 
       if ($lazies !== []) {
@@ -523,16 +555,20 @@ class Repository
          : $this->update($Entity, $id);
       $Operation = $this->Querying->query($Builder, Scope: $Scope ?? $this->Scope);
 
-      // ? Dialects without RETURNING backfill the generated key at hydrate()
-      //   from Result->inserted — keep the saved entity on the operation context.
-      if ($insert && $this->Model->generated && $this->Dialect->check(Capabilities::Output) === false) {
-         $this->contexts[$Operation] = [
-            'loads' => [],
-            'lazies' => [],
-            'Scope' => $Scope ?? $this->Scope,
-            'Entity' => $Entity,
-         ];
+      // ! A write names no relation: lazy wrappers are installed only where a bridge can load them.
+      $context = [
+         'loads' => [],
+         'lazies' => $this->Awaiting === null ? [] : $this->detect([]),
+         'Scope' => $Scope ?? $this->Scope,
+         'Held' => $Entity,
+      ];
+
+      // ? The generated key reaches the saved entity at hydrate(), from RETURNING or Result->inserted.
+      if ($insert && $this->Model->generated) {
+         $context['Entity'] = $Entity;
       }
+
+      $this->contexts[$Operation] = $context;
 
       $this->emit(Hooks::Saved, $Operation, $Entity);
 
