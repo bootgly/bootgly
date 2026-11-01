@@ -74,5 +74,6 @@ return new Suite(
       '1.26-port_windows',
       // # 1.0.x (UDP-22): another account can neither take a running UDP port nor have a launch start on top of it
       '1.27-port_cross_uid',
+      '1.28-connections_diagnostic_inert',
    ]
 );

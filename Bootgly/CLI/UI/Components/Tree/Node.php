@@ -23,7 +23,11 @@ use Throwable;
 class Node
 {
    // * Config
-   /** Label — Template markup allowed (per-node color goes here) */
+   /**
+    * Label — Template markup allowed (per-node color goes here). Authored text: a
+    * name this program did not write goes through
+    * `Escaped::scrub(Controls::escape(mb_scrub($name, 'UTF-8')))` first.
+    */
    public string $label;
    /** Consumer payload */
    public mixed $value;
@@ -86,7 +90,7 @@ class Node
    /**
     * Adds a child node.
     *
-    * @param string $label The child label — Template markup allowed.
+    * @param string $label The child label — Template markup allowed (authored text: see `$label`).
     * @param mixed $value The consumer payload carried by the child.
     * @param null|Closure $resolver A lazy children provider for the child.
     *

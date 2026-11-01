@@ -231,18 +231,21 @@ return new Test(
             description: 'naming the release the kit is on is a no-op'
          );
 
-         // # Unknown names — echoed clean of markup and control bytes
+         // # Unknown names — echoed with controls escaped and markup defused
+         //   (a name is one line: a TAB or a line feed in it is escaped like any other control)
          [$result, $document] = $Probe($Kit, ['upgrade', 'v9.9.9'], ['json' => true]);
          [$again, $other] = $Probe($Kit, ['upgrade', "ma@in\e[31m\u{202E}\u{200B}"], ['json' => true]);
          [$marked, $markup] = $Probe($Kit, ['upgrade', "ma@#red:in@;"], ['json' => true]);
          [$closed, $closer] = $Probe($Kit, ['upgrade', "x_@~:y@@:z@:red:w@\\;v@.;"], ['json' => true]);
+         [$lined, $line] = $Probe($Kit, ['upgrade', "ma\tin\nx"], ['json' => true]);
 
          yield assert(
             assertion: $result === false && str_contains($document['reason'] ?? '', 'No release v9.9.9')
-               && $again === false && ($other['reason'] ?? '') === 'ma@in[31m is not a release name.'
+               && $again === false && ($other['reason'] ?? '') === 'ma@in\u001b[31m is not a release name.'
                && $marked === false && ($markup['reason'] ?? '') === 'ma#red:in; is not a release name.'
-               && $closed === false && ($closer['reason'] ?? '') === 'x_~:y:z:red:w\\;v.; is not a release name.',
-            description: 'an unknown release and a name that is no version are both refused; controls and bidi overrides are cleaned, a plain `@` stays, an `@` that opens markup goes'
+               && $closed === false && ($closer['reason'] ?? '') === 'x_~:y:z:red:w\\;v.; is not a release name.'
+               && $lined === false && ($line['reason'] ?? '') === 'ma\tin\nx is not a release name.',
+            description: 'an unknown release and a name that is no version are both refused; a control is shown as a visible escape (a TAB and a line feed too: a name is one line), bidi overrides go, a plain `@` stays, an `@` that opens markup goes'
          );
 
          // # Nothing below the earliest

@@ -55,14 +55,14 @@ return new Test(
          description: 'Strings dump single-quoted'
       );
 
-      // @ Control chars — C mnemonics + octal escapes (SGR-injection-proof)
+      // @ Control chars — the visible escapes the logs use (SGR-injection-proof)
       yield assert(
          assertion: $Dumper->dump("a\nb") === "'a\\nb'"
             && $Dumper->dump("a\tb") === "'a\\tb'"
-            && $Dumper->dump("esc\e[31m") === "'esc\\033[31m'"
-            && $Dumper->dump("del\x7F!") === "'del\\177!'"
+            && $Dumper->dump("esc\e[31m") === "'esc\\u001b[31m'"
+            && $Dumper->dump("del\x7F!") === "'del\\u007f!'"
             && $Dumper->dump("qu'ote") === "'qu\\'ote'",
-         description: 'Control chars escape visibly — ESC as octal, never raw'
+         description: 'Control chars escape visibly — ESC as \\u001b, never raw'
       );
    }
 );

@@ -12,9 +12,12 @@ namespace Demo\WS_Client_CLI;
 
 
 use function getenv;
+use function mb_scrub;
 use function strlen;
 
 use const Bootgly\CLI;
+use Bootgly\ABI\Code\__String\Controls;
+use Bootgly\ABI\Templates\Template\Escaped;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Nodes\WS_Client_CLI;
 use Bootgly\WPI\Nodes\WS_Client_CLI\Configs;
@@ -32,6 +35,12 @@ return new Project(
    // # Project Boot Function
    boot: function (array $arguments = [], array $options = []): void
    {
+      // ! A server's reply is shown as text, never obeyed: a byte that is not
+      //   UTF-8 becomes `?`, a control character a visible escape, an `@` that
+      //   opens Output markup goes
+      $Show = static fn (string $text, string $keep = ''): string
+         => Escaped::scrub(Controls::escape(mb_scrub($text, 'UTF-8'), $keep));
+
       $WS_Client_CLI = new WS_Client_CLI();
 
       // @ Optional TLS / wss:// (WS_TLS=1) — verification relaxed for local certs.
@@ -68,19 +77,19 @@ return new Project(
 
       $WS_Client_CLI
          // # On the verified 101: report the negotiated session and send a message.
-         ->on(Events::Connected, function ($Session) {
+         ->on(Events::Connected, function ($Session) use ($Show) {
             $Output = CLI->Terminal->Output;
             $Output->render('@.;@#green:✓ Connected to WebSocket server@;@.;');
-            $Output->render('  subprotocol: @#cyan:' . ($Session->subprotocol ?: '(none)') . '@;@..;');
+            $Output->render('  subprotocol: @#cyan:' . ($Session->subprotocol !== '' ? $Show($Session->subprotocol) : '(none)') . '@;@..;');
             $Output->render('  permessage-deflate: @#cyan:' . ($Session->Deflator !== null ? 'yes' : 'no') . '@;@..;');
 
             $Session->send(getenv('WS_MESSAGE') ?: 'Hello from Bootgly WS_Client_CLI!');
          })
          // # On each server message: print it. WS_ONCE=1 closes after the first.
-         ->on(Events::MessageReceived, function ($Session, $Message) {
+         ->on(Events::MessageReceived, function ($Session, $Message) use ($Show) {
             $Output = CLI->Terminal->Output;
             $kind = $Message->binary ? 'binary' : 'text';
-            $Output->render('@#yellow:← ' . $kind . ' (' . strlen($Message->payload) . ' bytes)@;: ' . $Message->payload . '@\;');
+            $Output->render('@#yellow:← ' . $kind . ' (' . strlen($Message->payload) . ' bytes)@;: ' . $Show($Message->payload, "\t\n") . '@\;');
 
             if (getenv('WS_ONCE')) {
                $Session->close();

@@ -85,5 +85,9 @@ return new Suite(
       //   private staging directory; kit screens its releases remote
       '1.13-project-import-url',
       '8.11-kit-remote-screen',
+      '8.12-kit-stream-controls',
+      '1.14-project-git-stream',
+      '11.9-demo-reply-inert',
+      '1.15-project-migrate-names',
    ]
 );

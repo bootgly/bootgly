@@ -13,12 +13,15 @@ namespace Demo\HTTPS_Client_CLI;
 
 use function implode;
 use function is_array;
+use function mb_scrub;
 use function parse_url;
 use function str_contains;
 use function strlen;
 use function substr;
 
 use const Bootgly\CLI;
+use Bootgly\ABI\Code\__String\Controls;
+use Bootgly\ABI\Templates\Template\Escaped;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Configs;
@@ -39,6 +42,12 @@ return new Project(
    boot: function (array $arguments = [], array $options = []): void
    {
       $Output = CLI->Terminal->Output;
+      // ! A server's reply is shown as text, never obeyed: a byte that is not
+      //   UTF-8 becomes `?`, a control character a visible escape, an `@` that
+      //   opens Output markup goes
+      $Show = static fn (string $text, string $keep = ''): string
+         => Escaped::scrub(Controls::escape(mb_scrub($text, 'UTF-8'), $keep));
+
       $Output->render('@.;@#cyan:━━━ Bootgly HTTPS Client CLI Demo ━━━@;@..;');
 
       if (empty($arguments[0])) {
@@ -111,10 +120,10 @@ return new Project(
             $Output->render('@.;@#yellow:■ Connection closed@;@.;');
          })
          // @ on HTTP Response received
-         ->on(Events::ResponseReceive, function (Request $Request, Response $Response) use ($Output, $Client) {
+         ->on(Events::ResponseReceive, function (Request $Request, Response $Response) use ($Output, $Client, $Show) {
             $Output->render('@.;@#white:--- Response ---@;@.;');
-            $Output->render('@#green:Protocol:@; ' . $Response->protocol . '@.;');
-            $Output->render('@#green:Status:@;   ' . $Response->code . ' ' . $Response->status . '@.;');
+            $Output->render('@#green:Protocol:@; ' . $Show($Response->protocol) . '@.;');
+            $Output->render('@#green:Status:@;   ' . $Response->code . ' ' . $Show($Response->status) . '@.;');
 
             // @ Display response headers
             $Output->render('@#white:--- Headers ---@;@.;');
@@ -122,7 +131,7 @@ return new Project(
                if (is_array($value)) {
                   $value = implode(', ', $value);
                }
-               $Output->render("@#cyan:{$name}:@; {$value}@.;");
+               $Output->render("@#cyan:{$Show($name)}:@; {$Show($value)}@.;");
             }
 
             // @ Display response body (truncated)
@@ -130,9 +139,9 @@ return new Project(
             if ($body !== '') {
                $Output->render('@#white:--- Body ---@;@.;');
                if (strlen($body) > 500) {
-                  $Output->render(substr($body, 0, 500) . '...' . '@.;');
+                  $Output->render($Show(substr($body, 0, 500), "\t\n") . '...' . '@.;');
                } else {
-                  $Output->render($body . '@.;');
+                  $Output->render($Show($body, "\t\n") . '@.;');
                }
             }
 

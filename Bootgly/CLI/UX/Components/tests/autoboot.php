@@ -45,5 +45,6 @@ return new Suite(
       '7.1-filepicker-scan',
       '7.2-filepicker-pick',
       '8.1-tail-run',
+      '7.3-filepicker-labels',
    ]
 );

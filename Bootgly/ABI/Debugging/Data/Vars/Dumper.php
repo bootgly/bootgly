@@ -13,6 +13,7 @@ namespace Bootgly\ABI\Debugging\Data\Vars;
 
 use function addcslashes;
 use function count;
+use function get_debug_type;
 use function get_resource_type;
 use function gettype;
 use function is_array;
@@ -22,11 +23,13 @@ use function is_int;
 use function is_object;
 use function is_resource;
 use function is_string;
+use function mb_scrub;
 use function mb_strlen;
 use function mb_substr;
 use function method_exists;
 use function spl_object_id;
 use function str_repeat;
+use function strstr;
 use function var_export;
 use BackedEnum;
 use Closure;
@@ -36,6 +39,7 @@ use ReflectionProperty;
 use UnitEnum;
 use ValueError;
 
+use Bootgly\ABI\Code\__String\Controls;
 use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Code\__String\Theme;
 
@@ -199,9 +203,9 @@ class Dumper
       }
       // ?: Enums — before the generic object walk (enums are objects)
       if ($value instanceof UnitEnum) {
-         $enum = $this->Theme->apply(self::CLASSNAME, $value::class)
+         $enum = $this->Theme->apply(self::CLASSNAME, $this->escape($value::class))
             . $this->Theme->apply(self::PONTUATION, '::')
-            . $this->Theme->apply(self::PROPERTY, $value->name);
+            . $this->Theme->apply(self::PROPERTY, $this->escape($value->name));
          if ($value instanceof BackedEnum) {
             $enum .= ' ' . $this->Theme->apply(self::PONTUATION, '=')
                . ' ' . $this->walk($value->value, $level);
@@ -217,14 +221,14 @@ class Dumper
             : "{$file}:{$Reflection->getStartLine()}";
 
          return $this->Theme->apply(self::CLASSNAME, 'Closure')
-            . ' ' . $this->Theme->apply(self::NOTE, "({$location})");
+            . ' ' . $this->Theme->apply(self::NOTE, "({$this->escape($location)})");
       }
       // ?: Objects
       if (is_object($value) === true) {
          // ? Circular reference — ancestor path only
          $id = spl_object_id($value);
          if (isSet($this->visited[$id]) === true) {
-            return $this->Theme->apply(self::CLASSNAME, $value::class)
+            return $this->Theme->apply(self::CLASSNAME, $this->escape(get_debug_type($value)))
                . ' ' . $this->Theme->apply(self::NOTE, '*RECURSION*');
          }
 
@@ -246,10 +250,24 @@ class Dumper
    }
 
    /**
+    * Escape a name or a note for the terminal — the text is shown, never obeyed:
+    * a byte that is not UTF-8 becomes `?`, every control character a visible
+    * escape (`Controls::escape()`).
+    */
+   private function escape (string $text): string
+   {
+      // :
+      return Controls::escape(mb_scrub($text, 'UTF-8'));
+   }
+
+   /**
     * Quote a string — truncate the raw string first, then escape control chars.
     */
    private function quote (string $string): string
    {
+      // ! UTF-8 only — a stray byte becomes `?` (safe on a UTF-8 terminal, as `Controls::escape()` states)
+      $string = mb_scrub($string, 'UTF-8');
+
       // ? Truncation — raw chars first, so the `(+N)` note counts real chars
       $length = mb_strlen($string);
       $truncated = $length > $this->strings;
@@ -257,8 +275,9 @@ class Dumper
          $string = mb_substr($string, 0, $this->strings);
       }
 
-      // @ Escape control chars — C mnemonics + octal (SGR-injection-proof)
-      $string = addcslashes($string, "\0..\37\177\\'");
+      // @ Quote and backslash first (a literal `\u001b` stays distinguishable), then
+      //   every control character — C0, DEL, C1 — as the visible escape the logs use
+      $string = Controls::escape(addcslashes($string, "\\'"));
 
       // :
       if ($truncated === true) {
@@ -343,7 +362,8 @@ class Dumper
    private function expand (object $Object, int $level): string
    {
       // !
-      $classname = $this->Theme->apply(self::CLASSNAME, $Object::class);
+      // ! The type as PHP names it — `class@anonymous` carries no NUL and no path
+      $classname = $this->Theme->apply(self::CLASSNAME, $this->escape(get_debug_type($Object)));
 
       // ? Depth cap
       if ($level >= $this->depth) {
@@ -379,11 +399,16 @@ class Dumper
       }
       $Ancestor = $Reflection->getParentClass();
       while ($Ancestor !== false) {
+         // ! Named as `get_debug_type()` names a type — an anonymous ancestor
+         //   up to its NUL: no file path, no line
+         $origin = $Ancestor->isAnonymous() === true
+            ? (string) strstr($Ancestor->getName(), "\0", true)
+            : $Ancestor->getShortName();
          foreach ($Ancestor->getProperties(ReflectionProperty::IS_PRIVATE) as $Property) {
             if ($Property->isStatic() === true) {
                continue;
             }
-            $Properties[] = [$Property, $Ancestor->getShortName()];
+            $Properties[] = [$Property, $origin];
          }
          $Ancestor = $Ancestor->getParentClass();
       }
@@ -423,12 +448,12 @@ class Dumper
 
          $entries .= "\n{$indentation}"
             . $this->Theme->apply(self::MODIFIER, "{$modifiers}{$sigil}")
-            . $this->Theme->apply(self::PROPERTY, $Property->getName())
+            . $this->Theme->apply(self::PROPERTY, $this->escape($Property->getName()))
             . $this->Theme->apply(self::PONTUATION, ':')
             . " {$rendering}";
          // shadowed ancestor privates carry their declaring class
          if ($origin !== null) {
-            $entries .= ' ' . $this->Theme->apply(self::NOTE, "({$origin})");
+            $entries .= ' ' . $this->Theme->apply(self::NOTE, "({$this->escape($origin)})");
          }
 
          $rendered++;

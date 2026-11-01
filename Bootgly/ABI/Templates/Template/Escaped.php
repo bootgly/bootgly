@@ -160,6 +160,18 @@ class Escaped
       ];
    }
 
+   /**
+    * Render the Output markup (`@#red:`, `@*:`, `@;`, `@.;`) of text this program wrote.
+    *
+    * Every other byte is returned as it is — control characters included. Not
+    * a sanitizer: text this program did not write — a peer's reply, a file
+    * name, a remote's message — goes through
+    * `Escaped::scrub(Controls::escape(mb_scrub($text, 'UTF-8')))` first.
+    *
+    * @param string $message The text with its markup.
+    *
+    * @return string The text with SGR sequences in place of the markup.
+    */
    public static function render (string $message): string
    {
       $message = preg_replace_callback_array(self::$directives, $message);

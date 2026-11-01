@@ -11,18 +11,20 @@
 namespace Bootgly\WPI\Interfaces\UDP_Server_CLI\commands;
 
 
+use const FILTER_VALIDATE_IP;
 use const PHP_EOL;
 use function count;
 use function date;
-use function is_array;
-use function is_object;
+use function filter_var;
+use function strlen;
 use Closure;
+use Throwable;
 
 use Bootgly\ACI\Logs\Data\Display;
-use Bootgly\ACI\Logs\Logger;
 use Bootgly\CLI\Command;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections;
+use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections\Connection;
 
 
 return new class extends Command
@@ -41,79 +43,77 @@ return new class extends Command
          return false;
       }
 
-      // @
-      $context(function () {
-         /** @var Server $Server */
-         $Server = $this; // @phpstan-ignore-line
+      try {
+         // @
+         $context(function () {
+            /** @var Server $Server */
+            $Server = $this; // @phpstan-ignore-line
 
-         Display::show(Display::MESSAGE);
+            Display::show(Display::MESSAGE);
 
-         $worker = $Server->Process::$index;
+            $worker = $Server->Process::$index;
 
-         $Server->Logger->log(debug: PHP_EOL . "Worker #{$worker}:" . PHP_EOL);
+            $Server->Logger->log(debug: PHP_EOL . "Worker #{$worker}:" . PHP_EOL);
 
-         /** @var Connections $Connection */
-         foreach (Connections::$Connections as $peer => $Connection) {
-            $Server->Logger->log(info: 'Peer #' . $peer . ':' . PHP_EOL);
+            $index = 0;
+            /** @var Connection $Connection */
+            foreach (Connections::$Connections as $Connection) {
+               $index++;
+               $Server->Logger->log(info: "Peer #{$index}:" . PHP_EOL);
 
-            $Connection = (array) $Connection;
-            foreach ($Connection as $key => $value) {
-               // ? Internal ownership callbacks/protocol objects are not
-               //   printable diagnostics and may not be string-convertible.
-               if (is_object($value)) {
-                  continue;
-               }
+               $status = match ($Connection->status) {
+                  Connections::STATUS_INITIAL     => 'INITIAL',
+                  Connections::STATUS_CONNECTING  => 'CONNECTING',
+                  Connections::STATUS_ESTABLISHED => 'ESTABLISHED',
+                  Connections::STATUS_CLOSING     => 'CLOSING',
+                  Connections::STATUS_CLOSED      => 'CLOSED',
+                  default                         => 'UNKNOWN'
+               };
+               $IP = filter_var($Connection->ip, FILTER_VALIDATE_IP);
 
-               // @ Exclude
-               switch ($key) {
-                  case 'Connection':
-                  case 'Logger':
-                  case 'Socket':
-                     continue 2;
-               }
+               // ! Security boundary: diagnostic output is an explicit scalar
+               //   allowlist — the peer's datagram and the reply are represented
+               //   only by their lengths, never by their bytes; protocol objects
+               //   only by fixed presence labels
+               $metadata = [
+                  'status' => $status,
+                  'IP' => $IP === false ? 'UNKNOWN' : $IP,
+                  'port' => (string) $Connection->port,
+                  'expiration' => "{$Connection->expiration} second(s)",
+                  'started' => date('Y-m-d H:i:s', $Connection->started),
+                  'used' => date('Y-m-d H:i:s', $Connection->used),
+                  'writes' => (string) $Connection->writes,
+                  'timers' => (string) count($Connection->timers),
+                  'input bytes' => (string) strlen($Connection->input),
+                  'output bytes' => (string) strlen($Connection->output),
+                  'consumed bytes' => (string) $Connection->consumed,
+                  'rejected' => $Connection->rejected ? 'YES' : 'NO',
+                  'decoder' => $Connection->Decoder === null ? 'DEFAULT' : 'CUSTOM',
+                  'encoder' => $Connection->Encoder === null ? 'DEFAULT' : 'CUSTOM',
+                  'decoded' => $Connection->decoded === null ? 'NONE' : 'PRESENT',
+               ];
 
-               $Server->Logger->log(debug: '@:notice: ' . $key . ': @; ');
-
-               switch ($key) {
-                  case 'status':
-                     $status = (int) $value; // @phpstan-ignore-line
-
-                     $status = match ($status) {
-                        Connections::STATUS_INITIAL     => 'INITIAL',
-                        Connections::STATUS_CONNECTING  => 'CONNECTING',
-                        Connections::STATUS_ESTABLISHED => 'ESTABLISHED',
-                        Connections::STATUS_CLOSING     => 'CLOSING',
-                        Connections::STATUS_CLOSED      => 'CLOSED',
-                        default                         => 'UNKNOWN'
-                     };
-
-                     $Server->Logger->log(debug: $status . PHP_EOL);
-                     break;
-
-                  case 'expiration':
-                     $Server->Logger->log(debug: $value . ' second(s)' . PHP_EOL); // @phpstan-ignore-line
-                     break;
-
-                  case 'used':
-                  case 'started':
-                     $Server->Logger->log(debug: date('Y-m-d H:i:s', $value) . PHP_EOL); // @phpstan-ignore-line
-                     break;
-
-                  default:
-                     // @phpstan-ignore-next-line
-                     if ( is_array($value) ) {
-                        $value = count($value);
-                     }
-
-                     $Server->Logger->log(debug: $value . PHP_EOL); // @phpstan-ignore-line
+               foreach ($metadata as $key => $value) {
+                  $Server->Logger->log(debug: "@:notice: {$key}: @; ");
+                  $Server->Logger->log(debug: $value . PHP_EOL);
                }
             }
-         }
 
-         if ( empty(Connections::$Connections) ) {
-            $Server->Logger->log(warning: 'No active peer.' . PHP_EOL);
-         }
-      });
+            if ( empty(Connections::$Connections) ) {
+               $Server->Logger->log(warning: 'No active peer.' . PHP_EOL);
+            }
+
+            // @ Fixed completion oracle: callers/tests can distinguish a
+            //   complete diagnostic from a safely contained partial failure.
+            $Server->Logger->log(debug: 'Connections diagnostic complete.' . PHP_EOL);
+         });
+      }
+      catch (Throwable) {
+         // ! A diagnostic command runs from SIGIOT in each worker. Even an
+         //   unexpected formatter/runtime failure must not escape that signal
+         //   callback and terminate the worker.
+         return false;
+      }
 
       return true;
    }

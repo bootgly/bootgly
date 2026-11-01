@@ -509,4 +509,27 @@ namespace {
             . \chr(0x80 | ($codepoint & 0x3F));
       }
    }
+
+   // mb_scrub
+   if (!function_exists('mb_scrub')) {
+      function mb_scrub(string $string, string|null $encoding = null): string
+      {
+         // ? Well-formed UTF-8 — or another encoding, which has no converter without ext-mbstring
+         if (__String::encoding($encoding) !== 'UTF-8' || \preg_match('//u', $string) === 1) {
+            return $string;
+         }
+
+         // : Every maximal ill-formed subsequence becomes one `?`, as ext-mbstring writes it
+         return (string) \preg_replace(
+            '/(?:[\x00-\x7F]|[\xC2-\xDF][\x80-\xBF]|\xE0[\xA0-\xBF][\x80-\xBF]|[\xE1-\xEC\xEE\xEF][\x80-\xBF]{2}'
+            . '|\xED[\x80-\x9F][\x80-\xBF]|\xF0[\x90-\xBF][\x80-\xBF]{2}|[\xF1-\xF3][\x80-\xBF]{3}|\xF4[\x80-\x8F][\x80-\xBF]{2})'
+            . '(*SKIP)(*FAIL)'
+            . '|\xE0[\xA0-\xBF]?|[\xE1-\xEC\xEE\xEF][\x80-\xBF]?|\xED[\x80-\x9F]?'
+            . '|\xF0(?:[\x90-\xBF][\x80-\xBF]?)?|[\xF1-\xF3](?:[\x80-\xBF][\x80-\xBF]?)?|\xF4(?:[\x80-\x8F][\x80-\xBF]?)?'
+            . '|[\x80-\xFF]/',
+            '?',
+            $string
+         );
+      }
+   }
 }

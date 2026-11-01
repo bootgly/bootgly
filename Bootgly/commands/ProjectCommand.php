@@ -1067,12 +1067,14 @@ class ProjectCommand extends Command
             $content .= '@#Green:' . str_pad('Local only', 12) . ' @; ' . count($Status['pending']) . PHP_EOL;
             $content .= '@#Green:' . str_pad('DB only', 12) . ' @; ' . count($Status['missing']);
 
+            // ! A migration name is read back from the database too — shown as
+            //   text, never obeyed (`clean()`)
             if ($Status['pending'] !== []) {
-               $content .= PHP_EOL . '@#Green:' . str_pad('Next', 12) . ' @; ' . $Status['pending'][0];
+               $content .= PHP_EOL . '@#Green:' . str_pad('Next', 12) . ' @; ' . $this->clean($Status['pending'][0]);
             }
 
             if ($Status['missing'] !== []) {
-               $content .= PHP_EOL . '@#Green:' . str_pad('Remove', 12) . ' @; ' . $Status['missing'][0];
+               $content .= PHP_EOL . '@#Green:' . str_pad('Remove', 12) . ' @; ' . $this->clean($Status['missing'][0]);
             }
 
             $Output->write(PHP_EOL);
@@ -1094,11 +1096,11 @@ class ProjectCommand extends Command
             $content .= '@#Green:' . str_pad('Delete', 12) . ' @; ' . count($Status['missing']);
 
             if ($Status['pending'] !== []) {
-               $content .= PHP_EOL . '@#Green:' . str_pad('Add first', 12) . ' @; ' . $Status['pending'][0];
+               $content .= PHP_EOL . '@#Green:' . str_pad('Add first', 12) . ' @; ' . $this->clean($Status['pending'][0]);
             }
 
             if ($Status['missing'] !== []) {
-               $content .= PHP_EOL . '@#Green:' . str_pad('Delete first', 12) . ' @; ' . $Status['missing'][0];
+               $content .= PHP_EOL . '@#Green:' . str_pad('Delete first', 12) . ' @; ' . $this->clean($Status['missing'][0]);
             }
 
             $Output->write(PHP_EOL);
@@ -1175,9 +1177,11 @@ class ProjectCommand extends Command
          }
       }
       catch (Throwable $Throwable) {
+         // ! A driver's message may quote what the database holds — shown as text
+         $message = $this->clean($Throwable->getMessage(), breaks: true);
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = $Throwable->getMessage() . '@.;';
+         $Alert->message = "{$message}@.;";
          $Alert->render();
 
          return false;
@@ -1320,9 +1324,11 @@ class ProjectCommand extends Command
          }
       }
       catch (Throwable $Throwable) {
+         // ! A driver's message may quote what the database holds — shown as text
+         $message = $this->clean($Throwable->getMessage(), breaks: true);
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = $Throwable->getMessage() . '@.;';
+         $Alert->message = "{$message}@.;";
          $Alert->render();
 
          return false;

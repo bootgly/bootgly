@@ -23,5 +23,6 @@ return new Suite(
       '1.7-dump-caps',
       '2.1-dump-themes',
       '3.1-vars-delegate',
+      '1.8-dump-controls',
    ]
 );

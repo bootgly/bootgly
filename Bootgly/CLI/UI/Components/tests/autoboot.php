@@ -66,5 +66,6 @@ return new Suite(
       '3.5-select-filter-confinement',
       // # Alert crop on visible width (appended last — earlier indexes stay stable)
       '21.1-alert-crop',
+      '19.7-markdown-controls',
    ]
 );

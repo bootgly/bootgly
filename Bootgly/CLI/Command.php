@@ -17,6 +17,7 @@ use function implode;
 use function in_array;
 use function ltrim;
 use function max;
+use function mb_scrub;
 use function preg_replace;
 use function rtrim;
 use function str_pad;
@@ -25,6 +26,7 @@ use function strtok;
 use Closure;
 
 use const Bootgly\CLI;
+use Bootgly\ABI\Code\__String\Controls;
 use Bootgly\ABI\Code\__String\Path;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\CLI\UI\Base\Fieldset;
@@ -140,13 +142,19 @@ abstract class Command
     * the JSON document.
     *
     * Control characters, C0 and C1 alike, would drive the terminal (title,
-    * colours, erased lines); an `@` that could open or close Output markup —
-    * one not followed by a letter, a digit or a non-ASCII character (`@#`,
-    * `@;`, `@.`, `@:`, `@@`, `@*`, `@\\`), or one right after `*`, `~`, `_`,
-    * `-` (the closers) — would drive it and goes (`Escaped::scrub()`); a plain
-    * `@` between word characters, legal in a path and in a ref, stays; a byte that is not UTF-8 would make the JSON
-    * encoder throw.
-    * Line breaks go too, unless the text is a multi-line note.
+    * colours, erased lines): each is shown as a visible escape (`\u001b`,
+    * `\u009b`, `\t` — `Controls::escape()`), so the reader sees it was there
+    * and nothing after it is lost. An `@` that could open or close Output
+    * markup — one not followed by a letter, a digit or a non-ASCII character
+    * (`@#`, `@;`, `@.`, `@:`, `@@`, `@*`, `@\\`), or one right after `*`, `~`,
+    * `_`, `-` (the closers) — would drive it and goes (`Escaped::scrub()`); a
+    * plain `@` between word characters, legal in a path and in a ref, stays.
+    * A byte that is not UTF-8 (the JSON encoder would throw on it) becomes
+    * `?` — the guarantee is for a UTF-8 terminal, as `Controls::escape()`
+    * states: one outside UTF-8 mode reads bytes 0x80–0x9F of valid UTF-8 text
+    * as C1 controls. The zero-width and bidi format
+    * characters that disguise a path are removed. A line break is escaped
+    * too, unless the text is a multi-line note.
     *
     * @param string $text
     * @param bool $breaks Keep line feeds.
@@ -155,19 +163,13 @@ abstract class Command
     */
    protected function clean (string $text, bool $breaks = false): string
    {
-      // ! C0, C1, and the zero-width / bidi format characters that disguise a path
-      $invisible = '\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{2066}-\x{206F}\x{FEFF}';
-      $controls = $breaks
-         ? "/[\\x00-\\x09\\x0B-\\x1F\\x7F\\x{80}-\\x{9F}{$invisible}]/u"
-         : "/[\\x00-\\x1F\\x7F\\x{80}-\\x{9F}{$invisible}]/u";
-      $cleaned = preg_replace($controls, '', $text);
-      // ? Not UTF-8 at all: keep printable ASCII (and the break) only
-      if ($cleaned === null) {
-         $cleaned = preg_replace($breaks ? '/[^\x0A\x20-\x7E]/' : '/[^\x20-\x7E]/', '?', $text) ?? '';
-      }
+      // ! UTF-8 only — a stray byte becomes `?`
+      $text = mb_scrub($text, 'UTF-8');
+      // ! The zero-width / bidi format characters that disguise a path
+      $text = preg_replace('/[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{2066}-\x{206F}\x{FEFF}]/u', '', $text) ?? '';
 
-      // :
-      return TemplateEscaped::scrub($cleaned);
+      // : Controls shown (`\u001b`, `\u009b`, `\t`), markup defused
+      return TemplateEscaped::scrub(Controls::escape($text, $breaks === true ? "\n" : ''));
    }
 
 

@@ -21,6 +21,7 @@ use function function_exists;
 use function implode;
 use function intdiv;
 use function max;
+use function mb_scrub;
 use function mb_strwidth;
 use function preg_replace;
 use function str_pad;
@@ -29,6 +30,7 @@ use function strlen;
 use function strtolower;
 
 use Bootgly\ABI\Code\__String;
+use Bootgly\ABI\Code\__String\Controls;
 use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Code\__String\Markdown as Parser;
 use Bootgly\ABI\Code\__String\Markdown\Blocks;
@@ -457,7 +459,7 @@ class Markdown extends Component
     */
    private function code (Node $Fence): array
    {
-      // ! Untrusted source — ESC/C0 stripped before any rendering path. The
+      // ! Untrusted source — ESC/C0/C1 escaped before any rendering path. The
       //   info string is source too: the parser takes it verbatim, `paint()`
       //   returns it unchanged in plain mode and the buffer reaches the
       //   terminal unescaped, so echoing it raw handed the document author
@@ -584,8 +586,10 @@ class Markdown extends Component
    }
 
    /**
-    * Cleans untrusted text — raw control bytes (including ESC) never reach
-    * the output, so source markdown cannot inject cursor/SGR sequences.
+    * Cleans untrusted text — a control character (C0 but TAB and LF, DEL, C1)
+    * is shown as a visible escape (`\u001b`) instead of reaching the output,
+    * so source markdown cannot drive the terminal; a byte that is not UTF-8
+    * becomes `?`.
     *
     * @param string $text The raw text.
     *
@@ -593,7 +597,7 @@ class Markdown extends Component
     */
    private function clean (string $text): string
    {
-      // :
-      return (string) preg_replace('/[\x00-\x08\x0B-\x1F\x7F]/', '', $text);
+      // : The parser already turned CR into LF and dropped NUL
+      return Controls::escape(mb_scrub($text, 'UTF-8'), "\t\n");
    }
 }

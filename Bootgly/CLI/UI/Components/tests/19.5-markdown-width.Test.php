@@ -74,7 +74,7 @@ return new Test(
       yield assert(
          assertion: substr_count($rendered, "\e") === 0
             && str_contains($rendered, 'evil') === true,
-         description: 'Injected escapes are stripped from plain output'
+         description: 'Injected escapes never reach plain output raw'
       );
 
       $hostile = $make("evil \e[2J text", true, 40);
@@ -84,8 +84,8 @@ return new Test(
 
       yield assert(
          assertion: str_contains($rendered, "\e[2J") === false
-            && str_contains($visible, 'evil [2J text') === true,
-         description: 'Injected escapes are stripped from styled output too'
+            && str_contains($visible, 'evil \\u001b[2J text') === true,
+         description: 'Injected escapes are shown as visible escapes in styled output too'
       );
 
       // @ The fence INFO STRING is source too — it reaches the opening fence
@@ -99,7 +99,7 @@ return new Test(
       yield assert(
          assertion: substr_count($rendered, "\e") === 0
             && substr_count($rendered, "\x07") === 0
-            && str_contains($rendered, '```php[2J') === true,
+            && str_contains($rendered, '```php\\u001b[2J') === true,
          description: 'A hostile fence info string reaches plain output inert'
       );
 

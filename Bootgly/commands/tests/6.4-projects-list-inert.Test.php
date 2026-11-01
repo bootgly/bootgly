@@ -238,8 +238,8 @@ return new Test(
             assertion: str_contains($listed, "\x1b[2J") === false
                && str_contains($listed, "\x1b]") === false
                && str_contains($listed, "\xc2\x9b") === false
-               && str_contains($listed, 'Clear[2Jscreen'),
-            description: 'control characters in a description never reach the table raw (the text around them stays)'
+               && str_contains($listed, 'Clear\u001b[2Jscreen'),
+            description: 'control characters in a description never reach the table raw: each is shown as a visible escape and the text around it stays'
          );
 
          // @ `project <x> info` — its own signature, and the others it used to discover

@@ -263,7 +263,7 @@ class Output
     *
     * This method writes the padded data to the output stream, after rendering it to escape any
     * special template symbols. If an error occurs during the write operation, the written property
-    * is set to false.
+    * is set to false. Like `render()`, it is meant for text this program wrote.
     *
     * @param string $data   The string to pad.
     * @param int    $length The desired total length of the padded string.
@@ -303,6 +303,12 @@ class Output
     * This method writes a rendered version of the given data to the stream using 
     * the TemplateEscaped renderer. It handles any errors during the writing process
     * by catching a Throwable, and sets the written state to false if an exception occurs.
+    *
+    * The markup is rendered and every other byte is written as it is. Not a
+    * sanitizer: text this program did not write — a peer's reply, a file
+    * name, a remote's message — goes through
+    * `Escaped::scrub(Controls::escape(mb_scrub($text, 'UTF-8')))` first;
+    * `write()` is the raw path.
     *
     * @param string $data The data string to be rendered.
     *

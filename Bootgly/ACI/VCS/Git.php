@@ -23,6 +23,7 @@ use function is_executable;
 use function is_file;
 use function is_resource;
 use function is_string;
+use function mb_scrub;
 use function preg_match;
 use function proc_close;
 use function proc_open;
@@ -36,6 +37,8 @@ use function trim;
 use Closure;
 use RuntimeException;
 
+use Bootgly\ABI\Code\__String\Controls;
+
 
 /**
  * One git working tree, driven through the `git` binary.
@@ -46,8 +49,11 @@ use RuntimeException;
  * SSH agent, config) minus the `GIT_DIR` family — a hook or a nested tool
  * could otherwise point every command at a repository other than `$path`.
  * Both streams come back through one pipe, in order, and the last run's
- * combined output and exit status stay readable on the instance. Transfers
- * run under the network deadline and the transport allow-list
+ * combined output and exit status stay readable on the instance. A callback
+ * sees each line as text to show on a UTF-8 terminal — not UTF-8 → `?`, a
+ * carriage return dropped, every other control character but TAB escaped
+ * visibly — while `$output` keeps the raw bytes, for parsing.
+ * Transfers run under the network deadline and the transport allow-list
  * (`transfer()`), and a caller value is never read as an option: `--` ends
  * option parsing before it, or a value shaped like an option is refused
  * before git runs.
@@ -95,7 +101,12 @@ final class Git
    public private(set) string $binary;
 
    // * Metadata
-   /** Combined stdout + stderr of the last `execute()` — its last `TAIL` bytes when a callback streamed it. */
+   /**
+    * Combined stdout + stderr of the last `execute()` — its last `TAIL` bytes when a callback streamed it.
+    *
+    * Raw — data to parse, not text to show: git relays text a remote wrote, so
+    * display it only through `Controls::escape(mb_scrub($text, 'UTF-8'))`.
+    */
    public private(set) string $output = '';
    /** Exit status of the last `execute()`. */
    public private(set) int $status = 0;
@@ -148,7 +159,11 @@ final class Git
     * Run one git command in the working tree.
     *
     * @param list<string> $arguments The command line after `git`.
-    * @param null|Closure $Callback Receives each output line as it arrives, without its break.
+    * @param null|Closure $Callback Receives each output line as it arrives, without its break —
+    *                               safe to write to a UTF-8 terminal: UTF-8 (a stray byte is `?`),
+    *                               a carriage return dropped (progress repainting), every other
+    *                               control character but TAB escaped visibly. Markup is not defused:
+    *                               `write()` the line, or `Escaped::scrub()` it before `render()`.
     * @param array<string,string> $variables Set on the child, over the caller's environment.
     *
     * @return int The exit status — `126` when the process could not start.
@@ -205,7 +220,11 @@ final class Git
                $this->output = substr($this->output, -self::TAIL);
             }
 
-            $Callback(str_replace("\r", '', rtrim($line, "\n")));
+            // ! Shown, never obeyed: git relays text a remote wrote — the sideband,
+            //   a tag name, a submodule path — so the line reaches the callback as
+            //   UTF-8 with every control character but the tab escaped visibly;
+            //   `$output` keeps the bytes
+            $Callback(Controls::escape(mb_scrub(str_replace("\r", '', rtrim($line, "\n")), 'UTF-8'), "\t"));
          }
       }
       if ($Callback !== null && strlen($this->output) > self::TAIL) {
@@ -225,7 +244,7 @@ final class Git
     * none).
     *
     * @param list<string> $arguments The command line after `git` (and the deadline).
-    * @param null|Closure $Callback Receives each output line as it arrives.
+    * @param null|Closure $Callback Receives each output line as it arrives — safe to show (see `execute()`).
     *
     * @return int The exit status.
     */
@@ -255,7 +274,7 @@ final class Git
     *
     * @param string $URL The repository URL or path.
     * @param string $target The directory to create — absent or empty.
-    * @param null|Closure $Callback Receives each output line as it arrives.
+    * @param null|Closure $Callback Receives each output line as it arrives — safe to show (see `execute()`).
     *
     * @return int The exit status.
     */
@@ -400,7 +419,7 @@ final class Git
     *
     * @param string $remote The remote name or URL.
     * @param list<string> $refspecs What to fetch; every tag when empty.
-    * @param null|Closure $Callback Receives each output line as it arrives.
+    * @param null|Closure $Callback Receives each output line as it arrives — safe to show (see `execute()`).
     *
     * @return int The exit status.
     */
@@ -424,7 +443,7 @@ final class Git
     * branch sharing the name can never be picked instead.
     *
     * @param string $reference The reference to check out.
-    * @param null|Closure $Callback Receives each output line as it arrives.
+    * @param null|Closure $Callback Receives each output line as it arrives — safe to show (see `execute()`).
     *
     * @return int The exit status.
     */

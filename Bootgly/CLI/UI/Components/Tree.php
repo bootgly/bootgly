@@ -105,7 +105,7 @@ class Tree extends Component
    /**
     * Adds a root node.
     *
-    * @param string $label The node label — Template markup allowed.
+    * @param string $label The node label — Template markup allowed (authored text: see `Node::$label`).
     * @param mixed $value The consumer payload carried by the node.
     * @param null|Closure $resolver A lazy children provider for the node.
     *

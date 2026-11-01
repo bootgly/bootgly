@@ -14,14 +14,21 @@ namespace Bootgly\CLI\UX\Components;
 use const BOOTGLY_TTY;
 use function in_array;
 use function is_string;
+use function json_encode;
+use function mb_scrub;
+use function preg_replace;
+use function preg_replace_callback;
 use function realpath;
+use function str_replace;
 use function str_starts_with;
 use function strcasecmp;
 use function strtolower;
+use function substr;
 use function usort;
 use DirectoryIterator;
 use UnexpectedValueException;
 
+use Bootgly\ABI\Code\__String\Controls;
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\UI\Components\Textbox;
@@ -101,7 +108,8 @@ class Filepicker
       // ? Unreachable roots cannot be browsed — warn loud: a silent null is
       //   indistinguishable from a user cancel
       if ($root === false) {
-         $this->Output->render("@#Red:✖@; Filepicker: unreachable root `{$this->root}`.\n");
+         $shown = $this->defuse($this->root);
+         $this->Output->render("@#Red:✖@; Filepicker: unreachable root `{$shown}`.\n");
 
          $this->picked = null;
 
@@ -130,7 +138,7 @@ class Filepicker
       $Tree->blink = $this->blink;
 
       // ! Root node — expanded upfront so the first level is visible
-      $Root = $Tree->add($root, value: $root, resolver: $this->scan(...));
+      $Root = $Tree->add($this->defuse($root), value: $root, resolver: $this->scan(...));
       $this->mount($Root);
       $Root->expand();
 
@@ -214,7 +222,8 @@ class Filepicker
 
       // @@ Populate
       foreach ($entries as [$name, $path, $directory]) {
-         $Child = $Node->add($name, value: $path);
+         // ! The label is the name shown as text; the value keeps the real path `pick()` returns
+         $Child = $Node->add($this->defuse($name), value: $path);
 
          if ($directory === true) {
             $Child->resolver = $this->scan(...);
@@ -225,6 +234,37 @@ class Filepicker
             $Child->glyph = $this->glyphs['file'];
          }
       }
+   }
+
+   /**
+    * Defuse a filesystem name for a Tree label — a Tree label is authored
+    * markup, and a name is not. The label is shown, never obeyed, and keeps
+    * two names apart: a byte that is not UTF-8 becomes `?`; a backslash
+    * doubles, so no name can spell another name's escape; a control
+    * character, and a zero-width or bidi format character that would hide or
+    * reorder part of the name, becomes a visible escape (`\u001b`,
+    * `\u202e`); an `@` that would open or close Output markup is shown as
+    * `\u0040` instead of being removed.
+    *
+    * @param string $name The name as the filesystem holds it.
+    *
+    * @return string The name, safe to render.
+    */
+   private function defuse (string $name): string
+   {
+      // ! UTF-8 only — a stray byte becomes `?`
+      $name = mb_scrub($name, 'UTF-8');
+      // ! A backslash doubles before any escape is written
+      $name = Controls::escape(str_replace('\\', '\\\\', $name));
+      // ! The format characters that disguise a name, shown as their escape
+      $name = preg_replace_callback(
+         '/[\x{061C}\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{2066}-\x{206F}\x{FEFF}]/u',
+         static fn (array $match): string => substr((string) json_encode($match[0]), 1, -1),
+         $name
+      ) ?? '';
+
+      // : An `@` that would open or close markup, shown — never removed
+      return preg_replace('/(?<=[*~_-])@|@(?![A-Za-z0-9\x80-\xFF])/', '\\\\u0040', $name) ?? '';
    }
 
    /**

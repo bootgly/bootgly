@@ -38,8 +38,6 @@ use function count;
 use function dirname;
 use function escapeshellarg;
 use function explode;
-use function fclose;
-use function fgets;
 use function file_exists;
 use function filesize;
 use function function_exists;
@@ -54,7 +52,6 @@ use function is_dir;
 use function is_file;
 use function is_int;
 use function is_link;
-use function is_resource;
 use function is_string;
 use function json_encode;
 use function max;
@@ -66,8 +63,6 @@ use function pcntl_signal;
 use function pcntl_signal_get_handler;
 use function posix_getuid;
 use function preg_match;
-use function proc_close;
-use function proc_open;
 use function random_bytes;
 use function register_shutdown_function;
 use function rmdir;
@@ -75,7 +70,6 @@ use function rtrim;
 use function scandir;
 use function shell_exec;
 use function str_pad;
-use function str_replace;
 use function str_starts_with;
 use function strlen;
 use function strtolower;
@@ -1748,15 +1742,28 @@ class ProjectsCommand extends Command
 
             $Output->render("@.;@#green:Initializing platform submodules:@; @#cyan:{$modules}@;@.;");
 
-            $working = escapeshellarg(BOOTGLY_WORKING_DIR);
-
-            $status = $this->execute("git -C {$working} submodule update --init {$modules}");
+            // ! Through the git engine — no shell, one language, no prompt, the
+            //   network deadline, every line shown as text. Never `transfer()`:
+            //   its allow-list names `file`, which would lift git's
+            //   `protocol.file.allow=user` for submodules
+            try {
+               $Git = new Git(BOOTGLY_WORKING_DIR);
+               $status = $Git->execute(
+                  [...Git::DEADLINE, 'submodule', 'update', '--init', '--', ...$targets],
+                  $this->stream(...)
+               );
+            }
+            catch (RuntimeException) {
+               // ? git not on PATH — refused like a failed initialization, saying why
+               $status = 127;
+            }
 
             // ?
             if ($status !== 0) {
+               $reason = $status === 127 ? 'git was not found on PATH — install git, then run: ' : 'Run manually: ';
                $Alert = new Alert($Output);
                $Alert->Type::Failure->set();
-               $Alert->message = 'Could not initialize the platform submodules. Run manually: '
+               $Alert->message = "Could not initialize the platform submodules. {$reason}"
                   . "@#cyan:git submodule update --init {$modules}@;";
                $Alert->render();
 
@@ -1771,12 +1778,12 @@ class ProjectsCommand extends Command
 
                // ?
                if ($release !== null) {
-                  // ! `@` is this Output's markup introducer and is a legal
-                  //   character in a tag name — stripping it keeps a careless
-                  //   tag from injecting resets into the row. The row is also
+                  // ! A tag name is the platform repository's text: a control
+                  //   character in it is shown as an escape and an `@` that
+                  //   would open Output markup goes (`clean()`). The row is also
                   //   kept short on purpose: a long one hard-wraps at the
                   //   terminal edge and escapes the Wizard's region gutter.
-                  $named = str_replace('@', '', $release);
+                  $named = $this->clean($release);
 
                   $Output->render(
                      "@#yellow:{$target}@;: pinned past a release — "
@@ -1991,12 +1998,6 @@ class ProjectsCommand extends Command
          return null;
       }
 
-      // ! Fully-qualified `refs/tags/`: `rev-parse` resolves a bare name to the
-      //   TAG but `checkout` resolves it to a BRANCH, so a branch sharing the
-      //   tag's name would pass the guard below and then check out something
-      //   else — possibly ahead of the pin, which this must never do
-      $reference = escapeshellarg("refs/tags/{$release}");
-
       // ? Already standing on it — the normal case, and it must stay silent
       $target = trim((string) shell_exec(
          "git -C {$sub} rev-parse " . escapeshellarg("refs/tags/{$release}^{commit}")
@@ -2008,53 +2009,41 @@ class ProjectsCommand extends Command
 
       // ---
 
-      $status = $this->execute(
-         "git -C {$sub} -c advice.detachedHead=false checkout --quiet {$reference}"
-      );
+      // ! Fully-qualified `refs/tags/`: `rev-parse` resolves a bare name to the
+      //   TAG but `checkout` resolves it to a BRANCH, so a branch sharing the
+      //   tag's name would pass the guard above and then check out something
+      //   else — possibly ahead of the pin, which this must never do
+      try {
+         $Git = new Git("{$working}{$module}");
+         $status = $Git->checkout("refs/tags/{$release}", $this->stream(...));
+      }
+      catch (RuntimeException) {
+         return null;
+      }
 
       // :
       return $status === 0 ? $release : null;
    }
 
    /**
-    * Runs a system command with its output nested in the current Output.
+    * Write one line of git's output nested in the current Output.
     *
     * A child process inherits the terminal and writes straight to it, escaping
     * the Wizard's nested region: its lines land without the guide column and
-    * break the frame open. Piping the stream back and writing it line by line
-    * keeps every row inside the region — the guide re-enters on each break and
-    * the content area grows to fit, exactly like any other nested component.
+    * break the frame open. Writing each line back keeps every row inside the
+    * region — the guide re-enters on each break and the content area grows to
+    * fit, exactly like any other nested component. `ACI\VCS\Git` hands the
+    * line over safe to show: no carriage return, controls escaped.
     *
-    * @param string $command The command line to run.
-    *
-    * @return int The command exit status (non-zero on failure).
+    * @param string $line One line of git's output, without its break.
     */
-   private function execute (string $command): int
+   private function stream (string $line): void
    {
-      // ! Resolved at call time — inside a Wizard step this is the nested Region
+      // ! Resolved per line — inside a Wizard step this is the nested Region
       $Output = CLI->Terminal->Output;
 
-      // ! One stream: git reports cloning and checkout notes on stderr, and
-      //   both belong to the same visual flow. Piping also drops the progress
-      //   bars by itself — git only paints them onto a terminal
-      $pipes = [];
-      $process = proc_open("{$command} 2>&1", [1 => ['pipe', 'w']], $pipes);
-
-      // ?
-      if (is_resource($process) === false) {
-         return 1;
-      }
-
-      // @@ Line by line, as it arrives — carriage returns would drag the
-      //   cursor out of the region column, so they never reach the Output
-      while (($line = fgets($pipes[1])) !== false) {
-         $Output->write(str_replace("\r", '', rtrim($line, "\n")) . PHP_EOL);
-      }
-
-      fclose($pipes[1]);
-
-      // :
-      return proc_close($process);
+      // @
+      $Output->write($line . PHP_EOL);
    }
 
    /**
