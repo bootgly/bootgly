@@ -173,5 +173,8 @@ return new Suite(
       // # 1.1.0 (MY-12/MY-17): a parameter count the statement does not take
       //   is refused before a byte is written, and never wedges the FIFO
       '10.26-mysql_parameter_count',
+      // # 1.1.0 (LITE-12/POOL-16): a refused SQLite statement or teardown never
+      //   leaves its connection inside a transaction
+      '9.13-sqlite_refused_transaction',
    ]
 );

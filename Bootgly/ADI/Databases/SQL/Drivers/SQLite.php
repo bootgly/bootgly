@@ -115,6 +115,21 @@ class SQLite extends Driver
             : 0;
 
          $Operation->fail($Throwable->getMessage(), $code > 0 ? (string) $code : null);
+
+         // ? A teardown the engine refused leaves its transaction open —
+         //   SQLite keeps it on a deferred constraint and on `database is
+         //   locked` — while the caller's Transaction has already let go of
+         //   it and the pool lends the connection on: the next caller's
+         //   writes would report success inside it and vanish with it. End it
+         //   here. PHP's SQLite3 exposes no autocommit probe, so the rollback
+         //   is the probe; one that finds no transaction has nothing to end.
+         if ($Operation->unlock && $this->Handle !== null) {
+            try {
+               $this->Handle->exec('ROLLBACK');
+            }
+            catch (SQLite3Exception) {
+            }
+         }
       }
 
       // :
@@ -243,12 +258,12 @@ class SQLite extends Driver
             $this->statements[$Operation->SQL] = $Statement;
 
             // ? sqlite3_reset() reports the result code of the statement's
-            //   PREVIOUS step, and the handle raises exceptions — so a statement
-            //   whose last execution the engine rejected throws here, on an
-            //   operation that has nothing to do with that rejection. The reset
-            //   itself always re-arms, so the stale code is the only thing to
-            //   drop: swallowing it costs nothing, since that error was already
-            //   delivered to the operation that earned it.
+            //   PREVIOUS step, and the handle raises exceptions. A refused step
+            //   is reset where it fails (below), and a refused fetch by its
+            //   result's destructor, so no stale code should reach this re-arm;
+            //   the swallow stays as defence in depth — the reset always
+            //   re-arms, and any code it repeats was already delivered to the
+            //   operation that earned it.
             try {
                $Statement->reset();
             }
@@ -266,7 +281,26 @@ class SQLite extends Driver
             $this->bind($Statement, $key, $parameter);
          }
 
-         $SQLite3Result = $Statement->execute();
+         // ? SQLite does not halt a statement whose step was refused —
+         //   `database is locked` (5, or 517 under WAL) parks it at its lock
+         //   request, still active, and an active statement keeps the
+         //   connection's autocommit transaction open: every later write here
+         //   would report success and never commit. Reset it on the way out;
+         //   the reset reports the refused step's code again, and the step's
+         //   own exception — message and extended code — is the one that
+         //   reaches the operation.
+         try {
+            $SQLite3Result = $Statement->execute();
+         }
+         catch (SQLite3Exception $Exception) {
+            try {
+               $Statement->reset();
+            }
+            catch (SQLite3Exception) {
+            }
+
+            throw $Exception;
+         }
       }
 
       // ?
