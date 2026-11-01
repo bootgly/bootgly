@@ -38,7 +38,16 @@ return new Test(
          'port' => $port,
          'timeout' => 1,
       ]);
+      // ! A cancel request names the backend, so the driver sends one only
+      //   for the batch the backend runs: the FIFO head, whole on the wire.
+      [$client, $peer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+      stream_set_blocking($client, false);
+      stream_set_blocking($peer, false);
+      $Database->Connection->attach($client);
+
       $Operation = $Database->query('SELECT pg_sleep(10)');
+      $Database->advance($Operation);
+      fread($peer, 8192);
       $Driver = $Operation->Protocol;
 
       if ($Driver instanceof PostgreSQL) {
@@ -79,7 +88,14 @@ return new Test(
          'host' => '127.0.0.1',
          'port' => $port,
       ]);
+      [$client, $other] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+      stream_set_blocking($client, false);
+      stream_set_blocking($other, false);
+      $Missing->Connection->attach($client);
+
       $MissingOperation = $Missing->query('SELECT 1');
+      $Missing->advance($MissingOperation);
+      fread($other, 8192);
       $MissingOperation->Protocol?->cancel($MissingOperation);
 
       yield assert(
@@ -87,6 +103,10 @@ return new Test(
          description: 'Cancellation fails clearly before BackendKeyData is available'
       );
 
+      fclose($peer);
+      fclose($other);
+      $Database->Connection->disconnect();
+      $Missing->Connection->disconnect();
       fclose($server);
    }
 );

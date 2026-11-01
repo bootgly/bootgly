@@ -459,13 +459,47 @@ class MySQL extends Driver
    }
 
    /**
+    * Check whether the server owes this operation an answer: only the FIFO
+    * head ever writes, and a command counts as sent once it is whole on the
+    * wire. A sibling waiting behind the head and a session still in its
+    * handshake are owed nothing, and neither is a parameterized command while
+    * only its COM_STMT_PREPARE is out: the statement itself is the EXECUTE
+    * that follows the prepare-OK. `KILL QUERY` names the session, so a kill
+    * sent for any of them lands on whatever the session runs instead.
+    *
+    * A head partly written is committed: the rest of it must follow, or the
+    * session dies, and with it every caller handed that connection —
+    * including the ones this driver has not seen yet.
+    */
+   public function owe (DatabaseOperation $Operation): bool
+   {
+      // ? Only the head ever writes.
+      if (($this->pipeline[0] ?? null) !== $Operation) {
+         return false;
+      }
+
+      // ? Partly written: the rest must follow, or the session drops with
+      //   every caller handed it, queued here or not yet.
+      if ($this->flushed === false) {
+         return true;
+      }
+
+      // :
+      return $this->preparing === false && $this->phase !== 'definitions';
+   }
+
+   /**
     * Kill the in-flight command through a separate connection.
     *
     * MySQL cancellation is advisory: the side channel authenticates a fresh
     * session and issues `KILL QUERY {thread}`. The main operation remains
     * pending until the server reports ERR/OK on the main socket, or until the
     * operation deadline expires. The side channel only supports the fast
-    * authentication paths — full caching_sha2 authentication aborts.
+    * authentication paths — full caching_sha2 authentication aborts. A kill
+    * is sent only for the command the session is executing — the head, whole
+    * on the wire (`owe()`) — and counts only once the server answers it OK:
+    * any other operation, and one whose kill is refused, is returned
+    * untouched, with `cancelled` false.
     */
    public function cancel (DatabaseOperation $Operation): DatabaseOperation
    {
@@ -475,7 +509,12 @@ class MySQL extends Driver
 
       /** @var Operation $Operation */
 
-      // ?
+      // ? The session is running somebody else's command, or none of this
+      //   one yet: a kill would stop that instead.
+      if ($this->flushed === false || $this->owe($Operation) === false) {
+         return $Operation;
+      }
+
       if ($this->thread <= 0) {
          return $Operation->fail('MySQL cancellation requires the greeting thread id.');
       }
@@ -568,7 +607,15 @@ class MySQL extends Driver
 
          // @ KILL QUERY — advisory; the main operation resolves on its own socket
          fwrite($socket, $this->Encoder->encode(Encoder::QUERY, "KILL QUERY {$this->thread}"));
-         $this->pull($socket, $Decoder, $Queue);
+         $Message = $this->pull($socket, $Decoder, $Queue);
+
+         // ? Only an OK means the server took the kill. Refused, the command
+         //   keeps running and resolves on its own socket as if never
+         //   cancelled — failing it here would report a statement that may
+         //   still commit.
+         if ($Message === null || ord($Message->payload[0] ?? "\xFF") !== 0x00) {
+            return $Operation;
+         }
 
          $Operation->cancelled = true;
 

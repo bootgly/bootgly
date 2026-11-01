@@ -14,6 +14,7 @@ namespace Bootgly\ADI\Database;
 use Bootgly\ADI\Database\Config;
 use Bootgly\ADI\Database\Connection;
 use Bootgly\ADI\Database\Operation;
+use Bootgly\ADI\Database\Operation\OperationStates;
 
 
 /**
@@ -70,6 +71,25 @@ abstract class Driver
     * Advance a pending operation through the driver state machine.
     */
    abstract public function advance (Operation $Operation): Operation;
+
+   /**
+    * Check whether the server owes this operation an answer: its request is
+    * committed to the wire — whole on it, or partly written, when the rest
+    * must follow or the session dies with every caller handed it.
+    *
+    * The pool asks before it sends a cancel. A cancel request names the
+    * session, not a statement, so one sent for work the server never received
+    * — a command composed but not written yet, one waiting in the FIFO behind
+    * another caller's, a session still in its handshake — lands on whatever
+    * that session runs instead. Such work is withdrawn locally; committed work
+    * is left to the driver's `cancel()`, which sends only for the statement
+    * the session is executing. The default counts every operation past
+    * `Queued` as sent, for drivers whose requests leave in one step.
+    */
+   public function owe (Operation $Operation): bool
+   {
+      return $Operation->state !== OperationStates::Queued;
+   }
 
    /**
     * Cancel one running operation when the concrete driver supports it.

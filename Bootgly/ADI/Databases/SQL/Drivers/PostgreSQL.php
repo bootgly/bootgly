@@ -87,6 +87,13 @@ class PostgreSQL extends Driver
     * session.
     */
    private const string RESET = 'SELECT pg_advisory_unlock_all(); UNLISTEN *';
+   /**
+    * How many reads a cancel spends on answers that already arrived before
+    * it picks the batch to stop — 8 KiB each, so 1 MiB: short of reading a
+    * streaming result to its end. A receive buffer can hold more, so an
+    * answered batch larger than this still looks running.
+    */
+   private const int READS = 128;
 
    // * Config
    public Authentication $Authentication;
@@ -154,6 +161,8 @@ class PostgreSQL extends Driver
    //   a torn-down session gets a fresh driver). A hang-up before it did is a
    //   server that is not listening yet; one after it is not.
    private bool $answered = false;
+   // @ Bytes read from this session so far — whether a read brought anything.
+   private int $received = 0;
    // @ Operation currently holding the socket write stream (co-located pipelining).
    private null|Operation $writing = null;
    // @ Holder bytes accepted by the stream. A positive count makes withdrawal
@@ -770,12 +779,47 @@ class PostgreSQL extends Driver
    }
 
    /**
+    * Check whether the server owes this operation an answer: an operation
+    * joins the FIFO only once its batch is whole on the wire. A batch not
+    * written yet or parked behind another writer, and a session still in its
+    * startup, are owed nothing.
+    *
+    * A batch partly written is committed: the rest of it must follow, or
+    * the session dies, and with it every caller handed that connection —
+    * including the ones this driver has not seen yet.
+    */
+   public function owe (DatabaseOperation $Operation): bool
+   {
+      foreach ($this->pipeline as $Queued) {
+         if ($Queued === $Operation) {
+            return true;
+         }
+      }
+
+      // ? Partly written — credited bytes, or a TLS record that may hold
+      //   some: the rest must follow, or the session drops with every caller
+      //   handed it, pipelined or not yet.
+      if ($this->writing === $Operation && ($this->wrote > 0 || $this->encrypted)) {
+         return true;
+      }
+
+      // :
+      return false;
+   }
+
+   /**
     * Send one PostgreSQL CancelRequest through a separate connection.
     *
     * PostgreSQL cancellation is advisory: this side-channel request does not
     * abort the in-flight read path. The operation remains pending until the
     * backend reports ErrorResponse/ReadyForQuery on the main socket, or until
-    * the operation deadline expires.
+    * the operation deadline expires. The request names the backend, not a
+    * statement, so it is sent only for the batch the backend is executing:
+    * the first one in the FIFO it has not answered yet, once whatever answer
+    * already arrived has been read. A batch pipelined
+    * behind another — a caller's, or a stand-in still draining an abandoned
+    * statement — cannot be stopped without stopping that one, so it is
+    * returned untouched, with `cancelled` false, and runs to completion.
     */
    public function cancel (DatabaseOperation $Operation): DatabaseOperation
    {
@@ -784,6 +828,51 @@ class PostgreSQL extends Driver
       }
 
       /** @var Operation $Operation */
+
+      // ! What the backend is running is decided by what it has answered,
+      //   not by what this driver has read: an answer still unread would
+      //   point the request at a batch already done, and it would stop the
+      //   one behind it — another caller's. Read what has arrived first; a
+      //   batch answered by now needs no cancel. The window left between the
+      //   last byte read and the request reaching the backend is the
+      //   protocol's own.
+      //   An answer larger than one read takes several; the reads stop at
+      //   the first that brings nothing, and at a bound, since a result still
+      //   streaming in would otherwise be read to its end — the very work the
+      //   cancel exists to stop.
+      // @@
+      for ($turn = 0; $turn < self::READS && $this->writing === null && $this->pipeline !== []; $turn++) {
+         $received = $this->received;
+
+         $this->read($Operation);
+
+         // ?: Answered by now — nothing to cancel.
+         if ($Operation->finished) {
+            return $Operation;
+         }
+
+         if ($this->received === $received) {
+            break;
+         }
+      }
+
+      // ! An answered entry only waits at its slot for its ReadyForQuery:
+      //   the backend has moved on to the batch behind it.
+      $Running = null;
+
+      foreach ($this->pipeline as $Queued) {
+         if ($Queued->finished === false) {
+            $Running = $Queued;
+
+            break;
+         }
+      }
+
+      // ? The backend is running somebody else's batch: the request would
+      //   stop that one instead.
+      if ($Running !== $Operation) {
+         return $Operation;
+      }
 
       if ($this->backendProcess <= 0 || $this->backendSecret <= 0) {
          return $Operation->fail('PostgreSQL cancellation requires BackendKeyData.');
@@ -1612,6 +1701,7 @@ class PostgreSQL extends Driver
       }
 
       $this->answered = true;
+      $this->received += strlen($bytes);
 
       try {
          $Messages = $this->Decoder->decode($bytes);

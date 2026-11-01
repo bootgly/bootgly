@@ -166,5 +166,9 @@ return new Suite(
       // # 1.0.x (SEC-R3-2): a kept session is reset behind everything it owes
       //   before anyone else runs there
       '4.20-pool-session_reset',
+      // # 1.1.0 (POOL-46/MY-14): a cancel is sent only for the statement the
+      //   session runs; work the server was never handed is withdrawn locally
+      '4.21-pool-cancel_owed',
+      '10.25-mysql_cancel_refused',
    ]
 );

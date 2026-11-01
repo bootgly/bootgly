@@ -421,19 +421,23 @@ class Pool
          return $Operation->fail('Database operation has no protocol to cancel.');
       }
 
-      // ? Composed but never written, so the server has never heard of it and
-      //   there is nothing out there to cancel. A request would once more land
-      //   on what the backend is actually doing — inside a transaction, on the
-      //   transaction itself, which then can never be committed. It is withdrawn
-      //   locally instead, the way a parked operation is. No drain() follows:
-      //   the drivers leave `Queued` for `Querying` before anything claims the
-      //   write stream, so abandoning one tears no session down and hands no
-      //   sibling back — unlike the two branches below.
-      if ($Operation->state === OperationStates::Queued) {
+      // ? The server owes it no answer: nothing of its request is committed to
+      //   the wire. That is more than `Queued` — a MySQL command waiting in
+      //   the FIFO behind another caller's, or with only its COM_STMT_PREPARE
+      //   out, a session still in its handshake, a batch parked behind another
+      //   writer. A request would land on what the session is actually
+      //   running: another caller's statement, which then fails with an error
+      //   nobody asked for, while this one is written and runs later anyway —
+      //   or, inside a transaction, the transaction itself, which then can
+      //   never be committed. It is withdrawn locally instead, the way a
+      //   parked operation is. The session is kept whenever it can be
+      //   (`Driver::detach()`), even on a reserved connection: its caller is
+      //   still there, and the transaction's next statement queues behind
+      //   whatever the session still drains. A handshake drops the connection.
+      //   Reconciling may still tear a session down and hand siblings back,
+      //   so they are drained here.
+      if ($Protocol->owe($Operation) === false) {
          $Operation->fail('Database operation was cancelled before reaching the server.');
-
-         $Protocol->abandon($Operation);
-         $this->forget($Operation);
 
          // ? A teardown that never reached the server ended nothing: the
          //   transaction is still open on this connection and still holds its
@@ -447,7 +451,7 @@ class Pool
          //   dead connection never ran — while dropping the flag for good broke
          //   the one route that legitimately ends the transaction, a caller
          //   re-arming the teardown it withdrew.
-         $this->settle($Operation, sent: false);
+         $this->retire($Operation, sent: false, detach: true);
 
          return $Operation;
       }
@@ -662,14 +666,10 @@ class Pool
 
       // ? Only a teardown ends a transaction. An ordinary statement withdrawn
       //   inside one must leave it alone — the caller can still commit it.
-      //   The `sent` half is defensive and, measured, changes nothing today:
-      //   a reserved connection is always reconciled through `abandon()` —
-      //   the deadline route abandons, and `withdraw()` detaches only an
-      //   unreserved connection — and `abandon()` drops a session with no
-      //   reader left, which a reserved connection never has, since the pool
-      //   refuses to co-locate onto one. It stays because it states the
-      //   precondition the branch relies on, and a driver that keeps the wire
-      //   instead would need it.
+      //   The `sent` half is what lets a reserved connection keep its session
+      //   when a statement inside the transaction is withdrawn: a cancel that
+      //   never reached the server detaches it (`cancel()`), and only a
+      //   teardown that never reached it — which ended nothing — severs.
       // ? The session is still this driver's to sever. A stale teardown can
       //   outlive an abort while the pool rebuilds the same Connection object;
       //   calling the old driver's sever() then disconnects the replacement
