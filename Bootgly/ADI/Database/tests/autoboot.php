@@ -170,5 +170,8 @@ return new Suite(
       //   session runs; work the server was never handed is withdrawn locally
       '4.21-pool-cancel_owed',
       '10.25-mysql_cancel_refused',
+      // # 1.1.0 (MY-12/MY-17): a parameter count the statement does not take
+      //   is refused before a byte is written, and never wedges the FIFO
+      '10.26-mysql_parameter_count',
    ]
 );

@@ -202,6 +202,18 @@ class MySQL extends Driver
          $Operation->prepared = $entry !== null;
 
          if ($entry !== null) {
+            // ? COM_STMT_EXECUTE carries no count of its own: the server reads
+            //   as many values as the statement declared, so one too many or
+            //   too few shifts every value into the wrong bytes — stored as
+            //   numbers nobody bound, with no error.
+            $count = count($Operation->parameters);
+
+            if ($count !== $entry['parameters']) {
+               $noun = $entry['parameters'] === 1 ? 'parameter' : 'parameters';
+
+               return $Operation->fail("MySQL statement expects {$entry['parameters']} {$noun}, {$count} given.");
+            }
+
             // @ Cache hit — LRU touch and execute directly.
             unset($this->statements[$Operation->SQL]);
             $this->statements[$Operation->SQL] = $entry;
@@ -387,13 +399,36 @@ class MySQL extends Driver
                return $Operation;
             }
 
-            if ($this->pipeline[0] !== $Operation) {
+            // ? The read may have promoted this command and written it already,
+            //   from a nested advance() — a sibling ahead of it that failed to
+            //   encode hands the wire on. Writing it again here would run it
+            //   twice and shift every answer behind it onto the wrong caller.
+            if ($this->pipeline[0] !== $Operation || $Operation->state !== OperationStates::Querying) {
                return $this->await($Operation, Scheduler::SCHEDULE_READ);
             }
          }
 
          if ($Operation->write === '') {
             $this->prepare($Operation);
+
+            // ? It could not be encoded — a value that cannot be bound, a
+            //   count the statement does not take — so nothing of it reached
+            //   the wire. Left at the head, it would read as a flushed command
+            //   no answer ever retires, wedging every caller queued behind it.
+            //   It leaves the FIFO instead, and the next command takes the wire.
+            if ($Operation->finished) {
+               array_shift($this->pipeline);
+               $this->completed[] = $Operation;
+
+               $Head = $this->pipeline[0] ?? null;
+
+               if ($Head !== null && $Head->finished === false && $Head->state === OperationStates::Querying) {
+                  $this->advance($Head);
+               }
+
+               return $Operation;
+            }
+
             $Operation->state = OperationStates::Querying;
          }
 
@@ -1437,6 +1472,21 @@ class MySQL extends Driver
          return $Operation->fail('MySQL prepared statement metadata is missing.');
       }
 
+      // ? The count the prepare-OK declared is the one the server reads — see
+      //   prepare(). The statement stays cached: it is valid, the call is not.
+      $count = count($Operation->parameters);
+
+      if ($count !== $entry['parameters']) {
+         // ! Without a cache nothing else ever closes the statement the
+         //   prepare-OK just created — and the server caps them per instance.
+         $Operation->prepared = true;
+         $this->discard($Operation);
+
+         $noun = $entry['parameters'] === 1 ? 'parameter' : 'parameters';
+
+         return $Operation->fail("MySQL statement expects {$entry['parameters']} {$noun}, {$count} given.");
+      }
+
       try {
          // ! Pending COM_STMT_CLOSE packets are prepended by the Querying flush.
          $Operation->write = $this->Encoder->encode(Encoder::EXECUTE, [
@@ -1448,6 +1498,10 @@ class MySQL extends Driver
          $this->Holders[$entry['statement']][spl_object_id($Operation)] = WeakReference::create($Operation);
       }
       catch (Throwable $Throwable) {
+         // ! Same as a count refusal: without a cache, close what was prepared.
+         $Operation->prepared = true;
+         $this->discard($Operation);
+
          return $Operation->fail($Throwable->getMessage());
       }
 
