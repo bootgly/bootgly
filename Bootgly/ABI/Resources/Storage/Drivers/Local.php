@@ -12,6 +12,8 @@ namespace Bootgly\ABI\Resources\Storage\Drivers;
 
 
 use const DIRECTORY_SEPARATOR;
+use const PHP_MAXPATHLEN;
+use function clearstatcache;
 use function copy;
 use function dirname;
 use function fclose;
@@ -24,9 +26,11 @@ use function is_dir;
 use function is_file;
 use function ltrim;
 use function mkdir;
+use function realpath;
 use function rename;
 use function rmdir;
 use function scandir;
+use function str_contains;
 use function str_starts_with;
 use function stream_copy_to_stream;
 use function strlen;
@@ -46,10 +50,13 @@ use Bootgly\ABI\Resources\Storage\Driver;
  * Local filesystem storage driver (default).
  *
  * Always available — no extension required. Paths are normalized and jailed
- * inside the disk root: `resolve()` collapses `..`/`.` textually, and every
- * operation additionally runs a `realpath()` containment check (`File->guard()`)
- * so a symlink planted inside the root cannot escape it. Writes are atomic (temp
- * file + rename) and listings use a recursive SPL walk.
+ * inside the disk root: `resolve()` collapses `..`/`.` textually and refuses a
+ * NUL byte, and every operation additionally runs a `realpath()` containment
+ * check (`File->guard()`) so a symlink planted inside the root cannot escape it.
+ * Directories are jailed before they are created: the deepest one that already
+ * exists must resolve inside the root, so nothing is created through an escaping
+ * symlink. Writes are atomic (temp file + rename) and listings use a recursive
+ * SPL walk.
  */
 class Local extends Driver
 {
@@ -80,19 +87,19 @@ class Local extends Driver
    {
       $this->error = '';
       $file = $this->resolve($path);
+      // ? A NUL byte names no file
+      if ($file === null) {
+         return $this->fail('Local write: path contains a NUL byte');
+      }
 
-      // ! Ensure the parent directory exists
+      // ! Ensure the parent directory exists inside the root
       $dir = dirname($file);
-      if (is_dir($dir) === false) {
-         @mkdir($dir, 0775, true);
-      }
-      // ? Jail: the (now-existing) parent must resolve inside the root
-      if ($this->guard($dir) === true) {
-         return $this->fail("Local write {$file}: path escapes the disk root");
+      if ($this->prepare($dir, "write {$file}") === false) {
+         return false;
       }
 
-      // @ Atomic write: stream into a temp file + rename
-      $temp = $file . '.' . getmypid() . '.' . uniqid('', true) . '.tmp';
+      // @ Atomic write: stream into a temp file in the jailed parent + rename
+      $temp = "{$dir}/" . getmypid() . '.' . uniqid('', true) . '.tmp';
       $out = @fopen($temp, 'wb');
       if ($out === false) {
          return $this->fail("Local write {$file}: cannot open temp file");
@@ -123,6 +130,10 @@ class Local extends Driver
    {
       $this->error = '';
       $file = $this->resolve($path);
+      // ? A NUL byte names no file
+      if ($file === null) {
+         return $this->fail('Local read: path contains a NUL byte');
+      }
 
       // ?
       if (is_file($file) === false) {
@@ -153,6 +164,10 @@ class Local extends Driver
    {
       $this->error = '';
       $file = $this->resolve($path);
+      // ? A NUL byte names no file
+      if ($file === null) {
+         return $this->fail('Local delete: path contains a NUL byte');
+      }
 
       // ?: Idempotent — nothing to delete
       if (is_file($file) === false) {
@@ -176,6 +191,10 @@ class Local extends Driver
    {
       $this->error = '';
       $resolved = $this->resolve($path);
+      // ? A NUL byte names no file
+      if ($resolved === null) {
+         return $this->fail('Local check: path contains a NUL byte');
+      }
 
       // ? Jail: a path that escapes the root is reported as absent
       if ($this->guard($resolved) === true) {
@@ -195,6 +214,12 @@ class Local extends Driver
    {
       $this->error = '';
       $dir = $this->resolve($path);
+      // ? A NUL byte names no directory
+      if ($dir === null) {
+         $this->error = 'Local list: path contains a NUL byte';
+
+         return [];
+      }
       // ?
       if (is_dir($dir) === false) {
          return [];
@@ -243,6 +268,12 @@ class Local extends Driver
    {
       $this->error = '';
       $source = $this->resolve($from);
+      $target = $this->resolve($to);
+      // ? A NUL byte names no file
+      if ($source === null || $target === null) {
+         return $this->fail('Local copy: path contains a NUL byte');
+      }
+
       // ?
       if (is_file($source) === false) {
          return $this->fail("Local copy {$source}: source not found");
@@ -252,20 +283,16 @@ class Local extends Driver
          return $this->fail("Local copy {$source}: path escapes the disk root");
       }
 
-      $target = $this->resolve($to);
+      // ! Ensure the target's parent directory exists inside the root
       $dir = dirname($target);
-      if (is_dir($dir) === false) {
-         @mkdir($dir, 0775, true);
-      }
-      // ? Jail: target parent must resolve inside the root
-      if ($this->guard($dir) === true) {
-         return $this->fail("Local copy {$target}: path escapes the disk root");
+      if ($this->prepare($dir, "copy {$target}") === false) {
+         return false;
       }
 
       // @ Atomic copy: into a temp file inside the jailed parent + rename, so a
       //   symlinked target is replaced instead of written through (as write() and
       //   move() already do — `copy()` is the only path that follows the link)
-      $temp = $target . '.' . getmypid() . '.' . uniqid('', true) . '.tmp';
+      $temp = "{$dir}/" . getmypid() . '.' . uniqid('', true) . '.tmp';
       if (@copy($source, $temp) === false) {
          @unlink($temp);
 
@@ -288,6 +315,12 @@ class Local extends Driver
    {
       $this->error = '';
       $source = $this->resolve($from);
+      $target = $this->resolve($to);
+      // ? A NUL byte names no file
+      if ($source === null || $target === null) {
+         return $this->fail('Local move: path contains a NUL byte');
+      }
+
       // ?
       if (is_file($source) === false) {
          return $this->fail("Local move {$source}: source not found");
@@ -297,14 +330,9 @@ class Local extends Driver
          return $this->fail("Local move {$source}: path escapes the disk root");
       }
 
-      $target = $this->resolve($to);
-      $dir = dirname($target);
-      if (is_dir($dir) === false) {
-         @mkdir($dir, 0775, true);
-      }
-      // ? Jail: target parent must resolve inside the root
-      if ($this->guard($dir) === true) {
-         return $this->fail("Local move {$target}: path escapes the disk root");
+      // ! Ensure the target's parent directory exists inside the root
+      if ($this->prepare(dirname($target), "move {$target}") === false) {
+         return false;
       }
 
       // :
@@ -320,6 +348,10 @@ class Local extends Driver
    {
       $this->error = '';
       $file = $this->resolve($path);
+      // ? A NUL byte names no file
+      if ($file === null) {
+         return $this->fail('Local measure: path contains a NUL byte');
+      }
       // ?
       if (is_file($file) === false) {
          return false;
@@ -342,6 +374,10 @@ class Local extends Driver
    {
       $this->error = '';
       $resolved = $this->resolve($path);
+      // ? A NUL byte names no file
+      if ($resolved === null) {
+         return $this->fail('Local inspect: path contains a NUL byte');
+      }
       // ?
       if (file_exists($resolved) === false) {
          return false;
@@ -363,27 +399,23 @@ class Local extends Driver
    }
 
    /**
-    * Create a directory (recursively); returns true when it exists afterwards.
+    * Create a directory (recursively) inside the disk root; returns true when it exists
+    * there afterwards — false for one that resolves outside the root, existing or not.
+    *
+    * Each call re-checks the tree and flushes PHP's realpath cache (see `prepare()`), so
+    * make a directory once at setup rather than on every request.
     */
    public function make (string $path): bool
    {
       $this->error = '';
       $dir = $this->resolve($path);
-      // ?
-      if (is_dir($dir) === true) {
-         return true;
-      }
-
-      if (@mkdir($dir, 0775, true) === false) {
-         return $this->fail("Local make {$dir}: mkdir failed");
-      }
-      // ? Jail: a symlinked component could place the new directory outside the root
-      if ($this->guard($dir) === true) {
-         return $this->fail("Local make {$dir}: path escapes the disk root");
+      // ? A NUL byte names no directory
+      if ($dir === null) {
+         return $this->fail('Local make: path contains a NUL byte');
       }
 
       // :
-      return true;
+      return $this->prepare($dir, "make {$dir}");
    }
 
    /**
@@ -393,6 +425,10 @@ class Local extends Driver
    {
       $this->error = '';
       $dir = $this->resolve($path);
+      // ? A NUL byte names no directory
+      if ($dir === null) {
+         return $this->fail('Local clear: path contains a NUL byte');
+      }
       // ?
       if (is_dir($dir) === false) {
          return true;
@@ -425,10 +461,16 @@ class Local extends Driver
    // ---
 
    /**
-    * Resolve a disk-relative path to an absolute path jailed inside the root.
+    * Resolve a disk-relative path to an absolute path jailed inside the root, or null
+    * when the path cannot name a file (it carries a NUL byte).
     */
-   private function resolve (string $path): string
+   private function resolve (string $path): null|string
    {
+      // ? NUL names no file — refused on the raw path, before `Path::normalize()` can
+      //   drop the component carrying it (`"x\0/../y"` normalizes to `y`)
+      if (str_contains($path, "\0") === true) {
+         return null;
+      }
       // ?
       if ($path === '') {
          return $this->root;
@@ -445,9 +487,63 @@ class Local extends Driver
    }
 
    /**
+    * Ensure a directory exists inside the disk root, jailing it before anything is
+    * created; false (with the reason on `$error`) when it escapes or cannot be made.
+    *
+    * The deepest directory that already exists on the way up from `$dir` is judged
+    * first — the root, created on demand, caps the climb — so `mkdir()` never follows
+    * an escaping symlink: a link below that ancestor is dangling or names a file, and
+    * the kernel refuses to create through it. The result is judged again after
+    * creation. The realpath cache is flushed first, so a directory swapped for a
+    * link since an earlier check is judged as it is now (a successful write flushes
+    * it anyway, through `rename()`). The check and `mkdir()` act on path names, so a
+    * component swapped between them is not caught here (PHP has no `mkdirat()`).
+    */
+   private function prepare (string $dir, string $operation): bool
+   {
+      // ? A name of PATH_MAX bytes or more can never exist — refused before the climb,
+      //   whose cost grows with the square of the path length
+      if (strlen($dir) >= PHP_MAXPATHLEN) {
+         return $this->fail("Local {$operation}: path too long");
+      }
+      // ! Judge the tree as it is now, not as an earlier check cached it. Only a whole-cache
+      //   flush is sound: a per-path flush misses a stale ancestor or link target. The root
+      //   is decided by name, so it needs none
+      if ($dir !== $this->root) {
+         clearstatcache(true);
+      }
+      // ! The deepest existing directory on the way up — never above the root
+      $parent = $dir;
+      while (is_dir($parent) === false && $parent !== $this->root && $parent !== dirname($parent)) {
+         $parent = dirname($parent);
+      }
+      // ? Jail before mkdir(): an escaping ancestor is refused while nothing exists yet
+      if ($this->guard($parent) === true) {
+         return $this->fail("Local {$operation}: path escapes the disk root");
+      }
+      // ?: Already there
+      if ($parent === $dir && is_dir($dir) === true) {
+         return true;
+      }
+
+      // @ Create the missing tail (a concurrent creator of the same tail is not a failure)
+      if (@mkdir($dir, 0775, true) === false && is_dir($dir) === false) {
+         return $this->fail("Local {$operation}: mkdir failed");
+      }
+      // ? Jail again: what now exists must still resolve inside the root
+      if ($this->guard($dir) === true) {
+         return $this->fail("Local {$operation}: path escapes the disk root");
+      }
+
+      // :
+      return true;
+   }
+
+   /**
     * Whether an absolute path breaches the disk root once symlinks are resolved
     * (true = blocked). Defers to `File->guard()` (realpath containment,
-    * fail-closed); the root itself is trivially contained.
+    * fail-closed), which only matches entries below the root — so the root itself,
+    * and any in-root path resolving to it (a link to the root), is contained too.
     */
    private function guard (string $absolute): bool
    {
@@ -455,9 +551,15 @@ class Local extends Driver
       if ($absolute === $this->root) {
          return false;
       }
+      // ?: Below the root
+      if ($this->Jail->guard($absolute) === false) {
+         return false;
+      }
 
-      // :
-      return $this->Jail->guard($absolute);
+      // : The root under another name is still the root
+      $resolved = realpath($absolute);
+
+      return $resolved === false || $resolved !== realpath($this->root);
    }
 
    /**

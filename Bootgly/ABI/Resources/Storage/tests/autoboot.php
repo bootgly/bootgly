@@ -36,5 +36,8 @@ return new Suite(
 
       // @ Appended to preserve every existing selected-case index.
       '1.7-local-symlink-copy',
+      '1.8-local-symlink-mkdir',
+      '1.9-local-nul-path',
+      '1.10-local-concurrent-mkdir',
    ]
 );

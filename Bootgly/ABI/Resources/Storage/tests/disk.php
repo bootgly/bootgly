@@ -85,3 +85,57 @@ function grab (Storage|Driver $Disk, string $path): string|false
    // :
    return stream_get_contents($Stream);
 }
+
+/**
+ * Every entry under a directory, relative and sorted: a directory ends in `/`, a symlink in
+ * `@` and is never followed (test helper).
+ *
+ * @return array<int,string>
+ */
+function scan (string $dir): array
+{
+   $entries = [];
+   // ?
+   if (is_dir($dir) === false) {
+      return $entries;
+   }
+
+   // @
+   $Iterator = new RecursiveIteratorIterator(
+      new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
+      RecursiveIteratorIterator::SELF_FIRST
+   );
+   foreach ($Iterator as $Info) {
+      $relative = substr($Info->getPathname(), strlen($dir) + 1);
+      $mark = $Info->isLink() === true ? '@' : ($Info->isDir() === true ? '/' : '');
+      $entries[] = "{$relative}{$mark}";
+   }
+   sort($entries);
+
+   // :
+   return $entries;
+}
+
+/**
+ * Remove a tree, unlinking every symlink instead of following it (test helper).
+ */
+function wipe (string $path): void
+{
+   // ?
+   if (is_link($path) === true || is_file($path) === true) {
+      @unlink($path);
+
+      return;
+   }
+   if (is_dir($path) === false) {
+      return;
+   }
+
+   // @@
+   foreach (scandir($path) ?: [] as $entry) {
+      if ($entry !== '.' && $entry !== '..') {
+         wipe("{$path}/{$entry}");
+      }
+   }
+   @rmdir($path);
+}

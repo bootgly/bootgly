@@ -33,8 +33,10 @@ abstract class Driver
    // * Metadata
    /**
     * Human-readable reason for the last failed operation (valid right after a `false`
-    * return). Exposed so a higher layer can log it — ABI drivers cannot depend on the
-    * ACI logger (forward-only layering), so failures are surfaced here instead.
+    * return, or an empty list from `list()`). A path a driver cannot name — one carrying
+    * a NUL byte, say — fails through the same channel. Exposed so a higher layer can log
+    * it — ABI drivers cannot depend on the ACI logger (forward-only layering), so
+    * failures are surfaced here instead.
     */
    public protected(set) string $error = '';
 
@@ -68,7 +70,8 @@ abstract class Driver
     */
    abstract public function read (string $path, $sink): bool;
    /**
-    * Remove one file; returns true when the path no longer exists.
+    * Remove one file; returns true when the path no longer exists (false, with the reason
+    * on `$error`, for a path the driver refuses).
     */
    abstract public function delete (string $path): bool;
    /**
@@ -100,7 +103,8 @@ abstract class Driver
     */
    abstract public function inspect (string $path): array|false;
    /**
-    * Create a directory (recursively); returns true when it exists afterwards.
+    * Create a directory (recursively); returns true when it exists inside the disk
+    * afterwards.
     */
    abstract public function make (string $path): bool;
    /**
