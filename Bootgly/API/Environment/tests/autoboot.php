@@ -27,5 +27,11 @@ return new Suite(
       '1.6-container-check',
       // # Which checkout the launcher works in: framework, platform or kit
       '1.7-workspaces-detect',
+      // # Environment facade
+      '1.8-environment-save-secrecy',
+      '1.9-environment-save-cross-uid',
+      '1.10-environment-save-format',
+      '1.11-environment-load-failure',
+      '1.12-environment-keys',
    ]
 );

@@ -12,11 +12,31 @@ namespace Bootgly\API;
 
 
 use const INI_SCANNER_RAW;
-use function file_exists;
-use function file_put_contents;
+use function bin2hex;
+use function chmod;
+use function clearstatcache;
+use function dirname;
+use function fclose;
+use function fflush;
+use function file_get_contents;
+use function fopen;
+use function fstat;
+use function fsync;
+use function fwrite;
 use function getenv;
-use function parse_ini_file;
+use function is_file;
+use function is_string;
+use function parse_ini_string;
 use function putenv;
+use function random_bytes;
+use function rename;
+use function str_contains;
+use function str_starts_with;
+use function strlen;
+use function strpbrk;
+use function substr;
+use function umask;
+use function unlink;
 
 use Bootgly\API\Environment\Agent;
 use Bootgly\API\Environment\Configs;
@@ -46,32 +66,67 @@ class Environment
 
 
    /**
-    * Load environment variables from a file.
+    * Load environment variables from an INI-style file.
+    *
+    * Every pair is exported through `put()`, so the prefix and suffix apply.
+    * Returns `false`, applying nothing, when the file is missing, is not a
+    * regular file, cannot be read or parsed, holds a NUL byte (the INI parser
+    * would stop there and drop the pairs after it) or holds an array key
+    * (`KEY[]=`), and when the prefix or suffix holds `=` or NUL (`put()` would
+    * refuse every pair).
     *
     * @param string $file
     *
     * @return bool
     */
-   public static function load ($file): bool
+   public static function load (string $file): bool
    {
-      if (file_exists($file) === false) {
+      // ? Missing or not a regular file (a directory, a FIFO): nothing is applied
+      if (is_file($file) === false) {
+         return false;
+      }
+      // ? Unreadable, or a NUL byte — where the INI parser stops, silently dropping the rest
+      $contents = @file_get_contents($file);
+      if ($contents === false || str_contains($contents, "\0")) {
+         return false;
+      }
+      // ? Not INI
+      $variables = @parse_ini_string($contents, false, INI_SCANNER_RAW);
+      if ($variables === false) {
          return false;
       }
 
-      $sections = false;
-      $variables = parse_ini_file($file, $sections, INI_SCANNER_RAW);
-
-      if ($variables !== false) {
-         foreach ($variables as $key => $value) {
-            self::put($key, $value);
+      // ? All or nothing: an `ARR[]=` key parses to an array `put()` cannot carry, and a
+      //   prefix or suffix holding `=` or NUL makes `put()` refuse every pair
+      if (strpbrk(self::compose(''), "=\0") !== false) {
+         return false;
+      }
+      foreach ($variables as $value) {
+         if (is_string($value) === false) {
+            return false;
          }
       }
 
+      // @@
+      foreach ($variables as $key => $value) {
+         self::put((string) $key, $value);
+      }
+
+      // :
       return true;
    }
 
    /**
     * Save the environment variables to a file.
+    *
+    * Writes the whole process environment as `KEY=value` lines, quoted only
+    * when the bare line would not read back (`;`, edge spaces, a value wrapped
+    * in quotes), each verified to read back identically through `load()`. The
+    * file is created `0600` beside `$file` and renamed over it: a link at
+    * `$file` is replaced, never written through. Returns `false`, leaving
+    * `$file` untouched, for a path that is not local (a stream wrapper), when
+    * a variable has no such line (a line break, a name INI cannot carry) or
+    * the write fails.
     *
     * @param string $file
     *
@@ -79,18 +134,27 @@ class Environment
     */
    public static function save (string $file): bool
    {
-      // !
-      $env_list = self::list();
-
-      // @
-      $env_content = '';
-      foreach ($env_list as $key => $value) {
-         $env_content .= "$key=$value\n";
+      // ? A NUL byte never reaches the filesystem; a stream wrapper cannot rename() or
+      //   unlink() the temporary it opened
+      if (str_contains($file, "\0") || (str_contains($file, '://') && str_starts_with($file, 'file://') === false)) {
+         return false;
       }
 
-      $file_bytes_written = file_put_contents($file, $env_content);
+      // !
+      $lines = '';
 
-      return $file_bytes_written !== false;
+      // @@ Every variable, each line verified before anything is written
+      foreach (getenv() as $key => $value) {
+         $line = self::encode((string) $key, $value);
+         if ($line === null) {
+            return false;
+         }
+
+         $lines .= "{$line}\n";
+      }
+
+      // :
+      return self::write($file, $lines);
    }
 
    // ! Variable
@@ -116,9 +180,7 @@ class Environment
     */
    public static function get (string $key, null|string|false $default = null): false|string
    {
-      $key = self::$prefix . $key . self::$suffix;
-
-      $value = getenv($key);
+      $value = getenv(self::compose($key));
 
       if ($value === false && $default !== null) {
          return $default;
@@ -143,6 +205,9 @@ class Environment
    /**
     * Set the value of an environment variable.
     *
+    * Returns `false` for an empty key, a name (prefix, key and suffix) holding
+    * `=` or NUL, or a value holding NUL: `putenv()` would retarget or cut them.
+    *
     * @param string $key
     * @param string|int $value
     *
@@ -150,13 +215,22 @@ class Environment
     */
    public static function put (string $key, string|int $value): bool
    {
-      $key = self::$prefix . $key . self::$suffix;
+      $name = self::compose($key);
+      // ? A name `putenv()` would misread, or a value it would cut at NUL
+      if ($key === '' || strpbrk($name, "=\0") !== false || str_contains((string) $value, "\0")) {
+         return false;
+      }
 
-      return putenv("$key=$value");
+      // :
+      return putenv("{$name}={$value}");
    }
 
    /**
     * Clear the value of an environment variable.
+    *
+    * The key is composed with the prefix and suffix, like `get()` and `put()`.
+    * Returns `false` for an empty key or a name (prefix, key and suffix)
+    * holding `=` or NUL.
     *
     * @param string $key
     *
@@ -164,6 +238,112 @@ class Environment
     */
    public static function del (string $key): bool
    {
-      return putenv($key);
+      $name = self::compose($key);
+      // ? A name `putenv()` would misread: `NAME=value` SETS, NUL truncates
+      if ($key === '' || strpbrk($name, "=\0") !== false) {
+         return false;
+      }
+
+      // :
+      return putenv($name);
+   }
+
+   /**
+    * Compose the real variable name: prefix, key, suffix.
+    */
+   private static function compose (string $key): string
+   {
+      $prefix = (string) self::$prefix;
+      $suffix = (string) self::$suffix;
+
+      return "{$prefix}{$key}{$suffix}";
+   }
+
+   /**
+    * Encode one variable as the INI line `load()` reads back identically.
+    *
+    * Bare first — the bytes a plain `KEY=value` reader (`docker --env-file`)
+    * expects — and quoted only when the bare line does not read back. Returns
+    * `null` when neither does: a CR, LF or NUL (a split record, a planted
+    * variable), a name INI cannot carry.
+    */
+   private static function encode (string $key, string $value): null|string
+   {
+      // @@
+      foreach (["{$key}={$value}", "{$key}=\"{$value}\""] as $line) {
+         // ?: Only a line that parses back to exactly this pair
+         if (@parse_ini_string($line, false, INI_SCANNER_RAW) === [$key => $value]) {
+            return $line;
+         }
+      }
+
+      // :
+      return null;
+   }
+
+   /**
+    * Replace `$file` atomically with a private (0600) file holding `$data`.
+    *
+    * The bytes go to a random sibling created under umask 077 and set 0600
+    * before the first byte (a default ACL on the directory overrides the
+    * umask), are flushed and synced, then `rename()` swaps the directory entry
+    * itself: a link at `$file` is replaced, never opened, and in a sticky
+    * directory a link another account owns makes the swap fail instead.
+    */
+   private static function write (string $file, string $data): bool
+   {
+      // ! A sibling nobody can predict (no basename: NAME_MAX), made 0600 before its first byte
+      $parent = dirname($file);
+      $random = bin2hex(random_bytes(8));
+      $temporary = "{$parent}/.{$random}.tmp";
+      // ! Resolve the parent as the kernel's rename() will, not as an earlier lookup cached it
+      clearstatcache(true);
+      $mask = umask(0077);
+      try {
+         $Handle = @fopen($temporary, 'xb');
+      }
+      finally {
+         umask($mask);
+      }
+      // ?
+      if ($Handle === false) {
+         return false;
+      }
+      // ? Private before the first byte — a default ACL on the directory ignores the umask
+      $state = @chmod($temporary, 0600) === true ? @fstat($Handle) : false;
+      if ($state === false || ($state['mode'] & 0777) !== 0600) {
+         fclose($Handle);
+         @unlink($temporary);
+
+         return false;
+      }
+
+      // @@ Every byte, then to the disk
+      $written = false;
+      try {
+         $length = strlen($data);
+         $offset = 0;
+         while ($offset < $length) {
+            $bytes = @fwrite($Handle, substr($data, $offset));
+            if ($bytes === false || $bytes === 0) {
+               break;
+            }
+            $offset += $bytes;
+         }
+         $written = $offset === $length && @fflush($Handle) && @fsync($Handle);
+      }
+      finally {
+         fclose($Handle);
+      }
+
+      // @ Swap the entry: `rename()` never opens what a link points to
+      if ($written === false || @rename($temporary, $file) === false) {
+         @unlink($temporary);
+
+         return false;
+      }
+
+      // :
+      return true;
    }
 }
