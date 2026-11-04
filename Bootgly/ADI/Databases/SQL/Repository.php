@@ -191,7 +191,6 @@ class Repository
       $Selection ??= $this->select();
       $Scope ??= $this->Scope;
       $this->apply($Selection);
-      $this->emit(Hooks::Selecting, $Selection);
 
       $Operation = $this->Querying->query($Selection->compile(), Scope: $Scope);
       $loads = $Selection->loads;
@@ -438,7 +437,6 @@ class Repository
       $Pagination ??= new Pagination;
       $Scope ??= $this->Scope;
       $this->apply($Selection);
-      $this->emit(Hooks::Selecting, $Selection);
 
       // ! Effective orders with the primary key as final tiebreak.
       $cursored = $Pagination->Mode === Modes::Cursor;
@@ -595,7 +593,11 @@ class Repository
    }
 
    /**
-    * Apply named scopes to one selection.
+    * Apply named scopes and `Selecting` hooks to one selection.
+    *
+    * Each one runs as a guard (`Selection::guard()`): the predicates it adds
+    * form a group of their own, ANDed after the caller's predicates as a
+    * whole — appended to them, a caller's `OR` escaped the scope.
     */
    private function apply (Selection $Selection): void
    {
@@ -606,7 +608,15 @@ class Repository
             throw new InvalidArgumentException("ORM scope is not registered: {$name}");
          }
 
-         $Scope($Selection, $this);
+         $Selection->guard(function (Selection $Selection) use ($Scope): void {
+            $Scope($Selection, $this);
+         });
+      }
+
+      foreach ($this->listeners[Hooks::Selecting->name] ?? [] as $Listener) {
+         $Selection->guard(static function (Selection $Selection) use ($Listener): void {
+            $Listener($Selection);
+         });
       }
    }
 

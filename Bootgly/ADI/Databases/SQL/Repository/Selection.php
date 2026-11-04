@@ -11,6 +11,8 @@
 namespace Bootgly\ADI\Databases\SQL\Repository;
 
 
+use function array_key_first;
+use function array_slice;
 use function count;
 use function is_string;
 use BackedEnum;
@@ -49,10 +51,16 @@ class Selection
    public private(set) array $orders = [];
 
    // * Metadata
-   /** @var array<int,array{column:BackedEnum|Stringable,operator:Operators,value:mixed,junction:Junctions}|array{nest:Closure,junction:Junctions}> */
-   private array $filters = [];
-   /** @var array<int,array{column:BackedEnum|Stringable,value:mixed,match:Matches,junction:Junctions}> */
-   private array $matches = [];
+   // @ The caller's predicates, in call order: a filter, a text match, or a
+   //   nested group.
+   /** @var array<int,array{column:BackedEnum|Stringable,operator:Operators,value:mixed,junction:Junctions}|array{column:BackedEnum|Stringable,value:mixed,match:Matches,junction:Junctions}|array{nest:Closure,junction:Junctions}> */
+   private array $predicates = [];
+   // @ Predicates the repository adds of its own — each named scope, each
+   //   `Selecting` hook, the cursor keyset — one group each. Every group is
+   //   ANDed after the caller's predicates as a whole, so a caller's `OR`
+   //   can never reach past it.
+   /** @var array<int,array<int,array{column:BackedEnum|Stringable,operator:Operators,value:mixed,junction:Junctions}|array{column:BackedEnum|Stringable,value:mixed,match:Matches,junction:Junctions}|array{nest:Closure,junction:Junctions}>> */
+   private array $guards = [];
    private null|int $limited = null;
    private int $offset = 0;
    private null|Locks $Lock = null;
@@ -124,12 +132,43 @@ class Selection
     */
    public function filter (BackedEnum|Stringable $Column, Operators $Operator, mixed $value = null, Junctions $Junction = Junctions::And): static
    {
-      $this->filters[] = [
+      $this->predicates[] = [
          'column' => $Column,
          'operator' => $Operator,
          'value' => $value,
          'junction' => $Junction,
       ];
+
+      return $this;
+   }
+
+   /**
+    * Add the predicates one closure adds as a group of their own, ANDed after
+    * the caller's predicates as a whole.
+    *
+    * The repository runs every named scope and every `Selecting` hook through
+    * here: whatever `filter()` / `match()` calls the closure makes are taken
+    * out of the caller's predicates into one group, so neither a caller's
+    * `OR` nor one inside the closure can loosen the other. A closure that
+    * adds nothing adds no group.
+    */
+   public function guard (Closure $Guard): static
+   {
+      $from = count($this->predicates);
+
+      // ! Moved even when the closure throws: a predicate it added before the
+      //   throw must not stay among the caller's, where an `OR` reaches past it.
+      try {
+         $Guard($this);
+      }
+      finally {
+         $added = array_slice($this->predicates, $from);
+
+         if ($added !== []) {
+            $this->predicates = array_slice($this->predicates, 0, $from);
+            $this->guards[] = $added;
+         }
+      }
 
       return $this;
    }
@@ -172,7 +211,7 @@ class Selection
     */
    public function match (BackedEnum|Stringable $Column, mixed $value, Matches $Match = Matches::Like, Junctions $Junction = Junctions::And): static
    {
-      $this->matches[] = [
+      $this->predicates[] = [
          'column' => $Column,
          'value' => $value,
          'match' => $Match,
@@ -225,7 +264,9 @@ class Selection
 
       // ! Keyset OR-chain: row i = equality on all preceding order columns
       //   plus one strict comparison on column i. Replay-safe for dialects.
-      $this->filters[] = [
+      //   A group of its own: ANDed onto the caller's last predicate only, a
+      //   caller's `OR` served the first page forever.
+      $this->guards[] = [[
          'nest' => static function (Builder $Group) use ($orders, $values): void {
             foreach ($orders as $index => $Order) {
                $Group->nest(static function (Builder $Inner) use ($orders, $values, $index): void {
@@ -241,7 +282,7 @@ class Selection
             }
          },
          'junction' => Junctions::And,
-      ];
+      ]];
 
       return $this;
    }
@@ -279,28 +320,81 @@ class Selection
     */
    private function restrict (Builder $Builder): void
    {
-      foreach ($this->filters as $Filter) {
+      // ?: Nothing of the repository's own — the caller's predicates as written.
+      if ($this->guards === []) {
+         $this->replay($Builder, $this->predicates);
+
+         return;
+      }
+
+      // @ The caller's predicates as one group, then every guard group ANDed.
+      if ($this->predicates !== []) {
+         $this->join($Builder, $this->predicates);
+      }
+
+      foreach ($this->guards as $predicates) {
+         $this->join($Builder, $predicates);
+      }
+   }
+
+   /**
+    * AND one group of predicates onto a SQL builder: nested when it holds
+    * more than one, as is when it holds one — a lone predicate needs no
+    * parentheses, and a nested one already has its own.
+    *
+    * @param array<int,array{column:BackedEnum|Stringable,operator:Operators,value:mixed,junction:Junctions}|array{column:BackedEnum|Stringable,value:mixed,match:Matches,junction:Junctions}|array{nest:Closure,junction:Junctions}> $predicates
+    */
+   private function join (Builder $Builder, array $predicates): void
+   {
+      // ?: One predicate — its own junction joined it to a neighbour that is
+      //   no longer beside it.
+      if (count($predicates) === 1) {
+         $Predicate = $predicates[array_key_first($predicates)];
+         $Predicate['junction'] = Junctions::And;
+
+         $this->replay($Builder, [$Predicate]);
+
+         return;
+      }
+
+      $Builder->nest(function (Builder $Group) use ($predicates): void {
+         $this->replay($Group, $predicates);
+      });
+   }
+
+   /**
+    * Replay a list of predicates into one SQL builder, in call order.
+    *
+    * @param array<int,array{column:BackedEnum|Stringable,operator:Operators,value:mixed,junction:Junctions}|array{column:BackedEnum|Stringable,value:mixed,match:Matches,junction:Junctions}|array{nest:Closure,junction:Junctions}> $predicates
+    */
+   private function replay (Builder $Builder, array $predicates): void
+   {
+      // @@
+      foreach ($predicates as $Predicate) {
          // ?: Grouped predicate scope.
-         if (isSet($Filter['nest'])) {
-            $Builder->nest($Filter['nest'], $Filter['junction']);
+         if (isSet($Predicate['nest'])) {
+            $Builder->nest($Predicate['nest'], $Predicate['junction']);
+
+            continue;
+         }
+
+         // ?: Text match.
+         if (isSet($Predicate['match'])) {
+            $Builder->match(
+               $this->identify($Predicate['column']),
+               $Predicate['value'],
+               $Predicate['match'],
+               $Predicate['junction']
+            );
 
             continue;
          }
 
          $Builder->filter(
-            $this->identify($Filter['column']),
-            $Filter['operator'],
-            $Filter['value'],
-            $Filter['junction']
-         );
-      }
-
-      foreach ($this->matches as $Match) {
-         $Builder->match(
-            $this->identify($Match['column']),
-            $Match['value'],
-            $Match['match'],
-            $Match['junction']
+            $this->identify($Predicate['column']),
+            $Predicate['operator'],
+            $Predicate['value'],
+            $Predicate['junction']
          );
       }
    }

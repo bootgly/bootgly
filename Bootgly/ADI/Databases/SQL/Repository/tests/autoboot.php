@@ -34,5 +34,8 @@ return new Suite(
       '12.16-orm_hydrate_key_width',
       '12.17-orm_relation_empty_window',
       '12.18-orm_persistence_context',
+      // # 1.1.0 (REPO-14/REPO-15): the repository's own predicates never join a
+      //   caller's OR, and a caller's predicates replay in call order
+      '12.19-orm_selection_guards',
    ]
 );
