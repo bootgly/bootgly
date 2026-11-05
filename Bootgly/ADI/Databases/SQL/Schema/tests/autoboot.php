@@ -27,5 +27,6 @@ return new Suite(
       '10.9-schema_non_finite_defaults',
       '10.10-schema_timestamptz',
       '10.11-schema_identity_resync',
+      '10.12-schema_mysql_inline_reference',
    ]
 );

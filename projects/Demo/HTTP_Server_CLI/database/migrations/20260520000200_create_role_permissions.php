@@ -32,9 +32,8 @@ return new Migration(
       ];
    },
    Down: function (Migrating $Schema) {
-      return [
-         $Schema->unindex('role_permissions', 'role_permissions_role_permission_unique'),
-         $Schema->drop('role_permissions'),
-      ];
+      // : DROP TABLE takes its indexes with it. Dropping the unique index first
+      //   fails on MySQL: it is the index backing the role_id foreign key.
+      return $Schema->drop('role_permissions');
    }
 );

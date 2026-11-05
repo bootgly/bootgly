@@ -65,14 +65,24 @@ class MySQL extends Dialect
       }
 
       $definitions = [];
+      $constraints = [];
 
       foreach ($Blueprint->columns as $Column) {
          $definitions[] = $this->define($Column);
+
+         // ? MySQL parses a column-level REFERENCES and ignores it, with no
+         //   error and no warning: only the table-level constraint creates a
+         //   foreign key. An inline reference is compiled as one.
+         if ($Column->Reference !== null && $this->cover($Blueprint, $Column->Reference) === false) {
+            $constraints[] = $this->reference($Column->Reference);
+         }
       }
 
       foreach ($Blueprint->references as $Reference) {
-         $definitions[] = $this->reference($Reference, true);
+         $constraints[] = $this->reference($Reference);
       }
+
+      $definitions = [...$definitions, ...$constraints];
 
       $clause = $exists ? 'IF NOT EXISTS ' : '';
       $table = $this->quote($Blueprint->table);
@@ -91,6 +101,14 @@ class MySQL extends Dialect
       foreach ($Blueprint->columns as $Column) {
          $definition = $this->define($Column);
          $actions[] = "ADD COLUMN {$definition}";
+
+         // ? The same column-level REFERENCES MySQL ignores: the added
+         //   column's foreign key follows it as its own table-level action.
+         if ($Column->Reference !== null && $this->cover($Blueprint, $Column->Reference) === false) {
+            $this->guard(Capabilities::AddConstraint);
+            $reference = $this->reference($Column->Reference);
+            $actions[] = "ADD {$reference}";
+         }
       }
 
       foreach ($Blueprint->changes as $Change) {
@@ -245,7 +263,7 @@ class MySQL extends Dialect
 
       foreach ($Blueprint->references as $Reference) {
          $this->guard(Capabilities::AddConstraint);
-         $reference = $this->reference($Reference, true);
+         $reference = $this->reference($Reference);
          $actions[] = "ADD {$reference}";
       }
 
@@ -390,11 +408,35 @@ class MySQL extends Dialect
          $segments[] = "CHECK ({$expression})";
       }
 
-      if ($Column->Reference !== null) {
-         $segments[] = $this->reference($Column->Reference, false);
+      return implode(' ', $segments);
+   }
+
+   /**
+    * Check whether a table-level reference already declares an inline one.
+    *
+    * Both forms name a foreign key `<table>_<column>_<target>_fk`, and MySQL
+    * keeps one namespace of foreign key names per database: compiling both
+    * would fail the statement with 1826. Only a reference to the same target
+    * under the same name, whose rules the inline one does not contradict or
+    * add to, is covered — any other clash stays the server's refusal, never a
+    * foreign key or a rule dropped in silence.
+    */
+   private function cover (Blueprint $Blueprint, Reference $Inline): bool
+   {
+      foreach ($Blueprint->references as $Reference) {
+         if (
+            $Reference->name === $Inline->name
+            && $Reference->source === $Inline->source
+            && $Reference->table === $Inline->table
+            && $Reference->column === $Inline->column
+            && ($Inline->Delete === null || $Inline->Delete === $Reference->Delete)
+            && ($Inline->Update === null || $Inline->Update === $Reference->Update)
+         ) {
+            return true;
+         }
       }
 
-      return implode(' ', $segments);
+      return false;
    }
 
    /**
@@ -423,9 +465,10 @@ class MySQL extends Dialect
    }
 
    /**
-    * Compile one foreign key reference.
+    * Compile one foreign key reference as a table-level constraint — the only
+    * form MySQL enforces.
     */
-   private function reference (Reference $Reference, bool $table = false): string
+   private function reference (Reference $Reference): string
    {
       $column = $this->quote($Reference->column);
 
@@ -446,11 +489,6 @@ class MySQL extends Dialect
       }
 
       $target = implode(' ', $segments);
-
-      if ($table === false) {
-         return $target;
-      }
-
       $constraint = $this->quote($Reference->name);
       $name = "CONSTRAINT {$constraint} ";
       $source = $this->quote($Reference->source);
