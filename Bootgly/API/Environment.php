@@ -39,7 +39,6 @@ use function umask;
 use function unlink;
 
 use Bootgly\API\Environment\Agent;
-use Bootgly\API\Environment\Configs;
 
 
 class Environment
@@ -61,9 +60,6 @@ class Environment
     */
    public static $suffix = '';
 
-   // * Data
-   public static null|Configs $Configs = null;
-
 
    /**
     * Load environment variables from an INI-style file.
@@ -74,6 +70,10 @@ class Environment
     * would stop there and drop the pairs after it) or holds an array key
     * (`KEY[]=`), and when the prefix or suffix holds `=` or NUL (`put()` would
     * refuse every pair).
+    *
+    * @deprecated 1.1.0 `.env` files belong to `Environment\Configs` (scoped,
+    *             validated, never exported); export a value a child process
+    *             needs with `put()`. Removed in 2.0.0.
     *
     * @param string $file
     *
@@ -128,6 +128,11 @@ class Environment
     * a variable has no such line (a line break, a name INI cannot carry) or
     * the write fails.
     *
+    * @deprecated 1.1.0 Persisting the whole process environment is not
+    *             supported: write the values a deployment needs to a file
+    *             you own (0600) and read them through a scope `.env`.
+    *             Removed in 2.0.0.
+    *
     * @param string $file
     *
     * @return bool
@@ -160,6 +165,8 @@ class Environment
    // ! Variable
    /**
     * Get the list of environment variables.
+    *
+    * @deprecated 1.1.0 Use `getenv()`. Removed in 2.0.0.
     *
     * @return array<string,string>
     */

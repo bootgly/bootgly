@@ -33,5 +33,6 @@ return new Suite(
       '1.10-environment-save-format',
       '1.11-environment-load-failure',
       '1.12-environment-keys',
+      '1.13-environment-deprecations',
    ]
 );
