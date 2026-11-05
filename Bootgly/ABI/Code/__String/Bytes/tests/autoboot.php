@@ -14,6 +14,7 @@ return new Suite(
    // * Data
    suiteName: __NAMESPACE__,
    tests: [
-      '1.0-callstatic-format'
+      '1.0-callstatic-format',
+      '1.1-callstatic-parse'
    ]
 );
