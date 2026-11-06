@@ -110,29 +110,44 @@ return new Test(
          ->assert();
 
       // @ Retirees — slot 0 is retired and refilled, slot 1 serves on
-      $Process->fork(2, static function (Process $Worker, int $index): void {
-         // ! Waits to be signalled, without this runner's shutdown functions
-         pcntl_exec('/bin/sh', ['-c', 'exec sleep 30']);
-      });
-      $Old = $Process->Children->PIDs;
-      $retired = $Process->Children->retire($Old[0] ?? -1);
-      $unknown = $Process->Children->retire(-1);
-      $twice = $Process->Children->retire($Old[0] ?? -1);
-      $Retirement = [
-         'retired' => $retired,
-         'an unknown PID is refused' => $unknown,
-         'a retiree is not retired twice' => $twice,
-         'serving' => $Process->Children->PIDs === [1 => $Old[1] ?? -1],
-         'retirees' => $Process->Children->retirees === [($Old[0] ?? -1) => 0],
-         'slots counted' => $Process->Children->count(),
-      ];
-      // @ Its replacement takes slot 0 while the retiree lives
-      $Process->Children->push($Old[1] ?? -1, 1);
-      $Replacement = pcntl_fork();
-      if ($Replacement === 0) {
-         pcntl_exec('/bin/sh', ['-c', 'exec sleep 30']);
+      // ! The children below are ended by SIGTERM, which may reach one before
+      //   its exec: born with the default action and the signal unblocked, it
+      //   dies of it — a PHP handler or mask left in this runner by an earlier
+      //   suite would swallow it or hold it pending through the exec
+      //   (the mask is read first: installing a handler unblocks the signal)
+      pcntl_sigprocmask(SIG_UNBLOCK, [SIGTERM], $Mask);
+      $Handler = pcntl_signal_get_handler(SIGTERM);
+      pcntl_signal(SIGTERM, SIG_DFL);
+      try {
+         $Process->fork(2, static function (Process $Worker, int $index): void {
+            // ! Waits to be signalled, without this runner's shutdown functions
+            pcntl_exec('/bin/sh', ['-c', 'exec sleep 30']);
+         });
+         $Old = $Process->Children->PIDs;
+         $retired = $Process->Children->retire($Old[0] ?? -1);
+         $unknown = $Process->Children->retire(-1);
+         $twice = $Process->Children->retire($Old[0] ?? -1);
+         $Retirement = [
+            'retired' => $retired,
+            'an unknown PID is refused' => $unknown,
+            'a retiree is not retired twice' => $twice,
+            'serving' => $Process->Children->PIDs === [1 => $Old[1] ?? -1],
+            'retirees' => $Process->Children->retirees === [($Old[0] ?? -1) => 0],
+            'slots counted' => $Process->Children->count(),
+         ];
+         // @ Its replacement takes slot 0 while the retiree lives
+         $Process->Children->push($Old[1] ?? -1, 1);
+         $Replacement = pcntl_fork();
+         if ($Replacement === 0) {
+            pcntl_exec('/bin/sh', ['-c', 'exec sleep 30']);
+         }
+         $Process->Children->push($Replacement, 0);
       }
-      $Process->Children->push($Replacement, 0);
+      finally {
+         // ! The runner keeps its own SIGTERM policy
+         pcntl_signal(SIGTERM, $Handler);
+         pcntl_sigprocmask(SIG_SETMASK, $Mask);
+      }
       $Retirement['two PIDs for slot 0'] = $Process->Children->PIDs[0] === $Replacement
          && isSet($Process->Children->retirees[$Old[0] ?? -1]);
       $Retirement['slots counted with a replacement'] = $Process->Children->count();
