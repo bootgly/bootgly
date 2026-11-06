@@ -56,17 +56,21 @@ use function posix_get_last_error;
 use function posix_getpwnam;
 use function posix_getuid;
 use function posix_kill;
+use function posix_setgid;
+use function posix_setuid;
 use function preg_match_all;
 use function proc_close;
 use function proc_get_status;
 use function proc_open;
 use function proc_terminate;
+use function realpath;
 use function rmdir;
 use function rtrim;
 use function scandir;
 use function shell_exec;
 use function str_contains;
 use function str_repeat;
+use function str_starts_with;
 use function stream_get_contents;
 use function stream_set_blocking;
 use function stream_socket_get_name;
@@ -74,12 +78,17 @@ use function stream_socket_server;
 use function strrpos;
 use function substr;
 use function symlink;
+use function sys_get_temp_dir;
 use function trim;
+use function uniqid;
 use function unlink;
 use function usleep;
 use function var_export;
 use Throwable;
 
+use Bootgly\ABI\Resources\Cache as CacheResource;
+use Bootgly\ABI\Resources\Cache\Config as CacheConfig;
+use Bootgly\ABI\Templates\Template;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Data\Record;
 use Bootgly\ACI\Logs\Handler;
@@ -100,6 +109,18 @@ if (! class_exists(TCPServerCLIStorageProbe::class, false)) {
       protected const array DIRECTORIES = [
          'cache' => 0o775,
          'sessions' => 0o700
+      ];
+
+      public function examine (): null|string
+      {
+         return $this->provision(static::DIRECTORIES);
+      }
+   }
+   /** A node whose workers keep their own cache tree, like the HTTP one (SRV-4). */
+   class TCPServerCLICacheProbe extends TCPServer
+   {
+      protected const array DIRECTORIES = [
+         'cache-{uid}' => 0o700
       ];
 
       public function examine (): null|string
@@ -144,6 +165,24 @@ if (! class_exists(TCPServerCLIStorageProbe::class, false)) {
  *   R1) root building the session store over a runtime-owned `sessions/` with a
  *       link planted at its records directory: refused by its owner, nothing
  *       created through the link;
+ *   C1) SRV-4: `cache-{uid}` is provisioned for the runtime identity; a demoted
+ *       worker renders a template and keeps a default File cache there, root's
+ *       `storage/cache` stays root's, and root never runs what the worker wrote;
+ *   C2) SRV-4: no `storage/cache` at all — the demoted worker renders and caches
+ *       in its own `cache-<uid>`, also through a Config root built before the
+ *       fork, and never creates `storage/cache`;
+ *   C3) SRV-4: a compiled file in root's own cache owned by another user is
+ *       compiled again, never included;
+ *   K1) SRV-4: a storage root reached through a link of another user's is
+ *       never resolved through — root's cache goes to its private temporary
+ *       directory;
+ *   K2) SRV-4: nothing is made inside a sticky storage root of root's open to
+ *       all;
+ *   K3) SRV-4: that private temporary directory is made owner-only inside the
+ *       sticky system temporary directory of root's;
+ *   K4) SRV-4: under a sticky shared directory, a memoized storage location is
+ *       dropped once another user makes its watched entry again — even with
+ *       the freed inode number;
  *   R2) a root-owned `sessions/` with a link at `sessions/cache`: refused by the
  *       records directory check;
  *   S5) start() over a root-owned `cache/`: the launch exits 1 before any fork
@@ -211,8 +250,10 @@ return new Test(
             }
             @unlink($path);
          };
-         $reset = static function () use ($purge, $cache, $sessions, $aside, $trace): void {
+         $reset = static function () use ($purge, $cache, $sessions, $aside, $trace, $runtime): void {
             $purge($cache);
+            $purge("{$cache}-{$runtime}");
+            $purge("{$cache}-0");
             $purge($sessions);
             $purge($aside);
             @mkdir(BOOTGLY_STORAGE_DIR . 'pids', 0o755, true);
@@ -386,7 +427,8 @@ return new Test(
             [$stickyRefusal, $sticky] = $warned(0o1777);
             $legs['S8'] = $safeRefusal === null && str_contains($safe, 'its ancestor') === false
                && $refusal === null
-               && str_contains($said, "its ancestor {$above} is group/world-writable without the sticky bit — `chmod go-w {$above}`")
+               && str_contains($said, "its ancestor {$above} is group/world-writable without the sticky bit")
+               && str_contains($said, "`chmod go-w {$above}`")
                && str_contains($said, 'chown') === false
                && $stickyRefusal === null && str_contains($sticky, 'its ancestor') === false
                && $owned($sessions, $runtime);
@@ -439,6 +481,194 @@ return new Test(
             yield assert(
                assertion: $legs['R2'],
                description: 'a link at sessions/cache is refused by the records directory check itself (thrown=' . var_export($thrown, true) . ')'
+            );
+
+            // @ C1) SRV-4: the workers get their own cache tree; root never reads it
+            $reset();
+            $Probe = new TCPServerCLICacheProbe(Modes::Test);
+            $Probe->configure(new TCPConfigs(host: '127.0.0.1', port: 65003, workers: 1, user: 'daemon'));
+            $refusal = $Probe->examine();
+            $workers = "{$cache}-{$runtime}";
+            $source = 'C1 @> $who; ' . uniqid('', true);
+            $root = new Template($source)->render(['who' => 'root']);
+            // ! Every class the worker needs, loaded while root can still read
+            //   the framework tree (the runtime identity cannot)
+            new CacheResource(['path' => "{$aside}/preload"])->increment('preload', 1, 60);
+            $pid = pcntl_fork();
+            if ($pid === 0) {
+               $out = [];
+               try {
+                  posix_setgid($group);
+                  posix_setuid($runtime);
+                  $Template = new Template($source);
+                  $out[] = 'render=' . $Template->render(['who' => 'worker']);
+                  $compiled = (fn (): string => $this->cache)->call($Template);
+                  $out[] = "compiled={$compiled}";
+                  $out[] = 'counter=' . new CacheResource([])->increment('c1', 1, 60);
+                  // ! The worker plants code in its own tree — root must never run it
+                  @file_put_contents($compiled, '<?php echo "PLANTED"; ?>');
+               }
+               catch (Throwable $Throwable) {
+                  $out[] = 'threw ' . $Throwable::class . ': ' . $Throwable->getMessage();
+               }
+               @file_put_contents($trace, implode("\n", $out) . "\n", FILE_APPEND);
+               exit(0);
+            }
+            pcntl_waitpid($pid, $status);
+            $said = (string) @file_get_contents($trace);
+            $again = new Template($source)->render(['who' => 'root']);
+            $legs['C1'] = $refusal === null
+               && $owned($workers, $runtime) && $mode($workers) === 0o700
+               && str_contains($said, 'render=C1 worker')
+               && str_contains($said, "compiled={$workers}/templates/")
+               && str_contains($said, 'counter=1')
+               && str_starts_with($root, 'C1 root') && str_starts_with($again, 'C1 root')
+               && str_contains($again, 'PLANTED') === false
+               && $owned($cache, 0);
+
+            yield assert(
+               assertion: $legs['C1'],
+               description: 'a root launch provisions cache-<uid> (0700, the runtime identity\'s); the demoted worker renders and caches '
+                  . 'there while storage/cache stays root\'s, and root never runs what the worker left in its own tree (refusal='
+                  . var_export($refusal, true) . ', root=' . var_export($again, true) . $probe() . ')'
+            );
+
+            // @ C2) SRV-4: no storage/cache yet — the worker still takes its own tree,
+            //   even through a Config the root master built before the fork
+            $reset();
+            $Probe = new TCPServerCLICacheProbe(Modes::Test);
+            $Probe->configure(new TCPConfigs(host: '127.0.0.1', port: 65004, workers: 1, user: 'daemon'));
+            $refusal = $Probe->examine();
+            $Inherited = new CacheResource([]);
+            $source = 'C2 @> $who; ' . uniqid('', true);
+            $pid = pcntl_fork();
+            if ($pid === 0) {
+               $out = [];
+               try {
+                  posix_setgid($group);
+                  posix_setuid($runtime);
+                  $Template = new Template($source);
+                  $out[] = 'render=' . $Template->render(['who' => 'worker']);
+                  $out[] = 'compiled=' . (fn (): string => $this->cache)->call($Template);
+                  $out[] = 'inherited=' . $Inherited->increment('c2', 1, 60);
+                  $out[] = 'path=' . (fn (): string => $this->Driver->Config->path)->call($Inherited);
+               }
+               catch (Throwable $Throwable) {
+                  $out[] = 'threw ' . $Throwable::class . ': ' . $Throwable->getMessage();
+               }
+               @file_put_contents($trace, implode("\n", $out) . "\n", FILE_APPEND);
+               exit(0);
+            }
+            pcntl_waitpid($pid, $status);
+            $said = (string) @file_get_contents($trace);
+            $workers = "{$cache}-{$runtime}";
+            $legs['C2'] = $refusal === null
+               && str_contains($said, 'render=C2 worker')
+               && str_contains($said, "compiled={$workers}/templates/")
+               && str_contains($said, 'inherited=1')
+               && str_contains($said, "path={$workers}")
+               && is_dir($cache) === false;
+
+            yield assert(
+               assertion: $legs['C2'],
+               description: 'with no storage/cache at all the demoted worker renders and caches in its own cache-<uid> — through a '
+                  . 'Config the root master built before the fork, too — and never creates storage/cache (refusal='
+                  . var_export($refusal, true) . $probe() . ')'
+            );
+
+            // @ C3) SRV-4: root's own cache — a compiled file of another owner is compiled again, never run
+            $reset();
+            $source = 'C3 @> $who; ' . uniqid('', true);
+            $Template = new Template($source);
+            $first = $Template->render(['who' => 'root']);
+            $compiled = (fn (): string => $this->cache)->call($Template);
+            file_put_contents($compiled, '<?php echo "PLANTED"; ?>');
+            chmod($compiled, 0o600);
+            lchown($compiled, $runtime);
+            $again = new Template($source)->render(['who' => 'root']);
+            $inode = @lstat($compiled);
+            $legs['C3'] = str_starts_with($first, 'C3 root') && str_starts_with($again, 'C3 root')
+               && str_contains($again, 'PLANTED') === false
+               && is_array($inode) && (int) $inode['uid'] === 0;
+
+            yield assert(
+               assertion: $legs['C3'],
+               description: 'a compiled file in root\'s own cache owned by another user (0600) is compiled again over, never '
+                  . 'included (again=' . var_export($again, true) . ')'
+            );
+
+            // @ K1..K3) SRV-4: where root's cache goes when a storage root cannot be
+            //   trusted — the private temporary directory, made inside the
+            //   sticky one of root's this run points sys_temp_dir at
+            $reset();
+            $system = (string) realpath(sys_get_temp_dir());
+            $private = "{$system}/bootgly-0";
+            $fresh = is_dir($private) === false;
+            // # K1) a storage root written through a link of another user's: never resolved through
+            @mkdir("{$aside}/k-real/storage", 0o700, true);
+            symlink("{$aside}/k-real/storage", "{$aside}/k-link");
+            lchown("{$aside}/k-link", $runtime);
+            $through = CacheConfig::locate("{$aside}/k-link");
+            $legs['K1'] = str_starts_with($through, "{$private}/") && is_dir("{$aside}/k-real/storage/cache") === false;
+            yield assert(
+               assertion: $legs['K1'],
+               description: "a storage root reached through a link of another user's is never resolved through ({$through})"
+            );
+            // # K2) a storage root of root's open to all with the sticky bit: nothing made in it
+            @mkdir("{$aside}/k-sticky", 0o755);
+            chmod("{$aside}/k-sticky", 0o1777);
+            $sticky = CacheConfig::locate("{$aside}/k-sticky");
+            $legs['K2'] = str_starts_with($sticky, "{$private}/")
+               && is_dir("{$aside}/k-sticky/cache") === false && is_dir("{$aside}/k-sticky/cache-0") === false;
+            yield assert(
+               assertion: $legs['K2'],
+               description: "no cache directory is made inside a sticky storage root of root's open to all ({$sticky})"
+            );
+            // # K3) the private temporary directory: made owner-only inside root's sticky one
+            $parent = @lstat($system);
+            $legs['K3'] = $fresh && is_array($parent) && ((int) $parent['mode'] & 0o1777) === 0o1777 && $owned($system, 0)
+               && $owned($private, 0) && $mode($private) === 0o700;
+            yield assert(
+               assertion: $legs['K3'],
+               description: "the private temporary directory is made owner-only inside root's sticky one ({$private}, fresh="
+                  . var_export($fresh, true) . ', ' . decoct($mode($private)) . ')'
+            );
+
+            // # K4) under a sticky shared directory, the memo's watched entry made
+            //   again by another user — even with the freed inode number (a disk
+            //   filesystem hands it out again): never kept
+            @mkdir("{$aside}/k-shared", 0o755);
+            chmod("{$aside}/k-shared", 0o1777);
+            @mkdir("{$aside}/k-shared/app/storage/cache", 0o700, true);
+            $located = "{$aside}/k-shared/app/storage/cache";
+            $memo = static fn (null|array $entry): mixed => (static function () use ($entry, $located): mixed {
+               if ($entry === null) {
+                  unset(self::$directories[0]);
+                  return null;
+               }
+               self::$directories[0] = [$located, null, self::guard($located)];
+               return self::$directories[0][2];
+            })->bindTo(null, CacheConfig::class)();
+            $watched = $memo([]);
+            $kept = CacheConfig::locate();
+            $purge("{$aside}/k-shared/app");
+            @mkdir("{$aside}/k-shared/app/storage/cache", 0o700, true);
+            foreach (["{$aside}/k-shared/app", "{$aside}/k-shared/app/storage", $located] as $planted) {
+               lchown($planted, $runtime);
+            }
+            $inode = @lstat("{$aside}/k-shared/app");
+            (static function () use ($inode): void {
+               self::$directories[0][2][1] = (int) $inode['dev'];
+               self::$directories[0][2][2] = (int) $inode['ino'];
+            })->bindTo(null, CacheConfig::class)();
+            $reused = CacheConfig::locate();
+            $memo(null);
+            $legs['K4'] = is_array($watched) && $watched[0] === "{$aside}/k-shared/app" && $kept === $located
+               && $reused !== $located;
+            yield assert(
+               assertion: $legs['K4'],
+               description: "a memoized storage location under a sticky shared directory is dropped once another user makes its "
+                  . "watched entry again, freed inode number and all (watched=" . var_export($watched, true) . ", kept={$kept}, reused={$reused})"
             );
 
             // @ S5) start() over a root-owned cache/: exits 1 before any fork
@@ -562,6 +792,10 @@ return new Test(
 
       try {
          mkdir($storage, 0o755, true);
+         // ! The system temporary directory of the root legs: a sticky one of
+         //   (namespace) root's, never the host's /tmp
+         mkdir("$base/system", 0o755);
+         chmod("$base/system", 0o1777);
          // ! The runtime identity the probes demote to must reach the fixture
          chmod($base, 0o711);
          file_put_contents($prepend, "<?php\ndefine('BOOTGLY_STORAGE_BASE', '$storage');\ndefine('BOOTGLY_STORAGE_DIR', '$storage/');\n");
@@ -578,7 +812,7 @@ return new Test(
             . "env AI_AGENT=1 BOOTGLY_ROOT_LEG=1 BOOTGLY_ROOT_LEG_STORAGE='$storage' " . PHP_BINARY
             // ! Assertions on up front: the runner would otherwise re-exec itself
             //   with its own `-d` flags only, dropping the prepend
-            . " -d zend.assertions=1 -d bootgly.assertions=1 -d opcache.jit=0 -d auto_prepend_file='$prepend' '" . BOOTGLY_ROOT_DIR . "bootgly' test $suite $case\n"
+            . " -d zend.assertions=1 -d bootgly.assertions=1 -d opcache.jit=0 -d sys_temp_dir='$base/system' -d auto_prepend_file='$prepend' '" . BOOTGLY_ROOT_DIR . "bootgly' test $suite $case\n"
             . "s=\$?\nrm -rf '$storage'\nexit \$s\n");
          chmod($inner, 0o700);
          $script = <<<RUNNER
@@ -697,7 +931,7 @@ return new Test(
          static fn (array $failure): string => (string) ($failure['message'] ?? ''),
          $verdict['failures'] ?? []
       ) : [];
-      $expected = ['S1', 'S2', 'S3', 'S4', 'S6', 'S7', 'S8', 'R1', 'R2', 'S5', 'W1'];
+      $expected = ['S1', 'S2', 'S3', 'S4', 'S6', 'S7', 'S8', 'R1', 'R2', 'C1', 'C2', 'C3', 'K1', 'K2', 'K3', 'K4', 'S5', 'W1'];
       $ran = is_array($legs) ? array_keys($legs) : [];
 
       yield assert(

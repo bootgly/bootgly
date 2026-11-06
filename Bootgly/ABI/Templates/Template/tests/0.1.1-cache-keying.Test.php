@@ -2,6 +2,7 @@
 
 
 use Bootgly\ABI\IO\FS\File;
+use Bootgly\ABI\Resources\Cache\Config;
 use Bootgly\ABI\Templates\Template;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
@@ -12,7 +13,7 @@ return new Test(
    description: 'It should key compiled caches by path (file) and by content (inline)',
    test: new Assertions(function () {
       // !
-      $storage = BOOTGLY_STORAGE_DIR . 'cache/templates/';
+      $storage = Config::locate() . '/templates/';
       // The key formula is deliberately NOT rebuilt here: it also carries the compiler
       // identity (see BUGS TPL-15), and a spec that duplicates it pins the bytes of the
       // salt instead of the invariant the description states. What is observable — and

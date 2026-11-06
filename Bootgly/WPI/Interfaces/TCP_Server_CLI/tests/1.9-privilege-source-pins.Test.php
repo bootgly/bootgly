@@ -121,6 +121,23 @@ return new Test(
       // @ A refused launch says why even with the display muted (the live suites mute theirs)
       $start = $slice(TCPServer::class, 'start');
       $refused = strpos($start, '$refusal = $this->provision(static::DIRECTORIES);');
+      $soft = strpos($start, "\$this->provision(['cache-{uid}' => 0o700], strict: false);");
+      yield assert(
+         assertion: $soft !== false && $refused !== false && $refused < $soft
+            && strpos($start, 'exit(1);') < $soft,
+         description: 'TCP_Server_CLI::start() provisions every node\'s worker cache tree cache-{uid}, softly, only once the strict '
+            . 'directories were not refused (SRV-4)'
+      );
+      // ! The ancestor warning: once per directory and ancestor, a cache tree
+      //   walking through a link it can trust (its storage root is resolved)
+      yield assert(
+         assertion: str_contains($provision, '$found = $this->inspect($path, $UID, links: $sessions === false);')
+            && str_contains($provision, 'isSet($this->ancestors["{$name}:{$found[0]}"]) === false')
+            && str_contains($provision, '$this->ancestors["{$name}:{$ancestor}"] = true;')
+            && str_contains($provision, 'Until then the workers keep it in a private temporary directory.'),
+         description: 'Demotable::provision() warns about an ancestor once per directory, lets a cache tree walk through a trusted link, '
+            . 'and keeps the workers\' caches elsewhere when a soft directory is refused'
+      );
       $muted = strpos($start, 'if (Display::$segments === Display::NONE) { fwrite(STDERR, "Server not started: {$refusal}\\n"); }');
       $exited = strpos($start, 'exit(1);');
       yield assert(

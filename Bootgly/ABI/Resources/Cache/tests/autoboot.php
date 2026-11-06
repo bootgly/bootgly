@@ -48,5 +48,7 @@ return new Suite(
       '1.9-config-keys',
       // # 1.0.x (H6C-6): a counter with a TTL is created with its expiry in one step
       '5.9-redis-counter-expiry',
+      // # 1.1.x (SRV-4): a process caches in a directory of its own
+      '1.10-config-locate',
    ]
 );

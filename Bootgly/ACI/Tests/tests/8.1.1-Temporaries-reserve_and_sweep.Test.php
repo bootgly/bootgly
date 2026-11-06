@@ -24,6 +24,32 @@ return new Test(
          ->to->be(true)
          ->assert();
 
+      // @ The root is never group/world-writable — made under umask 0002, or
+      //   found that way — in a process of its own with a fresh temp directory
+      $system = "{$reserved}/system";
+      mkdir($system, 0o700);
+      $script = 'umask(0002); spl_autoload_register(static function (string $class): void { $file = $GLOBALS["argv"][1]'
+         . ' . str_replace("\\\\", "/", $class) . ".php"; if (is_file($file)) { require $file; } });'
+         . ' Bootgly\\ACI\\Tests\\Temporaries::reserve("made"); $root = sys_get_temp_dir() . "/" . Bootgly\\ACI\\Tests\\Temporaries::ROOT;'
+         . ' $made = fileperms($root) & 0777; chmod($root, 0775); clearstatcache();'
+         . ' Bootgly\\ACI\\Tests\\Temporaries::reserve("found"); clearstatcache(); echo decoct($made), " ", decoct(fileperms($root) & 0777);';
+      $modes = trim((string) shell_exec(
+         escapeshellarg(PHP_BINARY) . ' -d ' . escapeshellarg("sys_temp_dir={$system}") . ' -r ' . escapeshellarg($script)
+         . ' ' . escapeshellarg(BOOTGLY_ROOT_DIR) . ' 2>&1'
+      ));
+      foreach ((array) glob("{$system}/" . Temporaries::ROOT . '/*') as $entry) {
+         @rmdir((string) $entry);
+      }
+      @rmdir("{$system}/" . Temporaries::ROOT);
+      @rmdir($system);
+
+      yield new Assertion(
+         description: "reserve() keeps its root 0755 — made under umask 0002 and found group-writable ({$modes})",
+      )
+         ->expect($modes)
+         ->to->be('755 755')
+         ->assert();
+
       $invalid = false;
       try {
          Temporaries::reserve('../escape');

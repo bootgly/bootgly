@@ -79,6 +79,7 @@ projects/**/configs/**/.env.*
 /storage/@*/
 # Ignore known folders
 /storage/cache/*
+/storage/cache-*/
 /storage/pids/*
 /storage/locks/*
 /storage/logs/*

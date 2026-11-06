@@ -57,5 +57,7 @@ return new Suite(
       '0.2.1-render-directives-scoped_expressions',
       '3.1.2.3-render-conditionals-short_conditional_anchoring',
       '0.1.3-cache-compiler_invalidation',
+      // # 1.1.x (SRV-4): the compiled cache is per-identity and never trusted when others could write it
+      '0.1.4-cache-trust',
    ]
 );

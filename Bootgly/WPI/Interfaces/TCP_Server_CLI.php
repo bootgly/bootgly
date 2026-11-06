@@ -232,8 +232,13 @@ class TCP_Server_CLI implements Servers
    // # Storage
    /**
     * @var array<string,int> The directories under the storage root this node's
-    *      workers write (name => creation mode). On a root launch with a runtime
-    *      `user` they are prepared before the fork, or the launch is refused.
+    *      workers cannot do without (name => creation mode; `{uid}` is the
+    *      runtime uid). On a root launch with a runtime `user` they are
+    *      prepared before the fork, or the launch is refused. Every node's
+    *      workers also get their own cache tree, `cache-<uid>` (compiled
+    *      templates, default File caches — see `Cache\Config::locate()`), on
+    *      the same terms but softly: without it they cache in a private
+    *      temporary directory.
     */
    protected const array DIRECTORIES = [];
    // ! How long a master that just demoted waits for its workers to demote
@@ -910,6 +915,8 @@ class TCP_Server_CLI implements Servers
          }
          exit(1);
       }
+      // ! The workers' own cache tree — softly: they can cache elsewhere
+      $this->provision(['cache-{uid}' => 0o700], strict: false);
 
       $this->Status = Status::Starting;
 

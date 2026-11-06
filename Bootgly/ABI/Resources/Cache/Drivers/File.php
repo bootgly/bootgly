@@ -49,6 +49,7 @@ use RuntimeException;
 use SplFileInfo;
 
 use Bootgly\ABI\Resources\Cache\Atomic;
+use Bootgly\ABI\Resources\Cache\Config;
 use Bootgly\ABI\Resources\Cache\Driver;
 use Bootgly\ABI\Resources\Cache\Item;
 
@@ -565,8 +566,16 @@ class File extends Driver implements Atomic
     */
    private function lock (): mixed
    {
+      // ? Gone (a cache cleared by hand): the located default is located again —
+      //   created owner-only, or elsewhere — never recreated blindly; a given
+      //   path is made as before
       if (is_dir($this->Config->path) === false) {
-         @mkdir($this->Config->path, 0775, true);
+         if ($this->Config->located) {
+            Config::forget();
+         }
+         else {
+            @mkdir($this->Config->path, 0775, true);
+         }
       }
 
       $path = $this->Config->path . '/' . self::LOCK;

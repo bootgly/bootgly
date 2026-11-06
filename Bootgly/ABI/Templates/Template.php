@@ -11,28 +11,31 @@
 namespace Bootgly\ABI\Templates;
 
 
-use const BOOTGLY_STORAGE_DIR;
 use const BOOTGLY_VERSION;
 use const E_WARNING;
 use const EXTR_SKIP;
 use function array_key_exists;
 use function call_user_func;
+use function chmod;
 use function clearstatcache;
 use function count;
+use function dirname;
 use function extract;
 use function file_put_contents;
 use function filemtime;
 use function func_get_arg;
 use function function_exists;
+use function is_array;
 use function is_dir;
-use function is_file;
 use function is_string;
+use function lstat;
 use function mkdir;
 use function ob_end_clean;
 use function ob_get_clean;
 use function ob_get_level;
 use function ob_start;
 use function opcache_invalidate;
+use function posix_geteuid;
 use function preg_match;
 use function preg_replace;
 use function preg_replace_callback;
@@ -44,11 +47,14 @@ use function sha1;
 use function str_contains;
 use function str_replace;
 use function str_starts_with;
+use function umask;
 use function uniqid;
+use function unlink;
 use Throwable;
 
 use Bootgly\ABI\Code\__String\Path;
 use Bootgly\ABI\IO\FS\File;
+use Bootgly\ABI\Resources\Cache\Config;
 use Bootgly\ABI\Templates;
 use Bootgly\ABI\Templates\Template\Exceptions\TemplateException;
 
@@ -90,6 +96,11 @@ class Template implements Templates
     * @var array<string,null|string>
     */
    private static array $sources = [];
+   /**
+    * Template cache directories already trusted, as `<euid>:<directory>`.
+    * @var array<string,true>
+    */
+   private static array $directories = [];
    // Pipeline
    // 1
    /**
@@ -279,16 +290,36 @@ class Template implements Templates
       $key = ($file !== null)
          ? sha1($compiler . $file)
          : sha1($compiler . $this->raw);
-      $cache = $this->cache = BOOTGLY_STORAGE_DIR . "cache/templates/{$key}.php";
+      // ! This process's own cache tree: root never shares one with the demoted
+      //   workers of a root launch (it would `include` what they wrote) — and
+      //   its `templates/` held to the same rule as the tree, proven once per
+      //   process and user: inside a tree only root or this user can change,
+      //   nobody else can replace it afterwards
+      // Read per call: a worker forked by a root master demotes after it
+      $EUID = function_exists('posix_geteuid') ? posix_geteuid() : -1;
+      $directory = Config::locate() . '/templates';
+      if ($EUID !== -1 && isSet(self::$directories["{$EUID}:{$directory}"]) === false) {
+         $directory = $this->prove($EUID, $directory);
+      }
+      $cache = $this->cache = "{$directory}/{$key}.php";
 
-      // ? Warm cache
+      // ? Warm cache — only a compiled file this process can trust: a regular
+      //   file of its own that nobody else may write (its directory is already
+      //   one only this process can change — see Config::locate()); anything
+      //   else is compiled again over it
       // Long-running workers: bypass the PHP stat cache to see external edits
       if ($file !== null) {
          clearstatcache(filename: $file);
       }
+      $state = @lstat($cache);
       if (
-         is_file($cache)
-         && ($file === null || filemtime($file) < filemtime($cache))
+         is_array($state)
+         && ((int) $state['mode'] & 0170000) === 0100000
+         && ($EUID === -1 || (
+            ((int) $state['mode'] & 0022) === 0
+            && (int) $state['uid'] === $EUID
+         ))
+         && ($file === null || filemtime($file) < (int) $state['mtime'])
       ) {
          self::$sources[$cache] ??= $file;
 
@@ -333,17 +364,32 @@ class Template implements Templates
          $postcompiled .= "<?php /* FILE: {$file} */ ?>";
       }
 
-      // @ Write atomically (temp file + rename), never leaving partial caches behind
-      $directory = BOOTGLY_STORAGE_DIR . 'cache/templates';
-      if (is_dir($directory) === false) {
-         @mkdir($directory, recursive: true);
-      }
-
+      // @ Write atomically (temp file + rename), never leaving partial caches
+      //   behind — owner-only from creation whatever the umask (no chmod by
+      //   name afterwards), or the warm path above would never trust it again
       $temporary = "{$cache}." . uniqid('', true) . '.tmp';
-      if (
-         @file_put_contents($temporary, $postcompiled) === false
-         || @rename($temporary, $cache) === false
-      ) {
+      $mask = umask(0077);
+      try {
+         // ? Gone since it was proven (a cache cleared by hand): proven again —
+         //   and, when its tree went with it, relocated — never recreated blindly
+         if ($EUID !== -1 && is_dir($directory) === false) {
+            unset(self::$directories["{$EUID}:{$directory}"]);
+            $directory = $this->prove($EUID, $directory);
+            $cache = $this->cache = "{$directory}/{$key}.php";
+            $temporary = "{$cache}." . uniqid('', true) . '.tmp';
+         }
+         else if ($EUID === -1 && is_dir($directory) === false) {
+            @mkdir($directory, 0700, true);
+         }
+         $written = @file_put_contents($temporary, $postcompiled) !== false
+            && @rename($temporary, $cache) !== false;
+      }
+      finally {
+         umask($mask);
+      }
+      if ($written === false) {
+         @unlink($temporary);
+
          throw new TemplateException(
             "Unwritable template cache file `{$cache}`.",
             $file
@@ -355,6 +401,43 @@ class Template implements Templates
       }
 
       self::$sources[$cache] = $file;
+   }
+
+   /**
+    * Prove this user's template cache directory — created owner-only when
+    * missing, and relocated once when its cache tree is no longer one this
+    * user can trust (gone and not recreatable, or opened since it was located).
+    *
+    * @throws TemplateException When no trusted directory is left.
+    */
+   private function prove (int $EUID, string $directory): string
+   {
+      // ? Refused: the tree above it is held to the same rule (recreated
+      //   owner-only when it went away) — and located again, once, when it
+      //   cannot be trusted any more; a tree still trusted keeps the verdict
+      $trusted = Config::trust($directory, $EUID);
+      if ($trusted === false) {
+         if (Config::trust(dirname($directory), $EUID) === false) {
+            Config::forget();
+            $directory = Config::locate() . '/templates';
+         }
+         $trusted = Config::trust($directory, $EUID);
+      }
+
+      // ?
+      if ($trusted === false) {
+         $state = @lstat($directory);
+         throw new TemplateException(
+            is_array($state)
+               ? "Untrusted template cache directory `{$directory}`: it must be a plain directory of uid {$EUID} that nobody else can write."
+               : "Unwritable template cache directory `{$directory}`.",
+            $this->file
+         );
+      }
+      self::$directories["{$EUID}:{$directory}"] = true;
+
+      // :
+      return $directory;
    }
 
    /**

@@ -2,6 +2,7 @@
 
 
 use Bootgly\ABI\IO\FS\File;
+use Bootgly\ABI\Resources\Cache\Config;
 use Bootgly\ABI\Templates\Template;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
@@ -12,7 +13,7 @@ return new Test(
    description: 'It should recompile only when the source mtime reaches the cache mtime',
    test: new Assertions(function () {
       // !
-      $storage = BOOTGLY_STORAGE_DIR . 'cache/templates/';
+      $storage = Config::locate() . '/templates/';
       $file = sys_get_temp_dir() . '/bootgly-' . uniqid() . '.template.php';
       // The cache entry is identified by observation, not by rebuilding the key: it also
       // carries the compiler identity (see BUGS TPL-15), which this spec does not pin.

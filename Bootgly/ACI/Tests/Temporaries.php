@@ -13,13 +13,17 @@ namespace Bootgly\ACI\Tests;
 
 use function basename;
 use function bin2hex;
+use function chmod;
 use function filemtime;
 use function function_exists;
 use function getmypid;
 use function glob;
+use function is_array;
 use function is_dir;
 use function is_link;
+use function lstat;
 use function mkdir;
+use function posix_geteuid;
 use function posix_kill;
 use function preg_match;
 use function random_bytes;
@@ -126,8 +130,19 @@ class Temporaries
 
       // !
       $root = rtrim(sys_get_temp_dir(), '/') . '/' . self::ROOT;
-      if (is_dir($root) === false && @mkdir($root, 0o777, true) === false && is_dir($root) === false) {
+      if (is_dir($root) === false && @mkdir($root, 0o755, true) === false && is_dir($root) === false) {
          throw new RuntimeException("Cannot create the test temporaries root: {$root}");
+      }
+      // ! Never group/world-writable, whatever the umask it was made under: code
+      //   under test that checks the ancestors of its paths (cache, sessions)
+      //   would refuse every reservation under it — narrowed when it is ours
+      $state = @lstat($root);
+      if (
+         is_array($state)
+         && ((int) $state['mode'] & 0o022) !== 0
+         && function_exists('posix_geteuid') && (int) $state['uid'] === posix_geteuid()
+      ) {
+         @chmod($root, 0o755);
       }
 
       // @

@@ -13,6 +13,7 @@ namespace Bootgly\WPI\Endpoints;
 
 use const BOOTGLY_STORAGE_DIR;
 use const DIRECTORY_SEPARATOR;
+use function basename;
 use function chdir;
 use function class_exists;
 use function clearstatcache;
@@ -31,9 +32,11 @@ use function posix_getgrnam;
 use function posix_getpwnam;
 use function posix_getuid;
 use function readdir;
+use function realpath;
 use function register_shutdown_function;
 use function rmdir;
 use function rtrim;
+use function str_replace;
 
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Data\Levels;
@@ -82,6 +85,11 @@ trait Demotable
    private null|string $issue = null;
    /** Whether store() already decided — it runs once, as soon as the transport is configured. */
    private bool $stored = false;
+   /**
+    * The ancestors provision() already warned about in this launch, as `<directory>:<ancestor>` — said once per directory.
+    * @var array<string,true>
+    */
+   private array $ancestors = [];
 
 
    /**
@@ -271,11 +279,12 @@ trait Demotable
     * require. An ancestor the session store's own path checks refuse is said
     * in a warning, not refused: the server still starts.
     *
-    * @param array<string,int> $directories Directory name under the storage root => the mode it is created with.
+    * @param array<string,int> $directories Directory name under the storage root (`{uid}` is the runtime uid) => the mode it is created with.
+    * @param bool $strict Whether a directory that cannot be prepared refuses the launch; otherwise it is said in a warning (the workers keep what goes there in a private temporary directory).
     *
     * @return null|string Why the launch must be refused, or `null` to go on.
     */
-   protected function provision (array $directories): null|string
+   protected function provision (array $directories, bool $strict = true): null|string
    {
       // ? Not root, or root that stays root: whoever runs keeps writing
       if ($directories === [] || posix_getuid() !== 0 || $this->user === null) {
@@ -298,53 +307,71 @@ trait Demotable
 
       // @@
       foreach ($directories as $name => $mode) {
+         // ! A per-identity directory names the runtime uid (`cache-{uid}`)
+         $name = str_replace('{uid}', (string) $UID, $name);
          $path = BOOTGLY_STORAGE_DIR . $name;
 
+         $refusal = null;
          $issue = $this->decide($name, $mode, $UID, $GID);
          if ($issue !== null) {
             $entry = @lstat($path);
             // ? A link: a worker's directory is never a target somebody chose
             if (is_array($entry) && ((int) $entry['mode'] & 0170000) === 0120000) {
-               // :
-               return "storage/{$name} is a link: it must be a plain directory of {$this->user}'s, and root follows no link to make it one. Replace the link with that directory before starting.";
+               $refusal = "storage/{$name} is a link: it must be a plain directory of {$this->user}'s, and root follows no link to make it one. Replace the link with that directory before starting.";
             }
-            // ? A directory of somebody else's: the one case a chown fixes
-            $foreign = is_array($entry)
-               && ((int) $entry['mode'] & 0170000) === 0040000
-               && (int) $entry['uid'] !== $UID;
-
-            // :
-            return $foreign
-               ? "{$issue} The workers run as {$this->user} and write there: `chown -R {$this->user}: {$path}` before starting."
-               : $issue;
+            else {
+               // ? A directory of somebody else's: the one case a chown fixes
+               $foreign = is_array($entry)
+                  && ((int) $entry['mode'] & 0170000) === 0040000
+                  && (int) $entry['uid'] !== $UID;
+               $refusal = $foreign
+                  ? "{$issue} The workers run as {$this->user} and write there: `chown -R {$this->user}: {$path}` before starting."
+                  : $issue;
+            }
          }
+         else {
+            // ? The runtime identity's, but opener than its workers require: the
+            //   session handler refuses a group/world-writable key directory
+            $entry = @lstat($path);
+            $open = is_array($entry) ? (int) $entry['mode'] & 0o022 & ~$mode : 0;
+            if ($open !== 0) {
+               $found = decoct((int) $entry['mode'] & 0o777);
+               $wanted = decoct($mode);
+               $refusal = "storage/{$name} is group/world-writable ({$found}): its workers require {$wanted}. Run `chmod {$wanted} {$path}` as {$this->user} — it owns it — before starting.";
+            }
+         }
+         if ($refusal !== null) {
+            // ?: A directory the workers cannot do without
+            if ($strict) {
+               return $refusal;
+            }
+            // ? One they can: said, and they make do elsewhere
+            $this->Logger->log(warning: "@\;{$refusal} Until then the workers keep it in a private temporary directory.@\;");
 
-         // ? The runtime identity's, but opener than its workers require: the
-         //   session handler refuses a group/world-writable key directory
-         $entry = @lstat($path);
-         $open = is_array($entry) ? (int) $entry['mode'] & 0o022 & ~$mode : 0;
-         if ($open !== 0) {
-            $found = decoct((int) $entry['mode'] & 0o777);
-            $wanted = decoct($mode);
-
-            // :
-            return "storage/{$name} is group/world-writable ({$found}): its workers require {$wanted}. Run `chmod {$wanted} {$path}` as {$this->user} — it owns it — before starting.";
+            continue;
          }
 
          // ? An ancestor the session store's own checks refuse: said, not
          //   refused (a host-owned bind mount is the documented container
          //   layout), since what lives under it may still work
-         $found = $this->inspect($path, $UID);
-         if ($found !== null) {
+         //   — a cache tree follows a link it can trust (Config::locate()
+         //   resolves the storage root), the session store never does
+         $sessions = $name === 'sessions';
+         $found = $this->inspect($path, $UID, links: $sessions === false);
+         if ($found !== null && isSet($this->ancestors["{$name}:{$found[0]}"]) === false) {
             [$ancestor, $reason] = $found;
+            $this->ancestors["{$name}:{$ancestor}"] = true;
+            $fails = $sessions
+               ? 'the session store refuses such a path, so every session access will fail'
+               : "the workers' caches cannot be kept there and move to a private temporary directory";
             $cause = match ($reason) {
-               'link' => "is a symbolic link — point the storage directory at the real path, never through a link",
-               'kind' => "is not a directory",
-               'owner' => "is owned by neither root nor {$this->user} — give it to root: `chown root: {$ancestor}`",
-               default => "is group/world-writable without the sticky bit — `chmod go-w {$ancestor}`",
+               'link' => "is a symbolic link — {$fails}: point the storage directory at the real path",
+               'kind' => "is not a directory — {$fails}",
+               'owner' => "is owned by neither root nor {$this->user} — {$fails}. Give it to root: `chown root: {$ancestor}`",
+               default => "is group/world-writable without the sticky bit — {$fails}. `chmod go-w {$ancestor}`",
             };
             $this->Logger->log(
-               warning: "@\;storage/{$name}: its ancestor {$ancestor} {$cause}. The default session store (file driver, no `path`) refuses such a path, so every session access through it will fail.@\;"
+               warning: "@\;storage/{$name}: its ancestor {$ancestor} {$cause}.@\;"
             );
          }
       }
@@ -362,10 +389,11 @@ trait Demotable
     *
     * @param string $path The worker directory.
     * @param int $UID The runtime identity.
+    * @param bool $links Whether a link of root's or the runtime identity's is walked through — and then where it leads — (the cache trees: their storage root is resolved) instead of refused (the session store).
     *
     * @return null|array{0:string,1:string} The offending ancestor and why (`link`, `kind`, `owner` or `mode`), or `null` when every one is safe.
     */
-   private function inspect (string $path, int $UID): null|array
+   private function inspect (string $path, int $UID, bool $links = false): null|array
    {
       // ! Root is uid 0 — and whoever owns `/` (a user namespace shows the
       //   host's root as an overflow uid there)
@@ -379,16 +407,16 @@ trait Demotable
          $type = is_array($state) ? (int) $state['mode'] & 0170000 : 0;
          $mode = is_array($state) ? (int) $state['mode'] : 0;
          // ?:
-         if ($type === 0120000) {
+         if ($type === 0120000 && $links === false) {
             return [$ancestor, 'link'];
          }
-         if (is_array($state) === false || $type !== 0040000) {
+         if (is_array($state) === false || ($type !== 0040000 && $type !== 0120000)) {
             return [$ancestor, 'kind'];
          }
          if (in_array((int) $state['uid'], [0, $rootUID, $UID], true) === false) {
             return [$ancestor, 'owner'];
          }
-         if (($mode & 0o022) !== 0 && ($mode & 0o1000) === 0) {
+         if ($type === 0040000 && ($mode & 0o022) !== 0 && ($mode & 0o1000) === 0) {
             return [$ancestor, 'mode'];
          }
 
@@ -397,6 +425,14 @@ trait Demotable
             break;
          }
          $ancestor = $parent;
+      }
+
+      // ?: A link walked through: where it leads is held to the same rule —
+      //    the chain Config::locate() resolves and then trusts
+      $written = dirname(rtrim($path, DIRECTORY_SEPARATOR));
+      $resolved = $links ? realpath($written) : false;
+      if ($resolved !== false && $resolved !== $written) {
+         return $this->inspect($resolved . DIRECTORY_SEPARATOR . basename($path), $UID);
       }
 
       // :

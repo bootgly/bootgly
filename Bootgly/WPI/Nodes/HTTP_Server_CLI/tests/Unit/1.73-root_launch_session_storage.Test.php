@@ -32,13 +32,13 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Handlers\Cache;
  *   handler's choosing.
  */
 return new Test(
-   description: 'SESS-4: the HTTP node hands only storage/sessions to its workers, and the default session records live there',
+   description: 'SESS-4/SRV-4: the HTTP node hands its workers only storage/sessions and their own cache-<uid>, and the default session records live in sessions/',
    test: function () {
       $directories = new ReflectionClassConstant(HTTP_Server_CLI::class, 'DIRECTORIES')->getValue();
 
       yield assert(
          assertion: $directories === ['sessions' => 0o700],
-         description: 'HTTP_Server_CLI::DIRECTORIES is exactly storage/sessions, owner-only (' . var_export($directories, true) . ')'
+         description: 'HTTP_Server_CLI::DIRECTORIES is exactly storage/sessions, owner-only — the workers\' cache-<uid> is every node\'s, provisioned softly (' . var_export($directories, true) . ')'
       );
 
       // @ The constructor's default, read from the source: no I/O on the real storage
