@@ -12,32 +12,24 @@ namespace Bootgly\API;
 
 
 use const INI_SCANNER_RAW;
-use function bin2hex;
-use function chmod;
+use function basename;
 use function clearstatcache;
 use function dirname;
-use function fclose;
-use function fflush;
 use function file_get_contents;
-use function fopen;
-use function fstat;
-use function fsync;
-use function fwrite;
 use function getenv;
 use function is_file;
 use function is_string;
 use function parse_ini_string;
 use function putenv;
-use function random_bytes;
-use function rename;
+use function realpath;
+use function rtrim;
 use function str_contains;
+use function str_ends_with;
 use function str_starts_with;
-use function strlen;
 use function strpbrk;
 use function substr;
-use function umask;
-use function unlink;
 
+use Bootgly\ABI\IO\FS\File;
 use Bootgly\API\Environment\Agent;
 
 
@@ -124,9 +116,10 @@ class Environment
     * in quotes), each verified to read back identically through `load()`. The
     * file is created `0600` beside `$file` and renamed over it: a link at
     * `$file` is replaced, never written through. Returns `false`, leaving
-    * `$file` untouched, for a path that is not local (a stream wrapper), when
-    * a variable has no such line (a line break, a name INI cannot carry) or
-    * the write fails.
+    * `$file` untouched, for a path that is not local (a stream wrapper, a
+    * `file://` form without an absolute path) or names no file (a trailing
+    * separator, a backslash), when a variable has no such line (a line break,
+    * a name INI cannot carry) or the write fails.
     *
     * @deprecated 1.1.0 Persisting the whole process environment is not
     *             supported: write the values a deployment needs to a file
@@ -291,7 +284,7 @@ class Environment
    /**
     * Replace `$file` atomically with a private (0600) file holding `$data`.
     *
-    * The bytes go to a random sibling created under umask 077 and set 0600
+    * Through `File->replace()`: the bytes go to a random sibling made 0600
     * before the first byte (a default ACL on the directory overrides the
     * umask), are flushed and synced, then `rename()` swaps the directory entry
     * itself: a link at `$file` is replaced, never opened, and in a sticky
@@ -299,58 +292,36 @@ class Environment
     */
    private static function write (string $file, string $data): bool
    {
-      // ! A sibling nobody can predict (no basename: NAME_MAX), made 0600 before its first byte
-      $parent = dirname($file);
-      $random = bin2hex(random_bytes(8));
-      $temporary = "{$parent}/.{$random}.tmp";
-      // ! Resolve the parent as the kernel's rename() will, not as an earlier lookup cached it
-      clearstatcache(true);
-      $mask = umask(0077);
-      try {
-         $Handle = @fopen($temporary, 'xb');
-      }
-      finally {
-         umask($mask);
-      }
-      // ?
-      if ($Handle === false) {
-         return false;
-      }
-      // ? Private before the first byte — a default ACL on the directory ignores the umask
-      $state = @chmod($temporary, 0600) === true ? @fstat($Handle) : false;
-      if ($state === false || ($state['mode'] & 0777) !== 0600) {
-         fclose($Handle);
-         @unlink($temporary);
-
-         return false;
-      }
-
-      // @@ Every byte, then to the disk
-      $written = false;
-      try {
-         $length = strlen($data);
-         $offset = 0;
-         while ($offset < $length) {
-            $bytes = @fwrite($Handle, substr($data, $offset));
-            if ($bytes === false || $bytes === 0) {
-               break;
-            }
-            $offset += $bytes;
+      // ? `file:///` names a local path; any other `file://` form names none `rename()` can swap
+      if (str_starts_with($file, 'file://')) {
+         if (str_starts_with($file, 'file:///') === false) {
+            return false;
          }
-         $written = $offset === $length && @fflush($Handle) && @fsync($Handle);
+         $file = substr($file, 7);
       }
-      finally {
-         fclose($Handle);
-      }
-
-      // @ Swap the entry: `rename()` never opens what a link points to
-      if ($written === false || @rename($temporary, $file) === false) {
-         @unlink($temporary);
-
+      // ? No entry to name: a trailing separator asks for a directory a file cannot replace
+      if ($file === '' || str_ends_with($file, '/')) {
          return false;
       }
+
+      // ! The parent as the kernel's rename() resolves it, not as an earlier lookup cached
+      //   it — `File` collapses `..` by name, which a link in the path would contradict
+      clearstatcache(true);
+      $parent = realpath(dirname($file));
+      if ($parent === false) {
+         return false;
+      }
+      $parent = rtrim($parent, '/');
+      $name = basename($file);
+      $target = "{$parent}/{$name}";
+      // ? A backslash `File` would read as a separator: refused, never written elsewhere
+      if (str_contains($target, '\\')) {
+         return false;
+      }
+      $File = new File($target);
+      $File->convert = false;
 
       // :
-      return true;
+      return $File->replace($data, 0600);
    }
 }

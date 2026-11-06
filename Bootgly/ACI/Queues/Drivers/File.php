@@ -11,18 +11,14 @@
 namespace Bootgly\ACI\Queues\Drivers;
 
 
-use function bin2hex;
 use function count;
 use function explode;
 use function file_get_contents;
-use function file_put_contents;
 use function filemtime;
-use function getmypid;
 use function is_dir;
 use function is_file;
 use function mkdir;
 use function preg_replace;
-use function random_bytes;
 use function rename;
 use function scandir;
 use function serialize;
@@ -30,9 +26,11 @@ use function sprintf;
 use function str_ends_with;
 use function time;
 use function touch;
+use function umask;
 use function unlink;
 use function unserialize;
 
+use Bootgly\ABI\IO\FS\File as FSFile;
 use Bootgly\ACI\Queues\Driver;
 use Bootgly\ACI\Queues\Job;
 
@@ -44,7 +42,9 @@ use Bootgly\ACI\Queues\Job;
  * `storage/queues/<name>/{ready,reserved,failed}/`. A job is one file named
  * `<available-ts>-<id>.job` (zero-padded ts → lexical order == FIFO/due order).
  *
- * enqueue   = serialize + atomic temp+rename into `ready/`.
+ * enqueue   = serialize + atomic temp+rename into `ready/` (`FSFile->replace()`, not synced:
+ *             a worker never sees a partial job; a power loss may lose the jobs written just
+ *             before it — see `write()`).
  * reserve   = scan `ready/` in order, atomic rename of the first due file into
  *             `reserved/` — the rename IS the claim, so competing workers never
  *             pick the same job (the loser's rename fails and it moves on).
@@ -352,32 +352,28 @@ class File extends Driver
    }
 
    /**
-    * Atomic write: temp file + rename, creating the directory lazily on failure.
+    * Atomic write through `FSFile->replace()` (temporary + rename), creating the directory lazily
+    * on failure. The job file gets the mode a plain write would give it (`0666` minus the umask).
+    * Not durable: skipping the two syncs keeps enqueue cheap. A worker still sees a job whole
+    * or not at all; a power loss or kernel crash may lose the jobs written just before it. That
+    * includes a job `release()` or `recover()` moved back to `ready/`: its reserved file is
+    * unlinked once the rewrite lands, and the rewrite may come back empty — `load()` skips an
+    * empty job file, so that job is lost.
     */
    private function write (string $dir, string $name, string $bytes): bool
    {
-      $file = "{$dir}/{$name}";
-      $temp = "{$file}." . getmypid() . '.' . bin2hex(random_bytes(6)) . '.tmp';
+      $File = new FSFile("{$dir}/{$name}");
+      // ! The mode a plain write would give it
+      $permissions = 0666 & ~umask();
 
       // ? Create the dir lazily — only when the first write fails
-      $written = @file_put_contents($temp, $bytes);
-      if ($written === false) {
-         $this->prepare($dir);
-         $written = @file_put_contents($temp, $bytes);
+      if ($File->replace($bytes, $permissions, durable: false) === true) {
+         return true;
       }
-      if ($written === false) {
-         return false;
-      }
-
-      // @
-      if (@rename($temp, $file) === false) {
-         @unlink($temp);
-
-         return false;
-      }
+      $this->prepare($dir);
 
       // :
-      return true;
+      return $File->replace($bytes, $permissions, durable: false);
    }
 
    /**

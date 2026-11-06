@@ -59,5 +59,7 @@ return new Suite(
       '0.1.3-cache-compiler_invalidation',
       // # 1.1.x (SRV-4): the compiled cache is per-identity and never trusted when others could write it
       '0.1.4-cache-trust',
+      // # The compiled cache is written through File->replace(): a write that cannot land fails loudly
+      '0.1.5-cache-write_failure',
    ]
 );

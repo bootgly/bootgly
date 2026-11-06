@@ -34,5 +34,7 @@ return new Suite(
       '1.11-environment-load-failure',
       '1.12-environment-keys',
       '1.13-environment-deprecations',
+      // # save() names the entry the kernel names (through File->replace())
+      '1.14-environment-save-entry',
    ]
 );

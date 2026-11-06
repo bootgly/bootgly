@@ -16,12 +16,10 @@ use const E_WARNING;
 use const EXTR_SKIP;
 use function array_key_exists;
 use function call_user_func;
-use function chmod;
 use function clearstatcache;
 use function count;
 use function dirname;
 use function extract;
-use function file_put_contents;
 use function filemtime;
 use function func_get_arg;
 use function function_exists;
@@ -40,7 +38,6 @@ use function preg_match;
 use function preg_replace;
 use function preg_replace_callback;
 use function preg_replace_callback_array;
-use function rename;
 use function restore_error_handler;
 use function set_error_handler;
 use function sha1;
@@ -48,8 +45,6 @@ use function str_contains;
 use function str_replace;
 use function str_starts_with;
 use function umask;
-use function uniqid;
-use function unlink;
 use Throwable;
 
 use Bootgly\ABI\Code\__String\Path;
@@ -364,10 +359,9 @@ class Template implements Templates
          $postcompiled .= "<?php /* FILE: {$file} */ ?>";
       }
 
-      // @ Write atomically (temp file + rename), never leaving partial caches
-      //   behind — owner-only from creation whatever the umask (no chmod by
-      //   name afterwards), or the warm path above would never trust it again
-      $temporary = "{$cache}." . uniqid('', true) . '.tmp';
+      // @ Write atomically (`File->replace()`: temp file + rename), never leaving
+      //   partial caches behind — owner-only (0600) before its first byte whatever
+      //   the umask or a default ACL, or the warm path above would never trust it again
       $mask = umask(0077);
       try {
          // ? Gone since it was proven (a cache cleared by hand): proven again —
@@ -376,20 +370,18 @@ class Template implements Templates
             unset(self::$directories["{$EUID}:{$directory}"]);
             $directory = $this->prove($EUID, $directory);
             $cache = $this->cache = "{$directory}/{$key}.php";
-            $temporary = "{$cache}." . uniqid('', true) . '.tmp';
          }
          else if ($EUID === -1 && is_dir($directory) === false) {
             @mkdir($directory, 0700, true);
          }
-         $written = @file_put_contents($temporary, $postcompiled) !== false
-            && @rename($temporary, $cache) !== false;
+         $Cache = new File($cache);
+         $Cache->convert = false;
+         $written = $Cache->replace($postcompiled, 0600);
       }
       finally {
          umask($mask);
       }
       if ($written === false) {
-         @unlink($temporary);
-
          throw new TemplateException(
             "Unwritable template cache file `{$cache}`.",
             $file

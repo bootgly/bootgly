@@ -4,13 +4,18 @@ namespace Bootgly\commands;
 
 
 use const BOOTGLY_ROOT_BASE;
+use const GLOB_BRACE;
 use const PHP_BINARY;
+use const SIGCONT;
+use const SIGSTOP;
 use function array_search;
 use function array_splice;
 use function assert;
 use function chmod;
 use function clearstatcache;
 use function decoct;
+use function defined;
+use function explode;
 use function fclose;
 use function file_get_contents;
 use function file_put_contents;
@@ -21,6 +26,7 @@ use function getenv;
 use function glob;
 use function in_array;
 use function is_array;
+use function is_dir;
 use function is_file;
 use function is_link;
 use function is_resource;
@@ -28,13 +34,21 @@ use function json_decode;
 use function json_encode;
 use function mkdir;
 use function posix_getuid;
+use function posix_kill;
 use function proc_close;
+use function proc_get_status;
 use function proc_open;
+use function rename;
 use function rmdir;
+use function scandir;
 use function str_contains;
 use function stream_get_contents;
+use function strrpos;
+use function substr;
 use function symlink;
+use function trim;
 use function unlink;
+use function usleep;
 
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\ACI\Tests\Temporaries;
@@ -417,6 +431,187 @@ return new Test(
                . json_encode(['swapped' => $swapped, 'victim' => file_get_contents($victim), 'link' => is_link("{$dir}/race/Wide.php"), 'result' => $result['report']['files'] ?? null, 'skipped' => $result['report']['skipped'] ?? null])
          );
 
+         // @ A name carrying a backslash is neither read nor written: normalized, `..\\x\\y.php`
+         //   would climb out of the scanned tree onto a neighbour — the neighbour stays
+         //   byte-identical and the name is reported as skipped, with its reason
+         @mkdir("{$dir}/climb", 0o700);
+         @mkdir("{$dir}/neighbour", 0o700);
+         $neighbour = "{$dir}/neighbour/target.php";
+         $neighbourSource = "<?php // the neighbour\n";
+         file_put_contents($neighbour, $neighbourSource);
+         $climber = "{$dir}/climb/..\\neighbour\\target.php";
+         $climberSource = "<?php\n\nnamespace Demo;\n\necho strlen('a');\n";
+         file_put_contents($climber, $climberSource);
+         $result = $run('imports', '--fix', '--target', "{$dir}/climb/");
+         yield assert(
+            assertion: file_get_contents($neighbour) === $neighbourSource
+               && file_get_contents($climber) === $climberSource
+               && ($result['report']['files']['scanned'] ?? null) === 1
+               && ($result['report']['files']['fixed'] ?? null) === 0
+               && ($result['report']['files']['skipped'] ?? null) === 1
+               && str_contains((string) ($result['report']['skipped'][0]['notice'] ?? ''), 'backslash'),
+            description: 'A backslash name must be skipped with its reason, and nothing outside the tree written, got: '
+               . json_encode(['neighbour' => file_get_contents($neighbour), 'climber' => file_get_contents($climber), 'result' => $result['report'] ?? null])
+         );
+
+         // @ A directory swapped for a link out of the tree mid-run is neither read nor
+         //   written through: the racer turns `zone/` into a link to a neighbour holding the
+         //   same name once the first file is rewritten — the rewrite would land outside
+         @mkdir("{$dir}/swap/zone", 0o700, true);
+         @mkdir("{$dir}/elsewhere", 0o700);
+         $elsewhere = "{$dir}/elsewhere/Wide.php";
+         $elsewhereSource = "<?php\n\nnamespace Elsewhere;\n\n\nclass Wide { public function run (): int { return strlen('x'); } }\n";
+         file_put_contents($elsewhere, $elsewhereSource);
+         for ($n = 0; $n < 39; $n++) {
+            file_put_contents(
+               "{$dir}/swap/Narrow{$n}.php",
+               "<?php\n\nnamespace Demo;\n\n\nclass Narrow{$n} { public function run (): int { return strlen('x'); } }\n"
+            );
+         }
+         file_put_contents("{$dir}/swap/zone/Wide.php", "<?php\n\nnamespace Demo;\n\n\nclass Wide { public function run (): int { return strlen('x'); } }\n");
+         $swapper = <<<'PHP'
+         <?php
+         [$script, $dir, $elsewhere] = $argv;
+         $mark = "{$dir}/Narrow0.php";
+         $deadline = microtime(true) + 20;
+         while (microtime(true) < $deadline) {
+            if (str_contains((string) file_get_contents($mark), 'use function strlen;')) {
+               rename("{$dir}/zone", "{$dir}/zone.old");
+               symlink($elsewhere, "{$dir}/zone");
+               exit(0);
+            }
+            usleep(200);
+         }
+         exit(1);
+         PHP;
+         $swapperFile = "{$dir}/swapper.php";
+         file_put_contents($swapperFile, $swapper);
+         $Swapper = proc_open(
+            [PHP_BINARY, $swapperFile, "{$dir}/swap", "{$dir}/elsewhere"],
+            [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
+            $swapperPipes
+         );
+         $result = $run('imports', '--fix', '--target', "{$dir}/swap/");
+         $swapped = is_resource($Swapper) ? proc_close($Swapper) : -1;
+         yield assert(
+            assertion: $swapped === 0 && file_get_contents($elsewhere) === $elsewhereSource
+               && ($result['report']['files']['fixed'] ?? null) === 39
+               && ($result['report']['files']['skipped'] ?? null) === 1
+               && str_contains((string) ($result['report']['skipped'][0]['notice'] ?? ''), 'no longer resolves inside the scanned tree'),
+            description: 'A directory swapped for a link out of the tree must be neither read nor written through, got: '
+               . json_encode(['swapped' => $swapped, 'elsewhere' => file_get_contents($elsewhere), 'result' => $result['report']['files'] ?? null, 'skipped' => $result['report']['skipped'] ?? null])
+         );
+
+         // @ A directory swapped for a link out of the tree WHILE `php -l` validates the fix is
+         //   never written through: the run passed its own check before the child started,
+         //   so only the write itself, jailed in the scanned tree, can refuse it. The child
+         //   is caught and frozen (SIGSTOP) — while it is stopped the run waits on it, so the
+         //   swap lands deterministically between the check and the write; a child that
+         //   ends before it is caught only costs an attempt, and no catch at all fails loud
+         if (function_exists('posix_kill') === false || defined('SIGSTOP') === false || is_dir('/proc/self/task') === false) {
+            yield assert(assertion: true, description: 'Skipped: no posix_kill(), signals or /proc to freeze the validating child');
+         }
+         else {
+            $wideSource = "<?php\n\nnamespace Demo;\n\n\nclass Wide { public function run (): int { return strlen('x'); } }\n";
+            // ! The descendants of a process, as the kernel lists them
+            $descend = static function (int $PID) use (&$descend): array {
+               $children = [];
+               foreach (explode(' ', trim((string) @file_get_contents("/proc/{$PID}/task/{$PID}/children"))) as $child) {
+                  if ($child !== '') {
+                     $children[] = (int) $child;
+                     $children = [...$children, ...$descend((int) $child)];
+                  }
+               }
+
+               return $children;
+            };
+            // ! The state letter of a process (`T` once stopped), or '' when it is gone
+            $state = static function (int $PID): string {
+               $stat = (string) @file_get_contents("/proc/{$PID}/stat");
+               $close = strrpos($stat, ')');
+
+               return ($close === false) ? '' : substr($stat, $close + 2, 1);
+            };
+            $caught = 0;
+            $attempts = 0;
+            $frozen = null;
+            $outcome = null;
+            try {
+               while ($caught === 0 && $attempts < 10) {
+                  $attempts++;
+                  // ! A fresh tree: zone/ a real directory, beyond/ empty
+                  if (is_link("{$dir}/frozen/zone")) {
+                     @unlink("{$dir}/frozen/zone");
+                     @rename("{$dir}/frozen/zone.old", "{$dir}/frozen/zone");
+                  }
+                  @mkdir("{$dir}/frozen/zone", 0o700, true);
+                  @mkdir("{$dir}/beyond", 0o700);
+                  file_put_contents("{$dir}/frozen/zone/Wide.php", $wideSource);
+
+                  $Lint = proc_open(
+                     [PHP_BINARY, '-d', 'opcache.jit=0', $launcher, 'lint', 'imports', "{$dir}/frozen/", '--fix'],
+                     [1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']],
+                     $lintPipes,
+                     BOOTGLY_ROOT_BASE,
+                     $environment
+                  );
+                  if (is_resource($Lint) === false) {
+                     break;
+                  }
+                  /** @var array<int,resource> $lintPipes */
+                  $PID = (int) proc_get_status($Lint)['pid'];
+
+                  // @@ Catch the validating child, freeze it, swap the directory, thaw it
+                  while ($frozen === null && proc_get_status($Lint)['running'] === true) {
+                     foreach ($descend($PID) as $child) {
+                        if (@file_get_contents("/proc/{$child}/cmdline") !== PHP_BINARY . "\0-l\0") {
+                           continue;
+                        }
+                        posix_kill($child, SIGSTOP);
+                        for ($wait = 0; $wait < 2000 && ($letter = $state($child)) !== 'T' && $letter !== ''; $wait++) {
+                           usleep(100);
+                        }
+                        if ($state($child) === 'T') {
+                           $frozen = $child;
+                        }
+                        else {
+                           posix_kill($child, SIGCONT);
+                        }
+                        break;
+                     }
+                  }
+                  if ($frozen !== null) {
+                     rename("{$dir}/frozen/zone", "{$dir}/frozen/zone.old");
+                     symlink("{$dir}/beyond", "{$dir}/frozen/zone");
+                     posix_kill($frozen, SIGCONT);
+                     $frozen = null;
+                     $caught = $attempts;
+                  }
+
+                  $output = (string) stream_get_contents($lintPipes[1]);
+                  fclose($lintPipes[1]);
+                  proc_close($Lint);
+                  $outcome = json_decode($output, true);
+               }
+            }
+            finally {
+               // ? Never leave a stopped process behind
+               if ($frozen !== null) {
+                  posix_kill($frozen, SIGCONT);
+               }
+            }
+            $beyond = scandir("{$dir}/beyond") ?: [];
+            $original = (string) @file_get_contents("{$dir}/frozen/zone.old/Wide.php");
+            yield assert(
+               assertion: $caught > 0 && $beyond === ['.', '..'] && $original === $wideSource
+                  && is_array($outcome)
+                  && ($outcome['files']['fixed'] ?? null) === 0
+                  && ($outcome['issues']['unresolved'] ?? null) === 1,
+               description: 'A directory swapped out of the tree while `php -l` validates must never be written through, got: '
+                  . json_encode(['caught' => $caught, 'attempts' => $attempts, 'beyond' => $beyond, 'original' => $original, 'outcome' => $outcome])
+            );
+         }
+
          // @ A directory the caller names is scanned whatever its ancestors are called
          @mkdir("{$dir}/examples", 0o700);
          file_put_contents("{$dir}/examples/Sample.php", "<?php\n\nnamespace Demo;\n\n\nclass Sample { public function fooBar (): void {} }\n");
@@ -438,7 +633,23 @@ return new Test(
 
       }
       finally {
-         foreach (['examples', 'locked', 'linked', 'race'] as $sub) {
+         @unlink("{$dir}/swap/zone");
+         foreach (glob("{$dir}/swap/zone.old/*") ?: [] as $probe) {
+            @unlink($probe);
+         }
+         @rmdir("{$dir}/swap/zone.old");
+         foreach (glob("{$dir}/swap/zone/*") ?: [] as $probe) {
+            @unlink($probe);
+         }
+         @rmdir("{$dir}/swap/zone");
+         @unlink("{$dir}/frozen/zone");
+         foreach (['frozen/zone.old', 'frozen/zone'] as $sub) {
+            foreach (glob("{$dir}/{$sub}/{,.}*.{php,tmp}", GLOB_BRACE) ?: [] as $probe) {
+               @unlink($probe);
+            }
+            @rmdir("{$dir}/{$sub}");
+         }
+         foreach (['examples', 'locked', 'linked', 'race', 'climb', 'neighbour', 'swap', 'elsewhere', 'frozen', 'beyond'] as $sub) {
             foreach (glob("{$dir}/{$sub}/*") ?: [] as $probe) {
                @chmod($probe, 0o644);
                @unlink($probe);

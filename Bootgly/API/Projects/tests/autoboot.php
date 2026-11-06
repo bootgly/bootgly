@@ -29,5 +29,6 @@ return new Suite(
       '3.2-load',
       '3.3-shipped-hooks',
       '2.8-inspect',
+      '2.9-register-replace',
    ]
 );

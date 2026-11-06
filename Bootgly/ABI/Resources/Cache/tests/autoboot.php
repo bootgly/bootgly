@@ -54,5 +54,7 @@ return new Suite(
       '1.11-config-clock',
       // # 1.1.0: APCu measures remain() on the clock it expires on (real time)
       '1.12-apcu-remain-clock',
+      // # 1.1.0: File records are written through File->replace() (not synced)
+      '1.13-file-write-replace',
    ]
 );

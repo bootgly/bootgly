@@ -18,15 +18,11 @@ use const JSON_UNESCAPED_UNICODE;
 use const PHP_BINARY;
 use const PHP_EOL;
 use function array_slice;
-use function basename;
-use function bin2hex;
-use function chmod;
 use function constant;
 use function count;
 use function defined;
 use function dirname;
 use function fclose;
-use function fopen;
 use function function_exists;
 use function fwrite;
 use function getcwd;
@@ -39,9 +35,7 @@ use function json_encode;
 use function lstat;
 use function proc_close;
 use function proc_open;
-use function random_bytes;
 use function realpath;
-use function rename;
 use function rtrim;
 use function sort;
 use function str_contains;
@@ -51,14 +45,15 @@ use function str_replace;
 use function str_starts_with;
 use function stream_get_contents;
 use function strlen;
+use function strrpos;
 use function substr;
 use function ucfirst;
-use function unlink;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use Throwable;
 
 use const Bootgly\CLI;
+use Bootgly\ABI\IO\FS\File;
 use Bootgly\ABI\Syntax\Analyzers;
 use Bootgly\ABI\Syntax\Analyzers\Result;
 use Bootgly\ABI\Syntax\Builtins;
@@ -217,6 +212,10 @@ class LintCommand extends Command
 
       // @ Collect PHP files
       $files = $this->collect($path);
+      // ! The real directory every collected name must still land in — a rewrite
+      //   acts on the name's directory as the kernel resolves it at write time
+      $scope = realpath(is_dir($path) ? $path : dirname($path));
+      $scope = ($scope === false) ? null : rtrim($scope, '/');
 
       // ? Nothing to scan: an existing path without PHP files passes, a path
       //   that is not there fails — a gate must never go green on a typo
@@ -297,6 +296,30 @@ class LintCommand extends Command
             continue;
          }
          $mode = (int) $entry['mode'] & 0o777;
+
+         // ? A name the rewrite would not land on as collected is neither read nor
+         //   written: a backslash is a separator elsewhere (normalized, it would
+         //   climb out of the tree), and a directory swapped since collection
+         //   resolves outside the scanned tree
+         $directory = realpath(dirname($file));
+         $directory = ($directory === false) ? null : rtrim($directory, '/');
+         $notice = match (true) {
+            str_contains(substr($file, (int) strrpos($file, '/')), '\\')
+               => 'Its name carries a backslash — not analyzed',
+            $scope === null || $directory === null
+               || str_starts_with("{$directory}/", "{$scope}/") === false
+               => 'Its directory no longer resolves inside the scanned tree — not analyzed',
+            default => null
+         };
+         if ($notice !== null) {
+            $relativePath = str_replace(BOOTGLY_WORKING_DIR, '', $file);
+            $skipped[] = ['file' => $relativePath, 'notice' => $notice];
+            if (!$Agent->detected) {
+               $Output->render("@.;@#White: {$relativePath} @;\n  @#Yellow: ! @; {$notice}\n");
+            }
+
+            continue;
+         }
 
          $Result = $Facade->analyze($file);
 
@@ -385,9 +408,18 @@ class LintCommand extends Command
                   );
                }
             }
-            else if ($this->replace($file, $corrected, $mode) === false) {
+            else if (new File($file, (string) $scope)->replace($corrected, $mode) === false) {
                // ? The rewrite went to a sibling temporary and was discarded:
-               //   the file on disk is byte-identical to what was analyzed
+               //   the file on disk is byte-identical to what was analyzed.
+               //   The scanned tree is the jail, judged when the file is
+               //   written: a directory swapped for a link out of the tree
+               //   since the check above (while `php -l` validated the fix)
+               //   is refused, never written through.
+               //   A rename replaces the NAME: a name that became a link since
+               //   collection is discarded, never written through. The new
+               //   inode keeps the mode read at collection only — no
+               //   setuid/setgid/sticky bits, ACLs or old owner, and a hard
+               //   link to the old inode keeps the old content
                if (!$Agent->detected) {
                   $Output->render("@#Yellow:   ! Left untouched — the rewrite could not replace the file @;\n\n");
                }
@@ -850,67 +882,6 @@ class LintCommand extends Command
       sort($files);
 
       return $files;
-   }
-
-   /**
-    * Replace a file's content atomically — through a sibling temporary and a
-    * rename, never through the name that was collected.
-    *
-    * A name inside the scanned tree may have become a link since collection
-    * (`--fix` must never write outside the tree it was given), and a write
-    * may stop short (a full disk): the temporary is created exclusively next
-    * to the file, written whole, given the file's mode and renamed over it —
-    * a rename replaces the NAME, so a planted link is discarded, not
-    * followed, and a failed write leaves the original byte-identical. The
-    * new inode keeps the file's mode only: a hard link to the old inode
-    * keeps the old content, setuid/setgid/sticky bits and ACLs are not
-    * carried over — a source file needs none — the new inode belongs to
-    * whoever runs the fix (root rewrites to root), and a DIRECTORY swapped
-    * inside the tree mid-run is still resolved at the rename, which no
-    * portable call can pin.
-    *
-    * @param string $file The file to replace
-    * @param string $source Its new content
-    * @param int $mode The mode the file had when it was read — the new inode's
-    *
-    * @return bool Whether the file now carries the content
-    */
-   private function replace (string $file, string $source, int $mode): bool
-   {
-      $temporary = null;
-
-      try {
-         $temporary = dirname($file) . '/.' . basename($file) . '.' . bin2hex(random_bytes(8));
-         $handle = fopen($temporary, 'x');
-         if ($handle === false) {
-            return false;
-         }
-
-         // ! The file's mode first — before a byte lands in the temporary, so
-         //   a private source is never readable by others for an instant
-         chmod($temporary, $mode);
-
-         $written = fwrite($handle, $source);
-         $closed = fclose($handle);
-         if ($written !== strlen($source) || $closed === false) {
-            unlink($temporary);
-            return false;
-         }
-
-         if (rename($temporary, $file) === false) {
-            unlink($temporary);
-            return false;
-         }
-      }
-      catch (Throwable) {
-         if ($temporary !== null && is_file($temporary)) {
-            unlink($temporary);
-         }
-         return false;
-      }
-
-      // :
-      return true;
    }
 
    /**

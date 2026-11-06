@@ -85,7 +85,7 @@ use function strtolower;
 use function strtr;
 use function substr;
 use function token_get_all;
-use function unlink;
+use function umask;
 use function var_export;
 use FilesystemIterator;
 use ParseError;
@@ -97,6 +97,7 @@ use Throwable;
 
 use function Bootgly\ABI\copy_recursively;
 use function Bootgly\ABI\remove_recursively;
+use Bootgly\ABI\IO\FS\File;
 use Bootgly\ABI\Resources;
 use Bootgly\API\Projects\Project;
 
@@ -1415,33 +1416,22 @@ abstract class Projects
 
       REGISTRY;
 
-      // @ Write atomically (tmp + rename) behind a parse gate
-      $tmp = "{$file}.tmp";
+      // ? A registry the engine cannot parse must never be installed —
+      //   `register()` and `read()` both `include` this file, so a broken
+      //   emission would take the whole CLI down with it. `token_get_all`
+      //   alone is a lexer; TOKEN_PARSE runs the real parser.
       try {
-         if (file_put_contents($tmp, $content) !== strlen($content)) {
-            return false;
-         }
-         // ? A registry the engine cannot parse must never be installed —
-         //   `register()` and `read()` both `include` this file, so a broken
-         //   emission would take the whole CLI down with it. `token_get_all`
-         //   alone is a lexer; TOKEN_PARSE runs the real parser.
          token_get_all($content, TOKEN_PARSE); // @phpstan-ignore function.resultUnused
-
-         // :
-         return rename($tmp, $file);
       }
       catch (ParseError) {
          return false;
       }
-      finally {
-         // ! Whatever ended the install — a short write, an unparseable
-         //   emission, a refused rename, or a warning the framework escalated
-         //   into an exception before any `=== false` could run — the temp
-         //   file never outlives it. A rename that succeeded already took it.
-         if (is_file($tmp) === true) {
-            unlink($tmp);
-         }
-      }
+
+      // @ Install atomically: a synced temporary renamed over the registry,
+      //   removed by `replace()` on any failure. The mode is the one a plain
+      //   write gives (`0666` minus the umask).
+      // :
+      return new File($file)->replace($content, 0666 & ~umask());
    }
 
    /**

@@ -53,5 +53,12 @@ return new Suite(
 
       // @ Appended to preserve every existing selected-case index.
       '4.2.1-dynamic_call-base_jail-boundary',
+      '4.3.1-dynamic_call-lock_unlock',
+      '4.4.1-dynamic_call-replace-atomicity',
+      '4.4.2-dynamic_call-replace-permissions',
+      '4.4.3-dynamic_call-replace-boundaries',
+      '4.4.4-dynamic_call-replace-durability',
+      '4.4.5-dynamic_call-replace-syncs',
+      '4.4.6-dynamic_call-replace-consumers',
    ]
 );

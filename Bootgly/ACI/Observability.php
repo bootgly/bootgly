@@ -11,20 +11,18 @@
 namespace Bootgly\ACI;
 
 
-use const LOCK_EX;
 use function dirname;
 use function file_get_contents;
-use function file_put_contents;
 use function filemtime;
-use function getmypid;
 use function glob;
 use function is_array;
 use function is_dir;
 use function json_decode;
 use function mkdir;
-use function rename;
 use function time;
+use function umask;
 
+use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Observability\Collectors;
 use Bootgly\ACI\Observability\Collectors\Process;
 use Bootgly\ACI\Observability\Collectors\Runtime;
@@ -94,7 +92,8 @@ class Observability
     * Gather + encode the current snapshot and atomically write it to a file.
     *
     * Each worker calls this on a timer with its own per-PID path (e.g. `…/worker-123.json`); the
-    * write is atomic (temp file + rename) so readers never observe a partial document.
+    * write goes through `File->replace()` (synced temporary + rename) so readers never observe a
+    * partial document. The file gets the mode a plain write would give it (`0666` minus the umask).
     *
     * @param Exporter $Exporter The exporter to encode with.
     * @param string $path Destination file path (its directory is created if missing).
@@ -108,19 +107,17 @@ class Observability
          @mkdir($dir, 0775, true);
       }
 
-      // @ Encode + atomic write (temp + rename)
+      // @ Encode + atomic write (synced temporary + rename)
       $bytes = $this->export($Exporter);
       // ? Encoder failed (e.g. non-finite values) — keep the previous good snapshot
       if ( $bytes === '' ) {
          return false;
       }
-      $tmp = $path . '.' . getmypid() . '.tmp';
-      if ( file_put_contents($tmp, $bytes, LOCK_EX) === false ) {
-         return false;
-      }
+      // ! The mode a plain write would give it (`0666` minus the umask)
+      $permissions = 0666 & ~umask();
 
       // :
-      return rename($tmp, $path);
+      return new File($path)->replace($bytes, $permissions);
    }
 
    /**

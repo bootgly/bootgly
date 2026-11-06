@@ -45,5 +45,7 @@ return new Suite(
       // # Descriptor safety — bucket validation + merge type/schema guards
       '10.1-bucket-validation',
       '10.2-merge-guards',
+      // # Durable writes — dump() through File->replace()
+      '11.1-dump-replace',
    ]
 );

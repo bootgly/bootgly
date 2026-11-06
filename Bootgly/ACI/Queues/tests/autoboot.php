@@ -43,5 +43,7 @@ return new Suite(
       '4.4-redis-tls-connect',
       // # 1.1.0: the `clock` option takes a Clock (a closure is deprecated)
       '1.11-config-clock',
+      // # 1.1.0: job files are written through File->replace()
+      '1.12-file-write-replace',
    ]
 );

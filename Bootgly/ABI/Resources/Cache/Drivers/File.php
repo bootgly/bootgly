@@ -25,7 +25,6 @@ use function flock;
 use function fopen;
 use function ftruncate;
 use function fwrite;
-use function getmypid;
 use function hash;
 use function is_array;
 use function is_dir;
@@ -33,20 +32,20 @@ use function is_file;
 use function is_int;
 use function is_string;
 use function mkdir;
-use function rename;
 use function rewind;
 use function serialize;
 use function str_ends_with;
 use function stream_get_contents;
 use function substr;
 use function trim;
-use function uniqid;
+use function umask;
 use function unlink;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use RuntimeException;
 use SplFileInfo;
 
+use Bootgly\ABI\IO\FS\File as FSFile;
 use Bootgly\ABI\Resources\Cache\Atomic;
 use Bootgly\ABI\Resources\Cache\Config;
 use Bootgly\ABI\Resources\Cache\Driver;
@@ -57,8 +56,9 @@ use Bootgly\ABI\Resources\Cache\Item;
  * Filesystem cache driver.
  *
  * Always available — no extension required. One file per key, sharded by hash
- * prefix; writes are atomic (temp file + rename) and increment() is guarded by
- * an exclusive file lock. Raw filesystem calls are used throughout (the
+ * prefix; writes are atomic (`FSFile->replace()`: temp file + rename, not synced
+ * to the disk — a power loss may lose the latest records, a reader never sees a
+ * partial one) and increment() is guarded by an exclusive file lock. Raw filesystem calls are used throughout (the
  * Efficiency principle) including a direct SPL recursive walk for clear/purge.
  */
 class File extends Driver implements Atomic
@@ -191,23 +191,18 @@ class File extends Driver implements Atomic
       $record = ['key' => $key, 'Item' => new Item($value, $expiry, $tags)];
       $bytes = serialize($record);
 
-      // @ Atomic write: temp file + rename
-      $pid = getmypid();
-      $uid = uniqid('', true);
-      $temp = "{$file}.{$pid}.{$uid}.tmp";
+      // @ Atomic write (`FSFile->replace()`: temporary + rename), not synced — a record can
+      //   be regenerated. The mode a plain write gives it: `0666` minus the umask
+      $File = new FSFile($file);
+      $permissions = 0666 & ~umask();
 
       // ? Create the shard dir lazily — only when the first write fails
-      $written = @file_put_contents($temp, $bytes);
+      $written = $File->replace($bytes, $permissions, durable: false);
       if ($written === false) {
          $this->prepare($file);
-         $written = @file_put_contents($temp, $bytes);
+         $written = $File->replace($bytes, $permissions, durable: false);
       }
       if ($written === false) {
-         return false;
-      }
-      if (@rename($temp, $file) === false) {
-         @unlink($temp);
-
          return false;
       }
 
