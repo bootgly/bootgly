@@ -241,5 +241,8 @@ return new Suites(
       // # ABI/Data/URI — RFC 3986 URI value + §5 reference resolution (redirect followers)
       //   (appended last to keep every suite index above stable)
       'Bootgly/ABI/Data/URI/',
+      // # API/Platform — the contract the Console and Web platform roots implement
+      //   (appended last to keep every suite index above stable)
+      'Bootgly/API/Platform/',
    ]
 );
