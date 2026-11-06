@@ -16,6 +16,7 @@ return new Suite(
    tests: [
       '1.1-cors',
       '1.2-cors_vary_and_restrictive_default',
+      '1.3-cors_expose_headers',
       '2.1-rate_limit',
       '2.2-rate_limit_immutable_peer',
       '2.3-rate_limit_aggregation_global_sliding',
@@ -35,7 +36,9 @@ return new Suite(
       '11.1-authentication',
       '11.2-authentication_remember',
       '11.3-authentication_fallback_redirect',
+      '11.4-authentication_bearer_challenge',
       '12.1-authorization',
+      '12.2-authorization_scope_challenge',
       '13.1-access_log',
       '13.2-access_log_sanitization'
    ]

@@ -176,5 +176,17 @@ return new Suite(
       // # 1.1.0 (LITE-12/POOL-16): a refused SQLite statement or teardown never
       //   leaves its connection inside a transaction
       '9.13-sqlite_refused_transaction',
+      // # 1.1.0 (Phase 4): `parameters` — startup session parameters admitted
+      //   at config time, sent by PostgreSQL, refused by MySQL and SQLite
+      '1.3-config_session_parameters',
+      '7.41-postgresql_session_parameters_live',
+      '10.27-mysql_session_parameters',
+      '9.14-sqlite_session_parameters',
+      // # 1.1.0 (Phase 4): a NUL byte in `username` or `database` is refused
+      //   at config time, primary and replicas
+      '1.4-config_nul_strings',
+      // # 1.1.0 (Phase 4): bytea decodes from hex and escape output alike, so
+      //   the driver pins only what a stock connection pooler tracks
+      '7.42-postgresql_bytea_formats',
    ]
 );

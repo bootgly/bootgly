@@ -22,6 +22,7 @@ use function is_scalar;
 use function is_string;
 use function ord;
 use function pack;
+use function str_contains;
 use function str_repeat;
 use function strlen;
 use function substr;
@@ -152,6 +153,12 @@ class Encoder
 
       $capabilities = $payload['capabilities'];
       $Config = $payload['config'];
+
+      // ? Both are NUL-terminated on the wire, and stay writable after the
+      //   config admitted them: a NUL would end one early and frame the rest
+      if (str_contains($Config->username, "\0") || str_contains($Config->database, "\0")) {
+         throw new InvalidArgumentException('MySQL handshake username and database must not contain a NUL byte.');
+      }
 
       $body = pack('V', $capabilities)
          . pack('V', self::PACKET_MAX)

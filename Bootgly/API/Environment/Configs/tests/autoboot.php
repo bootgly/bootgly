@@ -39,5 +39,8 @@ return new Suite(
 
       // # The Demo scaffold must not re-impose verification on `prefer` (MY-11).
       '7.x-database_config_scaffold_verify',
+
+      // # 1.1.0 (Phase 4): `Parameters` nodes map into the session parameters.
+      '5.x-database_config_parameters',
    ]
 );

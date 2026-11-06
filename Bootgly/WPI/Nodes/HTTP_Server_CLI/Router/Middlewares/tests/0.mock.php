@@ -135,17 +135,20 @@ return function (
    }
 
    // ! Response mock (invocable)
-   $Response = new class ($ResponseHeader) {
+   $Response = new class ($ResponseHeader, $Request) {
       public object $Header;
       public object $Body;
       public int $code = 200;
       // Mirrors Response::$deferred — false on the synchronous cycle
       public bool $deferred = false;
+      // Mirrors Response::$Request — the Request this Response answers
+      public null|object $Request;
 
-      public function __construct (object $Header)
+      public function __construct (object $Header, object $Request)
       {
          $this->Header = $Header;
          $this->Body = (object) ['raw' => ''];
+         $this->Request = $Request;
       }
       /** @param array<string, string>|null $headers */
       public function __invoke (int $code = 200, array|null $headers = null, string $body = ''): static

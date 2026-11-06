@@ -20,6 +20,7 @@ use function property_exists;
 use function stripos;
 use function substr;
 use function trim;
+use InvalidArgumentException;
 use stdClass;
 
 use Bootgly\WPI\Modules\HTTP\Server\Response\Authentication as Method;
@@ -100,25 +101,38 @@ abstract class Guard
    /**
     * Build an HTTP authentication challenge value.
     *
-    * @param array<string, string> $Attributes Non-empty challenge attributes.
+    * Every non-empty attribute value is written as an RFC 9110
+    * `quoted-string` (see `Challenge::quote()`): backslashes and double quotes
+    * are escaped, control characters are refused. Empty values are omitted.
+    *
+    * @param array<string, string> $Attributes Challenge attributes, in order.
+    *
+    * @throws InvalidArgumentException When a value holds a control character.
     */
    protected function format (string $scheme, array $Attributes): string
    {
+      // !
       $parameters = [];
 
+      // @@
       foreach ($Attributes as $name => $value) {
          if ($value === '') {
             continue;
          }
 
-         $parameters[] = $name . '="' . $value . '"';
+         $quoted = Challenge::quote($value);
+         $parameters[] = "{$name}={$quoted}";
       }
 
+      // ?:
       if ($parameters === []) {
          return $scheme;
       }
 
-      return $scheme . ' ' . implode(', ', $parameters);
+      // :
+      $parameters = implode(', ', $parameters);
+
+      return "{$scheme} {$parameters}";
    }
 
    /**

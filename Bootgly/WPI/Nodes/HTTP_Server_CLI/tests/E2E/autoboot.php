@@ -594,6 +594,8 @@ return new Suite(
          // CORS
          '1.1-middleware-cors',
          '1.2-middleware-cors_preflight',
+         '1.3-middleware-cors_expose_headers',
+         '1.4-middleware-cors_expose_disallowed',
          // SecureHeaders
          '2.1-middleware-secure_headers',
          // RequestId
@@ -634,6 +636,7 @@ return new Suite(
          '10.12-middleware-authentication_basic_missing_colon_failure',
          '10.13-middleware-authentication_authorization_fuzz_failure',
          '10.14-middleware-authentication_metadata_reset',
+         '10.15-middleware-authentication_bearer_metadata',
          // Authorization
          '11.1-middleware-authorization_scope_success',
          '11.2-middleware-authorization_scope_failure',
@@ -642,6 +645,8 @@ return new Suite(
          '11.5-middleware-authorization_policy_success',
          '11.6-middleware-authorization_policy_failure',
          '11.7-middleware-authorization_rbac_e2e',
+         '11.8-middleware-authorization_scope_insufficient',
+         '11.9-middleware-authorization_scope_anonymous',
       ],
       'Response/Sequential/' => [
          // Response state reset across sequential requests

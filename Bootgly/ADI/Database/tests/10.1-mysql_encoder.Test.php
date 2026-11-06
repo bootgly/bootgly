@@ -82,6 +82,29 @@ return new Test(
          description: 'HandshakeResponse41 carries credentials, database and the plugin name'
       );
 
+      // # A NUL written into the config after it was built never reaches the wire
+      foreach (['username', 'database'] as $field) {
+         $Late = new Config(['driver' => 'mysql', 'database' => 'bootgly', 'username' => 'root']);
+         $Late->{$field} = "root\0x";
+         $refused = '';
+         try {
+            $Encoder->encode(Encoder::RESPONSE, [
+               'capabilities' => $capabilities,
+               'auth' => $auth,
+               'plugin' => 'mysql_native_password',
+               'config' => $Late,
+            ], 1);
+         }
+         catch (InvalidArgumentException $Exception) {
+            $refused = $Exception->getMessage();
+         }
+
+         yield assert(
+            assertion: $refused === 'MySQL handshake username and database must not contain a NUL byte.',
+            description: "a NUL in {$field} is refused before the handshake response is framed"
+         );
+      }
+
       // # Auth continuation
       yield assert(
          assertion: $Encoder->encode(Encoder::AUTH, "\x02", 3) === "\x01\x00\x00\x03\x02",

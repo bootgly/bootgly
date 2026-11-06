@@ -13,7 +13,10 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares;
 
 use function implode;
 use function in_array;
+use function is_string;
+use function preg_match;
 use Closure;
+use InvalidArgumentException;
 
 use Bootgly\API\Workables\Server\Middleware;
 
@@ -29,6 +32,16 @@ class CORS implements Middleware
    public private(set) array $headers;
    public private(set) int $maxAge;
    public private(set) bool $credentials;
+   /**
+    * Response header names exposed to the calling script.
+    *
+    * Sent as `Access-Control-Expose-Headers` on actual (non-preflight) CORS
+    * responses for allowed origins only — never on a preflight, never on a
+    * rejected origin. Empty omits the header.
+    *
+    * @var array<int,string>
+    */
+   public private(set) array $expose;
 
    // * Data
    // ...
@@ -49,15 +62,31 @@ class CORS implements Middleware
     *        NOTE: Cannot be true when $origins is ['*'] — the CORS spec forbids
     *        wildcard origin with credentials. $credentials will be forced to false
     *        in that case.
+    * @param array<int|string,mixed> $expose Response header names the browser may
+    *        expose to the calling script (e.g. `Mcp-Session-Id`,
+    *        `WWW-Authenticate`). Each must be an RFC 9110 token.
+    *
+    * @throws InvalidArgumentException When an exposed header name is not an RFC 9110 token.
     */
    public function __construct (
       array $origins = [],
       array $methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
       array $headers = ['Content-Type', 'Authorization'],
       int $maxAge = 86400,
-      bool $credentials = false
+      bool $credentials = false,
+      array $expose = []
    )
    {
+      // ? Exposed header names are RFC 9110 tokens (field-name syntax).
+      $names = [];
+      foreach ($expose as $name) {
+         if (is_string($name) === false || preg_match("/^[!#\$%&'*+.^_`|~0-9A-Za-z-]+\$/D", $name) !== 1) {
+            throw new InvalidArgumentException('CORS exposed header names must be RFC 9110 tokens.');
+         }
+
+         $names[] = $name;
+      }
+
       // ! Wildcard origin + credentials is forbidden by the CORS spec (Fetch §3.2)
       if ($origins === ['*'] && $credentials === true) {
          $credentials = false;
@@ -69,6 +98,7 @@ class CORS implements Middleware
       $this->headers = $headers;
       $this->maxAge = $maxAge;
       $this->credentials = $credentials;
+      $this->expose = $names;
    }
 
    public function process (object $Request, object $Response, Closure $next): object
@@ -120,6 +150,14 @@ class CORS implements Middleware
       // ? Preflight — short-circuit OPTIONS requests
       if ($Request->method === 'OPTIONS') { // @phpstan-ignore-line
          return $Response(code: 204); // @phpstan-ignore-line
+      }
+
+      // @ Access-Control-Expose-Headers — actual responses only (Fetch: a
+      //   preflight response never carries it), and only where an
+      //   Access-Control-Allow-Origin was emitted above (a rejected origin
+      //   returned 403 already; no Origin under an allowlist is no CORS).
+      if ($this->expose !== [] && ($wildcard || $origin !== null)) {
+         $Response->Header->set('Access-Control-Expose-Headers', implode(', ', $this->expose)); // @phpstan-ignore-line
       }
 
       // :

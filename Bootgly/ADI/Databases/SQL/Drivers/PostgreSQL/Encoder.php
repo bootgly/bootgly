@@ -22,10 +22,12 @@ use function is_scalar;
 use function is_string;
 use function pack;
 use function sprintf;
+use function str_contains;
 use function strlen;
+use function strtolower;
 use InvalidArgumentException;
 
-use Bootgly\ADI\Database\Config;
+use Bootgly\ADI\Databases\SQL\Config;
 
 
 /**
@@ -84,15 +86,44 @@ class Encoder
    }
 
    /**
-    * Encode a StartupMessage.
+    * Encode a StartupMessage: `user`, `database`, the pinned
+    * `Config::PINNED_PARAMETERS` (`client_encoding` UTF8, ISO `DateStyle`,
+    * `standard_conforming_strings` on), then the config's session parameters
+    * in their given order — `application_name` is `Bootgly` unless they name
+    * one.
+    *
+    * @throws InvalidArgumentException when the payload is not a SQL Config, or
+    *   its `username` or `database` holds a NUL byte.
     */
    private function start (mixed $payload): string
    {
       if ($payload instanceof Config === false) {
-         throw new InvalidArgumentException('PostgreSQL startup payload must be a Config.');
+         throw new InvalidArgumentException('PostgreSQL startup payload must be a SQL Config.');
+      }
+      // ? The config refuses a NUL in either; a Config changed after it was
+      //   built must not end a value early and frame fields it never named.
+      if (str_contains($payload->username, "\0") || str_contains($payload->database, "\0")) {
+         throw new InvalidArgumentException('PostgreSQL startup username and database must not contain a NUL byte.');
       }
 
-      $body = "user\0{$payload->username}\0database\0{$payload->database}\0client_encoding\0UTF8\0application_name\0Bootgly\0\0";
+      // ! The config admitted every name and value (identifier names, no
+      //   reserved or pinned name, no NUL byte, a message within the server's
+      //   limit), so each pair is framed as written.
+      $pinned = '';
+      $parameters = '';
+      $named = false;
+
+      // @@
+      foreach (Config::PINNED_PARAMETERS as $name => $value) {
+         $pinned = "{$pinned}{$name}\0{$value}\0";
+      }
+      foreach ($payload->parameters as $name => $value) {
+         $named = $named || strtolower($name) === 'application_name';
+         $parameters = "{$parameters}{$name}\0{$value}\0";
+      }
+
+      $application = $named ? '' : "application_name\0Bootgly\0";
+      $body = "user\0{$payload->username}\0database\0{$payload->database}\0{$pinned}{$application}{$parameters}\0";
       $length = pack('N', strlen($body) + 8);
       $version = pack('N', 196608);
 

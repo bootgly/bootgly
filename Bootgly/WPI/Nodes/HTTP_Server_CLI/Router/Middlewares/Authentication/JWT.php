@@ -15,6 +15,7 @@ use function explode;
 use function is_array;
 use function is_string;
 use function trim;
+use InvalidArgumentException;
 
 use Bootgly\API\Security\Identity;
 use Bootgly\API\Security\JWT as Token;
@@ -51,6 +52,14 @@ class JWT extends Bearer
 
    /**
     * Configure JWT verification for protected routes.
+    *
+    * The challenge values (`realm` … `metadata`) follow the `Bearer` rules:
+    * written as RFC 9110 quoted-strings, control characters refused, and
+    * `error`, `description`, `URI` and `scope` kept to their RFC 6750 §3
+    * character sets.
+    *
+    * @throws InvalidArgumentException When a challenge value holds a control
+    *         character, or an RFC 6750 attribute holds a character outside its set.
     */
    public function __construct (
       Token $Token,
@@ -59,7 +68,8 @@ class JWT extends Bearer
       string $error = 'invalid_token',
       string $description = '',
       string $URI = '',
-      string $scope = ''
+      string $scope = '',
+      string $metadata = ''
    )
    {
       parent::__construct(
@@ -70,7 +80,8 @@ class JWT extends Bearer
          error: $error,
          description: $description,
          URI: $URI,
-         scope: $scope
+         scope: $scope,
+         metadata: $metadata
       );
 
       // * Config

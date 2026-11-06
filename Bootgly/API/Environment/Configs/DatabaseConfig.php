@@ -146,6 +146,12 @@ class DatabaseConfig
          ];
       }
 
+      $parameters = $this->gather($Connection->Parameters);
+
+      if ($parameters !== []) {
+         $config['parameters'] = $parameters;
+      }
+
       $replicas = $this->extract($Connection->Replicas);
 
       if ($replicas !== []) {
@@ -234,10 +240,59 @@ class DatabaseConfig
             $config['pool'] = $pool;
          }
 
+         $parameters = $this->gather($Replica->Parameters);
+
+         if ($parameters !== []) {
+            $config['parameters'] = $parameters;
+         }
+
          $replicas[] = $config;
       }
 
       return $replicas;
+   }
+
+   /**
+    * Gather the session parameters of one `Parameters` subtree: each child
+    * node is one parameter, its name the node name and its value the bound
+    * one; an unbound child is left out. The ADI config validates the map.
+    *
+    * @throws InvalidArgumentException when `Parameters` itself holds a value
+    *   instead of one child node per parameter, or a parameter node holds
+    *   child nodes of its own.
+    *
+    * @return array<string,mixed>
+    */
+   private function gather (Config $Parameters): array
+   {
+      // ? A value bound to `Parameters` itself would be dropped in silence.
+      if ($Parameters->get() !== null) {
+         throw new InvalidArgumentException(
+            'Database `Parameters` config takes one child node per session parameter (Parameters->search_path), not a value of its own.'
+         );
+      }
+
+      $parameters = [];
+
+      // @@
+      foreach ($Parameters->walk() as $name => $Parameter) {
+         // ? A nested node (`Parameters->auto_explain->log_min_duration`)
+         //   would be dropped in silence: a dotted name is one node.
+         foreach ($Parameter->walk() as $child => $_) {
+            throw new InvalidArgumentException(
+               "Database `Parameters->{$name}` holds child nodes: name a dotted session parameter as one node, Parameters->{'{$name}.{$child}'}."
+            );
+         }
+
+         $value = $Parameter->get();
+
+         if ($value !== null) {
+            $parameters[$name] = $value;
+         }
+      }
+
+      // :
+      return $parameters;
    }
 
    /**

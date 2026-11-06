@@ -39,9 +39,11 @@ use function ord;
 use function preg_match;
 use function sha1;
 use function spl_object_id;
+use function str_contains;
 use function str_starts_with;
 use function stream_get_meta_data;
 use function stream_socket_client;
+use function stripcslashes;
 use function strlen;
 use function strtolower;
 use function substr;
@@ -454,7 +456,7 @@ class PostgreSQL extends Driver
          if ($mode === Config::SECURE_DISABLE) {
             $this->Connection->transition(ConnectionStates::Startup);
             $this->Authentication->authenticated = false;
-            $Operation->write = $this->Encoder->encode(Encoder::STARTUP, $this->Config);
+            $Operation->write = $this->Encoder->encode(Encoder::STARTUP, $this->SQLConfig);
             $Operation->state = OperationStates::Startup;
          }
          else {
@@ -494,7 +496,7 @@ class PostgreSQL extends Driver
             $this->encrypted = true;
             $this->Connection->transition(ConnectionStates::Startup);
             $this->Authentication->authenticated = false;
-            $Operation->write = $this->Encoder->encode(Encoder::STARTUP, $this->Config);
+            $Operation->write = $this->Encoder->encode(Encoder::STARTUP, $this->SQLConfig);
             $Operation->state = OperationStates::Startup;
 
             return $this->advance($Operation);
@@ -1638,7 +1640,7 @@ class PostgreSQL extends Driver
 
          $this->Connection->transition(ConnectionStates::Startup);
          $this->Authentication->authenticated = false;
-         $Operation->write = $this->Encoder->encode(Encoder::STARTUP, $this->Config);
+         $Operation->write = $this->Encoder->encode(Encoder::STARTUP, $this->SQLConfig);
          $Operation->state = OperationStates::Startup;
 
          $this->advance($Operation);
@@ -2294,17 +2296,25 @@ class PostgreSQL extends Driver
    }
 
    /**
-    * Cast one PostgreSQL bytea text value.
+    * Cast one PostgreSQL bytea text value, in either `bytea_output` format.
+    *
+    * `hex` (the server default) is `\x` plus two hex digits per byte. `escape`
+    * writes a backslash as `\\`, any other byte outside printable ASCII as
+    * `\ooo` octal and the rest as is, so it never starts with `\x` (that would
+    * be `\\x`): the prefix alone tells the formats apart.
     */
    private function decode (string $value): string
    {
-      if (str_starts_with($value, '\\x') === false) {
-         return $value;
+      // ?: hex
+      if (str_starts_with($value, '\\x')) {
+         $binary = hex2bin(substr($value, 2));
+
+         return $binary === false ? $value : $binary;
       }
 
-      $binary = hex2bin(substr($value, 2));
-
-      return $binary === false ? $value : $binary;
+      // : escape — `stripcslashes()` reads `\\` and `\ooo` exactly as the
+      //   server writes them, left to right.
+      return str_contains($value, '\\') ? stripcslashes($value) : $value;
    }
 
    /**
