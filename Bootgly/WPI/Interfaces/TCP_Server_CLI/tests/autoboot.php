@@ -43,5 +43,7 @@ return new Suite(
       '1.17-worker_ledger_shares_fit',
       // # 1.0.x (H-HSC-5): an array begun as a list keeps the table PHP grows and converts it to (Buffers\Table, tally)
       '1.18-buffers_table_fill',
+      // # 1.1.x (SESS-4, TEST-14): a root launch prepares cache/ and sessions/ or refuses; the demoted master can signal every worker
+      '1.19-root-launch-storage-signals',
    ]
 );

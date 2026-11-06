@@ -202,6 +202,19 @@ return new Test(
    test: function () use ($leg) {
       // ? The legs themselves — only with the storage redirected to a fixture
       if ($leg) {
+         // ! The legs purge and chown under the storage root: never anywhere but
+         //   the fixture the outer run handed over. A runner that lost the
+         //   prepend (a re-exec dropping `-d`) fails here, touching nothing
+         $fixture = (string) getenv('BOOTGLY_ROOT_LEG_STORAGE');
+         if ($fixture === '' || BOOTGLY_STORAGE_DIR !== "{$fixture}/") {
+            yield assert(
+               assertion: false,
+               description: 'the root legs run only on the fixture storage (fixture=' . var_export($fixture, true)
+                  . ', storage=' . BOOTGLY_STORAGE_DIR . ')'
+            );
+
+            return;
+         }
          $entry = posix_getpwnam('daemon');
          $runtime = is_array($entry) ? (int) $entry['uid'] : 1;
          $group = is_array($entry) ? (int) $entry['gid'] : 1;
@@ -721,8 +734,10 @@ return new Test(
          //   may be expanded by the runner's shell.
          $inner = "$base/inner.sh";
          file_put_contents($inner, "#!/bin/bash\ncd '$base'\n"
-            . 'env AI_AGENT=1 BOOTGLY_ROOT_LEG=1 ' . PHP_BINARY
-            . " -d opcache.jit=0 -d auto_prepend_file='$prepend' '" . BOOTGLY_ROOT_DIR . "bootgly' test $suite $case\n"
+            . "env AI_AGENT=1 BOOTGLY_ROOT_LEG=1 BOOTGLY_ROOT_LEG_STORAGE='$storage' " . PHP_BINARY
+            // ! Assertions on up front: the runner would otherwise re-exec itself
+            //   with its own `-d` flags only, dropping the prepend
+            . " -d zend.assertions=1 -d bootgly.assertions=1 -d opcache.jit=0 -d auto_prepend_file='$prepend' '" . BOOTGLY_ROOT_DIR . "bootgly' test $suite $case\n"
             . "s=\$?\nrm -rf '$storage'\nexit \$s\n");
          chmod($inner, 0o700);
          $script = <<<RUNNER

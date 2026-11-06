@@ -65,6 +65,8 @@ return new Test(
 
       $Trait = new ReflectionClass(TCPServer::class);
       $store = $slice(TCPServer::class, 'store');
+      $provision = $slice(TCPServer::class, 'provision');
+      $decide = $slice(TCPServer::class, 'decide');
       $cede = $slice(TCPServer::class, 'cede');
       $entered = strpos($cede, 'chdir(');
       $pinned = strpos($cede, "lstat('.')");
@@ -73,13 +75,18 @@ return new Test(
       $fresh = strpos($cede, "readdir(");
       $walked = str_contains($cede, 'scandir(') || str_contains($cede, '$this->hand($')
          || str_contains($cede, 'lstat($') || str_contains($cede, 'lchown($')
-         || str_contains($store, 'opendir(') || str_contains($store, 'scandir(');
+         || str_contains($store, 'opendir(') || str_contains($store, 'scandir(')
+         || str_contains($decide, 'opendir(') || str_contains($decide, 'scandir(')
+         || str_contains($provision, 'opendir(') || str_contains($provision, 'scandir(');
 
       yield assert(
          assertion: in_array('Bootgly\\WPI\\Endpoints\\Demotable', $Trait->getTraitNames(), true)
-            && $store !== '' && str_contains($store, '$this->cede(')
-            && str_contains($store, '$this->hand($directory') === false,
-         description: 'Demotable::store() hands storage/logs over only through cede() — never by its pathname'
+            && $store !== '' && str_contains($store, '$this->decide(\'logs\'')
+            && $provision !== '' && str_contains($provision, '$this->decide(')
+            && $decide !== '' && str_contains($decide, '$this->cede(')
+            && str_contains($store . $provision . $decide, '$this->hand(') === false
+            && str_contains($store . $provision, '$this->cede(') === false,
+         description: 'Demotable::store() (storage/logs) and provision() (the node\'s worker directories) hand a directory over only through decide() and cede() — never by its pathname'
       );
 
       yield assert(
@@ -88,12 +95,37 @@ return new Test(
             && $fresh !== false
             && $entered < $pinned && $pinned < $compared && $compared < $fresh && $fresh < $handed
             && $walked === false
-            && str_contains($store, '$created === false && (int) $entry[\'uid\'] !== $UID')
+            && strpos($decide, 'if ($created === false) {') !== false
+            && str_contains($decide, '(int) $entry[\'uid\'] === $UID')
+            && strpos($decide, 'if ($created === false) {') < (int) strpos($decide, '$this->cede(')
             && str_contains($store, 'if ($UID !== 0) { FileHandler::guard($UID); }'),
          description: 'Demotable::cede() enters the directory, pins `.` by dev/ino, proves a fresh one is still empty (entry by entry) and hands `.` over — '
-            . 'it touches nothing by name under it, and store() gives away only a directory this launch created or already the runtime identity\'s, '
+            . 'it touches nothing by name under it, and decide() gives away only a directory this launch created — one the runtime identity already owns is used as is, never chowned — '
             . 'guarding the sink against that identity unless it is root (chdir at ' . var_export($entered, true) . ', lstat at '
             . var_export($pinned, true) . ', readdir at ' . var_export($fresh, true) . ', hand at ' . var_export($handed, true) . ')'
+      );
+
+      // @ The demoted master's wait for its workers dispatches no signal: a
+      //   worker that died is peeked at (WNOWAIT), its SIGCHLD left where it
+      //   was handled before — inside the startup barrier or the supervision loop
+      $wait = $slice(TCPServer::class, 'wait');
+      yield assert(
+         assertion: $wait !== ''
+            && str_contains($wait, 'pcntl_signal_dispatch(') === false
+            && str_contains($wait, 'pcntl_waitid(') === true
+            && str_contains($wait, 'WNOWAIT') === true
+            && str_contains($wait, 'posix_kill($PID, 0)') === true,
+         description: 'TCP_Server_CLI::wait() probes each worker with kill(pid, 0), peeks a dead one with waitid(WNOWAIT) and dispatches no signal'
+      );
+
+      // @ A refused launch says why even with the display muted (the live suites mute theirs)
+      $start = $slice(TCPServer::class, 'start');
+      $refused = strpos($start, '$refusal = $this->provision(static::DIRECTORIES);');
+      $muted = strpos($start, 'if (Display::$segments === Display::NONE) { fwrite(STDERR, "Server not started: {$refusal}\\n"); }');
+      $exited = strpos($start, 'exit(1);');
+      yield assert(
+         assertion: $refused !== false && $muted !== false && $exited !== false && $refused < $muted && $muted < $exited,
+         description: 'TCP_Server_CLI::start() writes the provisioning refusal to STDERR when the display is muted, before it exits'
       );
    }
 );

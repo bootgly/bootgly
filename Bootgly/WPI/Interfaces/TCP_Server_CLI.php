@@ -14,6 +14,8 @@ namespace Bootgly\WPI\Interfaces;
 use const BOOTGLY_ENVIRONMENT;
 use const LOCK_EX;
 use const LOCK_NB;
+use const P_PID;
+use const PCNTL_EPERM;
 use const PHP_BINARY;
 use const PHP_SAPI;
 use const SCM_RIGHTS;
@@ -54,7 +56,9 @@ use const STREAM_SERVER_LISTEN;
 use const STREAM_SOCK_DGRAM;
 use const STREAM_SOCK_STREAM;
 use const TCP_NODELAY;
+use const WEXITED;
 use const WNOHANG;
+use const WNOWAIT;
 use function array_key_exists;
 use function array_keys;
 use function array_merge;
@@ -116,7 +120,9 @@ use function pcntl_signal;
 use function pcntl_signal_dispatch;
 use function pcntl_sigprocmask;
 use function pcntl_strerror;
+use function pcntl_waitid;
 use function pcntl_waitpid;
+use function posix_get_last_error;
 use function posix_getgrnam;
 use function posix_getpid;
 use function posix_getppid;
@@ -223,6 +229,16 @@ class TCP_Server_CLI implements Servers
    protected const string TRANSPORT = Configs::class;
    /** @var array<int,class-string<Configuring>> Every Configs this node applies. */
    protected const array CONFIGS = [Configs::class];
+   // # Storage
+   /**
+    * @var array<string,int> The directories under the storage root this node's
+    *      workers write (name => creation mode). On a root launch with a runtime
+    *      `user` they are prepared before the fork, or the launch is refused.
+    */
+   protected const array DIRECTORIES = [];
+   // ! How long a master that just demoted waits for its workers to demote
+   //   too: until then it cannot signal them. Microseconds.
+   private const int DEMOTION_TIMEOUT = 5_000_000;
 
    private const string RELOAD_HANDOFF_PATH = 'BOOTGLY_RELOAD_HANDOFF_PATH';
    private const string RELOAD_HANDOFF_TOKEN = 'BOOTGLY_RELOAD_HANDOFF_TOKEN';
@@ -881,6 +897,20 @@ class TCP_Server_CLI implements Servers
       //   not one record start() writes is ever written as root
       $this->store(starting: true);
 
+      // ? The storage the demoted workers write must be theirs before the first
+      //   request needs it — a server that could only answer errors from it
+      //   does not start
+      $refusal = $this->provision(static::DIRECTORIES);
+      if ($refusal !== null) {
+         $this->Logger->log(critical: "@\;Server not started: {$refusal}@\;");
+         // ? A muted display (the live test suites mute theirs) would end the
+         //   process without a word: the reason goes to STDERR then
+         if (Display::$segments === Display::NONE) {
+            fwrite(STDERR, "Server not started: {$refusal}\n");
+         }
+         exit(1);
+      }
+
       $this->Status = Status::Starting;
 
       // ! Capture the launch command NOW — before any daemon chdir — so reload()
@@ -1081,7 +1111,13 @@ class TCP_Server_CLI implements Servers
       //   inherited one listener that the privileged master pre-bound, then
       //   demoted itself in `instance()`. The master now demotes permanently;
       //   reload transfers those descriptors instead of regaining privilege.
+      $privileged = posix_getuid() === 0;
       $this->demote();
+      // ! Until every worker has demoted too, the demoted master cannot signal
+      //   it: a command, a stop or a test run sent in that window is refused
+      if ($privileged && posix_getuid() !== 0) {
+         $this->wait();
+      }
 
       // ! Node-specific readiness is a barrier, not a notification. A node
       //   may require every worker to prove local initialization (for example
@@ -1199,6 +1235,56 @@ class TCP_Server_CLI implements Servers
    protected function ready (): bool
    {
       return true;
+   }
+
+   /**
+    * Wait until the demoted master can signal every worker it forked as root.
+    *
+    * The master demotes right after the fork; each worker demotes only once
+    * its listener is in place (`instance()`). In between, the worker is still
+    * root and a signal from the master fails with `EPERM` — `kill(pid, 0)`
+    * probes exactly that permission. No signal is dispatched here: a worker
+    * that died in between is only peeked at (`waitid()` with `WNOWAIT`), so
+    * its SIGCHLD is still handled where it always was — inside the startup
+    * barrier, or by the supervision loop. Bounded: a worker still unreachable
+    * after `DEMOTION_TIMEOUT` is named in a warning.
+    */
+   private function wait (): void
+   {
+      // !
+      $deadline = hrtime(true) + self::DEMOTION_TIMEOUT * 1000;
+      $peek = function_exists('pcntl_waitid');
+
+      // @@
+      while (true) {
+         $pending = [];
+         foreach ($this->Process->Children->PIDs as $PID) {
+            if (@posix_kill($PID, 0) === true || posix_get_last_error() !== PCNTL_EPERM) {
+               continue;
+            }
+            // ? Dead — a zombie keeps the credentials it died with
+            $info = [];
+            if ($peek && pcntl_waitid(P_PID, $PID, $info, WEXITED | WNOHANG | WNOWAIT) && (int) ($info['pid'] ?? 0) === $PID) {
+               continue;
+            }
+
+            $pending[] = $PID;
+         }
+         // ?:
+         if ($pending === []) {
+            return;
+         }
+         if (hrtime(true) >= $deadline) {
+            $PIDs = implode(', ', $pending);
+            $this->Logger->log(
+               warning: "@\;Workers still unreachable after the master demoted (PIDs: {$PIDs}): commands and stops cannot reach them until they demote.@\;"
+            );
+
+            return;
+         }
+
+         usleep(1000);
+      }
    }
 
    /**

@@ -1303,7 +1303,17 @@ class TestCommand extends Command
       try {
          $autoBoot = $Suite->autoBoot ?? false;
          if ($autoBoot instanceof Closure) {
+            $runner = getmypid();
             $autoBoot($Suite);
+            // ? A Suite that expects cases but whose autoBoot ran none of them
+            //   — a harness that never connected, a command chain that broke
+            //   off — is a failure, never a green suite with nothing in it
+            if ($Suite->vacant && getmypid() === $runner) {
+               $Suite->case = 0;
+               $Suite->abort(new RuntimeException(
+                  "The autoBoot of \"{$Suite->name}\" returned without running or recording any of its cases."
+               ));
+            }
             // ? Closure suites run their own lifecycle (E2E boots often fork
             //   server workers, but run their client cases in this process).
             //   Chart the suite when it produced records here; returning the

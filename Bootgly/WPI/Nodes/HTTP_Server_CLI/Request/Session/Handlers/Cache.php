@@ -126,6 +126,15 @@ class Cache implements Committing
       $cache['prefix'] = is_string($cache['prefix'] ?? null)
          ? $cache['prefix']
          : "session:{$this->context}:";
+      // ! The records live beside the key, under `storage/sessions`: the one
+      //   directory a root launch hands to the runtime identity the workers run
+      //   as. Never the shared `storage/cache`, which root-run code reads too.
+      //   Checked like the key directory, whatever the key source: a process
+      //   that does not own the tree (root, over a runtime-owned one) refuses
+      //   it instead of following what its owner planted there.
+      if ($cache['driver'] === 'file' && is_string($cache['path'] ?? null) === false) {
+         $cache['path'] = self::store(BOOTGLY_STORAGE_DIR . 'sessions');
+      }
 
       if ($cache['driver'] === 'shared') {
          // ! Session IPC is always owner-only. An explicit prepared
@@ -447,10 +456,12 @@ class Cache implements Committing
       return self::import($path);
    }
 
-   /** Atomically create the default key without exposing partial contents. */
-   private static function create (string $path): string
+   /**
+    * Create the owner-only sessions directory when absent, and validate it and
+    * its ancestors for this process — never through a link.
+    */
+   private static function establish (string $directory): void
    {
-      $directory = dirname($path);
       if (is_link($directory)) {
          throw new RuntimeException('Session Cache key directory must not be a symbolic link.');
       }
@@ -468,6 +479,77 @@ class Cache implements Committing
          }
       }
       self::secure($directory, $created);
+   }
+
+   /**
+    * Prepare the default records directory inside the sessions directory and
+    * return it.
+    *
+    * Both directories are checked for what they are, never through their
+    * ancestors (that walk guards the key's multi-step creation, and an
+    * explicit `secret` creates no key): each must be a plain directory, not a
+    * link, writable by its owner only, and owned by this process — the
+    * sessions directory may also be root's. A process that does not own the
+    * tree (root, over the directory a root launch handed to the workers)
+    * refuses it instead of reading or writing through what its owner put there.
+    */
+   private static function store (string $directory): string
+   {
+      $records = "{$directory}/cache";
+      foreach ([$directory => true, $records => false] as $path => $rooted) {
+         // ! Created owner-only here, not 0775 by the File driver on first write
+         if (@lstat($path) === false) {
+            $mask = umask(0077);
+            try {
+               @mkdir($path, 0700);
+            }
+            finally {
+               umask($mask);
+            }
+         }
+
+         self::vet($path, $rooted);
+      }
+
+      // :
+      return $records;
+   }
+
+   /**
+    * Refuse a session store directory that is not this process's own — with
+    * the reason and its remedy.
+    *
+    * @param string $path The directory.
+    * @param bool $rooted Whether root may own it too.
+    */
+   private static function vet (string $path, bool $rooted): void
+   {
+      $state = @lstat($path);
+      if (is_array($state) === false) {
+         throw new RuntimeException("Session Cache store directory `{$path}` could not be created.");
+      }
+      $type = (int) $state['mode'] & 0170000;
+      if ($type === 0120000) {
+         throw new RuntimeException("Session Cache store directory `{$path}` must be a plain directory, not a link.");
+      }
+      if ($type !== 0040000) {
+         throw new RuntimeException("Session Cache store directory `{$path}` must be a directory.");
+      }
+
+      $EUID = function_exists('posix_geteuid') ? posix_geteuid() : null;
+      $owner = (int) $state['uid'];
+      if ($EUID !== null && $owner !== $EUID && ($rooted === false || $owner !== 0)) {
+         throw new RuntimeException("Session Cache store directory `{$path}` must be owned by the current user (uid {$EUID}), not uid {$owner}.");
+      }
+      if (((int) $state['mode'] & 0022) !== 0) {
+         throw new RuntimeException("Session Cache store directory `{$path}` must not be group- or world-writable: `chmod 700 {$path}`.");
+      }
+   }
+
+   /** Atomically create the default key without exposing partial contents. */
+   private static function create (string $path): string
+   {
+      self::establish(dirname($path));
 
       $material = random_bytes(32);
       $encoded = base64_encode($material);
@@ -573,6 +655,9 @@ class Cache implements Committing
       //   open. An ancestor is acceptable only while it is a directory owned by
       //   root or by this process, and is not world/group-writable without the
       //   sticky bit. Mirrors the File handler, which already walks its chain.
+      // ! Root is uid 0 — and whoever owns `/` (a user namespace shows the
+      //   host's root as an overflow uid). `Demotable::inspect()` applies the
+      //   same rule at a root launch, to warn before any worker runs into it.
       $rootState = @lstat(DIRECTORY_SEPARATOR);
       $rootUID = is_array($rootState) ? (int) $rootState['uid'] : 0;
 
@@ -589,7 +674,7 @@ class Cache implements Committing
          $mode = (int) $state['mode'];
          $owner = (int) $state['uid'];
          if (
-            ($EUID !== null && $owner !== $rootUID && $owner !== $EUID)
+            ($EUID !== null && $owner !== 0 && $owner !== $rootUID && $owner !== $EUID)
             || (($mode & 0022) !== 0 && ($mode & 01000) === 0)
          ) {
             throw new RuntimeException('Session Cache key path ancestor is replaceable.');

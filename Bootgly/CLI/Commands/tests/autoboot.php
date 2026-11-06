@@ -24,5 +24,7 @@ return new Suite(
       'TestCommand-nesting-01',
       'Scripts-bootstrap-01',
       'TestCommand-crash-01',
+      // # TEST-14: a closure suite that ran none of its cases fails the run
+      'TestCommand-vacant-01',
    ]
 );

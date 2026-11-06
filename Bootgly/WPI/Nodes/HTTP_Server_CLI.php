@@ -194,6 +194,16 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       Request\Configs::class,
       Response\Configs::class
    ];
+   // # Storage
+   /**
+    * @var array<string,int> What the workers write under the storage root: the
+    *      session key and records — owner-only, as `Session\Handlers\Cache`
+    *      requires. `storage/cache` is never handed over: root-run code (a
+    *      root CLI, the test runner) includes what it finds there.
+    */
+   protected const array DIRECTORIES = [
+      'sessions' => 0o700
+   ];
 
    // * Config
    // ...inherited from TCP_Server_CLI

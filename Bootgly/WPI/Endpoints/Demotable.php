@@ -12,10 +12,13 @@ namespace Bootgly\WPI\Endpoints;
 
 
 use const BOOTGLY_STORAGE_DIR;
+use const DIRECTORY_SEPARATOR;
 use function chdir;
 use function class_exists;
 use function clearstatcache;
 use function closedir;
+use function decoct;
+use function dirname;
 use function getcwd;
 use function in_array;
 use function is_array;
@@ -29,6 +32,8 @@ use function posix_getpwnam;
 use function posix_getuid;
 use function readdir;
 use function register_shutdown_function;
+use function rmdir;
+use function rtrim;
 
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Data\Levels;
@@ -229,49 +234,11 @@ trait Demotable
          FileHandler::guard($UID);
       }
 
-      $directory = BOOTGLY_STORAGE_DIR . 'logs';
-      $entry = @lstat($directory);
-      $created = false;
-      if ($entry === false) {
-         // ! Only the one directory — an ancestor root created would stay
-         //   root's, unreported, and the storage root is the deployment's
-         $created = @mkdir($directory, 0o775);
-         $entry = @lstat($directory);
-      }
-      $issue = null;
-      if ($entry === false) {
-         // ? Nothing there and nothing could be made there — the storage
-         //   root itself is missing; the demoted sink will say what it can
-         $issue = "storage/logs could not be created: is the storage directory there?@.;";
-      }
-      else if (((int) $entry['mode'] & 0170000) === 0120000) {
-         // ? A link where the directory should be: root follows nothing and
-         //   hands nothing over — whoever created the link chose where the
-         //   runtime identity writes, and its target must already be writable
-         //   by that identity. A link to a directory of root's would otherwise
-         //   let the runtime identity pick which directory of root's changes
-         //   hands, through any component it controls along the way.
-         $issue = "storage/logs is a link and was left as found: its target must be writable by {$this->user}.@.;";
-      }
-      else if (((int) $entry['mode'] & 0170000) !== 0040000) {
-         // ? An inode of another kind where the directory should be: root
-         //   touches nothing under it. The sinks are still installed at
-         //   settle() — the runtime identity may be able to write there on
-         //   its own — and File::write() refuses anything but a regular file.
-         $issue = "storage/logs was not handed to {$this->user}: not a plain directory.@.;";
-      }
-      else if ($created === false && (int) $entry['uid'] !== $UID) {
-         // ? A directory this launch did not create and that is not the
-         //   runtime identity's — root's from before, or anybody else's: of
-         //   unknown provenance. The runtime identity may own the name it
-         //   sits under and can rename any tree onto it, so it is left as found
-         $issue = "storage/logs is not {$this->user}'s and was left as found: make it {$this->user}'s yourself.@.;";
-      }
-      else if ($this->cede($directory, (int) $entry['dev'], (int) $entry['ino'], $UID, $GID, $created) === false) {
-         // ? The name came to resolve elsewhere between the decision and the
-         //   handover, or the working directory could not be kept: nothing
-         //   changed hands
-         $issue = "storage/logs was not handed to {$this->user}: it could not be entered as decided.@.;";
+      // ! The sinks still install at settle() whatever is found — the runtime
+      //   identity may be able to write there on its own
+      $issue = $this->decide('logs', 0o775, $UID, $GID);
+      if ($issue !== null) {
+         $issue = "{$issue}@.;";
       }
       // ? Said even when the project brought its own sinks — it is the one
       //   signal the operator gets when those sinks cannot write there
@@ -284,6 +251,226 @@ trait Demotable
       //   parent's hold — so the master writes it, first, as the runtime identity
       $this->issue = $issue;
       $this->notice = $notice;
+   }
+
+   /**
+    * Prepare the storage directories the demoted workers write, before any of
+    * them is forked — or refuse the launch.
+    *
+    * A worker runs as the runtime identity from its first request on, and
+    * what it writes under the storage root — the session key and records —
+    * must be that identity's before it needs them. On a root launch with a
+    * runtime `user`, each directory goes through the same decision as
+    * `storage/logs`: one this launch creates is handed over by inode, and one
+    * the runtime identity already owns is used as is. Anything else is never
+    * given away, and the workers could only answer errors from it, so the
+    * launch is refused instead, naming the directory and the remedy: a
+    * directory of unknown provenance root did not create, an inode of another
+    * kind, a link (a worker's directory is the runtime identity's own, never
+    * a target someone else chose), or one opener than the mode its workers
+    * require. An ancestor the session store's own path checks refuse is said
+    * in a warning, not refused: the server still starts.
+    *
+    * @param array<string,int> $directories Directory name under the storage root => the mode it is created with.
+    *
+    * @return null|string Why the launch must be refused, or `null` to go on.
+    */
+   protected function provision (array $directories): null|string
+   {
+      // ? Not root, or root that stays root: whoever runs keeps writing
+      if ($directories === [] || posix_getuid() !== 0 || $this->user === null) {
+         return null;
+      }
+
+      // !
+      $userInfo = posix_getpwnam($this->user);
+      if ($userInfo === false) {
+         return null; // demote() reports the unknown user and exits
+      }
+      $UID = (int) $userInfo['uid'];
+      $GID = (int) $userInfo['gid'];
+      if ($this->group !== null) {
+         $groupInfo = posix_getgrnam($this->group);
+         if ($groupInfo !== false) {
+            $GID = (int) $groupInfo['gid'];
+         }
+      }
+
+      // @@
+      foreach ($directories as $name => $mode) {
+         $path = BOOTGLY_STORAGE_DIR . $name;
+
+         $issue = $this->decide($name, $mode, $UID, $GID);
+         if ($issue !== null) {
+            $entry = @lstat($path);
+            // ? A link: a worker's directory is never a target somebody chose
+            if (is_array($entry) && ((int) $entry['mode'] & 0170000) === 0120000) {
+               // :
+               return "storage/{$name} is a link: it must be a plain directory of {$this->user}'s, and root follows no link to make it one. Replace the link with that directory before starting.";
+            }
+            // ? A directory of somebody else's: the one case a chown fixes
+            $foreign = is_array($entry)
+               && ((int) $entry['mode'] & 0170000) === 0040000
+               && (int) $entry['uid'] !== $UID;
+
+            // :
+            return $foreign
+               ? "{$issue} The workers run as {$this->user} and write there: `chown -R {$this->user}: {$path}` before starting."
+               : $issue;
+         }
+
+         // ? The runtime identity's, but opener than its workers require: the
+         //   session handler refuses a group/world-writable key directory
+         $entry = @lstat($path);
+         $open = is_array($entry) ? (int) $entry['mode'] & 0o022 & ~$mode : 0;
+         if ($open !== 0) {
+            $found = decoct((int) $entry['mode'] & 0o777);
+            $wanted = decoct($mode);
+
+            // :
+            return "storage/{$name} is group/world-writable ({$found}): its workers require {$wanted}. Run `chmod {$wanted} {$path}` as {$this->user} — it owns it — before starting.";
+         }
+
+         // ? An ancestor the session store's own checks refuse: said, not
+         //   refused (a host-owned bind mount is the documented container
+         //   layout), since what lives under it may still work
+         $found = $this->inspect($path, $UID);
+         if ($found !== null) {
+            [$ancestor, $reason] = $found;
+            $cause = match ($reason) {
+               'link' => "is a symbolic link — point the storage directory at the real path, never through a link",
+               'kind' => "is not a directory",
+               'owner' => "is owned by neither root nor {$this->user} — give it to root: `chown root: {$ancestor}`",
+               default => "is group/world-writable without the sticky bit — `chmod go-w {$ancestor}`",
+            };
+            $this->Logger->log(
+               warning: "@\;storage/{$name}: its ancestor {$ancestor} {$cause}. The default session store (file driver, no `path`) refuses such a path, so every session access through it will fail.@\;"
+            );
+         }
+      }
+
+      // :
+      return null;
+   }
+
+   /**
+    * Find the first ancestor of a worker directory that another identity
+    * could replace — the rule the session store applies to its own path
+    * (`Session\Handlers\Cache::secure()`): a plain directory owned by root
+    * (uid 0, or the owner of `/`) or by the runtime identity, and not
+    * group/world-writable unless it carries the sticky bit.
+    *
+    * @param string $path The worker directory.
+    * @param int $UID The runtime identity.
+    *
+    * @return null|array{0:string,1:string} The offending ancestor and why (`link`, `kind`, `owner` or `mode`), or `null` when every one is safe.
+    */
+   private function inspect (string $path, int $UID): null|array
+   {
+      // ! Root is uid 0 — and whoever owns `/` (a user namespace shows the
+      //   host's root as an overflow uid there)
+      $rootState = @lstat(DIRECTORY_SEPARATOR);
+      $rootUID = is_array($rootState) ? (int) $rootState['uid'] : 0;
+
+      // @@
+      $ancestor = dirname(rtrim($path, DIRECTORY_SEPARATOR));
+      while (true) {
+         $state = @lstat($ancestor);
+         $type = is_array($state) ? (int) $state['mode'] & 0170000 : 0;
+         $mode = is_array($state) ? (int) $state['mode'] : 0;
+         // ?:
+         if ($type === 0120000) {
+            return [$ancestor, 'link'];
+         }
+         if (is_array($state) === false || $type !== 0040000) {
+            return [$ancestor, 'kind'];
+         }
+         if (in_array((int) $state['uid'], [0, $rootUID, $UID], true) === false) {
+            return [$ancestor, 'owner'];
+         }
+         if (($mode & 0o022) !== 0 && ($mode & 0o1000) === 0) {
+            return [$ancestor, 'mode'];
+         }
+
+         $parent = dirname($ancestor);
+         if ($parent === $ancestor) {
+            break;
+         }
+         $ancestor = $parent;
+      }
+
+      // :
+      return null;
+   }
+
+   /**
+    * Decide one directory under the storage root for the runtime identity —
+    * create it when absent and hand over what this launch created, by inode.
+    *
+    * @param string $name The directory under the storage root.
+    * @param int $mode The mode it is created with when absent.
+    * @param int $UID The runtime identity.
+    * @param int $GID Its group.
+    *
+    * @return null|string What keeps the directory from being the runtime identity's, or `null` when it is.
+    */
+   private function decide (string $name, int $mode, int $UID, int $GID): null|string
+   {
+      $directory = BOOTGLY_STORAGE_DIR . $name;
+      $entry = @lstat($directory);
+      $created = false;
+      if ($entry === false) {
+         // ! Only the one directory — an ancestor root created would stay
+         //   root's, unreported, and the storage root is the deployment's
+         $created = @mkdir($directory, $mode);
+         $entry = @lstat($directory);
+      }
+
+      if ($entry === false) {
+         // ?: Nothing there and nothing could be made there — the storage
+         //    root itself is missing
+         return "storage/{$name} could not be created: is the storage directory there?";
+      }
+      if (((int) $entry['mode'] & 0170000) === 0120000) {
+         // ?: A link where the directory should be: root follows nothing and
+         //    hands nothing over — whoever created the link chose where the
+         //    runtime identity writes, and its target must already be writable
+         //    by that identity. A link to a directory of root's would otherwise
+         //    let the runtime identity pick which directory of root's changes
+         //    hands, through any component it controls along the way.
+         return "storage/{$name} is a link and was left as found: its target must be writable by {$this->user}.";
+      }
+      if (((int) $entry['mode'] & 0170000) !== 0040000) {
+         // ?: An inode of another kind where the directory should be: root
+         //    touches nothing under it
+         return "storage/{$name} was not handed to {$this->user}: not a plain directory.";
+      }
+      if ($created === false) {
+         // ?: Already the runtime identity's: used as is — never chowned again
+         //    (a root that may not chown it, an NFS root_squash, keeps working)
+         if ((int) $entry['uid'] === $UID) {
+            return null;
+         }
+
+         // ?: A directory this launch did not create and that is not the
+         //    runtime identity's — root's from before, or anybody else's: of
+         //    unknown provenance. The runtime identity may own the name it
+         //    sits under and can rename any tree onto it, so it is left as found
+         return "storage/{$name} is not {$this->user}'s and was left as found: make it {$this->user}'s yourself.";
+      }
+      if ($this->cede($directory, (int) $entry['dev'], (int) $entry['ino'], $UID, $GID, $created) === false) {
+         // ?: The name came to resolve elsewhere between the decision and the
+         //    handover, or the working directory could not be kept: nothing
+         //    changed hands. What this launch created goes again — removed
+         //    only while empty — so the next launch never blames the operator
+         //    for a root-owned directory the framework made
+         @rmdir($directory);
+
+         return "storage/{$name} was not handed to {$this->user}: it could not be entered as decided.";
+      }
+
+      // :
+      return null;
    }
 
    /**

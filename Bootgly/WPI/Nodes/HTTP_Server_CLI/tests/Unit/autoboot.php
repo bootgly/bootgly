@@ -115,5 +115,7 @@ return new Suite(
       '1.70-deferred_retained_leftovers',
       '1.71-deferred_standin_inert',
       '1.72-header_lazy_cookies',
+      // # 1.1.x (SESS-4): only storage/sessions is handed to the workers, and the session records live there
+      '1.73-root_launch_session_storage',
    ]
 );

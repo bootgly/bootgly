@@ -104,6 +104,25 @@ class Suite
     * @var array<int,array{case:int,file:string,status:string,results:array<int,bool|null>,description:null|string,message:null|string,debug:null|string,elapsed:null|string}>
     */
    public array $records;
+   /**
+    * Whether this run expects cases and not one ran, nor was even handed to a
+    * Tester: whatever drove the Suite never ran them. A case recorded only as
+    * "not reached" (summarize() settles those) did not run either.
+    */
+   public bool $vacant {
+      get {
+         if ($this->reached !== [] || $this->expect() === []) {
+            return false;
+         }
+         foreach ($this->records as $record) {
+            if ($record['status'] !== 'skipped' || $record['message'] !== self::UNREACHED) {
+               return false;
+            }
+         }
+
+         return true;
+      }
+   }
    // # Stats
    public int $assertions;
    // public static int $cases = 0;
