@@ -35,7 +35,6 @@ use function stream_set_timeout;
 use function stream_socket_client;
 use function strlen;
 use function substr;
-use function time;
 use function unserialize;
 use Redis as RedisClient;
 use RuntimeException;
@@ -76,14 +75,10 @@ class Redis extends Driver
    private Decoder $Decoder;
 
    /**
-    * Current Unix timestamp (honours the Config clock override).
+    * Current Unix timestamp, in whole seconds, from the Config Clock.
     */
    private int $now {
-      get {
-         $clock = $this->Config->clock;
-
-         return $clock === null ? time() : (int) $clock();
-      }
+      get => $this->Config->Clock->time;
    }
 
 

@@ -13,7 +13,6 @@ namespace Bootgly\ABI\Resources\Cache\Drivers;
 
 use function in_array;
 use function is_int;
-use function time;
 
 use Bootgly\ABI\Resources\Cache\Atomic;
 use Bootgly\ABI\Resources\Cache\Driver;
@@ -48,14 +47,10 @@ class Memory extends Driver implements Atomic
     */
    private array $tags = [];
    /**
-    * Current Unix timestamp via the configured clock (time() when unset).
+    * Current Unix timestamp, in whole seconds, from the configured Clock.
     */
    private int $now {
-      get {
-         $clock = $this->Config->clock;
-
-         return $clock === null ? time() : (int) $clock();
-      }
+      get => $this->Config->Clock->time;
    }
 
 

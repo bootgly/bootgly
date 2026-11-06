@@ -11,21 +11,36 @@
 namespace Bootgly\API\Security\Tokens;
 
 
-use function time;
 use InvalidArgumentException;
+
+use Bootgly\ABI\Clock;
 
 
 /**
  * Frozen/wall-clock time source for deterministic token expiration checks.
+ *
+ * Token time is the frozen `$timestamp` when one is set (`freeze()`), else the
+ * `$Clock`'s whole Unix seconds (`$time`).
  */
 trait Clocked
 {
    // * Data
+   /**
+    * The clock token time is read from while not frozen — the system Clock
+    * unless one is assigned (such as the test double
+    * `Bootgly\ACI\Tests\Doubles\Fake\Clock`).
+    */
+   public Clock $Clock {
+      get => $this->Clock ??= new Clock;
+   }
+   /**
+    * The frozen token time, in Unix seconds; null while it follows `$Clock`.
+    */
    public private(set) null|int $timestamp = null;
 
    // * Metadata
    private int $time {
-      get => $this->timestamp ?? time();
+      get => $this->timestamp ?? $this->Clock->time;
    }
 
 
@@ -45,7 +60,7 @@ trait Clocked
    }
 
    /**
-    * Resume wall-clock token time.
+    * Resume token time on `$Clock`.
     */
    public function resume (): self
    {

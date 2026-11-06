@@ -72,5 +72,7 @@ return new Suite(
       '1.49-authorization_rbac_cache_scope',
       // # 1.0.x (API-SEC-3): a remote JWKS redirect never crosses from a public to a non-public address
       '1.50-jwt_remote_destination_policy',
+      // # 1.1.0: token time and the remote JWKS origin floor read an injected Clock
+      '1.51-security_clock_seams',
    ]
 );

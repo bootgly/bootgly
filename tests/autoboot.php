@@ -248,5 +248,8 @@ return new Suites(
       //   (appended last to keep every suite index above stable)
       'Bootgly/API/RPC/JSON/',
       'Bootgly/API/RPC/MCP/',
+      // # ABI/Clock — the injectable wall/monotonic clock and its Stopwatch
+      //   (appended last to keep every suite index above stable)
+      'Bootgly/ABI/Clock/',
    ]
 );

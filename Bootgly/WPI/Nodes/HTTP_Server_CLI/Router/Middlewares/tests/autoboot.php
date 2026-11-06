@@ -40,6 +40,8 @@ return new Suite(
       '12.1-authorization',
       '12.2-authorization_scope_challenge',
       '13.1-access_log',
-      '13.2-access_log_sanitization'
+      '13.2-access_log_sanitization',
+      // # 1.1.0: the `clock` argument takes a Clock (a closure is deprecated)
+      '2.5-rate_limit_clock',
    ]
 );

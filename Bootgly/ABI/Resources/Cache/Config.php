@@ -49,6 +49,8 @@ use Closure;
 use InvalidArgumentException;
 use RuntimeException;
 
+use Bootgly\ABI\Clock;
+
 
 /**
  * ABI-native cache configuration.
@@ -176,7 +178,16 @@ class Config
     */
    public private(set) bool $persistent;
    /**
-    * Optional clock override returning a Unix timestamp; null uses time().
+    * The clock every TTL is read from — the `clock` option (a `Clock`, such as
+    * the test double `Bootgly\ACI\Tests\Doubles\Fake\Clock`), or the system
+    * Clock. Drivers read its `$time` (whole Unix seconds).
+    */
+   public private(set) Clock $Clock;
+   /**
+    * The legacy closure given as the `clock` option, or null.
+    *
+    * @deprecated 1.1.0 Read `$Clock`; a closure option is wrapped into it.
+    *    Removed in 2.0.0.
     */
    public private(set) null|Closure $clock;
 
@@ -259,7 +270,15 @@ class Config
       $this->timeout = is_scalar($timeout) ? (float) $timeout : self::DEFAULT_TIMEOUT;
       $this->secure = is_bool($secure) ? $secure : self::DEFAULT_SECURE;
       $this->persistent = is_bool($persistent) ? $persistent : self::DEFAULT_PERSISTENT;
+      // ! The `clock` option: a Clock, or (deprecated since 1.1.0, removed in
+      //   2.0.0) a closure returning a Unix timestamp, read through `Clock::adapt()`
+      //   as `(int) $clock()` — the reading it always had
       $this->clock = $clock instanceof Closure ? $clock : null;
+      $this->Clock = match (true) {
+         $clock instanceof Clock => $clock,
+         $clock instanceof Closure => Clock::adapt($clock),
+         default => new Clock
+      };
    }
 
    /**

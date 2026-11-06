@@ -50,6 +50,10 @@ use Bootgly\ABI\Resources\Cache\Driver;
  * holds before that check runs, so a process able to write the store can fire a
  * planted `__wakeup`/`__destruct`. APCu memory is shared across the SAPI: the
  * boundary is who can execute in that pool.
+ *
+ * **Clock caveat.** APCu expires entries on its own (real) clock, so the
+ * `clock` option does not move this driver's TTLs: `remain()` measures on real
+ * time too, the clock the expiry actually follows.
  */
 class APCu extends Driver
 {
@@ -158,7 +162,10 @@ class APCu extends Driver
          return -2;
       }
 
-      $now = $this->Config->clock === null ? time() : (int) ($this->Config->clock)();
+      // ! Real time, not the Config Clock: APCu stamps `creation_time` and
+      //   expires the entry on its own clock, so the remainder is only right
+      //   when measured on that same clock
+      $now = time();
       $pattern = '/^' . preg_quote($key, '/') . '$/';
 
       foreach (new APCUIterator($pattern, APC_ITER_TTL | APC_ITER_CTIME) as $info) {

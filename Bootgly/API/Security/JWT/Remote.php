@@ -55,13 +55,13 @@ use function stream_context_set_option;
 use function strlen;
 use function strtolower;
 use function substr;
-use function time;
 use function trim;
 use Closure;
 use InvalidArgumentException;
 use JsonException;
 use Throwable;
 
+use Bootgly\ABI\Clock;
 use Bootgly\ABI\Data\URI;
 use Bootgly\API\Security\JWT\Remote\Response;
 
@@ -140,6 +140,15 @@ class Remote implements KeyResolver
    public int|float $timeout = 10;
    public int $redirects = 3;
    public bool $insecure;
+   /**
+    * The clock the resolver reads: its wall `$time` (whole Unix seconds) for
+    * set freshness, its monotonic `$tick` (ns) for the origin floor (`hold`
+    * and `pause`). The system Clock unless one is given — a test double such
+    * as `Bootgly\ACI\Tests\Doubles\Fake\Clock` walks a cooldown without
+    * sleeping. A hop's network timeout always runs on the system monotonic
+    * clock: it bounds real I/O.
+    */
+   public private(set) Clock $Clock;
 
    // * Data
    /**
@@ -179,7 +188,8 @@ class Remote implements KeyResolver
       int $ttl = 3600,
       int $cooldown = 60,
       int $size = 1048576,
-      bool $insecure = false
+      bool $insecure = false,
+      null|Clock $Clock = null
    )
    {
       if ($URI === '') {
@@ -216,6 +226,7 @@ class Remote implements KeyResolver
       $this->cooldown = $cooldown;
       $this->size = $size;
       $this->insecure = $insecure;
+      $this->Clock = $Clock ?? new Clock;
 
       // * Data
       $this->Fetcher = $Fetcher === null ? null : Closure::fromCallable($Fetcher);
@@ -278,7 +289,7 @@ class Remote implements KeyResolver
          return null;
       }
 
-      $now = time();
+      $now = $this->Clock->time;
       if ($this->throttle($now)) {
          $this->mark(Failures::Key, 'JWT key could not be resolved.', $this->status);
          return null;
@@ -313,17 +324,17 @@ class Remote implements KeyResolver
     */
    private function load (bool $force): KeySet|Failures
    {
-      $now = time();
+      $now = $this->Clock->time;
       // ! The origin floor, on the monotonic clock: a confirmed set is held for
       //   one window — `cooldown`, or a shorter positive `$TTL` (the operator's
       //   bound wins); a failure pauses the origin for a whole `cooldown`
-      $clock = hrtime(true);
+      $tick = $this->Clock->tick;
       $window = ($this->ttl > 0 ? min($this->cooldown, $this->ttl) : $this->cooldown) * 1_000_000_000;
 
       // ? A set the ORIGIN confirmed is served for its whole window even when its
       //   TTL is 0 — nor does a failed forced refresh (an unknown `kid` any client
       //   can send) turn valid tokens into rejections inside that window
-      $held = $clock < $this->hold;
+      $held = $tick < $this->hold;
       $Keys = $this->Keys;
       if ($force === false && $Keys !== null && ($this->expires > $now || $held)) {
          $this->clear($this->status);
@@ -353,7 +364,7 @@ class Remote implements KeyResolver
       // ? The origin was asked within the window and gave no set to hold: replay
       //   its failure (fail closed) instead of asking again — `Network` for a
       //   failed request, or for a call while that attempt is still in flight
-      if ($force === false && $clock < $this->pause) {
+      if ($force === false && $tick < $this->pause) {
          return $this->mark($this->Fault ?? Failures::Network, 'Remote JWKS origin is cooling down.', $this->status);
       }
 
@@ -366,7 +377,7 @@ class Remote implements KeyResolver
       }
       finally {
          // ? Runs even when a suspended Fiber fetcher is destroyed mid-attempt
-         $ended = hrtime(true);
+         $ended = $this->Clock->tick;
          $this->pause = $ended + $this->cooldown * 1_000_000_000;
       }
       if ($Response instanceof Failures) {
@@ -390,7 +401,7 @@ class Remote implements KeyResolver
       $this->hold = $ended + $window;
       $this->pause = $this->hold;
 
-      $remaining = $this->expires - time();
+      $remaining = $this->expires - $this->Clock->time;
       if ($this->Cache !== null && $remaining > 0) {
          $value = $this->pack($Response->body, $this->expires);
          if ($value !== null) {

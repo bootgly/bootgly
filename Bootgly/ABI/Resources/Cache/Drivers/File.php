@@ -39,7 +39,6 @@ use function serialize;
 use function str_ends_with;
 use function stream_get_contents;
 use function substr;
-use function time;
 use function trim;
 use function uniqid;
 use function unlink;
@@ -74,8 +73,7 @@ class File extends Driver implements Atomic
 
    public function fetch (string $key): mixed
    {
-      $clock = $this->Config->clock;
-      $now = $clock === null ? time() : (int) $clock();
+      $now = $this->Config->Clock->time;
 
       return $this->read($key, $now)[1];
    }
@@ -99,8 +97,7 @@ class File extends Driver implements Atomic
    {
       $Lock = $this->lock();
       try {
-         $clock = $this->Config->clock;
-         $now = $clock === null ? time() : (int) $clock();
+         $now = $this->Config->Clock->time;
          // ? Occupied — or occupied by bytes THIS cache cannot decode. read()
          //   removes an expired record, so a file still standing after it means
          //   the slot is taken by a live record that merely names a class this
@@ -128,8 +125,7 @@ class File extends Driver implements Atomic
    {
       $Lock = $this->lock();
       try {
-         $clock = $this->Config->clock;
-         $now = $clock === null ? time() : (int) $clock();
+         $now = $this->Config->Clock->time;
          [$live, $current] = $this->read($key, $now, true);
          if ($live === false || $current !== $expected) {
             return false;
@@ -146,8 +142,7 @@ class File extends Driver implements Atomic
    {
       $Lock = $this->lock();
       try {
-         $clock = $this->Config->clock;
-         $now = $clock === null ? time() : (int) $clock();
+         $now = $this->Config->Clock->time;
          [$live, $current] = $this->read($key, $now, true);
          if ($live === false || $current !== $expected) {
             return false;
@@ -164,8 +159,7 @@ class File extends Driver implements Atomic
    {
       $Lock = $this->lock();
       try {
-         $clock = $this->Config->clock;
-         $now = $clock === null ? time() : (int) $clock();
+         $now = $this->Config->Clock->time;
          [$live, $value, $tags] = $this->read($key, $now, true);
          if ($live === false) {
             return false;
@@ -189,8 +183,7 @@ class File extends Driver implements Atomic
       bool $bind = true,
    ): bool
    {
-      $clock = $this->Config->clock;
-      $now = $clock === null ? time() : (int) $clock();
+      $now = $this->Config->Clock->time;
       $expiry = $TTL > 0 ? $now + $TTL : 0;
 
       $file = $this->locate($key);
@@ -267,16 +260,14 @@ class File extends Driver implements Atomic
 
    public function check (string $key): bool
    {
-      $clock = $this->Config->clock;
-      $now = $clock === null ? time() : (int) $clock();
+      $now = $this->Config->Clock->time;
 
       return $this->read($key, $now)[0];
    }
 
    public function increment (string $key, int $by = 1, int $TTL = 0): int
    {
-      $clock = $this->Config->clock;
-      $now = $clock === null ? time() : (int) $clock();
+      $now = $this->Config->Clock->time;
 
       $Lock = $this->lock();
       try {
@@ -336,8 +327,7 @@ class File extends Driver implements Atomic
 
    public function remain (string $key): int
    {
-      $clock = $this->Config->clock;
-      $now = $clock === null ? time() : (int) $clock();
+      $now = $this->Config->Clock->time;
 
       $file = $this->locate($key);
       // ?
@@ -409,8 +399,7 @@ class File extends Driver implements Atomic
    {
       $Lock = $this->lock();
       try {
-         $clock = $this->Config->clock;
-         $now = $clock === null ? time() : (int) $clock();
+         $now = $this->Config->Clock->time;
 
          $count = 0;
 

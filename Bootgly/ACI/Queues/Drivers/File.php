@@ -56,14 +56,10 @@ class File extends Driver
 {
    // * Metadata
    /**
-    * Current Unix timestamp (honours the Config clock override).
+    * Current Unix timestamp, in whole seconds, from the Config Clock.
     */
    private int $now {
-      get {
-         $clock = $this->Config->clock;
-
-         return $clock === null ? time() : (int) $clock();
-      }
+      get => $this->Config->Clock->time;
    }
 
 

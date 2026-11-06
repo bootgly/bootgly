@@ -29,11 +29,11 @@ use function str_pad;
 use function str_starts_with;
 use function strlen;
 use function substr;
-use function time;
 use function trim;
 use Closure;
 use InvalidArgumentException;
 
+use Bootgly\ABI\Clock;
 use Bootgly\ABI\Resources\Cache;
 use Bootgly\API\Workables\Server\Middleware;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\RateLimit\Algorithms;
@@ -70,6 +70,19 @@ class RateLimit implements Middleware
    public private(set) int $globalLimit;
    public private(set) Algorithms $algorithm;
    public private(set) null|Closure $key;
+   /**
+    * The clock windows are counted on — the `clock` argument (a `Clock`, such
+    * as the test double `Bootgly\ACI\Tests\Doubles\Fake\Clock`), or the
+    * system Clock. Its `$time` (whole Unix seconds) is read once per request,
+    * and it is handed to the default counter Cache.
+    */
+   public private(set) Clock $Clock;
+   /**
+    * The legacy closure given as the `clock` argument, or null.
+    *
+    * @deprecated 1.1.0 Read `$Clock`; a closure argument is wrapped into it.
+    *    Removed in 2.0.0.
+    */
    public private(set) null|Closure $clock;
    /** Stable identity for this policy's per-principal counters. */
    public private(set) string $scope;
@@ -88,6 +101,13 @@ class RateLimit implements Middleware
    private const string GLOBAL_KEY = '__global__';
 
 
+   /**
+    * Create a rate-limit policy.
+    *
+    * @param null|Clock|Closure $clock The clock windows are counted on (the
+    *    system Clock when null). A closure returning a Unix timestamp is
+    *    deprecated since 1.1.0 (removed in 2.0.0): pass a Clock.
+    */
    public function __construct (
       int $limit = 60,
       int $window = 60,
@@ -96,7 +116,7 @@ class RateLimit implements Middleware
       int $globalLimit = 0,
       Algorithms $algorithm = Algorithms::Sliding,
       null|Closure $key = null,
-      null|Closure $clock = null,
+      null|Clock|Closure $clock = null,
       null|Cache $Cache = null,
       null|string $scope = null,
       null|string $globalScope = null
@@ -122,7 +142,15 @@ class RateLimit implements Middleware
       //   Return a custom key (identity, API key, …) or null to fall back to
       //   the IP key. Lets callers rate-limit on something other than the IP.
       $this->key = $key;
-      $this->clock = $clock;
+      // ? Clock (1.1.0): a Clock — or, deprecated and removed in 2.0.0, a
+      //   closure returning a Unix timestamp, read through `Clock::adapt()` as
+      //   `(int) $clock()`, the reading it always had.
+      $this->clock = $clock instanceof Closure ? $clock : null;
+      $this->Clock = match (true) {
+         $clock instanceof Clock => $clock,
+         $clock instanceof Closure => Clock::adapt($clock),
+         default => new Clock
+      };
       // ? A route set is materialized independently inside every worker. A
       //   random/object identity would therefore split one logical quota into
       //   per-worker buckets. The construction site is deterministic across
@@ -153,16 +181,14 @@ class RateLimit implements Middleware
       $this->Cache = $Cache ?? new Cache([
          'driver' => 'shared',
          'prefix' => 'ratelimit:',
-         'clock' => $clock,
+         'clock' => $this->Clock,
       ]);
    }
 
    public function process (object $Request, object $Response, Closure $next): object
    {
       // !
-      $now = $this->clock === null
-         ? time()
-         : (int) ($this->clock)();
+      $now = $this->Clock->time;
 
       // @ Resolve the counter key (audit F-4): pluggable resolver first, then
       //   the default IP key with IPv6 aggregation.

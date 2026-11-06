@@ -43,7 +43,6 @@ use function shm_has_var;
 use function shm_put_var;
 use function shm_remove;
 use function shm_remove_var;
-use function time;
 use function trim;
 use RuntimeException;
 use SysvSemaphore;
@@ -120,14 +119,10 @@ class Shared extends Driver implements Atomic
    private SysvSemaphore $Semaphore;
    private int $segment;
    /**
-    * Current Unix timestamp via the configured clock (time() when unset).
+    * Current Unix timestamp, in whole seconds, from the configured Clock.
     */
    private int $now {
-      get {
-         $clock = $this->Config->clock;
-
-         return $clock === null ? time() : (int) $clock();
-      }
+      get => $this->Config->Clock->time;
    }
 
 

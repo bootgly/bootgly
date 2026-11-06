@@ -41,5 +41,7 @@ return new Suite(
       '1.10-recover-claim-window',
       '4.3-redis-persistent-identity',
       '4.4-redis-tls-connect',
+      // # 1.1.0: the `clock` option takes a Clock (a closure is deprecated)
+      '1.11-config-clock',
    ]
 );

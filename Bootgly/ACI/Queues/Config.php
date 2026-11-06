@@ -19,6 +19,7 @@ use function rtrim;
 use function sys_get_temp_dir;
 use Closure;
 
+use Bootgly\ABI\Clock;
 use Bootgly\ACI\Queues\Backoffs;
 
 
@@ -96,9 +97,42 @@ class Config
     */
    public bool $persistent;
    /**
-    * Optional clock override returning a Unix timestamp; null uses time().
+    * The clock job timestamps are read from — the `clock` option (a `Clock`,
+    * such as the test double `Bootgly\ACI\Tests\Doubles\Fake\Clock`), or the
+    * system Clock. Drivers read its `$time` (whole Unix seconds).
+    *
+    * Assigning a Clock clears the legacy `$clock`: it no longer describes
+    * what the drivers read.
     */
-   public null|Closure $clock;
+   public Clock $Clock {
+      set {
+         $this->Clock = $value;
+         $this->Closure = null;
+      }
+   }
+   /**
+    * The legacy closure given as the `clock` option (or assigned here), or
+    * null once `$Clock` is assigned. Assigning one (or null) still replaces
+    * `$Clock` (an adapter of it, or the system Clock).
+    *
+    * @deprecated 1.1.0 Use `$Clock`; a closure is wrapped into it. Removed in
+    *    2.0.0.
+    */
+   public null|Closure $clock {
+      get => $this->Closure;
+      set {
+         // ! `$Clock` first: assigning it clears the closure kept below
+         $this->Clock = $value === null ? new Clock : Clock::adapt($value);
+         $this->Closure = $value;
+      }
+   }
+
+   // * Data
+   /**
+    * The legacy closure `$clock` reads: kept apart so assigning `$Clock`
+    * can clear it.
+    */
+   private null|Closure $Closure = null;
 
 
    /**
@@ -137,7 +171,13 @@ class Config
       $this->timeout = is_scalar($timeout) ? (float) $timeout : self::DEFAULT_TIMEOUT;
       $this->secure = is_bool($secure) ? $secure : self::DEFAULT_SECURE;
       $this->persistent = is_bool($persistent) ? $persistent : self::DEFAULT_PERSISTENT;
+      // ! The `clock` option: a Clock, or (deprecated since 1.1.0, removed in
+      //   2.0.0) a closure returning a Unix timestamp, read through `Clock::adapt()`
+      //   as `(int) $clock()` — the reading it always had
       $this->clock = $clock instanceof Closure ? $clock : null;
+      if ($clock instanceof Clock) {
+         $this->Clock = $clock;
+      }
    }
 
    /**

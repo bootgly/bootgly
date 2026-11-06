@@ -123,5 +123,6 @@ return new Suite(
       '7.2.12-Coverage-Native_label_state',
       '7.2.13-Coverage-Native_arrow_pending',
       '9.4.1-Suite-unreached_and_abort',
+      '5.3.3-Fake-Clock-system_clock_double',
    ]
 );

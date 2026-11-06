@@ -50,5 +50,9 @@ return new Suite(
       '5.9-redis-counter-expiry',
       // # 1.1.x (SRV-4): a process caches in a directory of its own
       '1.10-config-locate',
+      // # 1.1.0: the `clock` option takes a Clock (a closure is deprecated)
+      '1.11-config-clock',
+      // # 1.1.0: APCu measures remain() on the clock it expires on (real time)
+      '1.12-apcu-remain-clock',
    ]
 );
