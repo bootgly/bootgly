@@ -117,5 +117,7 @@ return new Suite(
       '1.72-header_lazy_cookies',
       // # 1.1.x (SESS-4): only storage/sessions is handed to the workers, and the session records live there
       '1.73-root_launch_session_storage',
+      // # 1.1.x (v1.1.0 worker recycling): a refused or reset HTTP/2 stream id is used, never idle; no GOAWAY names more than the graceful one
+      '1.74-http2_refused_stream_ids',
    ]
 );

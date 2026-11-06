@@ -60,8 +60,12 @@ class Configs extends TCPConfigs
    /**
     * @param Argument $Named Guard slot — never pass it; it only rejects positional calls.
     * @param null|array<string,mixed> $secure Secure SSL/TLS Stream Context options.
+    * @param int $maxRequests Dispatches after which a worker recycles (`0` = never) — see `TCP_Server_CLI\Configs`.
+    * @param float $jitter Spread of each worker's limit, a fraction from `0` to `1`.
+    * @param int|string $maxMemory Memory ceiling of a worker in bytes, or a size such as `"512M"`; `0` = none.
     *
-    * @throws InvalidArgumentException When both `secure` and `AutoTLS` are given.
+    * @throws InvalidArgumentException When both `secure` and `AutoTLS` are given,
+    *         or a recycling option is out of range (see `TCP_Server_CLI\Configs`).
     */
    public function __construct (
       Argument $Named = Argument::Undefined,
@@ -78,7 +82,10 @@ class Configs extends TCPConfigs
       null|int $maxConnectionsPerIP = null,
       null|int $headroom = null,
       null|int $connectionIdleTimeout = null,
-      null|int $maxWorkerPendingBytes = null
+      null|int $maxWorkerPendingBytes = null,
+      int $maxRequests = 0,
+      float $jitter = 0.1,
+      int|string $maxMemory = 0
    )
    {
       // ? One TLS source — a manual context and Auto-TLS cannot both own it
@@ -96,7 +103,10 @@ class Configs extends TCPConfigs
          workers: $workers,
          secure: $secure,
          user: $user,
-         group: $group
+         group: $group,
+         maxRequests: $maxRequests,
+         jitter: $jitter,
+         maxMemory: $maxMemory
       );
 
       // * Config

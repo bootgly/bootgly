@@ -179,8 +179,18 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
    // # Streams
    // @ Stream id currently dispatched to the router (0 = none)
    public int $current;
-   // @ Highest client-initiated stream id seen
+   /**
+    * Last-Stream-ID every GOAWAY carries: the highest client stream this
+    * connection processed or may still process. Frozen once a graceful
+    * GOAWAY announced it (`retire()`): a later GOAWAY never names more.
+    */
    public int $last;
+   /**
+    * Highest client-initiated stream id the peer used, refused ones
+    * included: a new stream id must pass it, and a frame on a stream past it
+    * names an idle stream.
+    */
+   public protected(set) int $peak;
    // @ Open stream count
    public int $opened;
    // # Connection state
@@ -189,6 +199,8 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
    //   the preface — RFC 9113 §3.4)
    public bool $settled;
    public bool $closing;
+   /** Whether `retire()` announced this connection's end (GOAWAY NO_ERROR). */
+   public protected(set) bool $retired;
    // # Header block continuation
    // @ Stream id awaiting CONTINUATION frames (0 = none)
    protected int $expected;
@@ -240,10 +252,12 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
       $this->pending = 0;
       $this->current = 0;
       $this->last = 0;
+      $this->peak = 0;
       $this->opened = 0;
       $this->prefaced = false;
       $this->settled = false;
       $this->closing = false;
+      $this->retired = false;
       $this->expected = 0;
       $this->fragments = '';
       $this->ending = false;
@@ -356,7 +370,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
          switch ($type) {
             case HTTP2::FRAME_DATA:
                // ? DATA requires an existing stream
-               if ($stream === 0 || $stream > $this->last) {
+               if ($stream === 0 || $stream > $this->peak) {
                   return $this->fail($Package, Errors::Protocol, 'DATA on idle stream');
                }
                $Stream = $this->Streams[$stream] ?? null;
@@ -496,7 +510,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
                }
                else {
                   // ? New stream ids are odd and strictly increasing
-                  if (($stream & 1) === 0 || $stream <= $this->last) {
+                  if (($stream & 1) === 0 || $stream <= $this->peak) {
                      return $this->fail($Package, Errors::Protocol, 'invalid stream id');
                   }
                   $this->trailing = false;
@@ -659,7 +673,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
 
                // ? WINDOW_UPDATE on an idle stream is a connection error
                //   (RFC 9113 §5.1); on a closed one it is ignored (§6.9).
-               if ($stream > $this->last) {
+               if ($stream > $this->peak) {
                   return $this->fail($Package, Errors::Protocol, 'WINDOW_UPDATE on idle stream');
                }
 
@@ -686,7 +700,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
                   return $this->fail($Package, Errors::FrameSize, 'RST_STREAM payload must be 4 octets');
                }
                // ? RST on an idle (never opened) stream
-               if ($stream > $this->last) {
+               if ($stream > $this->peak) {
                   return $this->fail($Package, Errors::Protocol, 'RST_STREAM on idle stream');
                }
 
@@ -730,8 +744,11 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
                /** @var array{1: int} $dependency */
                $dependency = unpack('N', $data);
                if (($dependency[1] & 0x7fffffff) === $stream) {
-                  if ($stream > $this->last) {
-                     $this->last = $stream;
+                  if ($stream > $this->peak) {
+                     $this->peak = $stream;
+                     if ($this->retired === false) {
+                        $this->last = $stream;
+                     }
                   }
                   $this->reset($stream, Errors::Protocol);
                }
@@ -847,6 +864,40 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
    }
 
    /**
+    * Graceful local shutdown — a recycling worker's drain: queue
+    * GOAWAY(NO_ERROR) naming the last stream this connection processes, and
+    * refuse every stream the peer opens after it (`REFUSED_STREAM`, which
+    * the peer retries on a new connection — a serving worker). The streams
+    * already open finish. A stream the peer opened before it read the
+    * GOAWAY is no misbehaviour: its refusal never counts toward the rapid
+    * reset budget (`$resets`), and the announced Last-Stream-ID (`last`)
+    * stays frozen, so no later GOAWAY — a connection error's included — ever
+    * names a higher one (RFC 9113 §6.8). Once only: `closing` also keeps
+    * `disconnect()` from sending a second GOAWAY when the connection is
+    * closed.
+    *
+    * @return bool Whether the GOAWAY was queued on the ordered writer now.
+    */
+   public function retire (): bool
+   {
+      // ? Told the peer already, or never bound to a connection
+      $Package = $this->Package;
+      if ($this->closing || $Package === null || $Package->truncated) {
+         return false;
+      }
+
+      // @
+      $this->closing = true;
+      $this->retired = true;
+      $this->outbox .= Frame::pack(
+         HTTP2::FRAME_GOAWAY, 0, 0, pack('NN', $this->last, Errors::None->value)
+      );
+
+      // :
+      return $this->flush($Package);
+   }
+
+   /**
     * Transport teardown (via `Packages::$decoded`): best-effort GOAWAY so
     * the peer learns which streams were processed, then release state.
     */
@@ -934,7 +985,10 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
       // ? Self-dependent priority on the HEADERS is a stream error (§5.3.1)
       if ($this->circular) {
          $this->circular = false;
-         $this->last = $stream;
+         $this->peak = $stream;
+         if ($this->retired === false) {
+            $this->last = $stream;
+         }
          return $this->reset($stream, Errors::Protocol);
       }
 
@@ -958,8 +1012,18 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
          return null;
       }
 
+      // ?: Past this connection's announced end (`retire()`): a stream the
+      //    peer opened before it read the GOAWAY — refused, which it retries
+      //    on a new connection. No churn (the peer did nothing wrong), and
+      //    no later GOAWAY may name it.
+      if ($this->retired) {
+         $this->peak = $stream;
+         $this->reset($stream, Errors::RefusedStream);
+         return null;
+      }
       // ? Concurrency cap — refuse the excess stream, keep the connection
       if ($this->opened >= static::$streams || $this->closing) {
+         $this->peak = $stream;
          $this->last = $stream;
          $this->reset($stream, Errors::RefusedStream);
          if ($this->count($Package) !== null) {
@@ -968,6 +1032,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
          return null;
       }
 
+      $this->peak = $stream;
       $this->last = $stream;
 
       // @ Pseudo-header and field validation (RFC 9113 §8.3 / §8.2)

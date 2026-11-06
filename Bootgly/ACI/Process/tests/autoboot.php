@@ -31,5 +31,9 @@ return new Suite(
       '1.15-service-render',
       '1.16-state-lock-seal',
       '1.17-state-lock-holders',
+      // # 1.1.x (v1.1.0 worker recycling): recover() returns the wait status
+      '1.18-process-recover-status',
+      // # 1.1.x (v1.1.0 worker recycling): send() reaches the retirees too
+      '1.19-signals-send-retirees',
    ]
 );

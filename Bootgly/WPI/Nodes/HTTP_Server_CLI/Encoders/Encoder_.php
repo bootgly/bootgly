@@ -357,6 +357,22 @@ class Encoder_ extends Encoders
          return '';
       }
 
+      // @ Worker recycling: every dispatched request is one dispatch (a
+      //   refused one above is not) — one static read while recycling is off
+      if (Server::$counting) {
+         Server::count();
+      }
+      // @ A recycling worker hands each HTTP/1 connection back after this
+      //   request — the one that triggered the recycle included — so its
+      //   keep-alive clients reconnect to a serving worker. Set on the
+      //   Request itself: the deferred, streamed, error and replay paths all
+      //   read it (`Connection: close`). An HTTP/2 stream never carries it:
+      //   connection-specific fields are forbidden there, and the GOAWAY of
+      //   the drain hands that connection back instead.
+      if (Server::$recycling && $Request->stream === 0) {
+         $Request->closeConnection = true;
+      }
+
       // @ Locale — negotiated BEFORE the route-cache fetch so cached wire
       //   bytes vary by language; the unconditional assign doubles as the
       //   per-request reset (nothing leaks forward); the guards keep the

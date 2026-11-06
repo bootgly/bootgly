@@ -316,6 +316,12 @@ class Connections implements WPI\Connections
          return false;
       }
 
+      // @ Worker recycling: a node whose dispatch is the connection counts
+      //   each admitted one here (HTTP counts its requests instead)
+      if (Server::$counting && $this->Server::DISPATCH === 'connection') {
+         Server::count();
+      }
+
       return true;
    }
 

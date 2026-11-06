@@ -8,6 +8,7 @@ use const PHP_EOL;
 use const PHP_VERSION;
 use function abs;
 use function array_map;
+use function count;
 use function date;
 use function explode;
 use function file_get_contents;
@@ -105,8 +106,12 @@ return new class extends Command
          $load = "{$load[0]}, {$load[1]}, {$load[2]}";
 
          // @ Workers
-         // count
-         $workers = $Server->workers;
+         // count — and the retirees still draining a recycle, if any
+         $workers = (string) $Server->workers;
+         $retirees = count($Server->Process->Children->retirees);
+         if ($retirees > 0) {
+            $workers .= " (+{$retirees} retiring)";
+         }
 
          // @ Socket
          // address

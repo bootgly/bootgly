@@ -47,5 +47,25 @@ return new Suite(
       '1.19-root-launch-storage-signals',
       // # 1.1.x (SRV-4): the cache-tree ancestor warning checks where a trusted link leads
       '1.20-ancestor-warning-links',
+      // # 1.1.x (v1.1.0 worker recycling): maxRequests/jitter/maxMemory recycle a worker as a reload drain, never a crash
+      '1.21-recycle-configs',
+      '1.22-recycle-draw-count',
+      '1.23-recycle-connections',
+      '1.24-recycle-requests',
+      // # 1.1.x (v1.1.0 worker recycling): the replacement serves while the old worker drains; boot exits stay crashes
+      '1.25-recycle-overlap',
+      '1.26-recycle-supervision',
+      // # 1.1.x (v1.1.0 worker recycling): one retiree per slot (the gate), a deadline per retiree, no unreachable maxMemory
+      '1.27-recycle-bound',
+      // # 1.1.x (v1.1.0 worker recycling): a recycle inside a startup barrier is no lost worker
+      '1.28-recycle-barrier',
+      // # 1.1.x (v1.1.0 worker recycling): a replacement forked while paused boots paused
+      '1.29-recycle-paused',
+      // # 1.1.x (v1.1.0 worker recycling): beacon reads survive a handler, the WS mailbox follows the slot
+      '1.30-recycle-units',
+      // # 1.1.x (v1.1.0 worker recycling): a replacement past its limit holds its recycle until its slot's retiree is gone
+      '1.31-recycle-gate',
+      // # 1.1.x (v1.1.0 worker recycling): a worker forked without its beacon pair never recycles
+      '1.32-recycle-beaconless',
    ]
 );

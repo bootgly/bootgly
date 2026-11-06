@@ -27,6 +27,7 @@ use Bootgly\API\Environments;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\WPI\Event;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Modules\WS;
 use Bootgly\WPI\Modules\WS\Server;
 use Bootgly\WPI\Nodes\WS_Server_CLI\Decoders;
@@ -270,6 +271,35 @@ class WS_Server_CLI extends TCP_Server_CLI implements WS, Server
          self::$Event::EVENT_READ,
          Relay::$Instance
       );
+   }
+
+   /**
+    * A recycling worker's drain closes every open WebSocket session with
+    * `1001 Going Away`, so its clients reconnect to a serving worker instead
+    * of holding this one. The slot's cross-worker mailbox is left to the
+    * replacement already serving the slot: read here, a broadcast meant for
+    * the slot would reach this worker's emptied rooms instead.
+    */
+   protected function shed (): void
+   {
+      // @ The slot's mailbox belongs to its replacement now
+      $Relay = Relay::$Instance;
+      if ($Relay !== null) {
+         self::$Event->del($Relay->Socket, self::$Event::EVENT_READ);
+         Relay::$Instance = null;
+      }
+
+      // @@ Every established session; one still in its handshake is left
+      foreach (Connections::$Connections as $Connection) {
+         $Session = $Connection->decoded;
+         if (
+            $Session instanceof Session
+            && $Session->established
+            && $Session->disconnected === false
+         ) {
+            $Session->close(1001, 'Going Away');
+         }
+      }
    }
 
    /**

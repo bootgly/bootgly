@@ -11,6 +11,7 @@
 namespace Bootgly\ACI\Process;
 
 
+use function array_keys;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
 use function posix_kill;
@@ -53,9 +54,18 @@ class Signals
       }
    }
    /**
-    * Send a signal to the master and/or every child. Returns true only when
-    * EVERY `posix_kill` succeeded — a dead/forbidden target makes the whole
-    * dispatch report failure (callers relying on delivery must know).
+    * Send a signal to the master and/or every child — the children that
+    * serve a slot and the retirees still finishing their work
+    * (`Children->retirees`): both are processes of this one, so commands,
+    * log routing and stats reach them alike; a signal that only means
+    * something to a serving child (a pause, a certificate swap) is theirs to
+    * ignore. Returns true only when EVERY `posix_kill` to the master and the
+    * serving children succeeded — a dead/forbidden target makes the whole
+    * dispatch report failure (callers relying on delivery must know). A
+    * retiree may exit at any moment: its delivery is best-effort, never
+    * fails the dispatch and is never spaced out — the 0.1 s between serving
+    * children gives each its turn at the command slot, which a retiree only
+    * reads best-effort; the caller (a master loop) is not stalled for it.
     */
    public function send (
       int $signal, bool $master = true, bool $children = true
@@ -79,6 +89,10 @@ class Signals
                $sent = false;
             }
             usleep(100000); // 0.1s
+         }
+         // @@ The retirees — best-effort, at once
+         foreach (array_keys($this->Process->Children->retirees) as $id) {
+            posix_kill($id, $signal);
          }
       }
 

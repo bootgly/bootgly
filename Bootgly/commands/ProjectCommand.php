@@ -597,10 +597,11 @@ class ProjectCommand extends Command
                continue;
             }
 
+            // ! The retirees too: workers still draining a recycle
             $current = $this->locate($projectName, $instance !== '' ? $instance : null);
             $workers = $current !== null && $current['master'] === $masterPID
-               ? $current['workers']
-               : $PIDs['workers'];
+               ? array_merge($current['workers'], $current['retirees'])
+               : array_merge($PIDs['workers'], $PIDs['retirees']);
 
             foreach ($workers as $workerPID) {
                if ($this->authenticate($projectName, $instance, $workerPID, $masterPID)) {
@@ -646,7 +647,7 @@ class ProjectCommand extends Command
          // ! Success must mean TERMINATED: verify the whole lineage (master,
          //   workers and helper) actually exited instead of trusting signal
          //   dispatch — survivors keep ports bound and break the next start.
-         $survivors = array_merge([$masterPID], $PIDs['workers'], $helper > 1 ? [$helper] : []);
+         $survivors = array_merge([$masterPID], $PIDs['workers'], $PIDs['retirees'], $helper > 1 ? [$helper] : []);
          $deadline = microtime(true) + 3.0;
          // @@
          while (microtime(true) < $deadline) {
@@ -2321,7 +2322,7 @@ class ProjectCommand extends Command
     * @param string $projectName
     * @param null|string $instance Optional instance qualifier — the bound port (e.g. '8080').
     *
-    * @return null|array{master:int,workers:array<int>,started:int,status?:string,type:string,host?:string,port?:int,AutoTLS?:array<string,mixed>}
+    * @return null|array{master:int,workers:array<int>,retirees:array<int>,started:int,status?:string,type:string,host?:string,port?:int,AutoTLS?:array<string,mixed>}
     */
    private function locate (string $projectName, null|string $instance = null): null|array
    {
@@ -2368,7 +2369,7 @@ class ProjectCommand extends Command
     *
     * @param string $projectName
     *
-    * @return array<string, array{master:int,workers:array<int>,started:int,status?:string,type:string,host?:string,port?:int,AutoTLS?:array<string,mixed>}>
+    * @return array<string, array{master:int,workers:array<int>,retirees:array<int>,started:int,status?:string,type:string,host?:string,port?:int,AutoTLS?:array<string,mixed>}>
     *         Keys are instance qualifiers ('' for legacy unqualified files, the bound port otherwise)
     */
    private function scan (string $projectName): array

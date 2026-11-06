@@ -67,6 +67,51 @@ return new Test(
          'type' => 'CLI', 'project' => 'States Discovery',
       ]);
 
+      // # Retirees (workers still draining a recycle): held to the workers' proof
+      $Retiree = pcntl_fork();
+      if ($Retiree === 0) {
+         // ! A child holding the inherited flock, out of this runner's shutdown
+         pcntl_exec('/bin/sh', ['-c', 'exec sleep 30']);
+         exit(1);
+      }
+      usleep(200_000);
+      $Retirees = [];
+      foreach ([
+         'absent (an older server)' => [[], null],
+         'a child of the master' => [[], [$Retiree]],
+         'a PID that is not one' => [[], [99999999]],
+         'malformed' => [[], ['x']],
+         'a worker PID listed again' => [[$Retiree], [$Retiree]],
+      ] as $case => [$workers, $retirees]) {
+         $state = [
+            'master' => $PID, 'workers' => $workers, 'started' => time(),
+            'type' => 'WPI', 'host' => '127.0.0.1', 'port' => 7001,
+         ];
+         if ($retirees !== null) {
+            $state['retirees'] = $retirees;
+         }
+         $Server->save($state);
+         $located = States::locate($id, '7001');
+         $Retirees[$case] = $located === null ? null : $located['retirees'];
+      }
+      posix_kill($Retiree, SIGKILL);
+      pcntl_waitpid($Retiree, $status);
+      $Server->save([
+         'master' => $PID, 'workers' => [], 'started' => time(),
+         'type' => 'WPI', 'host' => '127.0.0.1', 'port' => 7001,
+      ]);
+      $evidence = json_encode($Retirees);
+      yield assert(
+         assertion: $Retirees === [
+            'absent (an older server)' => [],
+            'a child of the master' => [$Retiree],
+            'a PID that is not one' => [],
+            'malformed' => null,
+            'a worker PID listed again' => null,
+         ],
+         description: "retirees are authenticated like workers: kept when proved, dropped when not, refused when malformed or listed twice — {$evidence}"
+      );
+
       // # scan(): every live qualified instance, keyed by qualifier
       $instances = States::scan($id);
       yield assert(

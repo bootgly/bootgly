@@ -40,7 +40,7 @@ class States
     * @param null|string $instance Optional instance qualifier — the bound port for servers,
     *                              the master PID for console instances.
     *
-    * @return null|array{master:int,workers:array<int>,started:int,status?:string,type:string,host?:string,port?:int,tap?:string,project?:string,AutoTLS?:array<string,mixed>}
+    * @return null|array{master:int,workers:array<int>,retirees:array<int>,started:int,status?:string,type:string,host?:string,port?:int,tap?:string,project?:string,AutoTLS?:array<string,mixed>}
     */
    public static function locate (string $id, null|string $instance = null): null|array
    {
@@ -90,6 +90,29 @@ class States
       }
       $data['workers'] = $Workers;
 
+      // @ The retirees — workers still draining a recycle, replaced in their
+      //   slots — are signalled by the same stop paths: held to the same
+      //   proof. Absent from a state an older server wrote.
+      $retirees = $data['retirees'] ?? [];
+      if (is_array($retirees) === false || count($retirees) > 4096) {
+         return null;
+      }
+      $retiring = [];
+      foreach ($retirees as $retireePID) {
+         if (
+            is_int($retireePID) === false
+            || $retireePID <= 0
+            || isSet($seen[$retireePID])
+         ) {
+            return null;
+         }
+         $seen[$retireePID] = true;
+         if ($State->authenticate($retireePID, parent: $data['master'])) {
+            $retiring[] = $retireePID;
+         }
+      }
+      $data['retirees'] = $retiring;
+
       // ? The Auto-TLS helper PID rides in the SAME runtime-writable discovery
       //   state as everything else here, but unlike master/workers it used to
       //   pass through unauthenticated — the stop path then signalled it after
@@ -114,7 +137,7 @@ class States
          }
       }
 
-      /** @var array{master:int,workers:array<int>,started:int,status?:string,type:string,host?:string,port?:int,tap?:string,project?:string,AutoTLS?:array<string,mixed>} $data */
+      /** @var array{master:int,workers:array<int>,retirees:array<int>,started:int,status?:string,type:string,host?:string,port?:int,tap?:string,project?:string,AutoTLS?:array<string,mixed>} $data */
       return $data;
    }
 
@@ -123,7 +146,7 @@ class States
     *
     * @param string $id Encoded registry id.
     *
-    * @return array<string, array{master:int,workers:array<int>,started:int,status?:string,type:string,host?:string,port?:int,tap?:string,project?:string,AutoTLS?:array<string,mixed>}>
+    * @return array<string, array{master:int,workers:array<int>,retirees:array<int>,started:int,status?:string,type:string,host?:string,port?:int,tap?:string,project?:string,AutoTLS?:array<string,mixed>}>
     *         Keys are instance qualifiers ('' for legacy unqualified files, the bound
     *         port — or console master PID — otherwise)
     */

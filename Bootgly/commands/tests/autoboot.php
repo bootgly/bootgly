@@ -89,5 +89,7 @@ return new Suite(
       '1.14-project-git-stream',
       '11.9-demo-reply-inert',
       '1.15-project-migrate-names',
+      // # project stop ends the retirees of a recycling server with its workers
+      '9.2-project-stop-retirees',
    ]
 );

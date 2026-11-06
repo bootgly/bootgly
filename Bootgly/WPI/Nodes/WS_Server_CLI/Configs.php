@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Nodes\WS_Server_CLI;
 
 
 use Closure;
+use InvalidArgumentException;
 
 use Bootgly\ABI\Argument;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Configs as TCPConfigs;
@@ -81,6 +82,11 @@ class Configs extends TCPConfigs
     * @param null|array<string,mixed> $secure Secure SSL/TLS Stream Context options.
     * @param array<string> $subprotocols Server-supported subprotocols, in preference order.
     * @param array<object> $Guards Handshake authentication guards.
+    * @param int $maxRequests Dispatches after which a worker recycles (`0` = never) — see `TCP_Server_CLI\Configs`.
+    * @param float $jitter Spread of each worker's limit, a fraction from `0` to `1`.
+    * @param int|string $maxMemory Memory ceiling of a worker in bytes, or a size such as `"512M"`; `0` = none.
+    *
+    * @throws InvalidArgumentException When a recycling option is out of range (see `TCP_Server_CLI\Configs`).
     */
    public function __construct (
       Argument $Named = Argument::Undefined,
@@ -102,7 +108,10 @@ class Configs extends TCPConfigs
       null|int $maxConnectionsPerIP = null,
       null|int $headroom = null,
       null|int $maxWorkerPendingBytes = null,
-      null|Closure $Fallback = null
+      null|Closure $Fallback = null,
+      int $maxRequests = 0,
+      float $jitter = 0.1,
+      int|string $maxMemory = 0
    )
    {
       parent::__construct(
@@ -111,7 +120,10 @@ class Configs extends TCPConfigs
          workers: $workers,
          secure: $secure,
          user: $user,
-         group: $group
+         group: $group,
+         maxRequests: $maxRequests,
+         jitter: $jitter,
+         maxMemory: $maxMemory
       );
 
       // * Config

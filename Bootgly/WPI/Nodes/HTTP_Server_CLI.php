@@ -36,7 +36,6 @@ use const STREAM_IPPROTO_IP;
 use const STREAM_PF_UNIX;
 use const STREAM_SOCK_STREAM;
 use const WNOHANG;
-use function array_diff;
 use function array_key_first;
 use function array_reverse;
 use function array_values;
@@ -159,11 +158,13 @@ use Bootgly\API\Endpoints\Server\Status;
 use Bootgly\API\Environments;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\API\Workables\Server\Middlewares;
+use Bootgly\WPI\Endpoints\Servers\Ownership;
 use Bootgly\WPI\Event;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Events as TCP_Client_Events;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Modules\HTTP\Server;
@@ -194,6 +195,12 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       Request\Configs::class,
       Response\Configs::class
    ];
+   // # Recycling
+   /**
+    * One dispatch toward `maxRequests` is one complete request — counted by
+    * the encoder, so every request a keep-alive connection carries counts.
+    */
+   public const string DISPATCH = 'request';
    // # Storage
    /**
     * @var array<string,int> What the workers write under the storage root: the
@@ -351,12 +358,16 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    /**
     * A swap request is a dedicated generation record, not a command-file
     * payload. SIGURG is only the wake-up edge; coalescing is harmless because
-    * every process reads and applies the latest desired generation.
+    * every process reads and applies the latest desired generation. A
+    * draining worker (a recycle's retiree) ignores it: it left the accept
+    * set, so no handshake would ever present the new certificate, and its
+    * established connections keep the one they negotiated.
     */
    public function handle (int $signal): void
    {
       if (
          $signal === SIGURG
+         && $this->Status !== Status::Stopping
          && $this->AutoTLS !== null
          && ($desired = $this->AutoTLS->Swaps->fetch()) !== null
          && (
@@ -1149,6 +1160,10 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       //   startup credential was rejected, or it crashed. The barrier reaps
       //   without reforking (`$starting`), so a lost worker is a definitive
       //   failure: fail fast instead of waiting out the whole ACK budget.
+      //   A worker that recycled served and left on purpose: not lost
+      //   (`audit()`) — its slot is reforked once the barrier ends, and the
+      //   acknowledgements awaited are the remaining workers'. `heed()`
+      //   classifies each turn's deaths and reads the beacons first.
       $Workers = $this->Process->Children->PIDs;
 
       $deadline = microtime(true)
@@ -1156,7 +1171,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          + 1.0;
       while ($this->PendingSnapshot !== null && microtime(true) < $deadline) {
          pcntl_signal_dispatch();
-         if ($this->Process->Children->PIDs !== $Workers) {
+         $this->heed();
+         if ($this->audit($Workers) !== []) {
             break;
          }
          $this->reconcile();
@@ -1166,9 +1182,10 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          usleep(10000);
       }
 
+      $this->heed();
       $desired = $AutoTLS->Swaps->fetch();
       $ready = $desired !== null
-         && $this->Process->Children->PIDs === $Workers
+         && $this->audit($Workers) === []
          && $this->PendingSnapshot === null
          && $this->swapFallbackQueued === false
          && $this->appliedGeneration === $desired['generation']
@@ -1265,7 +1282,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
 
       // # Workers lost inside the barrier acknowledged nothing
-      $lost = array_values(array_diff($Workers, $this->Process->Children->PIDs));
+      $lost = array_values($this->audit($Workers));
       if ($lost !== []) {
          $list = implode(', ', $lost);
 
@@ -1289,6 +1306,90 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
 
       $this->supervise();
+   }
+
+   /**
+    * A recycling worker's drain hands back the connections that carry no
+    * work, so their clients reconnect to a serving worker instead of holding
+    * this one: an HTTP/1 keep-alive connection between two requests (it
+    * answered one; it holds no partial request, no request body, stream,
+    * deferred response or pending output) is closed; an HTTP/2 connection
+    * gets a GOAWAY at once (`Decoder_HTTP2::retire()`) and is closed once no
+    * stream is open on it. A connection with unread input is left for the
+    * loop to read: its request is answered — with `Connection: close`.
+    * A connection that never answered a request is left alone: its client
+    * may be sending its first request right now.
+    */
+   protected function shed (): void
+   {
+      // @@ The connections that carry no work
+      /** @var array<int,resource> $Sockets */
+      $Sockets = [];
+      foreach (Connections::$Connections as $id => $Connection) {
+         // ? A TLS handshake, a closing connection, or no answer yet
+         if (
+            $Connection->status !== Connections::STATUS_ESTABLISHED
+            || $Connection->writes === 0
+         ) {
+            continue;
+         }
+
+         // # HTTP/2 — no new stream here; closed once its streams are done
+         $Decoder = $Connection->Decoder;
+         if ($Decoder instanceof Decoder_HTTP2) {
+            // ! A GOAWAY the socket refuses closes the connection
+            $Decoder->retire();
+
+            if (
+               $Decoder->opened > 0
+               || $Connection->status !== Connections::STATUS_ESTABLISHED // @phpstan-ignore notIdentical.alwaysFalse (retire() may close it)
+            ) {
+               continue;
+            }
+         }
+         // ? A request body arriving, a stream (SSE), a download
+         else if ($Decoder !== null) {
+            continue;
+         }
+
+         // ? Work the transport still owns
+         if (
+            $Connection->carry !== ''
+            || $Connection->pendingBuffer !== ''
+            || $Connection->writeRegistered
+            || $Connection->uploading !== []
+            || $Connection->stagedUploading !== []
+            || $Connection->pendingResponses !== []
+            || $Connection->downloading !== []
+            || Ownership::check($Connection)
+         ) {
+            continue;
+         }
+
+         $Sockets[$id] = $Connection->Socket;
+      }
+      // ?
+      if ($Sockets === []) {
+         return;
+      }
+
+      // ! Input already waiting (a request, or the peer's close) is read by
+      //   the loop first — keys are kept by the select
+      $Readable = $Sockets;
+      $Writes = null;
+      $Excepts = null;
+      if (@stream_select($Readable, $Writes, $Excepts, 0) === false) {
+         return;
+      }
+
+      // @@ Close the silent ones
+      foreach ($Sockets as $id => $Socket) {
+         if (isSet($Readable[$id])) {
+            continue;
+         }
+
+         (Connections::$Connections[$id] ?? null)?->close();
+      }
    }
 
    /** @return array<string,mixed> Persisted HTTP and Auto-TLS topology. */

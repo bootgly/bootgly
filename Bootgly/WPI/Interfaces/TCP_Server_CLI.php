@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Interfaces;
 
 
+use const AF_UNIX;
 use const BOOTGLY_ENVIRONMENT;
 use const LOCK_EX;
 use const LOCK_NB;
@@ -19,6 +20,7 @@ use const PCNTL_EPERM;
 use const PHP_BINARY;
 use const PHP_SAPI;
 use const SCM_RIGHTS;
+use const SIG_BLOCK;
 use const SIG_DFL;
 use const SIG_IGN;
 use const SIG_SETMASK;
@@ -59,6 +61,7 @@ use const TCP_NODELAY;
 use const WEXITED;
 use const WNOHANG;
 use const WNOWAIT;
+use function array_diff;
 use function array_key_exists;
 use function array_keys;
 use function array_merge;
@@ -69,6 +72,7 @@ use function basename;
 use function bin2hex;
 use function chdir;
 use function chmod;
+use function constant;
 use function count;
 use function defined;
 use function explode;
@@ -89,6 +93,7 @@ use function glob;
 use function hash;
 use function hrtime;
 use function implode;
+use function in_array;
 use function ini_get;
 use function ini_parse_quantity;
 use function intdiv;
@@ -105,6 +110,7 @@ use function json_encode;
 use function ksort;
 use function lstat;
 use function max;
+use function memory_get_usage;
 use function method_exists;
 use function microtime;
 use function min;
@@ -122,6 +128,10 @@ use function pcntl_sigprocmask;
 use function pcntl_strerror;
 use function pcntl_waitid;
 use function pcntl_waitpid;
+use function pcntl_wexitstatus;
+use function pcntl_wifexited;
+use function pcntl_wifsignaled;
+use function pcntl_wtermsig;
 use function posix_get_last_error;
 use function posix_getgrnam;
 use function posix_getpid;
@@ -136,13 +146,16 @@ use function posix_setuid;
 use function preg_match;
 use function putenv;
 use function random_bytes;
+use function random_int;
 use function range;
 use function register_shutdown_function;
 use function restore_error_handler;
 use function rmdir;
+use function round;
 use function rtrim;
 use function scandir;
 use function socket_cmsg_space;
+use function socket_create_pair;
 use function socket_export_stream;
 use function socket_get_option;
 use function socket_import_stream;
@@ -261,6 +274,21 @@ class TCP_Server_CLI implements Servers
    private const int REVIVE_BURST = 3;
    private const int REVIVE_DELAY = 500_000_000;
    private const int REVIVE_CAP = 5_000_000_000;
+   // # Recycling
+   /**
+    * Exit status of a worker that recycled (`maxRequests` or `maxMemory`).
+    * Its replacement was forked when the recycle began (the worker announced
+    * it on its beacon), so the master only reaps it and logs the recycle. An
+    * exit 75 the beacon never announced — at boot, from a handler — is a
+    * crash like any other. 75 is `EX_TEMPFAIL`: done for now, retry.
+    */
+   public const int RECYCLE = 75;
+   /**
+    * What one dispatch of this node is, toward `maxRequests`: `'connection'`
+    * — every accepted connection counts, by the transport itself — or a unit
+    * the node counts on its own through `count()` (HTTP: `'request'`).
+    */
+   public const string DISPATCH = 'connection';
    // Every signal the master handles. One list: `start()` installs it and
    // `interacting()` re-installs it (Monitor's raw Input replaces some).
    private const array SIGNALS = [
@@ -297,9 +325,41 @@ class TCP_Server_CLI implements Servers
    protected array $Listeners = [];
    /** @var array<int,int> Worker index reaped by the SIGCHLD dispatch => hrtime (ns) from which revive() may refork it. */
    private array $casualties = [];
-   /** @var array<int,resource> Worker index => master end of the pair its current worker writes one byte to on entering its event loop. */
+   /**
+    * Worker index => master end of its current worker's beacon pair. The
+    * worker writes `!` on entering its event loop and `R` when it begins to
+    * recycle (it left the accept set and drains): the master reads both in
+    * `poll()` and wakes on them in `rest()`. The master writes `G` — the go —
+    * once the slot's previous worker, still draining when this one was
+    * forked, is gone (`permit()`): until then this one may not recycle.
+    *
+    * @var array<int,resource>
+    */
    private array $Beacons = [];
-   /** @var resource|null A worker's own end of its beacon pair, until it enters its event loop. */
+   /**
+    * Worker index => what its current worker said on its beacon so far
+    * (`!`, `R`), kept until its recycle is relieved or its death classified
+    * (`hear()`); `''` once its beacon closed without a word.
+    *
+    * @var array<int,string>
+    */
+   private array $words = [];
+   /**
+    * Workers the SIGCHLD dispatch reaped, `[index, PID, status, retired]`,
+    * waiting for `classify()` — the dispatch only records them: their
+    * beacons are read from loop context alone.
+    *
+    * @var array<int,array{int,int,int,bool}>
+    */
+   private array $deaths = [];
+   /**
+    * Retiree PID => hrtime (ns) past which the master kills it: `drainTimeout`
+    * plus 5 s after it began to recycle, as `reload()` bounds a drain.
+    *
+    * @var array<int,int>
+    */
+   private array $deadlines = [];
+   /** @var resource|null A worker's own end of its beacon pair, until its recycle is announced. */
    private $Beacon = null;
    /** @var array<int,int> Worker index => consecutive worker deaths before the event loop. */
    private array $streaks = [];
@@ -405,6 +465,17 @@ class TCP_Server_CLI implements Servers
    // # Reload — graceful drain budget (seconds) each worker gets to finish its
    //   in-flight connections before the master force-kills it during a reload.
    public static int $drainTimeout = 30;
+   // # Recycling — set by the transport Configs (`maxRequests`, `jitter`,
+   //   `maxMemory`). A worker past its dispatch limit (drawn once per worker
+   //   within ±jitter of maxRequests) or past maxMemory bytes tells the
+   //   master, which forks its replacement at once; it stops accepting,
+   //   drains like a reload and exits with `RECYCLE`. A slot keeps one
+   //   draining worker at most: a replacement past a limit while its slot's
+   //   previous worker still drains serves on until that one is gone (the
+   //   master's go). 0 keeps each trigger off.
+   public static int $maxRequests = 0;
+   public static float $jitter = 0.1;
+   public static int $maxMemory = 0;
    /** @var array<string,true> */
    protected array $Events = [];
    // # Hooks — server lifecycle callbacks, set by the node `on()` overrides.
@@ -433,6 +504,23 @@ class TCP_Server_CLI implements Servers
          return null;
       }
    }
+   // # Recycling — worker-local state behind `count()`, set when a worker
+   //   boots. Public for the nodes to read; never assign it.
+   /** Dispatches this worker counted. */
+   public static int $dispatches = 0;
+   /** This worker's own dispatch limit, drawn from maxRequests and jitter (0 = none). */
+   public static int $quota = 0;
+   /** Whether this worker counts dispatches: recycling is on and no limit passed yet. */
+   public static bool $counting = false;
+   /** Whether this worker is recycling: it drains and exits with `RECYCLE`. */
+   public static bool $recycling = false;
+   /**
+    * Whether this worker waits for the master's go before it may recycle: it
+    * was forked while its slot's previous worker still drained a recycle, and
+    * a slot keeps one draining worker at most. Past a limit before the go,
+    * it serves on — still accepting — and recycles once the go comes.
+    */
+   public static bool $gated = false;
    // # State
    protected int $started = 0;
    protected bool $daemonized = false;
@@ -455,6 +543,13 @@ class TCP_Server_CLI implements Servers
     * reports the failure instead.
     */
    protected bool $starting = false;
+   /**
+    * Workers that recycled inside the startup barrier, PID => slot index: not
+    * lost — each slot is reforked once the barrier ends. Emptied after it.
+    *
+    * @var array<int,int>
+    */
+   protected array $recycled = [];
    /** The re-admission retry a refused `resume()` armed (its deferred timer id), or null. */
    private null|int $retry = null;
    // # Reload — the launch command captured at start(), replayed verbatim by
@@ -718,6 +813,13 @@ class TCP_Server_CLI implements Servers
 
          $this->user = $Config->user;
          $this->group = $Config->group;
+
+         // @ Worker recycling — assigned whole, so a server configured later
+         //   in the same process never inherits an earlier one's limits
+         self::$maxRequests = $Config->maxRequests;
+         self::$jitter = $Config->jitter;
+         self::$maxMemory = $Config->maxMemory;
+
          // ? Root with no identity configured, inside a container: take the
          //   runtime account the kit image ships instead of running the workers
          //   as root. A host keeps its own behavior — an account that happens
@@ -845,34 +947,15 @@ class TCP_Server_CLI implements Servers
             }
             break;
 
-         // @ recover()
+         // @ recover() — the dispatch only reaps and records each death. The
+         //   loop classifies them (`classify()`): a beacon read here would race
+         //   the loop's own reads of it wherever signals arrive asynchronously
+         //   (Monitor mode), and a child forked inside this dispatch would
+         //   inherit pcntl's busy flag — its own handlers would never fire.
          case SIGCHLD: // 17
             if ($this->Process->level === 'master') {
                while ($dead = $this->Process->recover()) {
-                  [$deadIndex, $deadPID] = $dead;
-
-                  // @ The reaped worker can no longer release its own private
-                  //   credential artifact — a hard kill never runs its exit
-                  //   path. The reaper owns that cleanup.
-                  $this->sweep();
-
-                  // ? A worker lost inside the startup barrier is reaped, not
-                  //   reforked: the replacement would rebuild the same failing
-                  //   boot. `ready()` sees the lost worker and fails startup.
-                  if ($this->starting) {
-                     $this->Logger->log(
-                        warning: "Worker #{$deadIndex} (PID: {$deadPID}) died before startup completed.@.;"
-                     );
-
-                     continue;
-                  }
-
-                  // ! Never fork inside this dispatch: pcntl flags its
-                  //   dispatcher busy while a user handler runs, and a child
-                  //   forked in that window inherits the flag — its own
-                  //   signal handlers would never fire again. tick() reforks
-                  //   from plain loop context via revive().
-                  $this->schedule($deadIndex, $deadPID);
+                  $this->deaths[] = $dead;
                }
             }
             break;
@@ -977,6 +1060,41 @@ class TCP_Server_CLI implements Servers
          exit(1);
       }
 
+      // ? A memory ceiling no worker can honor is refused, as the Configs
+      //   refuse every limit no worker could reach: one not above the memory
+      //   a worker starts with recycles each worker at its first dispatch —
+      //   and every replacement after it, a fork per dispatch — and one not
+      //   below `memory_limit` is never reached (PHP's fatal error comes
+      //   first). A reload never takes the serving instance down for it —
+      //   its old workers are drained already: the fresh image turns the
+      //   ceiling off and says why, as a worker born past it does. A
+      //   Test-mode server never recycles.
+      $maxMemory = self::$maxMemory;
+      if ($maxMemory > 0 && $this->Mode !== Modes::Test) {
+         // ! A worker starts as a copy of this booted master
+         $baseline = memory_get_usage(true);
+         $ceiling = ini_parse_quantity($limit);
+         $refusal = match (true) {
+            $maxMemory <= $baseline
+               => "maxMemory ({$maxMemory} bytes) is not above the {$baseline} bytes a worker starts with: every worker would recycle at its first dispatch. Raise maxMemory.",
+            $ceiling > 0 && $maxMemory >= $ceiling
+               => "maxMemory ({$maxMemory} bytes) is not below memory_limit {$limit}: a worker would hit memory_limit — a fatal error, not a recycle — first. Lower maxMemory under memory_limit.",
+            default => ''
+         };
+         if ($refusal !== '' && $handoff === true) {
+            $this->Logger->log(error: "@\;Reloaded without a memory ceiling: {$refusal}@\;");
+            self::$maxMemory = 0;
+         }
+         else if ($refusal !== '') {
+            $this->Logger->log(critical: "@\;Server not started: {$refusal}@\;");
+            // ? A muted display would end the process without a word
+            if (Display::$segments === Display::NONE) {
+               fwrite(STDERR, "Server not started: {$refusal}\n");
+            }
+            exit(1);
+         }
+      }
+
       // ? On an ordinary launch there is no handoff, so retain the early bind
       //   probe and its useful permission diagnostic.
       if ($this->Listeners === []) {
@@ -1060,12 +1178,13 @@ class TCP_Server_CLI implements Servers
 
       // @ Fork process workers — each runs the overridable worker() boot body.
       $this->Logger->log(notice: "Forking {$this->workers} workers... @.;");
-      // ! One beacon pair per slot, before the fork: schedule() tells a
-      //   worker that died at boot from one that served by its byte. Test
-      //   mode never reforks, so it never pays for them.
+      // ! One beacon pair per slot, before the fork: `classify()` tells a
+      //   worker that died at boot from one that served by its byte, and a
+      //   recycle is announced on it. Test mode never reforks, so it never
+      //   pays for them.
       $Pairs = [];
       for ($index = 0; $this->Mode !== Modes::Test && $index < $this->workers; $index++) {
-         $Pairs[$index] = @stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+         $Pairs[$index] = $this->pair();
       }
       $this->Process->fork($this->workers, instance: function (Process $Process, int $index) use ($Pairs): void {
          foreach ($Pairs as $slot => $Pair) {
@@ -1132,6 +1251,7 @@ class TCP_Server_CLI implements Servers
       $this->starting = true;
       $crossed = $this->ready();
       $this->starting = false;
+      $this->recycled = [];
 
       if ($crossed === false) {
          $message = 'Server workers did not cross the startup readiness barrier.';
@@ -1192,12 +1312,18 @@ class TCP_Server_CLI implements Servers
       return true;
    }
 
-   /** @return array<string,mixed> Persisted master/worker topology. */
+   /**
+    * The persisted master/worker topology — `retirees` lists the workers
+    * still draining a recycle (their replacements are in `workers`).
+    *
+    * @return array<string,mixed>
+    */
    protected function describe (): array
    {
       return [
          'master'  => $this->Process->master,
          'workers' => $this->Process->Children->PIDs,
+         'retirees' => array_keys($this->Process->Children->retirees),
          'host'    => $this->host ?? '0.0.0.0',
          'port'    => $this->port ?? 0,
          'started' => $this->started,
@@ -1302,10 +1428,15 @@ class TCP_Server_CLI implements Servers
     */
    protected function work (Process $Process, int $index): void
    {
-      // ! A worker reforked from the master's SIGCHLD dispatch inherits the
-      //   dispatcher's full signal block mask across pcntl_fork(); a serving
-      //   worker must field its own SIGQUIT/SIGTERM lifecycle signals.
+      // ! A worker inherits the master's signal block mask across
+      //   pcntl_fork(); a serving worker must field its own SIGQUIT/SIGTERM
+      //   lifecycle signals.
       pcntl_sigprocmask(SIG_SETMASK, []);
+
+      // ! A worker forked while the server is paused — a recycle's
+      //   replacement, a crash's refork — boots paused: the master's status
+      //   is this process's own until `instance()` sets its own
+      $paused = $this->Status === Status::Paused;
 
       // The launcher handshake belongs only to the final daemon master. A
       // worker retaining the inherited descriptor would hide master failure.
@@ -1375,6 +1506,11 @@ class TCP_Server_CLI implements Servers
 
       // @ Adopt this worker's pre-bound SO_REUSEPORT listener.
       $this->instance();
+      // ! Paused before the listener's admission below can dispatch a
+      //   signal: a resume landing there finds this worker paused, and wins
+      if ($paused) {
+         $this->Status = Status::Paused;
+      }
 
       // ! The master probes every listener before forking, but the worker is
       //   the final owner of this selector. Refuse service before node wiring
@@ -1389,16 +1525,64 @@ class TCP_Server_CLI implements Servers
          );
          exit(1);
       }
+      // ? Paused — booted so, or by a pause that landed in that admission —
+      //   and not resumed since: admitted above, then out of the accept set
+      //   until the master resumes it (`resume()`)
+      if ($this->Status === Status::Paused) {
+         self::$Event->del($this->Socket, Select::EVENT_CONNECT);
+      }
 
       // @ Per-worker wiring hook (e.g. WS cross-worker relay). Default: nothing.
       $this->wire($index);
 
+      // @ Worker recycling: this worker's own limit, drawn once. A Test-mode
+      //   master never reforks, so recycling there would only lose workers
+      self::$dispatches = 0;
+      self::$recycling = false;
+      self::$quota = self::draw(self::$maxRequests, self::$jitter, $index, $this->workers);
+      if ($this->Mode !== Modes::Test && (self::$quota > 0 || self::$maxMemory > 0)) {
+         // ? No beacon (the master could not create its pair): this worker
+         //   could not announce a recycle, so no replacement would serve its
+         //   slot while it drains — it never recycles
+         if ($this->Beacon === null) {
+            $this->Logger->log(
+               warning: "Worker #{$index} has no beacon to announce a recycle (the master could not create its pair): it will not recycle.@.;"
+            );
+            self::$quota = 0;
+            self::$maxMemory = 0;
+         }
+         // ? Born at or past maxMemory (its boot took it there): every first
+         //   dispatch would recycle it, and its replacements alike — a fork
+         //   per dispatch. Its memory ceiling stays off; `maxRequests` holds
+         $born = memory_get_usage(true);
+         $maxMemory = self::$maxMemory;
+         if ($maxMemory > 0 && $born >= $maxMemory) {
+            $this->Logger->log(
+               error: "Worker #{$index} booted with {$born} bytes, not under maxMemory ({$maxMemory} bytes): it will not recycle by memory. Raise maxMemory.@.;"
+            );
+            self::$maxMemory = 0;
+         }
+      }
+      self::$counting = $this->Mode !== Modes::Test
+         && (self::$quota > 0 || self::$maxMemory > 0);
+      // ? Gated — forked while its slot's previous worker still drained its
+      //   recycle (`revive()`): it may not recycle before the master's go
+      //   (`permit()`), read from the beacon once a second. A worker that
+      //   counts nothing — no beacon, recycling off — has nothing to wait for
+      if (self::$gated && (self::$counting === false || $this->Beacon === null)) {
+         self::$gated = false;
+      }
+      if (self::$gated && $this->Beacon !== null) {
+         stream_set_blocking($this->Beacon, false);
+         Timer::add(interval: 1, handler: $this->await(...), persistent: true);
+      }
+
       // @ Booted: tell the master through the beacon, so a later death of
-      //   this worker is never taken for a boot that fails
+      //   this worker is never taken for a boot that fails. The beacon stays
+      //   open: a recycle announces itself on it (`drain()`), the master's go
+      //   arrives on it
       if ($this->Beacon !== null) {
          @fwrite($this->Beacon, '!');
-         fclose($this->Beacon);
-         $this->Beacon = null;
       }
 
       // @ Event loop.
@@ -1664,7 +1848,8 @@ class TCP_Server_CLI implements Servers
 
    /**
     * Master supervision tick — run once per master-loop iteration in every
-    * mode (Daemon, Foreground, Interactive, Monitor). Default: nothing.
+    * mode (Daemon, Foreground, Interactive, Monitor): it supervises the
+    * workers (`heed()`, then `revive()`) and services the live-log tap.
     * Nodes override it for periodic master-side duties (e.g. the HTTP
     * Auto-TLS renewal pump). Deliberately not Timer-based: Monitor mode
     * wipes the master timers (`Timer::del(0)`) when dropping to
@@ -1672,6 +1857,9 @@ class TCP_Server_CLI implements Servers
     */
    protected function tick (): void
    {
+      // @ What the workers did and said — a recycle frees its slot now —
+      //   then the reforks
+      $this->heed();
       $this->revive();
 
       // @ Service the live-log tap (accepts/reaps/drains). Monitor drains through
@@ -1682,8 +1870,9 @@ class TCP_Server_CLI implements Servers
    }
 
    /**
-    * Refork the workers reaped by the SIGCHLD dispatch. Runs from the master
-    * loops' tick() — plain execution context — because a child forked inside
+    * Refork the slots queued since — a worker that died (`classify()`) or
+    * one that began to recycle (`relieve()`). Runs from the master loops'
+    * tick() — plain execution context — because a child forked inside
     * `pcntl_signal_dispatch()` inherits its busy flag and goes signal-deaf.
     */
    protected function revive (): void
@@ -1702,7 +1891,11 @@ class TCP_Server_CLI implements Servers
             continue;
          }
 
-         $Pair = @stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+         $Pair = $this->pair();
+         // ! Gated: the slot's previous worker still drains its recycle — its
+         //   replacement may not recycle before it is gone (`permit()`), so a
+         //   slot never holds more than one retiree
+         $gated = in_array($deadIndex, $this->Process->Children->retirees, true);
 
          // ! `@`: a refused fork (EAGAIN under RLIMIT_NPROC or a cgroup
          //   pids.max, ENOMEM) must reach the -1 branch below, not become an
@@ -1734,15 +1927,22 @@ class TCP_Server_CLI implements Servers
                exit(1);
             }
 
-            // @ Keep only its own beacon end
+            // @ Keep only its own beacon end — and none of the master's
+            //   supervision state
             foreach ($this->Beacons as $End) {
-               fclose($End);
+               if (is_resource($End)) {
+                  fclose($End);
+               }
             }
             $this->Beacons = [];
+            $this->words = [];
+            $this->deaths = [];
+            $this->deadlines = [];
             if ($Pair !== false) {
                fclose($Pair[0]);
                $this->Beacon = $Pair[1];
             }
+            self::$gated = $gated;
 
             // ! Off the console: a child forked under the armed prompt inherits
             //   readline's state — its PHP exit would put the operator's
@@ -1771,6 +1971,7 @@ class TCP_Server_CLI implements Servers
 
          // # Master process
          unset($this->casualties[$deadIndex]);
+         unset($this->words[$deadIndex]);
          if ($Pair !== false) {
             fclose($Pair[1]);
             stream_set_blocking($Pair[0], false);
@@ -1785,26 +1986,447 @@ class TCP_Server_CLI implements Servers
       }
    }
    /**
-    * Queue a worker slot the SIGCHLD dispatch reaped for revive(). Its first
-    * deaths are reforked on the next loop turn; a slot whose workers keep
-    * dying before their event loop — a boot that always fails — is
-    * reforked after a delay that doubles per death, up to `REVIVE_CAP`.
-    * Runs inside the dispatch, so it never forks.
+    * Heed what the workers did and said since the last turn: classify the
+    * deaths reaped meanwhile (`classify()`), kill the retirees past their
+    * deadline (`expire()`) — a retiree gone either way lets its slot's
+    * worker recycle (`permit()`) and leaves the persisted state — then read
+    * the live workers' beacons — a recycle frees its slot for an immediate
+    * refork (`poll()`). Forks nothing: `revive()` does, after it.
+    *
+    * Called from loop context alone — every master loop's `tick()`, and a
+    * node's startup barrier (`ready()`, before `audit()`) — with SIGCHLD
+    * blocked meanwhile: an asynchronous dispatch (Monitor mode) can never
+    * reap a child while its slot is read or changed here.
     */
-   private function schedule (int $index, int $PID): void
+   protected function heed (): void
+   {
+      // ! The dispatch waits for the end of this turn
+      $mask = [];
+      pcntl_sigprocmask(SIG_BLOCK, [SIGCHLD], $mask);
+
+      try {
+         $left = $this->classify();
+         $left = $this->expire() || $left;
+         // @ The retirees that left, out of the persisted state — once per
+         //   turn. `check()` keeps a stop race from resurrecting a tombstone.
+         if ($left && $this->Process->State->check()) {
+            $this->Process->State->save($this->describe());
+         }
+
+         $this->poll();
+      }
+      finally {
+         pcntl_sigprocmask(SIG_SETMASK, $mask);
+      }
+   }
+   /**
+    * The workers a startup barrier lost: of the PIDs it began with, the ones
+    * that left the serving set without recycling. A worker that recycled
+    * inside the barrier (`recycled`) served and left on purpose — its slot is
+    * reforked once the barrier ends. Call `heed()` first, so this turn's
+    * deaths are classified.
+    *
+    * @param array<int,int> $Workers Slot index => PID when the barrier began.
+    *
+    * @return array<int,int> The lost ones, slot index => PID.
+    */
+   protected function audit (array $Workers): array
+   {
+      return array_diff($Workers, $this->Process->Children->PIDs, array_keys($this->recycled));
+   }
+   /**
+    * Classify the workers reaped since the last turn — recorded by the
+    * SIGCHLD dispatch, or reaped here for a child it could not see yet (one
+    * that died before the master tracked it). A retiree is logged and lets
+    * its slot's worker recycle (`permit()`): its slot was reforked when it
+    * began to recycle. A serving worker's last words (`hear()`) and exit
+    * status tell a recycle from a crash, and its slot is queued for
+    * `revive()` (`schedule()`). Inside the startup barrier a dead worker is
+    * never reforked — `ready()` sees it lost — unless it recycled.
+    *
+    * @return bool Whether a retiree left.
+    */
+   private function classify (): bool
+   {
+      // @ What the dispatch has not reaped yet
+      while ($dead = $this->Process->recover()) {
+         $this->deaths[] = $dead;
+      }
+      // ?:
+      if ($this->deaths === []) {
+         return false;
+      }
+
+      // !
+      $Deaths = $this->deaths;
+      $this->deaths = [];
+      $left = false;
+
+      // @ The reaped workers can no longer release their own private
+      //   credential artifacts — a hard kill never runs its exit path. The
+      //   reaper owns that cleanup.
+      $this->sweep();
+
+      // @@
+      foreach ($Deaths as [$index, $PID, $status, $retired]) {
+         // ? A retiree: its slot was reforked when it began to recycle —
+         //   reaped, never reforked a second time; its slot's worker may
+         //   recycle now
+         if ($retired) {
+            unset($this->deadlines[$PID]);
+            $left = true;
+            $exited = pcntl_wifexited($status);
+            $code = $exited ? pcntl_wexitstatus($status) : -1;
+            if ($code === self::RECYCLE) {
+               $this->Logger->log(notice: "Worker #{$index} (PID: {$PID}) recycled.@.;");
+            }
+            else {
+               $end = $exited ? "with status {$code}" : 'by a signal';
+               $this->Logger->log(
+                  warning: "Worker #{$index} (PID: {$PID}) ended {$end} while draining its recycle; its replacement serves the slot.@.;"
+               );
+            }
+            $this->permit($index);
+
+            continue;
+         }
+
+         // ! A recycle is proved, not claimed: the worker served (its beacon
+         //   said `!`), announced it (`R`) and exited with RECYCLE — an exit
+         //   75 alone (at boot, from a handler) is a crash like any other
+         [$served, $recycling] = $this->hear($index);
+         $recycled = $served
+            && $recycling
+            && pcntl_wifexited($status)
+            && pcntl_wexitstatus($status) === self::RECYCLE;
+
+         // ? A worker lost inside the startup barrier is reaped, not reforked:
+         //   the replacement would rebuild the same failing boot, and the
+         //   node's `ready()` fails startup (`audit()`). One that recycled is
+         //   not lost: its slot is reforked once the barrier ends.
+         if ($this->starting) {
+            if ($recycled === false) {
+               $this->Logger->log(
+                  warning: "Worker #{$index} (PID: {$PID}) died before startup completed.@.;"
+               );
+
+               continue;
+            }
+
+            $this->recycled[$PID] = $index;
+         }
+
+         $this->schedule($index, $PID, $served, $recycled);
+      }
+
+      // :
+      return $left;
+   }
+   /**
+    * Kill the retirees still draining past their deadline — `drainTimeout`
+    * plus 5 s after they began to recycle, as `reload()` bounds its drain.
+    * A handler that blocks (a sleep, a call without a timeout) keeps the
+    * retiree's own drain timer from ever firing.
+    *
+    * @return bool Whether a retiree left.
+    */
+   private function expire (): bool
+   {
+      // ?:
+      if ($this->deadlines === []) {
+         return false;
+      }
+
+      // !
+      $now = (int) hrtime(true);
+      $left = false;
+
+      // @@
+      foreach ($this->deadlines as $PID => $deadline) {
+         if ($deadline <= $now && $this->kill($PID)) {
+            $left = true;
+         }
+      }
+
+      // :
+      return $left;
+   }
+   /**
+    * Kill a retiree past its deadline: SIGKILL it, reap it now and let its
+    * slot's worker recycle (`permit()`) — its replacement already serves the
+    * slot, so nothing is reforked. Runs inside `heed()`, with SIGCHLD
+    * blocked: the reap is this one's, never the dispatch's.
+    *
+    * @return bool Whether it left — killed, or ended on its own meanwhile.
+    */
+   private function kill (int $PID): bool
+   {
+      unset($this->deadlines[$PID]);
+
+      // ?: Not a retiree (any more)
+      $index = $this->Process->Children->retirees[$PID] ?? null;
+      if ($index === null) {
+         return false;
+      }
+
+      // @
+      posix_kill($PID, SIGKILL);
+      $status = 0;
+      // ?: Not reaped (a signal cut the wait): the next turn reaps it
+      if (pcntl_waitpid($PID, $status) !== $PID) {
+         return false;
+      }
+      $this->Process->Children->remove($PID);
+
+      // ?: It had ended on its own meanwhile: an ordinary retiree death,
+      //    classified next turn
+      if (pcntl_wifsignaled($status) === false || pcntl_wtermsig($status) !== SIGKILL) {
+         $this->deaths[] = [$index, $PID, $status, true];
+
+         return true;
+      }
+
+      // @
+      $this->sweep();
+      $this->Logger->log(
+         warning: "Worker #{$index} (PID: {$PID}) killed, still draining past its deadline (drainTimeout + 5 s); its replacement serves the slot.@.;"
+      );
+      $this->permit($index);
+
+      // :
+      return true;
+   }
+   /**
+    * Let a slot's serving worker recycle: the slot's retiree is gone —
+    * reaped (`classify()`) or killed past its deadline (`kill()`). Its
+    * replacement, forked while it still drained (`revive()`), may not
+    * recycle before this go (`count()`), so a slot never holds more than its
+    * serving worker and one retiree; the worker reads the go from its beacon
+    * (`await()`). A slot whose worker is not forked yet has no beacon: that
+    * worker, forked with no retiree in its slot, is never gated.
+    */
+   private function permit (int $index): void
+   {
+      $End = $this->Beacons[$index] ?? null;
+      if (is_resource($End)) {
+         @fwrite($End, 'G');
+      }
+   }
+   /**
+    * Read what the workers said on their beacons since the last turn.
+    *
+    * `!` — the worker entered its event loop: a later death of it is never
+    * taken for a boot that fails. `R` — it began to recycle: it left the
+    * accept set and drains, so its slot is reforked at once (`relieve()`) on
+    * the same pre-bound listener while it finishes its in-flight work. A
+    * beacon closed without `R` (the worker is gone) is closed here too, so
+    * `rest()` never wakes on it again; its words wait for the reaper
+    * (`hear()`).
+    */
+   private function poll (): void
+   {
+      // @@ Each serving worker's beacon, read from the live set on every pass
+      //    (`relieve()` drops entries as it goes)
+      foreach (array_keys($this->Beacons) as $index) {
+         $End = $this->Beacons[$index] ?? null; // @phpstan-ignore nullCoalesce.offset (relieve() drops entries during this walk)
+         // ? Dropped meanwhile, or closed under this walk
+         if (is_resource($End) === false) {
+            unset($this->Beacons[$index]);
+
+            continue;
+         }
+
+         $said = @fread($End, 16);
+
+         // ? Nothing new
+         if ($said === false || $said === '') {
+            if (feof($End)) {
+               $this->words[$index] ??= '';
+               unset($this->Beacons[$index]);
+               fclose($End);
+            }
+
+            continue;
+         }
+
+         $prior = $this->words[$index] ?? '';
+         $this->words[$index] = "{$prior}{$said}";
+
+         if (str_contains($said, 'R')) {
+            $this->relieve($index);
+         }
+      }
+   }
+   /**
+    * Relieve the worker of a slot that began to recycle: it leaves the slot
+    * — kept as a retiree, reaped without a second refork when it exits,
+    * killed if it outlives its deadline (`expire()`) — and the slot is
+    * queued for an immediate refork, outside the crash backoff. The
+    * replacement inherits the slot's pre-bound listener, so the slot accepts
+    * again while the retiree still drains: no window without a worker
+    * accepting.
+    *
+    * One retiree per slot: the replacement is forked gated (`revive()`) —
+    * past a limit before this retiree is gone, it serves on instead of
+    * recycling, until the master's go (`permit()`). So a slot never holds
+    * more than its serving worker and one retiree, and the retiree's
+    * in-flight work keeps its whole drain: a client that keeps a retiree
+    * busy delays the next recycle of its slot — never past the retiree's
+    * deadline — and cannot multiply the processes.
+    */
+   private function relieve (int $index): void
+   {
+      // ? Not a serving worker any more (reaped meanwhile): its words wait
+      //   for `hear()`
+      $PID = $this->Process->Children->PIDs[$index] ?? 0;
+      if ($PID === 0 || $this->Process->Children->retire($PID) === false) {
+         return;
+      }
+
+      // @ Its beacon has said all it can
+      $End = $this->Beacons[$index] ?? null;
+      unset($this->Beacons[$index], $this->words[$index]);
+      if (is_resource($End)) {
+         fclose($End);
+      }
+
+      // ! Bounded like a reload drain
+      $now = (int) hrtime(true);
+      $this->deadlines[$PID] = $now + (max(0, self::$drainTimeout) + 5) * 1_000_000_000;
+      // ? Inside the startup barrier: recycled, not lost (`audit()`)
+      if ($this->starting) {
+         $this->recycled[$PID] = $index;
+      }
+
+      // @ A worker that served ends any crash streak of its slot
+      $this->streaks[$index] = 0;
+      $this->Logger->log(notice: "Worker #{$index} (PID: {$PID}) recycling, forking its replacement...@.;");
+      $this->casualties[$index] = $now;
+   }
+   /**
+    * Read a dead worker's last words — what its beacon said before (`poll()`)
+    * and what is left on it — and close it.
+    *
+    * @return array{bool,bool} [served, recycling] — whether it entered its
+    *         event loop (`!`) and whether it began to recycle (`R`). A slot
+    *         that never had a beacon (its pair was refused) counts as served,
+    *         never as recycling: neither can be proved.
+    */
+   private function hear (int $index): array
+   {
+      $End = $this->Beacons[$index] ?? null;
+      $words = $this->words[$index] ?? null;
+      unset($this->Beacons[$index], $this->words[$index]);
+
+      // ?: Never opened
+      if ($End === null && $words === null) {
+         return [true, false];
+      }
+
+      // @ What is left on it
+      $words ??= '';
+      if (is_resource($End)) {
+         $words .= (string) @fread($End, 16);
+         fclose($End);
+      }
+
+      // :
+      return [str_contains($words, '!'), str_contains($words, 'R')];
+   }
+   /**
+    * Wait up to `$microseconds` between two master loop turns: a signal or a
+    * byte on any worker's beacon (a recycle beginning) ends the wait early,
+    * so the next `tick()` forks a replacement without waiting out the turn.
+    */
+   private function rest (int $microseconds): void
+   {
+      // ! The open beacons
+      $Beacons = [];
+      foreach ($this->Beacons as $End) {
+         if (is_resource($End)) {
+            $Beacons[] = $End;
+         }
+      }
+      // ?: None to wake on (Test mode, every pair refused)
+      if ($Beacons === []) {
+         usleep($microseconds);
+
+         return;
+      }
+
+      // @ A signal interrupts the select (false): the loop dispatches it next
+      $Writes = null;
+      $Excepts = null;
+      @stream_select($Beacons, $Writes, $Excepts, 0, $microseconds);
+   }
+   /**
+    * Create one beacon pair: close-on-exec where ext-sockets offers
+    * `SOCK_CLOEXEC`, so a process a worker's handler starts (`proc_open()`,
+    * `exec()`) never inherits the worker's end — it would hold the pair open
+    * past the worker. Elsewhere a plain stream pair, whose ends such a
+    * process inherits: PHP has no `fcntl()` to set `FD_CLOEXEC` after.
+    *
+    * @return array<int,resource>|false [master end, worker end], or false when refused.
+    */
+   private function pair (): array|false
+   {
+      // @ Close-on-exec
+      if (defined('SOCK_CLOEXEC') && function_exists('socket_create_pair')) {
+         $Sockets = [];
+         if (@socket_create_pair(AF_UNIX, SOCK_STREAM | constant('SOCK_CLOEXEC'), 0, $Sockets) === false) {
+            return false;
+         }
+         $Master = socket_export_stream($Sockets[0]);
+         $Worker = socket_export_stream($Sockets[1]);
+         if ($Master === false || $Worker === false) {
+            if (is_resource($Master)) {
+               fclose($Master);
+            }
+            if (is_resource($Worker)) {
+               fclose($Worker);
+            }
+
+            return false;
+         }
+
+         // :
+         return [$Master, $Worker];
+      }
+
+      // :
+      return @stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+   }
+   /**
+    * Queue the slot of a worker that died for revive(). Its first deaths
+    * are reforked on the next loop turn; a slot whose workers keep dying
+    * before their event loop — a boot that always fails — is reforked after
+    * a delay that doubles per death, up to `REVIVE_CAP`. A recycled worker
+    * whose exit came before the master read its `R` (see `poll()`) is no
+    * death: it is logged as a recycle and reforked on the next loop turn,
+    * outside the backoff. Called by `classify()`, so it never forks.
+    *
+    * @param bool $served Whether the worker entered its event loop (`hear()`).
+    * @param bool $recycled Whether it ended a recycle (`hear()` and its exit status).
+    */
+   private function schedule (int $index, int $PID, bool $served, bool $recycled): void
    {
       $now = (int) hrtime(true);
+
+      // ?: A recycle never extends the streak (one that served ends it, as
+      //    any served exit does) and is never delayed
+      if ($recycled) {
+         if ($served) {
+            $this->streaks[$index] = 0;
+         }
+         $this->Logger->log(notice: "Worker #{$index} (PID: {$PID}) recycled, reforking...@.;");
+         $this->casualties[$index] = $now;
+
+         return;
+      }
 
       // @ A worker that died before its event loop (no byte on its beacon)
       //   extends the slot's streak; one that served resets it — a worker
       //   killed by a request is reforked at once, however young
-      $served = true;
-      $End = $this->Beacons[$index] ?? null;
-      if ($End !== null) {
-         $served = @fread($End, 1) === '!';
-         fclose($End);
-         unset($this->Beacons[$index]);
-      }
       $streak = $served ? 0 : ($this->streaks[$index] ?? 0) + 1;
       $this->streaks[$index] = $streak;
 
@@ -2037,16 +2659,16 @@ class TCP_Server_CLI implements Servers
       $this->Logger->log(info: 'Running in Daemon mode (no UI)...@.;');
 
       // @ Daemon master loop (Status changes via signal handlers).
-      //   Child exits are reaped exclusively by the SIGCHLD handler
-      //   (`recover()` drains every reapable child) — a raw waitpid here
-      //   would RACE it and could steal a worker exit, losing the refork.
+      //   Child exits are reaped only through `recover()` — by the SIGCHLD
+      //   handler, or by `tick()` for one it missed — never by a raw
+      //   waitpid here, which could steal a worker exit and lose its refork.
       while ($this->Status !== Status::Stopping) { // @phpstan-ignore notIdentical.alwaysTrue
          pcntl_signal_dispatch();
 
          // @ Master supervision tick (node overrides)
          $this->tick();
 
-         usleep(500000); // 0.5s
+         $this->rest(500_000); // 0.5s at most
       }
    }
    protected function serve (): void
@@ -2058,21 +2680,25 @@ class TCP_Server_CLI implements Servers
       // @ Master loop (no fork): stay in the foreground as the container/service
       //   process. Logs go to stdout and SIGTERM/SIGINT stop via signal handlers.
       //   Master PID is already this process and was saved before the dispatch.
-      //   Child exits are reaped exclusively by the SIGCHLD handler
-      //   (`recover()` drains every reapable child) — a raw waitpid here
-      //   would RACE it and could steal a worker exit, losing the refork.
+      //   Child exits are reaped only through `recover()` — by the SIGCHLD
+      //   handler, or by `tick()` for one it missed — never by a raw
+      //   waitpid here, which could steal a worker exit and lose its refork.
       while ($this->Status !== Status::Stopping) { // @phpstan-ignore notIdentical.alwaysTrue
          pcntl_signal_dispatch();
 
          // @ Master supervision tick (node overrides)
          $this->tick();
 
-         usleep(500000); // 0.5s
+         $this->rest(500_000); // 0.5s at most
       }
    }
    protected function interacting (): void
    {
-      $this->Status = Status::Running;
+      // ! Running — unless paused: back from Monitor, a paused server stays
+      //   paused (its workers do, and a replacement boots so), until `resume`
+      if ($this->Status !== Status::Paused) {
+         $this->Status = Status::Running;
+      }
 
       Display::show(Display::MESSAGE);
 
@@ -2118,7 +2744,14 @@ class TCP_Server_CLI implements Servers
          //   one already due); after the workers changed, re-check soon — a
          //   SIGCHLD can still land between that dispatch and the wait,
          //   which it would not cut short
-         $wait = $this->Process->Children->PIDs === $PIDs ? 500_000 : 50_000;
+         $wait = $this->Process->Children->PIDs === $PIDs && $this->deaths === []
+            ? 500_000
+            : 50_000;
+         // ? Recycling on: this wait cannot wake on a beacon, so look at them
+         //   often — a recycle's replacement is forked while it drains
+         if (self::$maxRequests > 0 || self::$maxMemory > 0) {
+            $wait = min($wait, 50_000);
+         }
          $now = (int) hrtime(true);
          foreach ($this->casualties as $due) {
             $wait = min($wait, max(0, intdiv($due - $now, 1_000)));
@@ -2274,7 +2907,11 @@ class TCP_Server_CLI implements Servers
     */
    protected function monitoring (): void
    {
-      $this->Status = Status::Running;
+      // ! Running — unless paused: a paused server entering Monitor stays
+      //   paused (its workers do, and a replacement boots so), until `resume`
+      if ($this->Status !== Status::Paused) {
+         $this->Status = Status::Running;
+      }
 
       // @ Route master logs into the pipe + silence stdout
       //   NOTE: file-change auto-reload (watch the project on disk → reload()) is a
@@ -2955,18 +3592,27 @@ class TCP_Server_CLI implements Servers
 
       switch ($this->Process->level) {
          case 'master':
+            // ! The serving workers, and the retirees still draining a recycle
             $children = (string) count($this->Process->Children->PIDs);
-            $this->Logger->log(critical: "Stopping {$children} worker(s)...@\\;");
+            $retirees = count($this->Process->Children->retirees);
+            $retiring = $retirees > 0 ? " and {$retirees} retiring" : '';
+            $this->Logger->log(critical: "Stopping {$children} worker(s){$retiring}...@\\;");
 
             $this->Process->Children->terminate();
 
-            // @ The beacons of the stopped workers (a Test-mode master lives on)
+            // @ The supervision state of the stopped workers (a Test-mode
+            //   master lives on)
             foreach ($this->Beacons as $End) {
-               fclose($End);
+               if (is_resource($End)) {
+                  fclose($End);
+               }
             }
             $this->Beacons = [];
+            $this->words = [];
+            $this->deaths = [];
+            $this->deadlines = [];
 
-            $this->Logger->log(critical: "{$children} worker(s) stopped!@\\;");
+            $this->Logger->log(critical: "{$children} worker(s){$retiring} stopped!@\\;");
 
             foreach ($this->Listeners as $Listener) {
                fclose($Listener);
@@ -3006,16 +3652,140 @@ class TCP_Server_CLI implements Servers
 
             exit(0);
          case 'child':
-            exit(0);
+            // : A recycle tells the master it retired on purpose
+            exit(self::$recycling ? self::RECYCLE : 0);
       }
    }
 
    /**
-    * Gracefully drain a worker for reload: stop accepting new connections (leave
-    * the SO_REUSEPORT group so nothing new is routed here), let the in-flight
-    * connections finish, then break the event loop so the worker exits cleanly
-    * via work() → stop(). Bounded by `self::$drainTimeout` so a stuck peer can
-    * never pin the reload open.
+    * Count one dispatch of this worker toward its recycle.
+    *
+    * The node calls it once per dispatch — what one is belongs to the node
+    * (`DISPATCH`): every accepted connection for TCP and WebSocket (counted by
+    * the transport), every complete request for HTTP (keep-alive requests on
+    * one connection count one each). Past the worker's own limit (drawn from
+    * `maxRequests` ± `jitter` when it booted), or past `maxMemory` bytes of
+    * real memory, the worker recycles: it stops counting and raises SIGQUIT
+    * on itself, so once this dispatch returns it drains (`drain()`): it tells
+    * the master — which forks its replacement on the slot's listener at once
+    * — leaves the accept set, hands back its idle connections, finishes its
+    * in-flight work and exits with `RECYCLE`.
+    *
+    * A slot keeps one draining worker at most: a worker forked while its
+    * slot's previous worker still drained (`$gated`) stops counting at its
+    * limit but serves on — still accepting — until the master's go, then
+    * recycles (`await()`). So a slow download on the draining worker always
+    * gets its whole `drainTimeout`, and the slot never holds a third process.
+    *
+    * A no-op (one static read) unless recycling is on in this worker.
+    */
+   public static function count (): void
+   {
+      // ? Off in this worker, or already past a limit
+      if (self::$counting === false) {
+         return;
+      }
+
+      self::$dispatches++;
+
+      // ? Under both ceilings: keep serving
+      if (
+         (self::$quota === 0 || self::$dispatches < self::$quota)
+         && (self::$maxMemory === 0 || memory_get_usage(true) < self::$maxMemory)
+      ) {
+         return;
+      }
+
+      // ? Held: the slot's previous worker still drains — serve on until the
+      //   master's go lets this one recycle
+      self::$counting = false;
+      if (self::$gated) {
+         return;
+      }
+
+      // @ Recycle — drained from the event loop once this dispatch returns
+      self::$recycling = true;
+      posix_kill(posix_getpid(), SIGQUIT);
+   }
+
+   /**
+    * Draw one worker's own dispatch limit: `maxRequests` spread by ±`jitter`.
+    *
+    * Stratified: the spread is cut into one band per worker and worker
+    * `index` draws at random inside its own band, so every worker gets a
+    * different limit (never two in the same band, however few the workers)
+    * and a reforked worker draws anew (so slots never fall into lockstep).
+    * `random_int()` reads the system CSPRNG: forked workers share the seeded
+    * `mt_rand()` state, and would draw the same numbers from it.
+    *
+    * @return int The limit, at least 1; 0 when `maxRequests` is 0 (off).
+    */
+   private static function draw (int $maxRequests, float $jitter, int $index, int $workers): int
+   {
+      // ? Recycling by dispatches is off
+      if ($maxRequests <= 0) {
+         return 0;
+      }
+
+      // !
+      $workers = max(1, $workers);
+      $band = 2.0 * $jitter / $workers;
+      $floor = 1.0 - $jitter + $band * ($index % $workers);
+
+      // @ A point inside this worker's band
+      $fraction = $floor + $band * (random_int(0, 1_000_000) / 1_000_000);
+
+      // :
+      return max(1, (int) round($maxRequests * $fraction));
+   }
+   /**
+    * Await the master's go, once a second, in a gated worker (`$gated`): the
+    * `G` on its beacon (`permit()`) tells it its slot's previous worker is
+    * gone. Let go, the worker may recycle — at once if it already passed a
+    * limit while held (it stopped counting there, `count()`), and it says so.
+    * A worker already draining (a reload, a stop) has nothing to recycle.
+    */
+   private function await (): void
+   {
+      // ? Let go already, or draining
+      if (
+         self::$gated === false
+         || $this->Beacon === null
+         || $this->Status === Status::Stopping
+      ) {
+         return;
+      }
+      // ? No go yet
+      if (str_contains((string) @fread($this->Beacon, 16), 'G') === false) {
+         return;
+      }
+
+      // @ Let go: one held past a limit meanwhile recycles now — drained
+      //   from the event loop once this tick returns
+      self::$gated = false;
+      if (self::$counting === false && self::$recycling === false) {
+         $PID = getmypid();
+         $this->Logger->log(
+            notice: "Worker (PID: {$PID}) held its recycle while its slot's previous worker drained; recycling now.@.;"
+         );
+         self::$recycling = true;
+         posix_kill(posix_getpid(), SIGQUIT);
+      }
+   }
+
+   /**
+    * Gracefully drain a worker — for a reload, or for its own recycle: stop
+    * accepting new connections (leave the SO_REUSEPORT group so nothing new is
+    * routed here), let the in-flight connections finish, then break the event
+    * loop so the worker exits cleanly via work() → stop(). Bounded by
+    * `self::$drainTimeout` so a stuck peer can never pin it open.
+    *
+    * A recycle first says why and tells the master on its beacon (`R`), so
+    * the replacement is forked at once instead of after this drain; then the
+    * node closes the connections that carry no work (`shed()`) — at once, and
+    * again at every drain tick — so idle clients reconnect to a serving
+    * worker instead of holding this one. Idempotent: a second SIGQUIT (a
+    * reload or a stop racing a recycle) finds the drain running and returns.
     */
    protected function drain (): void
    {
@@ -3023,13 +3793,44 @@ class TCP_Server_CLI implements Servers
       if ($this->Process->level !== 'child') {
          return;
       }
+      // ? Already draining
+      if ($this->Status === Status::Stopping) {
+         return;
+      }
 
       $this->Status = Status::Stopping;
 
+      // @ A recycle (`count()` raised it) says why, once, and tells the master
+      if (self::$recycling) {
+         $PID = getmypid();
+         $dispatches = self::$dispatches;
+         $unit = static::DISPATCH;
+         $quota = self::$quota;
+         $maxMemory = self::$maxMemory;
+         $reason = $quota > 0 && $dispatches >= $quota
+            ? "{$dispatches} {$unit}s reached its limit of {$quota}"
+            : "its memory passed maxMemory ({$maxMemory} bytes) after {$dispatches} {$unit}s";
+         $this->Logger->log(notice: "Worker (PID: {$PID}) recycling: {$reason}; draining...@.;");
+
+         if ($this->Beacon !== null) {
+            @fwrite($this->Beacon, 'R');
+            fclose($this->Beacon);
+            $this->Beacon = null;
+         }
+      }
+
       // @ Leave the accept set and close this worker's SO_REUSEPORT descriptor:
       //   no new connection is routed here; established sockets remain open.
-      self::$Event->del($this->Socket, self::$Event::EVENT_CONNECT);
-      @fclose($this->Socket);
+      //   The master keeps its own copy of the listener for the replacement.
+      if (is_resource($this->Socket)) {
+         self::$Event->del($this->Socket, self::$Event::EVENT_CONNECT);
+         @fclose($this->Socket);
+      }
+
+      // @ A recycle hands back the connections that carry no work
+      if (self::$recycling) {
+         $this->shed();
+      }
 
       // ? Already idle — break the loop at once (the common lightly-loaded case).
       if (count(Connections::$Connections) === 0) {
@@ -3039,17 +3840,33 @@ class TCP_Server_CLI implements Servers
 
       // @@ Otherwise poll once a second (SIGALRM-driven Timer): break the loop once
       //    the in-flight connections have drained or the budget expires. Breaking
-      //    the loop returns from work() → stop() → the forked child exit(0)s.
+      //    the loop returns from work() → stop() → the forked child exits.
       $deadline = time() + self::$drainTimeout;
       Timer::add(
          interval: 1,
          handler: function () use ($deadline): void {
+            // @ A connection whose work ended since is handed back too
+            if (self::$recycling) {
+               $this->shed();
+            }
+
             if (count(Connections::$Connections) === 0 || time() >= $deadline) {
                self::$Event->loop = false; // @phpstan-ignore-line (property on the Select impl)
             }
          },
          persistent: true
       );
+   }
+   /**
+    * Close, on a recycling worker's drain, the connections that carry no
+    * work — the node knows what work is. Called when the drain begins and at
+    * every drain tick. The transport cannot tell an idle raw TCP stream from
+    * one about to speak, so the default closes none: those connections stay
+    * until their peers close them, or `drainTimeout` ends the drain.
+    */
+   protected function shed (): void
+   {
+      // ...
    }
 
    /**
@@ -3623,9 +4440,14 @@ class TCP_Server_CLI implements Servers
       }
       $this->Listeners = [];
       foreach ($this->Beacons as $End) {
-         fclose($End);
+         if (is_resource($End)) {
+            fclose($End);
+         }
       }
       $this->Beacons = [];
+      $this->words = [];
+      $this->deaths = [];
+      $this->deadlines = [];
       foreach ($this->export() as $Resource) {
          fclose($Resource);
       }

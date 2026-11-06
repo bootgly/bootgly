@@ -148,10 +148,15 @@ class Process
    }
 
    /**
-    * Recover crashed children — reap via pcntl_waitpid.
-    * Returns the dead worker index + PID for the caller to handle reforking.
+    * Recover exited children — reap via pcntl_waitpid.
+    * Returns the dead worker index, PID, wait status and whether it was a
+    * retiree for the caller to handle reforking: the status tells an orderly
+    * exit (`pcntl_wifexited()` and `pcntl_wexitstatus()` read its code — a
+    * worker recycle, say) from a crash or a kill (`pcntl_wifsignaled()`); a
+    * retiree (`Children->retire()`) was already replaced in its slot, so its
+    * exit never calls for another child.
     *
-    * @return array{int,int}|null [deadIndex, deadPID] or null if none reaped.
+    * @return array{int,int,int,bool}|null [deadIndex, deadPID, status, retired] or null if none reaped.
     */
    public function recover (): null|array
    {
@@ -178,7 +183,19 @@ class Process
 
          $this->Children->remove($PID);
 
-         return [(int) $index, $PID];
+         // :
+         return [(int) $index, $PID, (int) $status, false];
+      }
+      // @@ The retirees: replaced in their slot, still reaped here
+      foreach ($this->Children->retirees as $PID => $index) {
+         if (pcntl_waitpid($PID, $status, WNOHANG) !== $PID) {
+            continue;
+         }
+
+         $this->Children->remove($PID);
+
+         // :
+         return [$index, $PID, (int) $status, true];
       }
 
       // :
