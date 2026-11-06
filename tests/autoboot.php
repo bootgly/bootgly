@@ -244,5 +244,9 @@ return new Suites(
       // # API/Platform — the contract the Console and Web platform roots implement
       //   (appended last to keep every suite index above stable)
       'Bootgly/API/Platform/',
+      // # API/RPC — the JSON-RPC 2.0 dispatcher and the MCP server core
+      //   (appended last to keep every suite index above stable)
+      'Bootgly/API/RPC/JSON/',
+      'Bootgly/API/RPC/MCP/',
    ]
 );
