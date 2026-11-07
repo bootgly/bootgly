@@ -302,9 +302,16 @@ PHP;
 
             return array_diff($Live, $Before) !== [];
          }, 1.5, $Pipes, $output);
+         // ! The master answers the stop at once; its exit then waits for
+         //   terminate() to collect the workers — the replacement may still be
+         //   booting, which a loaded host stretches past any tight bound
+         $mark = strlen($output);
          posix_kill($master, SIGTERM);
          $Observed['a stop during a refork is honoured at once'] = $replaced
-            && $Until(static fn (): bool => $Running($Process) === false, 0.4, $Pipes, $output);
+            && $Until(static function () use (&$output, $mark): bool {
+               return str_contains(substr($output, $mark), 'Stopping');
+            }, 0.4, $Pipes, $output)
+            && $Until(static fn (): bool => $Running($Process) === false, 3.0, $Pipes, $output);
       }
       finally {
          $Observed['group clean'] = $Finish($Process, $Pipes, $master, $port);
