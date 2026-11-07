@@ -1895,6 +1895,28 @@ class UDP_Server_CLI implements Servers
       $this->casualties[$index] = $now + $delay;
    }
 
+   /**
+    * Microseconds the master may wait before its next turn: 0.5 s at most,
+    * never past the next queued refork (0 polls one already due). After the
+    * workers changed it re-checks soon — a SIGCHLD that lands between the
+    * turn's last dispatch and the wait would not cut the wait short.
+    *
+    * @param array<int,int> $PIDs The workers before the turn's revive().
+    */
+   private function gauge (array $PIDs): int
+   {
+      $wait = $this->Process->Children->PIDs === $PIDs ? 500_000 : 50_000;
+
+      // @@ The next queued refork
+      $now = (int) hrtime(true);
+      foreach ($this->casualties as $due) {
+         $wait = min($wait, max(0, intdiv($due - $now, 1_000)));
+      }
+
+      // :
+      return $wait;
+   }
+
    /** Fork the final daemon master before any serving worker exists. */
    protected function detach (): void
    {
@@ -2045,9 +2067,14 @@ class UDP_Server_CLI implements Servers
          // @ Reap the orphans a container's init must (PID 1 only), then
          //   refork the workers the SIGCHLD dispatch — or reap() — found dead
          $this->reap();
+         $PIDs = $this->Process->Children->PIDs;
          $this->revive();
 
-         usleep(500000); // 0.5s
+         // @ A signal that landed while revive() forked — a worker dying at
+         //   boot, a stop — is handled now, not one wait later
+         pcntl_signal_dispatch();
+
+         usleep($this->gauge($PIDs));
       }
    }
    protected function serve (): void
@@ -2068,9 +2095,14 @@ class UDP_Server_CLI implements Servers
          // @ Reap the orphans a container's init must (PID 1 only), then
          //   refork the workers the SIGCHLD dispatch — or reap() — found dead
          $this->reap();
+         $PIDs = $this->Process->Children->PIDs;
          $this->revive();
 
-         usleep(500000); // 0.5s
+         // @ A signal that landed while revive() forked — a worker dying at
+         //   boot, a stop — is handled now, not one wait later
+         pcntl_signal_dispatch();
+
+         usleep($this->gauge($PIDs));
       }
    }
    protected function interacting (): void
@@ -2111,17 +2143,8 @@ class UDP_Server_CLI implements Servers
             return false;
          }
 
-         // : Wait 0.5 s at most, never past the next queued refork (0 polls
-         //   one already due); after the workers changed, re-check soon — a
-         //   SIGCHLD can still land between that dispatch and the wait,
-         //   which it would not cut short
-         $wait = $this->Process->Children->PIDs === $PIDs ? 500_000 : 50_000;
-         $now = (int) hrtime(true);
-         foreach ($this->casualties as $due) {
-            $wait = min($wait, max(0, intdiv($due - $now, 1_000)));
-         }
-
-         return $wait;
+         // :
+         return $this->gauge($PIDs);
       };
       foreach ($this->Commands->prompting($Supervise) as $input) {
          $interact = $this->Commands->execute($input);

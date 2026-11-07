@@ -64,6 +64,10 @@ final class BackoffProbe extends UDP_Server_CLI
    protected function describe (): array
    {
       file_put_contents((string) getenv('UDP_BACKOFF_LOG') . '.saves', hrtime(true) . "\n", FILE_APPEND);
+      // ! A slow state save keeps the master inside revive() while the worker
+      //   it just forked dies at boot: that SIGCHLD lands before the loop's
+      //   wait, so only a dispatch after revive() reforks it at once
+      usleep(100_000);
 
       return parent::describe();
    }
