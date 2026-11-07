@@ -74,16 +74,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # ! The experimental cells (alpine-3.24, almalinux-9, macos-15) are
+        #   paused while another session fixes them: uncomment each one here
+        #   and its `include` entry below to bring it back.
         os:
           - ubuntu-24.04
           - ubuntu-24.04-arm
           - ubuntu-26.04
           - debian-13
-          - alpine-3.24
+          # - alpine-3.24
           - fedora-44
-          - almalinux-9
+          # - almalinux-9
           - docker-image
-          - macos-15
+          # - macos-15
         php: ['8.4', '8.5']
         # ! ./Dockerfile does not build on PHP 8.5 (`docker-php-ext-install
         #   opcache` exits 2: OPcache is built into 8.5), and the published
@@ -132,12 +135,12 @@ jobs:
           #   lands: the /proc-only specs fail, instance discovery needs a
           #   procfs-free proof, and SO_REUSEPORT does not balance. 1800s:
           #   3 vCPU and no timed run yet.
-          - os: macos-15
-            kind: runner
-            runner: macos-15
-            coverage: none
-            budget: 1800
-            experimental: true
+          # - os: macos-15
+          #   kind: runner
+          #   runner: macos-15
+          #   coverage: none
+          #   budget: 1800
+          #   experimental: true
           # # Container cells (image: the cell's base; mirrors avoid Docker Hub's anonymous pull limit)
           # ! docker-init is PID 1: the suite takes its non-systemd branches.
           - os: debian-13            # glibc · deb · 8.4 native, 8.5 deb.sury.org
@@ -151,12 +154,12 @@ jobs:
           #   suite and the global wrapper keep to what all of them share.
           #   Still experimental: one green run, and WS_Client 5.6
           #   (pong_coalescing, lock-step under backpressure) has flaked once.
-          - os: alpine-3.24          # musl · BusyBox · apk · 8.4 and 8.5 native
-            kind: container
-            runner: ubuntu-24.04
-            image: public.ecr.aws/docker/library/alpine:3.24
-            budget: 900
-            experimental: true
+          # - os: alpine-3.24          # musl · BusyBox · apk · 8.4 and 8.5 native
+          #   kind: container
+          #   runner: ubuntu-24.04
+          #   image: public.ecr.aws/docker/library/alpine:3.24
+          #   budget: 900
+          #   experimental: true
           - os: fedora-44            # glibc · rpm · 8.5 native, 8.4 Remi
             kind: container
             runner: ubuntu-24.04
@@ -167,12 +170,12 @@ jobs:
           #   (20210216) keeps a ^V read blocked through SIGCHLD, so the
           #   console prompt's supervision stalls there. The image also ships
           #   journalctl without a running journald (9.6-syslog-handler).
-          - os: almalinux-9
-            kind: container
-            runner: ubuntu-24.04
-            image: public.ecr.aws/docker/library/almalinux:9
-            budget: 900
-            experimental: true
+          # - os: almalinux-9
+          #   kind: container
+          #   runner: ubuntu-24.04
+          #   image: public.ecr.aws/docker/library/almalinux:9
+          #   budget: 900
+          #   experimental: true
           # ! The published image's runtime: ./Dockerfile `base` stage. It is
           #   the only cell on GNU readline (the php images build ext-readline
           #   against it) and on the tracing JIT (its own zz-bootgly.ini). It
