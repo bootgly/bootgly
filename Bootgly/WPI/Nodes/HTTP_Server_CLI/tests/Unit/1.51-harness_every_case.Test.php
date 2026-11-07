@@ -20,21 +20,24 @@ return new Test(
       }
 
       // ! Free loopback ports: the child's live servers, and one that nothing
-      //   listens on (the harness must fail loudly when it never connects)
-      $free = static function (): int {
+      //   listens on (the harness must fail loudly when it never connects).
+      //   Every listener stays open until all four are bound: one closed
+      //   early hands its port back, and the kernel may give it out again
+      $Listeners = [];
+      $ports = [];
+      for ($i = 0; $i < 4; $i++) {
          $Listener = stream_socket_server('tcp://127.0.0.1:0');
          if ($Listener === false) {
-            return 0;
+            break;
          }
+         $Listeners[] = $Listener;
          $name = (string) stream_socket_get_name($Listener, false);
+         $ports[] = (int) substr($name, strrpos($name, ':') + 1);
+      }
+      foreach ($Listeners as $Listener) {
          fclose($Listener);
-
-         return (int) substr($name, strrpos($name, ':') + 1);
-      };
-      $port = $free();
-      $dead = $free();
-      $hung = $free();
-      $still = $free();
+      }
+      [$port, $dead, $hung, $still] = $ports + [0, 0, 0, 0];
       if (in_array(0, [$port, $dead, $hung, $still], true) || count(array_unique([$port, $dead, $hung, $still])) !== 4) {
          yield assert(assertion: false, description: 'No free loopback ports');
          return;
