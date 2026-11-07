@@ -259,6 +259,23 @@ PHP;
 
          return false;
       };
+      /**
+       * Wait until the server log holds a match of $pattern AFTER $marker; its
+       * first captured PID, or 0. A slot's earlier recoveries never match.
+       */
+      $Await = static function (Closure $Read, string $marker, string $pattern, float $seconds): int {
+         $deadline = hrtime(true) + (int) ($seconds * 1_000_000_000);
+         do {
+            $log = $Read();
+            $at = strpos($log, $marker);
+            if ($at !== false && preg_match($pattern, substr($log, $at), $Match) === 1) {
+               return (int) $Match[1];
+            }
+            usleep(10_000);
+         } while (hrtime(true) < $deadline);
+
+         return 0;
+      };
       // ! The download's head is under 200 bytes
       $whole = 4 * 1024 * 1024;
 
@@ -355,7 +372,7 @@ PHP;
          ->assert();
 
       // @ Two workers — the gate is per slot
-      [$Observed, $output, $clean] = $Run(2, static function (int $port, int $master, Closure $Read) use ($Up, $Count, $Ask, $Download, $Finish, $Expect, $whole): array {
+      [$Observed, $output, $clean] = $Run(2, static function (int $port, int $master, Closure $Read) use ($Up, $Count, $Ask, $Download, $Finish, $Expect, $Await, $whole): array {
          $up = $Up($port, $Read);
          $peak = 0;
 
@@ -375,14 +392,9 @@ PHP;
          if ($relieved && preg_match("/Worker #(\\d+) \\(PID: {$X}\\) recycling, forking/", $Read(), $Match) === 1) {
             $slot = (int) $Match[1];
          }
-         $Replacement = 0;
-         if ($slot >= 0 && $Expect($Read, "Worker #{$slot} recovered (new PID: ", 2.0)) {
-            $log = $Read();
-            $after = substr($log, (int) strpos($log, "(PID: {$X}) recycling, forking"));
-            if (preg_match("/Worker #{$slot} recovered \\(new PID: (\\d+)\\)/", $after, $Match) === 1) {
-               $Replacement = (int) $Match[1];
-            }
-         }
+         $Replacement = $slot >= 0
+            ? $Await($Read, "(PID: {$X}) recycling, forking", "/Worker #{$slot} recovered \\(new PID: (\\d+)\\)/", 2.0)
+            : 0;
          $other = $slot === 0 ? 1 : 0;
          $pattern = "/Worker #{$other} \\(PID: \\d+\\) (recycling, forking|recycled, reforking)/";
          $before = preg_match_all($pattern, $Read());
@@ -420,13 +432,10 @@ PHP;
                posix_kill($crashed, SIGKILL);
             }
          }
-         if ($crashed > 0 && $Expect($Read, "(PID: {$crashed}) crashed, reforking", 3.0)) {
-            $Expect($Read, "Worker #{$other} recovered (new PID: ", 3.0);
-            $log = $Read();
-            $tail = substr($log, (int) strrpos($log, "(PID: {$crashed}) crashed, reforking"));
-            if (preg_match("/Worker #{$other} recovered \\(new PID: (\\d+)\\)/", $tail, $Match) === 1) {
-               $refork = (int) $Match[1];
-            }
+         if ($crashed > 0) {
+            $refork = $Await(
+               $Read, "(PID: {$crashed}) crashed, reforking", "/Worker #{$other} recovered \\(new PID: (\\d+)\\)/", 6.0
+            );
          }
          $served = 0;
          $deadline = hrtime(true) + 6_000_000_000;
