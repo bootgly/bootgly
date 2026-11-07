@@ -186,12 +186,30 @@ PHP;
          $Gap = static fn (int $from, int $to): int => isSet($Times[$to], $Times[$from])
             ? intdiv($Times[$to] - $Times[$from], 1_000_000)
             : -1;
-         // ! Each retry under the first backoff step: a loaded runner boots a
-         //   worker in well over 100 ms, so the three boots are not timed together
-         $Observed['two immediate retries (each under 450 ms)'] = $Gap(0, 1) >= 0 && $Gap(0, 1) < 450
-            && $Gap(1, 2) >= 0 && $Gap(1, 2) < 450;
-         $Observed['then 0.5 s (450-900 ms)'] = $Gap(2, 3) >= 450 && $Gap(2, 3) < 900;
-         $Observed['then doubled to 1 s (950-1600 ms)'] = $Gap(3, 4) >= 950 && $Gap(3, 4) < 1_600;
+         // ! The schedule as the master decided it, in order from the served
+         //   worker's death: reforked at once, two immediate retries, then
+         //   0.5 s, then 1 s — exact, whatever the runner's load
+         $from = strpos($output, "(PID: {$original}) crashed, reforking");
+         preg_match_all(
+            '/\(PID: \d+\) (?:crashed, reforking|died before serving (\d+) times in a row, reforking in ([\d.]+)s)/',
+            $from === false ? '' : substr($output, $from),
+            $Decisions,
+            PREG_SET_ORDER
+         );
+         $Schedule = array_map(
+            static fn (array $Decision): string => isSet($Decision[1]) ? "{$Decision[1]} in a row: {$Decision[2]}s" : 'at once',
+            array_slice($Decisions, 0, 5)
+         );
+         $Observed['schedule logged: at once x3, then 0.5 s, then 1 s'] = $Schedule === [
+            'at once', 'at once', 'at once', '3 in a row: 0.5s', '4 in a row: 1s',
+         ];
+         // ! Timed boots: load only lengthens a gap (a worker's own boot is in
+         //   each), so the backoff is bounded from below and the immediate
+         //   retries are compared with the first step, never with a clock
+         $Observed['immediate retries come before the first backoff step'] = $Gap(0, 1) >= 0 && $Gap(1, 2) >= 0
+            && max($Gap(0, 1), $Gap(1, 2)) < $Gap(2, 3);
+         $Observed['then at least 0.5 s, then at least 1 s'] = $Gap(2, 3) >= 450 && $Gap(3, 4) >= 950
+            && $Gap(3, 4) > $Gap(2, 3);
          $Observed['master alive while backing off'] = $Alive();
 
          // @ The boot succeeds again: the slot serves on its next refork
@@ -258,9 +276,9 @@ PHP;
             'bounded (<= 6 boots in 3 s)' => true,
             'state saves bounded (<= 6 in 3 s)' => true,
             'crash loop logged' => true,
-            'two immediate retries (each under 450 ms)' => true,
-            'then 0.5 s (450-900 ms)' => true,
-            'then doubled to 1 s (950-1600 ms)' => true,
+            'schedule logged: at once x3, then 0.5 s, then 1 s' => true,
+            'immediate retries come before the first backoff step' => true,
+            'then at least 0.5 s, then at least 1 s' => true,
             'master alive while backing off' => true,
             'slot serves again once its boot succeeds' => true,
             'served worker reforked at once' => true,
