@@ -278,10 +278,15 @@ PHP;
       };
       // ! The download's head is under 200 bytes
       $whole = 4 * 1024 * 1024;
+      // ! How the master logs a worker's recycle: its beacon's `R` read first
+      //   ("recycling, forking its replacement"), or — a worker with nothing
+      //   left to drain, under a starved master — its exit reaped first, the
+      //   `R` read from its last words ("recycled, reforking")
+      $recycle = '(?:recycling, forking|recycled, reforking)';
 
       // @ One worker — the download in flight on the old worker; its
       //   replacement holds its recycle
-      [$Observed, $output, $clean] = $Run(1, static function (int $port, int $master, Closure $Read) use ($Up, $Count, $Ask, $Download, $Finish, $Expect, $whole): array {
+      [$Observed, $output, $clean] = $Run(1, static function (int $port, int $master, Closure $Read) use ($Up, $Count, $Ask, $Download, $Finish, $Expect, $Await, $whole, $recycle): array {
          $up = $Up($port, $Read);
          $peak = 0;
 
@@ -310,10 +315,12 @@ PHP;
 
          // # A is gone: B recycles now — then its own retiree goes too
          $gone = $Expect($Read, "(PID: {$A}) recycled.", 4.0);
-         $released = $Expect($Read, "(PID: {$B}) recycling, forking its replacement", 4.0);
+         $released = $Await($Read, "(PID: {$A}) recycled.", "/\\(PID: ({$B})\\) {$recycle}/", 4.0) > 0;
          $peak = max($peak, $Count($master));
          $fresh = $Ask($port);
-         $settled = $Expect($Read, "(PID: {$B}) recycled.", 4.0);
+         // ! Reaped as a retiree ("recycled.") or before its `R` was read
+         //   ("recycled, reforking")
+         $settled = $Expect($Read, "(PID: {$B}) recycled", 4.0);
          // ! The master saves the state right after the reap it just logged
          $Retirees = null;
          $Workers = [];
@@ -372,7 +379,7 @@ PHP;
          ->assert();
 
       // @ Two workers — the gate is per slot
-      [$Observed, $output, $clean] = $Run(2, static function (int $port, int $master, Closure $Read) use ($Up, $Count, $Ask, $Download, $Finish, $Expect, $Await, $whole): array {
+      [$Observed, $output, $clean] = $Run(2, static function (int $port, int $master, Closure $Read) use ($Up, $Count, $Ask, $Download, $Finish, $Expect, $Await, $whole, $recycle): array {
          $up = $Up($port, $Read);
          $peak = 0;
 
@@ -445,13 +452,14 @@ PHP;
             }
             $peak = max($peak, $Count($master));
          }
-         $free = $refork > 0 && $Expect($Read, "(PID: {$refork}) recycling, forking its replacement", 2.0)
+         $free = $refork > 0
+            && $Await($Read, "(PID: {$crashed}) crashed, reforking", "/\\(PID: ({$refork})\\) {$recycle}/", 2.0) > 0
             && $X > 0 && posix_kill($X, 0);
 
          // # The download completes: X goes, and its slot's worker recycles
          $bytes = $Big !== false ? $Finish($Big, $read) : 0;
          $gone = $Expect($Read, "(PID: {$X}) recycled.", 4.0);
-         $released = $Expect($Read, "(PID: {$Replacement}) recycling, forking its replacement", 4.0);
+         $released = $Await($Read, "(PID: {$X}) recycled.", "/\\(PID: ({$Replacement})\\) {$recycle}/", 4.0) > 0;
          $peak = max($peak, $Count($master));
          $log = $Read();
          $done = strpos($log, "(PID: {$X}) recycled.");
