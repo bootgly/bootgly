@@ -20,6 +20,7 @@ use function filter_var;
 use function in_array;
 use function inet_pton;
 use function intdiv;
+use function preg_match;
 use function str_pad;
 use function str_repeat;
 use function strlen;
@@ -32,8 +33,24 @@ use InvalidArgumentException;
 
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\API\Workables\Server\Middleware;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Cache;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\TrustedProxy\Strategies;
 
 
+/**
+ * Resolve the application-facing client address (`$Request->address`) and
+ * scheme (`$Request->scheme`) from forwarding headers — only when the
+ * immutable socket peer (`$Request->peer`) is in the trust list.
+ *
+ * Where the address is read from is the `strategy` (see `Strategies`): the
+ * right-most untrusted `X-Forwarded-For` hop by default, the left-most entry,
+ * or one named `header`. A `relay` names the visitor header of a trusted
+ * front proxy (a CDN in front of the edge), read when the address the
+ * strategy picked from forwarded data is itself a trusted proxy.
+ *
+ * Fail closed: a malformed or missing value never replaces the address, and
+ * `$Request->peer` is never altered.
+ */
 class TrustedProxy implements Middleware
 {
    public Logger $Logger {
@@ -50,6 +67,21 @@ class TrustedProxy implements Middleware
    // * Config
    /** @var array<string> */
    public private(set) array $proxies;
+   /**
+    * Where the client address is read from once the socket peer is trusted.
+    */
+   public private(set) Strategies $strategy;
+   /**
+    * The header `Strategies::Header` reads (`X-Real-IP`, `CF-Connecting-IP`,
+    * …); null under every other strategy.
+    */
+   public private(set) null|string $header;
+   /**
+    * The visitor header of a trusted front proxy (`CF-Connecting-IP`), read
+    * when the address the strategy picked is itself a trusted proxy; null
+    * disables the relay.
+    */
+   public private(set) null|string $relay;
 
    // * Data
    // ...
@@ -75,14 +107,58 @@ class TrustedProxy implements Middleware
     *   counts as `/32` | `/128`. When null, falls back to the localhost
     *   default (`127.0.0.1`, `::1`) and logs a one-time warning the first time
     *   it trusts a forwarded header — set an explicit list in production.
+    * @param Strategies $strategy Where the client address is read from once
+    *   the socket peer is trusted; `Rightmost` (the default) keeps the
+    *   right-most `X-Forwarded-For` walk with the `X-Real-IP` fallback.
+    * @param null|string $header The header `Strategies::Header` reads —
+    *   required by that strategy, refused by the others.
+    * @param null|string $relay The visitor header of a trusted front proxy,
+    *   read when the address the strategy picked from forwarded data is itself
+    *   a trusted proxy. Never read when nothing was picked (the socket peer);
+    *   a visitor inside the trust list is refused. Every `proxies` entry is
+    *   trusted to author this header — keep the list to real proxies.
     * @throws InvalidArgumentException When a `proxies` entry is not a valid
-    *   IP literal or CIDR range.
+    *   IP literal or CIDR range, when `Strategies::Header` has no `header` (or
+    *   another strategy has one), or when `header`/`relay` is not an RFC 9110
+    *   field-name token.
     */
    public function __construct (
-      null|array $proxies = null
+      null|array $proxies = null,
+      Strategies $strategy = Strategies::Rightmost,
+      null|string $header = null,
+      null|string $relay = null
    )
    {
+      // ? A strategy and its header come together: `Header` without one has
+      //   nothing to read, and a `header` under another strategy would be
+      //   silently ignored — both are config bugs that must fail at boot.
+      if ($strategy === Strategies::Header && $header === null) {
+         throw new InvalidArgumentException(
+            'TrustedProxy: Strategies::Header needs a `header` name.'
+         );
+      }
+      if ($strategy !== Strategies::Header && $header !== null) {
+         throw new InvalidArgumentException(
+            'TrustedProxy: `header` is read only by Strategies::Header.'
+         );
+      }
+      // ? Field names are RFC 9110 §5.1 tokens — this also refuses NUL, CR,
+      //   LF, whitespace and the empty string.
+      foreach (['header' => $header, 'relay' => $relay] as $input => $field) {
+         if (
+            $field !== null
+            && preg_match('/\A[!#$%&\'*+\-.^_`|~0-9A-Za-z]+\z/', $field) !== 1
+         ) {
+            throw new InvalidArgumentException(
+               "TrustedProxy: `{$input}` must be an HTTP field name (RFC 9110 token)."
+            );
+         }
+      }
+
       // * Config
+      $this->strategy = $strategy;
+      $this->header = $header;
+      $this->relay = $relay;
       if ($proxies === null) {
          $this->proxies = ['127.0.0.1', '::1'];
          $this->localhostDefault = true;
@@ -100,6 +176,17 @@ class TrustedProxy implements Middleware
          $ranges[] = self::parse($proxy);
       }
       $this->ranges = $ranges;
+
+      // ! The route cache answers before middleware runs, so it must keep
+      //   apart — and never store — requests that carry a forwarding field
+      //   this instance reads. X-Forwarded-For, X-Forwarded-Proto and
+      //   X-Real-IP are always covered; a configured `header`/`relay`
+      //   (`CF-Connecting-IP`) joins them here.
+      foreach ([$header, $relay] as $field) {
+         if ($field !== null) {
+            Cache::$forwarded[strtolower($field)] = true;
+         }
+      }
    }
 
    /**
@@ -229,6 +316,17 @@ class TrustedProxy implements Middleware
       return false;
    }
 
+   /**
+    * Resolve `$Request->address` (by `strategy`, then `relay`) and
+    * `$Request->scheme` (from `X-Forwarded-Proto`) when the socket peer is
+    * trusted; pass the request on untouched otherwise.
+    *
+    * @param object $Request The HTTP Request.
+    * @param object $Response The HTTP Response.
+    * @param Closure $next The next middleware or handler.
+    *
+    * @return object The Response returned by `$next`.
+    */
    public function process (object $Request, object $Response, Closure $next): object
    {
       // ? Only resolve if request comes from trusted proxy.
@@ -255,43 +353,108 @@ class TrustedProxy implements Middleware
          }
       }
 
-      // @ Try X-Forwarded-For first
-      $forwarded = $Request->Header->get('X-Forwarded-For'); // @phpstan-ignore-line
-      if ($forwarded !== null) {
-         // ? RFC 7239 §5.2 — walk the chain from the right, skipping trusted
-         //   hops; the first untrusted entry is the real client. Returning
-         //   the left-most entry (old `$ips[0]`) trusts whatever an attacker
-         //   wrote and is spoofable whenever there are ≥ 2 trusted hops.
-         $ips = explode(',', $forwarded);
-         for ($i = count($ips) - 1; $i >= 0; $i--) {
-            $candidate = trim($ips[$i]);
-            if ($candidate === '') {
-               continue;
+      // ! The candidate is a valid IP read from forwarded data, or null —
+      //   never the socket peer itself
+      $Header = $Request->Header; // @phpstan-ignore-line
+      $candidate = null;
+
+      // @ Resolve the candidate by strategy
+      switch ($this->strategy) {
+         case Strategies::Rightmost:
+            $forwarded = $Header->get('X-Forwarded-For');
+            if ($forwarded !== null) {
+               // ? RFC 7239 §5.2 — walk the chain from the right, skipping
+               //   trusted hops; the first untrusted entry is the real client.
+               //   Returning the left-most entry trusts whatever an attacker
+               //   wrote and is spoofable whenever there are ≥ 2 trusted hops.
+               $IPs = explode(',', $forwarded);
+               $hop = null;
+               $i = count($IPs) - 1;
+               // @@
+               for (; $i >= 0; $i--) {
+                  $entry = trim($IPs[$i]);
+                  if ($entry === '') {
+                     continue;
+                  }
+                  if ($this->trust($entry) === true) {
+                     $hop = $entry;
+                     continue;
+                  }
+                  // ! Fail closed: an invalid untrusted hop ends the walk
+                  //   without a rewrite — every entry left of it is written
+                  //   by whoever wrote it, so walking on lets the client choose
+                  if (filter_var($entry, FILTER_VALIDATE_IP) !== false) {
+                     $candidate = $entry;
+                  }
+                  break;
+               }
+               // ? A chain of trusted hops only: the left-most one is a
+               //   trusted proxy picked from forwarded data — a candidate for
+               //   the relay, never an address by itself (unchanged default)
+               if ($i < 0 && $this->relay !== null) {
+                  $candidate = $hop;
+               }
             }
-            if ($this->trust($candidate) === true) {
-               continue;
-            }
-            // ! Validate extracted IP before trusting it
-            if (filter_var($candidate, FILTER_VALIDATE_IP) !== false) {
-               $Request->address = $candidate; // @phpstan-ignore-line
+            else {
+               // @ Try X-Real-IP
+               $realIP = $Header->get('X-Real-IP');
+               if ($realIP !== null) {
+                  $entry = trim($realIP);
+                  if (filter_var($entry, FILTER_VALIDATE_IP) !== false) {
+                     $candidate = $entry;
+                  }
+               }
             }
             break;
-         }
+         case Strategies::Leftmost:
+            $forwarded = $Header->get('X-Forwarded-For');
+            if ($forwarded !== null) {
+               // ! The first entry only — garbage there is never skipped to
+               //   reach a later (equally client-writable) entry
+               $comma = strpos($forwarded, ',');
+               $entry = trim($comma === false ? $forwarded : substr($forwarded, 0, $comma));
+               if (filter_var($entry, FILTER_VALIDATE_IP) !== false) {
+                  $candidate = $entry;
+               }
+            }
+            break;
+         case Strategies::Header:
+            // ! A repeated field arrives comma-joined and fails validation
+            $value = $Header->get((string) $this->header);
+            if ($value !== null) {
+               $entry = trim($value);
+               if (filter_var($entry, FILTER_VALIDATE_IP) !== false) {
+                  $candidate = $entry;
+               }
+            }
+            break;
       }
-      else {
-         // @ Try X-Real-IP
-         $realIP = $Request->Header->get('X-Real-IP'); // @phpstan-ignore-line
-         if ($realIP !== null) {
-            $candidate = trim($realIP);
-            // ! Validate extracted IP before trusting it
-            if (filter_var($candidate, FILTER_VALIDATE_IP) !== false) {
-               $Request->address = $candidate; // @phpstan-ignore-line
+
+      // @ Relay: the picked address is a trusted front proxy — its visitor
+      //   header names the client. A missing or malformed visitor leaves the
+      //   address alone (the socket peer), never the front proxy's own; so
+      //   does a visitor inside the trust list — a front proxy names the
+      //   client, never another proxy (an internal address).
+      if ($candidate !== null && $this->relay !== null && $this->trust($candidate) === true) {
+         $candidate = null;
+         $visitor = $Header->get($this->relay);
+         if ($visitor !== null) {
+            $entry = trim($visitor);
+            if (
+               filter_var($entry, FILTER_VALIDATE_IP) !== false
+               && $this->trust($entry) === false
+            ) {
+               $candidate = $entry;
             }
          }
       }
 
+      if ($candidate !== null) {
+         $Request->address = $candidate; // @phpstan-ignore-line
+      }
+
       // @ Try X-Forwarded-Proto
-      $proto = $Request->Header->get('X-Forwarded-Proto'); // @phpstan-ignore-line
+      $proto = $Header->get('X-Forwarded-Proto');
       if ($proto !== null) {
          $candidate = strtolower(trim($proto));
          // ! Only accept valid HTTP schemes

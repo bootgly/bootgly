@@ -1399,6 +1399,13 @@ class Response extends Server\Response
       ) {
          return;
       }
+      // ? The same for the forwarding fields a TrustedProxy was configured to
+      //   read (`header`/`relay`, e.g. CF-Connecting-IP)
+      foreach (Cache::$forwarded as $name => $_) {
+         if (isSet($fields[$name])) {
+            return;
+         }
+      }
 
       // ? A Set-Cookie under ANY casing and from ANY serialization source
       //   blocks storage. The canonical cookie API (Cookies::append → Session,

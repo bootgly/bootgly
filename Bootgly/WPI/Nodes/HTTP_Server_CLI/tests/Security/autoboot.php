@@ -493,6 +493,11 @@ return new Suite(
       // A second proxy-resolution pass must authenticate the immutable socket
       // peer rather than the application-facing address changed by a prior pass.
       '90.01-trusted_proxy_mutable_address_trust_confusion',
+      // # 1.2.0 TrustedProxy strategies + relay
+      // The relay is never read on the socket-peer fallback, Leftmost never
+      // skips an invalid first entry, and the right-most walk never crosses an
+      // invalid untrusted hop — a client never chooses its own address.
+      '90.02-trusted_proxy_strategy_relay_spoofing',
       // # Deferred-write wall-time enforcement (audit 2026-08-02 L2)
       // A permanently non-writable peer must be closed by an independent
       // monotonic deadline without waiting for another EVENT_WRITE callback.

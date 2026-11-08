@@ -589,6 +589,7 @@ return new Suite(
          '7.7-route_cache-middleware_variance',
          '7.8-route_cache-global_lifecycle_guard',
          '7.9-route_cache-received_lifecycle_guard',
+         '7.10-route_cache-forwarding_header',
       ],
       'Router/Middleware/' => [
          // CORS
@@ -613,6 +614,8 @@ return new Suite(
          '7.1-middleware-rate_limit',
          // TrustedProxy
          '8.1-middleware-trusted_proxy',
+         '8.2-middleware-trusted_proxy_header',
+         '8.3-middleware-trusted_proxy_relay',
          // Validator
          '9.1-middleware-validator',
          '9.2-middleware-validator_headers',

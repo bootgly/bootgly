@@ -45,5 +45,7 @@ return new Suite(
       '2.5-rate_limit_clock',
       // # 1.1.1: no Bearer error code without a token; the Basic realm is a quoted-string
       '11.5-authentication_challenge_errors',
+      // # 1.2.0: TrustedProxy strategies (Rightmost/Leftmost/Header) + relay
+      '8.3-trusted_proxy_strategies',
    ]
 );

@@ -131,6 +131,22 @@ class Cache
     * entries/URIs; treat as read-only outside this class.
     */
    public static int $generation = 0;
+   /**
+    * Extra forwarding fields (lowercase names) a `TrustedProxy` was
+    * configured to read — its `header` and `relay` (`cf-connecting-ip`).
+    *
+    * Filled by the middleware's constructor. Like the built-in
+    * X-Forwarded-For / X-Forwarded-Proto / X-Real-IP selectors, each one is
+    * framed into the key (`compose()`) and blocks storage (`Response::stash()`):
+    * the middleware can rewrite `$Request->address` from it after the early
+    * cache lookup, so one visitor's representation must never be replayed to
+    * another. Only grows — a superset only splits keys or skips storage.
+    * Public for the same hot-path reason as entries; treat as written only by
+    * `TrustedProxy`.
+    *
+    * @var array<array-key,true>
+    */
+   public static array $forwarded = [];
 
    // * Metadata
    /**
@@ -156,6 +172,8 @@ class Cache
     * links can depend on it. Raw TrustedProxy inputs are also framed: that
     * middleware can change application address/scheme after cache lookup, so
     * a forwarded request must never read an entry primed without those fields.
+    * That covers the built-in forwarding fields and every configured one
+    * (`$forwarded`).
     *
     * When language variance is enabled, preserve the exact parsed request
     * field (including absent, empty and repeated-field distinctions). Using
@@ -184,8 +202,22 @@ class Cache
          . self::frame($Request->URI)
          . self::frame($forwardedProto)
          . self::frame($forwardedFor)
-         . self::frame($realIP)
-         . self::frame(self::identify($Request));
+         . self::frame($realIP);
+
+      // ! Configured TrustedProxy `header`/`relay` fields — the `F` marker
+      //   cannot open a frame (`N`/`S`/`A`), so the key stays unambiguous.
+      //   None configured: the key is byte-identical to the built-in shape.
+      foreach (self::$forwarded as $name => $_) {
+         /** @var null|string|array<int,string> $field */
+         $field = array_key_exists($name, $headers)
+            ? $headers[$name]
+            : null;
+
+         // ! A numeric token name (`123`) arrives as an int key
+         $key .= 'F' . self::frame((string) $name) . self::frame($field);
+      }
+
+      $key .= self::frame(self::identify($Request));
 
       if ($varyLanguage === false) {
          return "{$key}V0";
