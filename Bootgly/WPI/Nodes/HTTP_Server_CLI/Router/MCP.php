@@ -27,6 +27,7 @@ use function is_int;
 use function is_string;
 use function json_decode;
 use function json_encode;
+use function max;
 use function min;
 use function preg_match;
 use function random_bytes;
@@ -67,8 +68,8 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\SSE;
  * - `MCP-Protocol-Version`, when sent, must equal the revision agreed at
  *   `initialize` (`400` otherwise).
  * - `GET` opens the listening stream (heartbeats only: the server core sends
- *   no server-initiated messages), bounded per session; `DELETE` ends the
- *   session.
+ *   no server-initiated messages), bounded per session; while it is open the
+ *   session does not expire. `DELETE` ends the session.
  * - `Origin`, when present, must be in the `origins` allowlist (`403`
  *   otherwise) — the DNS-rebinding defence. A missing `Origin` is accepted:
  *   browsers always send it on `POST`/`DELETE`, and `GET` needs a session.
@@ -102,7 +103,11 @@ final class MCP
     * @var array<int,string>
     */
    public private(set) array $origins;
-   /** Seconds a session survives without a request (sliding; a session never resumed lasts at most 60). */
+   /**
+    * Seconds a session survives without a request — an open listening stream
+    * counts as one (sliding; each renewal grants at least 15 while `GET`
+    * streams are enabled; a session never resumed lasts `min(TTL, 60)`).
+    */
    public private(set) int $TTL;
    /** The largest request body accepted, in bytes. */
    public private(set) int $body;
@@ -124,6 +129,12 @@ final class MCP
    protected Cache $Stamps;
    /** The second this worker last swept, when the stamp cannot be kept. */
    private int $swept = 0;
+   /**
+    * Seconds every renewal grants a session: the TTL — never less than a
+    * stream's lease while `GET` streams are enabled, so no request ever
+    * shortens what the ticks of an open stream rely on.
+    */
+   private int $lifetime;
 
 
    /**
@@ -135,7 +146,9 @@ final class MCP
     *        directory (`shared` driver, prefix `mcp:`) — never the one
     *        RateLimit or other caches use. Use a Redis-backed Cache when the
     *        workers span hosts.
-    * @param int $TTL Seconds a session survives without a request.
+    * @param int $TTL Seconds a session survives without a request (an open
+    *        listening stream counts as one; each renewal grants at least 15
+    *        while `GET` streams are enabled).
     * @param int $body The largest request body accepted, in bytes.
     * @param int $streams Listening streams one session may hold open; `0`
     *        disables the `GET` stream.
@@ -194,6 +207,7 @@ final class MCP
       $this->Cache = $Cache;
 
       // * Metadata
+      $this->lifetime = $streams > 0 ? max($TTL, self::LEASE) : $TTL;
       // ! One key in a tiny segment of its own, per session store: it never
       //   fills, so a full store can still be throttled across every worker,
       //   and one flooded store never holds back another store's sweep
@@ -329,20 +343,32 @@ final class MCP
       //   Kept in the session record, it never adds a key to the store.
       $token = bin2hex(random_bytes(8));
       $streams = $this->streams;
-      try {
-         $claimed = $this->update($id, static function (array $slots) use ($token, $streams): null|array {
-            // ? Streams per session, counted across workers
-            if (count($slots) >= $streams) {
-               return null;
-            }
-            $slots[$token] = time() + self::LEASE;
+      $Claim = static function (array $slots) use ($token, $streams): null|array {
+         // ? Streams per session, counted across workers
+         if (count($slots) >= $streams) {
+            return null;
+         }
+         $slots[$token] = time() + self::LEASE;
 
-            // :
-            return $slots;
-         });
+         // :
+         return $slots;
+      };
+      try {
+         $claimed = $this->update($id, $Claim);
       }
       catch (RuntimeException) {
-         return $this->refuse($Response, 503, 'Service Unavailable: the session store cannot hold a new stream');
+         // ? A full store with nothing to sweep
+         if ($this->sweep() === false) {
+            return $this->refuse($Response, 503, 'Service Unavailable: the session store cannot hold a new stream');
+         }
+
+         // @ Swept: tried once more
+         try {
+            $claimed = $this->update($id, $Claim);
+         }
+         catch (RuntimeException) {
+            return $this->refuse($Response, 503, 'Service Unavailable: the session store cannot hold a new stream');
+         }
       }
       // ? The session ended meanwhile
       if ($claimed === null) {
@@ -461,7 +487,7 @@ final class MCP
       }
 
       // @ Sliding idle expiry
-      $this->Cache->renew("session:{$id}", $this->TTL);
+      $this->Cache->renew("session:{$id}", $this->lifetime);
 
       // :
       return $id;
@@ -472,7 +498,9 @@ final class MCP
     * live slots (token => lease expiry, lapsed ones left out) and returns the
     * new set, or null to leave the record as it is. The record is swapped
     * only if no other worker changed it meanwhile (it is then read again, up
-    * to three times), keeping its remaining lifetime.
+    * to three times), and the swap renews the session like a request does: a
+    * stream opening, ticking or closing is activity of the session, and a
+    * renewal by a request landing meanwhile is never undone.
     *
     * @param Closure(array<string,int>):(null|array<string,int>) $Change
     *
@@ -488,9 +516,8 @@ final class MCP
       // @@ Until the swap lands
       for ($attempt = 0; $attempt < 3; $attempt++) {
          $record = $this->Cache->fetch($key);
-         $left = $this->Cache->remain($key);
          // ? Ended or expired
-         if (is_array($record) === false || $left < 1) {
+         if (is_array($record) === false) {
             return null;
          }
 
@@ -516,7 +543,7 @@ final class MCP
          $next = $record;
          $next['streams'] = $slots;
          // ?: Swapped
-         if ($this->Cache->swap($key, $record, $next, $left)) {
+         if ($this->Cache->swap($key, $record, $next, $this->lifetime)) {
             return true;
          }
       }
@@ -562,8 +589,7 @@ final class MCP
    /**
     * Store a new session with a provisional lifetime (its first resumed
     * request extends it to the TTL). A full store is swept of expired
-    * sessions — by one worker at most once every SWEEP seconds, since a
-    * sweep holds the store's lock — and tried once more.
+    * sessions and tried once more.
     *
     * @param array{principal:string,revision:string} $record
     */
@@ -578,22 +604,40 @@ final class MCP
          return $this->Cache->create($key, $record, $TTL);
       }
       catch (RuntimeException) {
-         try {
-            // ? Another worker swept within SWEEP seconds
-            if ($this->stamp() === false) {
-               return false;
-            }
-            // ?: Nothing expired to reclaim
-            if ($this->Cache->purge() < 1) {
-               return false;
-            }
+         // ? Nothing swept
+         if ($this->sweep() === false) {
+            return false;
+         }
 
+         try {
             // :
             return $this->Cache->create($key, $record, $TTL);
          }
          catch (RuntimeException) {
             return false;
          }
+      }
+   }
+
+   /**
+    * Sweep the expired sessions out of a full store — by one worker at most
+    * once every SWEEP seconds, since a sweep holds the store's lock.
+    *
+    * @return bool Whether any session was swept (room to try again).
+    */
+   private function sweep (): bool
+   {
+      try {
+         // ? Another worker swept within SWEEP seconds
+         if ($this->stamp() === false) {
+            return false;
+         }
+
+         // :
+         return $this->Cache->purge() > 0;
+      }
+      catch (RuntimeException) {
+         return false;
       }
    }
 

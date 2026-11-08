@@ -25,7 +25,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
 /**
  * Idle expiry slides: each request renews the session for `TTL` seconds, so
  * a client active past the first TTL keeps it; after `TTL` of silence the
- * session is gone (404) and the client must initialize again.
+ * session is gone (404) and the client must initialize again. The endpoint
+ * is JSON-only (`streams: 0`): with `GET` streams enabled a session lives at
+ * least a stream's lease (15 s).
  */
 $Server = new RPC\MCP(
    name: 'Spec',
@@ -41,7 +43,7 @@ $initialize = [
    'params' => ['protocolVersion' => '2025-06-18', 'capabilities' => new stdClass, 'clientInfo' => ['name' => 'spec', 'version' => '1']]
 ];
 $list = ['jsonrpc' => '2.0', 'id' => 2, 'method' => 'tools/list'];
-$Transport = new MCP($Server, Cache: new Cache(['driver' => 'shared', 'segment' => 0x4d435053, 'prefix' => 'mcp-spec-1.3:']), TTL: 3);
+$Transport = new MCP($Server, Cache: new Cache(['driver' => 'shared', 'segment' => 0x4d435053, 'prefix' => 'mcp-spec-1.3:']), TTL: 3, streams: 0);
 $Probe = new class {
    /** @var array<string,mixed> */
    public array $answers = [];

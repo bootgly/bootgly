@@ -33,7 +33,8 @@ use Bootgly\ACI\Tests\Suite\Test;
  * that flushes, ends or cleans the output buffers — or ends the process
  * mid-call, or dies of memory exhaustion with `display_errors` on — still
  * prints to stderr only, and stdout keeps nothing but protocol lines. Errors
- * the process hides (`display_errors=0`) stay hidden, and a process where
+ * the process hides (`display_errors=0`, or any value PHP reads as off) stay
+ * hidden — a value PHP reads as on displays on stderr — and a process where
  * `ini_set` is disabled still serves. A `\r\n` line of exactly `line` bytes (line ending
  * excluded) is served.
  */
@@ -114,6 +115,26 @@ return new Test(
          assertion: $status === 255 && $stdout === '' && str_contains($stderr, 'Allowed memory size') === false,
          description: "display_errors=foo is off for PHP and stays off (status {$status}): {$shown}"
       );
+
+      // @@ Values read the way PHP reads them: the low byte of the leading
+      //   number, keywords as written — shown on stderr, or hidden
+      foreach ([
+         '1e-5' => true,
+         '-1' => true,
+         '9223372036854775808' => true,
+         '256' => false,
+         ' on' => false,
+         '-9223372036854775808' => false,
+         '0x1' => false
+      ] as $value => $shown) {
+         [$status, $stdout, $stderr] = $run(['MCP_STDIO_LEAK' => 'memory', 'MCP_STDIO_DISPLAY' => (string) $value], "{$call}\n", ['log_errors=0']);
+         $output = json_encode([$value, $stdout, $stderr]);
+         $reading = $shown ? 'is on for PHP and displays on stderr' : 'is off for PHP and stays off';
+         yield assert(
+            assertion: $status === 255 && $stdout === '' && str_contains($stderr, 'Allowed memory size') === $shown,
+            description: "display_errors=\"{$value}\" {$reading} (status {$status}): {$output}"
+         );
+      }
 
       // @ ini_set disabled
       $ping = '{"jsonrpc":"2.0","id":1,"method":"ping"}';

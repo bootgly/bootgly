@@ -68,13 +68,16 @@ return new Suite(
       $HTTP_Server_CLI->Process->Children->terminate();
       $HTTP_Server_CLI->Process->State->clean();
 
-      // @ The specs' session stores and the sweep stamp of the one spec that
-      //   fills its store: shared-memory segments removed so no run leaves
-      //   state behind (never the project's own stores or stamps)
+      // @ The specs' session stores, the sweep stamps of the specs that fill
+      //   their stores and the stamp segment one spec makes refuse:
+      //   shared-memory segments removed so no run leaves state behind
+      //   (never the project's own stores or stamps)
       $scope = BOOTGLY_WORKING_DIR;
-      $filled = 0x4d435054;
-      $stamps = crc32("bootgly.mcp.sweeps\0{$scope}\0shared\0{$filled}\0mcp-spec-1.11:") & 0x7fffffff;
-      foreach ([0x4d435053 => 16_777_216, 0x4d435054 => 32_768, $stamps => 65_536] as $segment => $size) {
+      $Segments = [0x4d435053 => 16_777_216, 0x4d435054 => 32_768, 0x4d435055 => 32_768, 0x4d435056 => 8_192];
+      foreach ([0x4d435054 => 'mcp-spec-1.11:', 0x4d435055 => 'mcp-spec-1.12:'] as $filled => $prefix) {
+         $Segments[crc32("bootgly.mcp.sweeps\0{$scope}\0shared\0{$filled}\0{$prefix}") & 0x7fffffff] = 65_536;
+      }
+      foreach ($Segments as $segment => $size) {
          $Store = new Cache(['driver' => 'shared', 'segment' => $segment, 'size' => $size]);
          // ! Attach (a cheap read) — destroy() removes an attached segment only
          $Store->check('teardown');
@@ -100,5 +103,6 @@ return new Suite(
       '1.9-delete',
       '1.10-construction',
       '1.11-store_capacity',
+      '1.12-stream_slots',
    ]
 );

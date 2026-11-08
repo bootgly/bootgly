@@ -26,13 +26,16 @@ use function in_array;
 use function ini_get;
 use function ini_set;
 use function is_resource;
+use function ltrim;
 use function ob_clean;
 use function ob_end_flush;
 use function ob_get_contents;
 use function ob_get_level;
 use function ob_start;
+use function preg_match;
 use function rtrim;
 use function str_ends_with;
+use function strcmp;
 use function strlen;
 use function strtolower;
 use function substr;
@@ -148,12 +151,13 @@ final class MCP
       $guarded = $this->output === STDOUT;
       // ? A fatal error (memory exhausted…) is displayed past every buffer:
       //   errors already displayed go to stderr; hidden ones stay hidden
-      if ($guarded && function_exists('ini_get') && function_exists('ini_set')) {
-         // ! Read the way PHP reads it: a keyword, or else a number
-         $display = strtolower(trim((string) ini_get('display_errors')));
-         if (in_array($display, ['on', 'yes', 'true', 'stderr', 'stdout'], true) || (int) $display !== 0) {
-            ini_set('display_errors', 'stderr');
-         }
+      if (
+         $guarded
+         && function_exists('ini_get')
+         && function_exists('ini_set')
+         && self::decode((string) ini_get('display_errors')) !== 0
+      ) {
+         ini_set('display_errors', 'stderr');
       }
       ob_start(
          function (string $buffer, int $phase): string {
@@ -242,6 +246,45 @@ final class MCP
             }
          }
       }
+   }
+
+   /**
+    * The display mode PHP reads from a `display_errors` value: `0` hidden,
+    * `1` stdout, `2` stderr. A keyword is matched as written (any case,
+    * never trimmed); anything else is the leading number C's `strtol()`
+    * reads — saturated at the bounds of a 64-bit long — kept to its low byte.
+    */
+   private static function decode (string $setting): int
+   {
+      // ? A keyword
+      $keyword = strtolower($setting);
+      if ($keyword === 'stderr') {
+         return 2;
+      }
+      if (in_array($keyword, ['on', 'yes', 'true', 'stdout'], true)) {
+         return 1;
+      }
+      // ? No leading number
+      if (preg_match('/^[ \t\n\x0B\f\r]*([+-]?)(\d+)/', $setting, $match) !== 1) {
+         return 0;
+      }
+
+      // !
+      $negative = $match[1] === '-';
+      $digits = ltrim($match[2], '0');
+      // ?: Beyond a 64-bit long: saturated (its low byte: 0xff, or 0x00 below)
+      if (strlen($digits) > 19 || (strlen($digits) === 19 && strcmp($digits, '9223372036854775807') > 0)) {
+         return $negative ? 0 : 1;
+      }
+      $value = (int) $digits;
+      $mode = ($negative ? -$value : $value) & 0xFF;
+
+      // :
+      return match ($mode) {
+         0 => 0,
+         2 => 2,
+         default => 1
+      };
    }
 
    /**

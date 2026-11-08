@@ -15,7 +15,8 @@
  * must move that to stderr. `MCP_STDIO_LINE` sets the line bound;
  * `MCP_STDIO_LEAK` makes the tool try to get output past the capture
  * (`flush`: flush and end the buffers; `exit`: end the process mid-call;
- * `memory`: die of memory exhaustion mid-call).
+ * `memory`: die of memory exhaustion mid-call). `MCP_STDIO_DISPLAY` sets
+ * `display_errors` at runtime, as written (the `-d` parser trims it).
  */
 
 // ! Classes only — the stdio process boots nothing that could write to stdout
@@ -71,5 +72,11 @@ $Server = new RPC\MCP(
       ];
    }
 );
+
+// ? A display_errors value exactly as written
+$display = getenv('MCP_STDIO_DISPLAY');
+if ($display !== false) {
+   ini_set('display_errors', $display);
+}
 
 exit((new MCP($Server, context: getenv('MCP_STDIO_USER') ?: null, line: (int) (getenv('MCP_STDIO_LINE') ?: 4_194_304)))->serving());
