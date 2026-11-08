@@ -16,9 +16,10 @@ use function is_string;
 use function trim;
 
 use Bootgly\ADI\Validation\Condition;
+use Bootgly\ADI\Validation\Descriptor;
 
 
-class Required extends Condition
+class Required extends Condition implements Descriptor
 {
    // * Metadata
    protected string $template = '{field} is required.';
@@ -50,5 +51,15 @@ class Required extends Condition
       }
 
       return true;
+   }
+
+   /**
+    * JSON Schema: required in the parent and non-blank (the `required` marker of `Descriptor`).
+    *
+    * @return null|array<string,mixed>
+    */
+   public function describe (): null|array
+   {
+      return ['required' => true];
    }
 }

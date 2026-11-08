@@ -12,7 +12,9 @@ namespace Bootgly\ADI\Validators;
 
 
 use function count;
+use function floor;
 use function is_array;
+use function is_finite;
 use function is_float;
 use function is_int;
 use function is_string;
@@ -20,9 +22,10 @@ use function preg_match;
 use function strlen;
 
 use Bootgly\ADI\Validation\Condition;
+use Bootgly\ADI\Validation\Descriptor;
 
 
-class Maximum extends Condition
+class Maximum extends Condition implements Descriptor
 {
    // * Config
    public private(set) int|float $limit;
@@ -64,5 +67,33 @@ class Maximum extends Condition
       }
 
       return false;
+   }
+
+   /**
+    * JSON Schema: `maximum` for numbers, and `maxLength` / `maxItems` /
+    * `maxProperties` for strings, arrays and objects (the Renderer keeps the
+    * one the value's `type` needs). String lengths here count bytes, JSON
+    * Schema counts characters; numeric strings compare as numbers here.
+    * `null` for an infinite limit.
+    *
+    * @return null|array<string,mixed>
+    */
+   public function describe (): null|array
+   {
+      // ? JSON has no infinity
+      if (is_finite((float) $this->limit) === false) {
+         return null;
+      }
+
+      $keywords = ['maximum' => $this->limit];
+
+      // ? Lengths and counts: the greatest whole count the limit admits
+      if ($this->limit >= 0 && $this->limit < 9.0E18) {
+         $count = (int) floor($this->limit);
+         $keywords += ['maxLength' => $count, 'maxItems' => $count, 'maxProperties' => $count];
+      }
+
+      // :
+      return $keywords;
    }
 }

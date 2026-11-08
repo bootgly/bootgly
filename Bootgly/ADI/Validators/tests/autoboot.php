@@ -19,5 +19,8 @@ return new Suite(
       '1.3-validators_i18n',
       // # 1.0.x (M6): the MIME rule sniffs the uploaded content, confined to BOOTGLY_UPLOADS_DIR
       '1.4-validators_MIME_content',
+      // # 1.2.0: JSON Schema keywords of the shipped rules (Validation\Renderer)
+      '1.5-validators_describe',
+      '1.6-validators_types',
    ]
 );

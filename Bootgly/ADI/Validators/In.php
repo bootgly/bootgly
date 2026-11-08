@@ -11,12 +11,17 @@
 namespace Bootgly\ADI\Validators;
 
 
+use function array_values;
 use function in_array;
+use function is_finite;
+use function is_float;
+use function is_scalar;
 
 use Bootgly\ADI\Validation\Condition;
+use Bootgly\ADI\Validation\Descriptor;
 
 
-class In extends Condition
+class In extends Condition implements Descriptor
 {
    // * Config
    /**
@@ -47,5 +52,28 @@ class In extends Condition
    public function validate (string $field, mixed $value, array $data): bool
    {
       return in_array($value, $this->values, $this->strict);
+   }
+
+   /**
+    * JSON Schema: `enum` of the allowed values (compared strictly: a loose
+    * `In` accepts more than the schema lists). `null` when a value is not
+    * a JSON scalar.
+    *
+    * @return null|array<string,mixed>
+    */
+   public function describe (): null|array
+   {
+      foreach ($this->values as $value) {
+         // ? Only JSON scalars
+         if ($value !== null && is_scalar($value) === false) {
+            return null;
+         }
+         if (is_float($value) && is_finite($value) === false) {
+            return null;
+         }
+      }
+
+      // :
+      return ['enum' => array_values($this->values)];
    }
 }

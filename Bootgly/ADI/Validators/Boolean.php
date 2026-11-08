@@ -17,9 +17,10 @@ use function is_int;
 use function is_string;
 
 use Bootgly\ADI\Validation\Condition;
+use Bootgly\ADI\Validation\Descriptor;
 
 
-class Boolean extends Condition
+class Boolean extends Condition implements Descriptor
 {
    // * Metadata
    protected string $template = '{field} must be a boolean.';
@@ -43,5 +44,15 @@ class Boolean extends Condition
       }
 
       return false;
+   }
+
+   /**
+    * JSON Schema: `type: boolean` (`0`/`1`/`"true"`/`"false"` are accepted here too).
+    *
+    * @return null|array<string,mixed>
+    */
+   public function describe (): null|array
+   {
+      return ['type' => 'boolean'];
    }
 }

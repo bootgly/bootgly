@@ -16,9 +16,10 @@ use function strtotime;
 use DateTimeImmutable;
 
 use Bootgly\ADI\Validation\Condition;
+use Bootgly\ADI\Validation\Descriptor;
 
 
-class Date extends Condition
+class Date extends Condition implements Descriptor
 {
    // * Config
    /**
@@ -62,5 +63,27 @@ class Date extends Condition
 
       // :
       return strtotime($value) !== false;
+   }
+
+   /**
+    * JSON Schema: `type: string`, plus `format: date` for `Y-m-d` and
+    * `format: date-time` for `DATE_ATOM`/`DATE_RFC3339` (`Y-m-d\TH:i:sP`,
+    * `Y-m-d\TH:i:sp`). Other formats, and any `strtotime()` date, have no
+    * JSON Schema format.
+    *
+    * @return null|array<string,mixed>
+    */
+   public function describe (): null|array
+   {
+      $format = match ($this->format) {
+         'Y-m-d' => 'date',
+         'Y-m-d\TH:i:sP', 'Y-m-d\TH:i:sp' => 'date-time',
+         default => null,
+      };
+
+      // :
+      return $format === null
+         ? ['type' => 'string']
+         : ['type' => 'string', 'format' => $format];
    }
 }

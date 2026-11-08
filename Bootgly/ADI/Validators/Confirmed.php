@@ -11,16 +11,16 @@
 namespace Bootgly\ADI\Validators;
 
 
-use function array_key_exists;
-
 use Bootgly\ADI\Validation\Condition;
+use Bootgly\ADI\Validation\Path;
 
 
 class Confirmed extends Condition
 {
    // * Config
    /**
-    * The confirming field name (defaults to `<field>_confirmation`).
+    * The confirming field path from the source root (defaults to
+    * `<field>_confirmation`, the sibling of a nested field).
     */
    public private(set) null|string $field;
 
@@ -43,6 +43,10 @@ class Confirmed extends Condition
    {
       $confirming = $this->field ?? "{$field}_confirmation";
 
-      return array_key_exists($confirming, $data) && $data[$confirming] === $value;
+      // ! The confirming value, read as a path (`user.password_confirmation`)
+      [$exists, $confirmation] = new Path($confirming)->resolve($data);
+
+      // :
+      return $exists && $confirmation === $value;
    }
 }
