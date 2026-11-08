@@ -28,6 +28,7 @@ use function str_starts_with;
 use function stream_get_contents;
 use function stripcslashes;
 use function strlen;
+use function strtolower;
 use function substr;
 use function substr_count;
 use function trim;
@@ -152,9 +153,10 @@ final class Changes
          '--dst-prefix=b/',
          $this->range,
          '--',
-         // ? PHP sources only, from the root whatever the directory: with
-         //   `--text`, an asset would otherwise come out whole in the diff
-         ':(top,glob)**/*.php',
+         // ? PHP sources only (`.php` in any case), from the root whatever
+         //   the directory: with `--text`, an asset would otherwise come out
+         //   whole in the diff
+         ':(top,glob,icase)**/*.php',
       ]);
 
       // * Metadata
@@ -236,7 +238,7 @@ final class Changes
                // ? A changed PHP source the work tree does not hold: the
                //   range does not end at it (or git read another root) —
                //   fail instead of measuring less than the range changed
-               else if (str_ends_with($relative, '.php')) {
+               else if (str_ends_with(strtolower($relative), '.php')) {
                   throw new RuntimeException(
                      "Coverage diff: '{$relative}' is changed by the range but not found under {$root}; "
                      . 'the range must end at the checked-out work tree.'

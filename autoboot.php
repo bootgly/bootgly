@@ -195,10 +195,18 @@ if (BOOTGLY_SAPI === 'cli') {
       }
 
       if ($native) {
-         $Coverage = new Bootgly\ACI\Tests\Coverage(
-            new Bootgly\ACI\Tests\Coverage\Drivers\Native(explicit: true, mode: $mode)
-         );
-         $Coverage->start();
+         // ? A Native driver that cannot run (opcache on, unknown mode)
+         //   stops the run with its reason, never a stack trace
+         try {
+            $Coverage = new Bootgly\ACI\Tests\Coverage(
+               new Bootgly\ACI\Tests\Coverage\Drivers\Native(explicit: true, mode: $mode)
+            );
+            $Coverage->start();
+         }
+         catch (LogicException $Exception) {
+            fwrite(STDERR, "[test] Coverage: {$Exception->getMessage()}" . PHP_EOL);
+            exit(1);
+         }
 
          $GLOBALS['BOOTGLY_COVERAGE'] = $Coverage;
       }

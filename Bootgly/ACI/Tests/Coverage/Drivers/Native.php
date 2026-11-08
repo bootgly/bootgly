@@ -45,6 +45,10 @@ use Bootgly\ACI\Tests\Coverage\Drivers\Native\Universe;
 final class Native extends Driver
 {
    /**
+    * The coverage engine itself — never instrumented: it records the hits.
+    */
+   public const string ENGINE = '/Bootgly/ACI/Tests/Coverage/';
+   /**
     * Strict executable-statement instrumentation mode.
     */
    public const string MODE_STRICT = 'strict';
@@ -79,7 +83,7 @@ final class Native extends Driver
     * @var array<int,string>
     */
    public static array $excludes = [
-      '/Bootgly/ACI/Tests/Coverage/',
+      self::ENGINE,
       '/vendor/',
       '/storage/',
       '/tmp/',

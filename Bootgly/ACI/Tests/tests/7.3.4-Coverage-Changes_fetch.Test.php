@@ -120,6 +120,7 @@ return new Test(
          file_put_contents("{$root}/Blank.php", "<?php\n\$a = 1;\n\$b = 2;\n\$c = 3;\n\$d = 4;\n\n\$e = 5;\n");
          file_put_contents("{$root}/asset.bin", "\0\1\2\n");
          file_put_contents("{$root}/notes.txt", "one\n");
+         file_put_contents("{$root}/Upper.PHP", "<?php\n\$u = 1;\n");
          $git(['add', '-A']);
          $git(['commit', '--quiet', '--no-gpg-sign', '-m', 'third']);
          file_put_contents("{$root}/Binary.php", "<?php\n\$a = 1;\n\$b = 2;\n");
@@ -127,6 +128,7 @@ return new Test(
          file_put_contents("{$root}/Blank.php", "<?php\n\$a = 1;\n\$b = 2;\n\$c = 3;\n\$d = 40;\n\n\$e = 50;\n");
          file_put_contents("{$root}/asset.bin", "\0\1\2\n\3\n");
          file_put_contents("{$root}/notes.txt", "one\ntwo\n");
+         file_put_contents("{$root}/Upper.PHP", "<?php\n\$u = 1;\n\$v = 2;\n");
 
          // ! A literal pathspec mode would read the PHP pathspec as a file name
          $literal = getenv('GIT_LITERAL_PATHSPECS');
@@ -144,9 +146,12 @@ return new Test(
             ->to->be([[3 => true], [4 => true]])
             ->assert();
 
-         yield (new Assertion(description: 'only PHP sources are diffed: a changed asset and a text file stay out'))
-            ->expect(array_keys($binary))
-            ->to->be([$path('Binary.php'), $path('Blank.php'), $path('Nul.php')])
+         // ! git's file order follows the user's diff.orderFile: compare sorted
+         $keys = array_keys($binary);
+         sort($keys);
+         yield (new Assertion(description: 'only PHP sources (.php in any case) are diffed: a changed asset and a text file stay out'))
+            ->expect($keys)
+            ->to->be([$path('Binary.php'), $path('Blank.php'), $path('Nul.php'), $path('Upper.PHP')])
             ->assert();
 
          yield (new Assertion(description: 'a blank context row between hunks keeps the line count'))

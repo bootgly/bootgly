@@ -716,8 +716,9 @@ class TestCommand extends Command
       $coverageDriver  = isset($options['coverage-driver'])
          ? strtolower((string) $options['coverage-driver'])
          : null;
+      // ? A bare --coverage-report takes the default format
       $coverageReport  = isset($options['coverage-report'])
-         ? (string) $options['coverage-report']
+         ? (is_string($options['coverage-report']) ? $options['coverage-report'] : 'text')
          : null;
       $coverageNativeMode = isset($options['coverage-native-mode'])
          ? strtolower((string) $options['coverage-native-mode'])
@@ -751,6 +752,27 @@ class TestCommand extends Command
          }
          catch (InvalidArgumentException $Exception) {
             fwrite(STDERR, "[test] {$Exception->getMessage()}" . PHP_EOL);
+
+            return false;
+         }
+      }
+
+      // ? The report format and its destination are known before any suite runs
+      if ($coverageReport !== null) {
+         [$format, $destination] = explode(':', $coverageReport, 2) + [1 => null];
+         if (isset(Coverage::REPORTS[strtolower($format)]) === false) {
+            $formats = implode(', ', array_keys(Coverage::REPORTS));
+            fwrite(STDERR, "[test] --coverage-report takes FORMAT[:PATH] with FORMAT one of {$formats}; got '{$format}'" . PHP_EOL);
+
+            return false;
+         }
+         // ? A stream destination (php://stderr) has no directory: its write
+         //   is checked when the report is written
+         if (
+            $destination !== null
+            && ($destination === '' || (str_contains($destination, '://') === false && is_dir(dirname($destination)) === false))
+         ) {
+            fwrite(STDERR, "[test] --coverage-report path has no directory to write to: '{$destination}'" . PHP_EOL);
 
             return false;
          }
@@ -982,18 +1004,24 @@ class TestCommand extends Command
             $rendered = $Coverage->report($format);
 
             if ($path !== null) {
-               file_put_contents($path, $rendered);
+               // ? A report that cannot be written fails the run
+               if (@file_put_contents($path, $rendered) === false) {
+                  $gated = false;
+                  $reason = "Coverage: the report could not be written to '{$path}'";
+                  fwrite(STDERR, "[test] {$reason}" . PHP_EOL);
+                  Results::$coverage = ['gate' => 'failed', 'failures' => [$reason]];
+               }
             }
             else {
                echo $rendered;
             }
          }
 
-         // ? Changed sources the driver cannot reach are neither covered nor
+         // ? Sources in scope the driver cannot reach are neither covered nor
          //   unchanged: a gate cannot pass over them
          if ($gated && $Coverage->unmeasured !== []) {
             $count = count($Coverage->unmeasured);
-            $reasons = ["Coverage: {$count} changed source(s) in scope that the native driver cannot measure:"];
+            $reasons = ["Coverage: {$count} source(s) in scope that the native driver cannot measure:"];
             foreach ($Coverage->unmeasured as $file) {
                $reasons[] = "  {$file}";
             }

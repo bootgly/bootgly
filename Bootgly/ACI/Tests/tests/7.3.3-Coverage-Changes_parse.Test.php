@@ -136,6 +136,18 @@ return new Test(
             ->to->be(true)
             ->assert();
 
+         $thrown = '';
+         try {
+            Changes::parse("diff --git a/src/Gone.PHP b/src/Gone.PHP\n--- a/src/Gone.PHP\n+++ b/src/Gone.PHP\n@@ -1 +1 @@\n-a\n+b\n", $root);
+         }
+         catch (RuntimeException $Exception) {
+            $thrown = $Exception->getMessage();
+         }
+         yield (new Assertion(description: 'a missing .PHP file (any case) throws too'))
+            ->expect(str_contains($thrown, "'src/Gone.PHP' is changed by the range but not found"))
+            ->to->be(true)
+            ->assert();
+
          $thrown = false;
          try {
             Changes::parse("diff --cc src/A.php\nindex 1,2..3\n@@@ -1,1 -1,1 +1,2 @@@\n++x\n", $root);

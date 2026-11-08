@@ -83,6 +83,60 @@ return new Test(
             ->to->be(true)
             ->assert();
 
+         [$code, $output] = $run($asserted, ['--coverage', '--coverage-report=bogus']);
+         yield (new Assertion(description: 'an unknown report format is refused before any suite runs'))
+            ->expect($code !== 0 && str_contains($output, '--coverage-report takes FORMAT[:PATH]') && str_contains($output, '[test] PASSED') === false)
+            ->to->be(true)
+            ->assert();
+
+         [$code, $output] = $run($asserted, ['--coverage', "--coverage-report=clover:{$directory}/missing/clover.xml"]);
+         yield (new Assertion(description: 'a report path without a directory is refused before any suite runs'))
+            ->expect($code !== 0 && str_contains($output, 'has no directory to write to'))
+            ->to->be(true)
+            ->assert();
+
+         // @ Report destinations and formats the run accepts
+         [$code, $output] = $run($asserted, ['--coverage-driver=nothing', "--coverage-report=clover:{$directory}"]);
+         yield (new Assertion(description: 'a report that cannot be written fails the run'))
+            ->expect($code !== 0 && str_contains($output, 'the report could not be written to'))
+            ->to->be(true)
+            ->assert();
+
+         [$code, $output] = $run($asserted, ['--coverage-driver=nothing', '--coverage-report=clover:php://stdout']);
+         yield (new Assertion(description: 'a stream destination (php://stdout) is accepted'))
+            ->expect($code === 0 && str_contains($output, '<coverage'))
+            ->to->be(true)
+            ->assert();
+
+         [$code, $output] = $run($asserted, ['--coverage-driver=nothing', '--coverage-report=TEXT']);
+         [$bare, $plain] = $run($asserted, ['--coverage-driver=nothing', '--coverage-report']);
+         yield (new Assertion(description: 'the format is case-insensitive, and a bare --coverage-report means text'))
+            ->expect($code === 0 && $bare === 0 && str_contains("{$output}{$plain}", '--coverage-report takes') === false)
+            ->to->be(true)
+            ->assert();
+
+         // @ 2b. A Native driver that cannot run stops with its reason, not a trace
+         if (extension_loaded('Zend OPcache')) {
+            [$code, $output] = $run([...$asserted, '-d', 'opcache.enable_cli=1'], ['--coverage-driver=native']);
+            yield (new Assertion(description: 'Native with opcache on stops with a Coverage line'))
+               ->expect(
+                  $code === 1
+                  && str_contains($output, '[test] Coverage: Native coverage requires opcache.enable_cli=0')
+                  && str_contains($output, 'Uncaught') === false
+               )
+               ->to->be(true)
+               ->assert();
+         }
+         else {
+            yield (new Assertion(description: 'Native with opcache on: OPcache is not loaded here'))->skip();
+         }
+
+         [$code, $output] = $run([...$asserted, '-d', 'opcache.enable_cli=0'], ['--coverage-driver=native', '--coverage-native-mode=bogus']);
+         yield (new Assertion(description: 'an unknown Native mode stops with a Coverage line'))
+            ->expect($code === 1 && str_contains($output, '[test] Coverage: Unknown native coverage mode: bogus'))
+            ->to->be(true)
+            ->assert();
+
          // @ 3. Auto-detection without a usable driver (environment-dependent)
          $xdebug = function_exists('xdebug_start_code_coverage') || extension_loaded('xdebug');
          $pcov = extension_loaded('pcov');
@@ -109,7 +163,7 @@ return new Test(
          //   fragments (/tmp/, /vendor/, /storage/): the measured probes
          //   below need a checkout it instruments
          if (Native::allow(BOOTGLY_ROOT_DIR . 'Bootgly/ABI/') === false) {
-            yield true;
+            yield (new Assertion(description: 'measured probes: Native never instruments this checkout (' . BOOTGLY_ROOT_DIR . ')'))->skip();
             return;
          }
 
@@ -202,7 +256,15 @@ return new Test(
                break;
             }
          }
-         if ($range !== null) {
+         if ($range === null) {
+            // ? Only a clone without that history may skip: a full one must have it
+            $shallow = $git(['rev-parse', '--is-shallow-repository']) !== 'false';
+            $skipped = new Assertion(description: 'a commit on Coverage/ whose PHP files the work tree still holds');
+            yield $shallow
+               ? $skipped->skip()
+               : $skipped->expect(false)->to->be(true)->assert();
+         }
+         else {
             [$code, $output] = $run($native, ['--coverage-driver=native', "--coverage-diff={$range}", '--coverage-path=Bootgly/ACI/Tests/', '--coverage-floor=1']);
             yield (new Assertion(description: 'a changed source the native driver cannot measure fails the gate'))
                ->expect(
@@ -213,6 +275,18 @@ return new Test(
                ->to->be(true)
                ->assert();
          }
+
+         // @ 5c. A measured path holding sources the native driver never
+         //   instruments fails the gate — no history needed
+         [$code, $output] = $run($native, ['--coverage-driver=native', '--coverage-path=Bootgly/ACI/Tests/', '--coverage-floor=1']);
+         yield (new Assertion(description: 'a measured path with sources out of the native driver\'s reach fails the gate'))
+            ->expect(
+               $code !== 0
+               && str_contains($output, 'source(s) in scope that the native driver cannot measure')
+               && str_contains($output, 'Bootgly/ACI/Tests/Coverage/Gate.php')
+            )
+            ->to->be(true)
+            ->assert();
 
          // @ 6. A measured path the run cannot read fails the run, not a trace
          $locked = "{$directory}/locked";
