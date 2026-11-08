@@ -20,6 +20,7 @@ use function bin2hex;
 use function chmod;
 use function closedir;
 use function ctype_digit;
+use function decoct;
 use function fclose;
 use function fflush;
 use function file_exists;
@@ -137,8 +138,9 @@ class State
       //   inode for the trusted storage administrator before any per-instance
       //   pathname is opened; otherwise the old owner could still replace
       //   another service's lock/state during boot.
-      if ($this->protect() === false) {
-         throw new RuntimeException("Unsafe process state directory at {$this->pidsDir}");
+      $refusal = $this->protect();
+      if ($refusal !== null) {
+         throw new RuntimeException("Unsafe process state directory at {$this->pidsDir}: {$refusal}");
       }
 
       // @ Extract short class name from FQCN (e.g. Bootgly\WPI\Nodes\HTTP_Server_CLI → HTTP_Server_CLI)
@@ -684,7 +686,7 @@ class State
    {
       // ? Re-run immediately before handoff as a final identity/mode check and
       //   to repair a legacy runtime-owned directory on an upgraded root boot.
-      if ($this->protect() === false) {
+      if ($this->protect() !== null) {
          return false;
       }
       $pids = rtrim($this->pidsDir, '/');
@@ -958,51 +960,80 @@ class State
     * root, preserving an ordinary non-root project administrator's ability to
     * create new instances without granting a distinct runtime UID authority
     * over every service pathname.
+    *
+    * @return null|string `null` when the directory is safe; otherwise the
+    *    check that refused it, naming the offending path (for the operator).
     */
-   private function protect (): bool
+   private function protect (): null|string
    {
       $storage = rtrim(BOOTGLY_STORAGE_DIR, '/');
       $pids = rtrim($this->pidsDir, '/');
-      if (is_link($storage) || is_link($pids)) {
-         return false;
+      // ? Never follow a link at either level.
+      foreach ([$storage, $pids] as $path) {
+         if (is_link($path)) {
+            return "symbolic link: {$path}";
+         }
       }
+      // ? The storage root is the trusted administrator: a real directory
+      //   that nobody else may write into.
       $administrator = @lstat($storage);
+      if (is_array($administrator) === false) {
+         return "cannot be inspected (lstat failed): {$storage}";
+      }
+      if (((int) $administrator['mode'] & 0170000) !== 0040000) {
+         return "not a directory: {$storage}";
+      }
+      if (((int) $administrator['mode'] & 0022) !== 0) {
+         $mode = decoct((int) $administrator['mode'] & 07777);
+         return "group/world-writable (0{$mode}): {$storage}";
+      }
       $before = @lstat($pids);
-      if (
-         is_array($administrator) === false
-         || ((int) $administrator['mode'] & 0170000) !== 0040000
-         || ((int) $administrator['mode'] & 0022) !== 0
-         || is_array($before) === false
-         || ((int) $before['mode'] & 0170000) !== 0040000
-      ) {
-         return false;
+      if (is_array($before) === false) {
+         return "cannot be inspected (lstat failed): {$pids}";
+      }
+      if (((int) $before['mode'] & 0170000) !== 0040000) {
+         return "not a directory: {$pids}";
       }
 
+      // @ Reclaim a legacy runtime-owned directory on a privileged launch.
       $EUID = posix_geteuid();
       if ($EUID === 0) {
-         if (
-            @lchown($pids, (int) $administrator['uid']) === false
-            || @lchgrp($pids, (int) $administrator['gid']) === false
-            || @chmod($pids, 0755) === false
-         ) {
-            return false;
+         if (@lchown($pids, (int) $administrator['uid']) === false) {
+            return "lchown failed: {$pids}";
+         }
+         if (@lchgrp($pids, (int) $administrator['gid']) === false) {
+            return "lchgrp failed: {$pids}";
+         }
+         if (@chmod($pids, 0755) === false) {
+            return "chmod failed: {$pids}";
          }
       }
 
+      // ? Re-check the same inode after any repair.
       $after = @lstat($pids);
       if (
          is_array($after) === false
          || $before['dev'] !== $after['dev']
          || $before['ino'] !== $after['ino']
          || ((int) $after['mode'] & 0170000) !== 0040000
-         || ((int) $after['mode'] & 0022) !== 0
-         || $after['uid'] !== $administrator['uid']
+      ) {
+         return "replaced while being checked: {$pids}";
+      }
+      if (((int) $after['mode'] & 0022) !== 0) {
+         $mode = decoct((int) $after['mode'] & 07777);
+         return "group/world-writable (0{$mode}): {$pids}";
+      }
+      if (
+         $after['uid'] !== $administrator['uid']
          || $after['gid'] !== $administrator['gid']
       ) {
-         return false;
+         $owner = "{$after['uid']}:{$after['gid']}";
+         $trusted = "{$administrator['uid']}:{$administrator['gid']}";
+         return "owner {$owner} differs from the storage root's {$trusted}: {$pids}";
       }
 
-      return true;
+      // :
+      return null;
    }
 
    /** @return resource|null Open a regular lock file without following links. */

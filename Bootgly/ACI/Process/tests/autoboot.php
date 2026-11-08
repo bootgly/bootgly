@@ -35,5 +35,7 @@ return new Suite(
       '1.18-process-recover-status',
       // # 1.1.x (v1.1.0 worker recycling): send() reaches the retirees too
       '1.19-signals-send-retirees',
+      // # 1.1.1: an unsafe state directory names the refusing check
+      '1.20-state-protect-reasons',
    ]
 );
