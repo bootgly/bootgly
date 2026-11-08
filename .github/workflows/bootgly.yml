@@ -7,6 +7,16 @@ on:
       - 'main'
     paths-ignore:
       - '**/README.md'
+  # ! A pull request runs every job; its coverage job gates the lines it changed.
+  pull_request:
+    branches:
+      - 'main'
+    paths-ignore:
+      - '**/README.md'
+  # ! A release runs the coverage jobs only (the matrix ran on the push of the
+  #   tagged commit): the tree gate on the tag, its clover attached to the release.
+  release:
+    types: [published]
   # ! The distro, Sury and Remi packages the container cells install move
   #   without a push: a weekly run catches that drift on its own (on the
   #   cell's job while the cell is experimental, not on the run's status).
@@ -20,6 +30,7 @@ jobs:
   # The style rules are OS- and PHP-independent (token-level checks): one job.
   lint:
     name: lint
+    if: github.event_name != 'release'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
 
@@ -63,6 +74,7 @@ jobs:
   # and diagnostics are one script for every cell.
   test:
     name: test (${{ matrix.os }}, php ${{ matrix.php }}${{ matrix.experimental && ', experimental' || '' }})
+    if: github.event_name != 'release'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
     # ! The Ubuntu runner cells, Debian, Fedora and the published image block
@@ -365,3 +377,120 @@ jobs:
         name: Remove the cell container
         if: always() && matrix.kind == 'container'
         run: docker rm -f bootgly-matrix-cell >/dev/null 2>&1 || true
+
+  # The coverage gate: the whole suite under PCOV, measured over every PHP
+  # source in Bootgly/ (files no test loads count at zero). Not on the weekly
+  # schedule: that run watches distro drift, which does not move coverage.
+  #   push to main  — the statements floor over the tree; clover as an artifact.
+  #   pull request  — the same floor over the lines the pull request changed,
+  #                   and no changed class left without a covered statement.
+  #   release       — the tree gate on the tag; its clover is attached to the
+  #                   release as bootgly-<tag>-coverage.clover.xml.
+  coverage:
+    name: coverage (pcov, php 8.4)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    # ! A newer pull-request push cancels the older gate; every other run is
+    #   its own group, so a push to main is never cancelled while pending.
+    concurrency:
+      group: coverage-${{ github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    env:
+      # ! The statements floor (percent of executable statements in Bootgly/).
+      #   Baseline over the 1.2.0 tree (these flags run locally on PHP 8.5):
+      #   69.8% of 69,266 statements; the floor sits below it to absorb
+      #   PHP-version and run-to-run drift. Raise it as coverage grows; never
+      #   lower it to let a change through.
+      #   What PCOV cannot see counts as uncovered: lines that run before the
+      #   runner starts collecting (CLI boot, the runner's own prologue and
+      #   epilogue), forked server workers and sub-processes. A pull request
+      #   that only changes such code fails its gate however it is tested.
+      #   The tree is not gated on classes yet: 66 class sources were at zero in
+      #   that baseline — worker- and sub-process-only code, untested classes,
+      #   and constant-only traits/enums whose one statement runs at load, before
+      #   collection starts. Pull requests are gated on it now.
+      BOOTGLY_COVERAGE_FLOOR: '65'
+
+    steps:
+      -
+        # ! Full history: a pull request diffs against its base branch, and the
+        #   runner's git-dependent specs skip on a shallow clone.
+        name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      -
+        name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          ini-file: 'development'
+          # ! pcov.enabled=1: a PCOV that is loaded but disabled stops the run
+          #   (it would measure nothing). The directory is the checkout, so
+          #   every source under Bootgly/ is instrumented.
+          ini-values: disable_functions="", pcov.enabled=1, pcov.directory=${{ github.workspace }}
+          extensions: mbstring, pcntl, posix, sockets, readline, session, sqlite3, fileinfo, ctype, iconv, tokenizer, zlib, sysvsem, sysvshm, simplexml, openssl
+          coverage: pcov
+      -
+        name: Run Bootgly Test command under coverage
+        env:
+          BOOTGLY_TEST_TRACE: 1
+          # ! The Xdebug lane takes ~10 minutes; collection adds to it.
+          BOOTGLY_CI_BUDGET: 1500
+          BOOTGLY_CI_PHP: '8.4'
+          BOOTGLY_CI_XDEBUG: 0
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
+        run: |
+          set -- --coverage --coverage-driver=pcov --coverage-path=Bootgly/ \
+             --coverage-floor="$BOOTGLY_COVERAGE_FLOOR" \
+             --coverage-report=clover:"$RUNNER_TEMP/coverage.xml"
+          # ? A pull request is gated on the lines it changed; the checkout is
+          #   its merge commit, so the range ends at the measured tree
+          if [ "$EVENT" = pull_request ]; then
+             set -- "$@" --coverage-diff="origin/$BASE...HEAD" --coverage-classes
+          fi
+          bash .github/scripts/test.sh "$@"
+      -
+        name: Upload the clover report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-clover
+          path: ${{ runner.temp }}/coverage.xml
+          if-no-files-found: warn
+          retention-days: 30
+          # ? A re-run of a failed attempt replaces its report
+          overwrite: true
+
+  # Only a report whose run passed — every suite and the gate — reaches the
+  # release; this job alone can write, and it runs none of the tested code.
+  publish:
+    name: attach the clover report to the release
+    needs: coverage
+    if: github.event_name == 'release'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+
+    steps:
+      -
+        name: Download the clover report
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-clover
+          path: coverage
+      -
+        name: Attach it to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          # ? A tag may hold `/`; an asset name cannot
+          asset="bootgly-${TAG//\//-}-coverage.clover.xml"
+          mv coverage/coverage.xml "$asset"
+          gh release upload "$TAG" "$asset" --clobber --repo "$REPOSITORY"
