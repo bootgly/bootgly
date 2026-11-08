@@ -21,9 +21,11 @@ use function is_string;
 use function parse_ini_file;
 use function preg_match;
 use InvalidArgumentException;
+use RuntimeException;
 
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\API\Environment\Configs\Config;
+use Bootgly\API\Environment\Configs\Schema;
 use Bootgly\API\Environment\Configs\Scopes;
 
 
@@ -273,6 +275,12 @@ class Configs
     * trusted PHP config file for the scope. A declared scope-name mismatch
     * returns false without registration. Explicit calls retry a latched
     * mismatch; only a successful identity match clears the latch.
+    *
+    * A scope file declared with a `Schema` that fails throws its
+    * `Schema\Failure` report, and the scope is not registered.
+    *
+    * @throws RuntimeException When the scope file throws (a `Schema\Failure`,
+    *   a required `bind()`), or returns a `Schema` without `build()`.
     */
    public function load (string $scope): bool
    {
@@ -344,6 +352,9 @@ class Configs
     * The local `.env` map is temporarily exposed through `Config::swap()` so
     * `Config::bind()` can resolve file-local values without mutating process
     * environment.
+    *
+    * @throws RuntimeException When the file returns a `Schema` instead of its
+    *   `build()` result (the scope would otherwise skip its validation).
     */
    protected function include (string $file): null|Config
    {
@@ -362,6 +373,11 @@ class Configs
       }
       finally {
          Config::swap($previous);
+      }
+
+      // ? A Schema returned without `build()` would skip its validation
+      if ($Config instanceof Schema) {
+         throw new RuntimeException("Config file of scope `{$Config->scope}` returns a Schema: return its build() result.");
       }
 
       if ($Config instanceof Config === false) {

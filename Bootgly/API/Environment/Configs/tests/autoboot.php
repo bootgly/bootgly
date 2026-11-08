@@ -45,5 +45,11 @@ return new Suite(
 
       // # 1.2.0: Types delegate to the ADI Casters strict mode (edge forms pinned).
       '1.x-config_types_parity',
+
+      // # 1.2.0: declared config schemas (one aggregated report per scope).
+      '8.x-config_schema_declaration',
+      '8.x-config_schema_build',
+      '8.x-config_schema_failures',
+      '8.x-configs_schema_load',
    ]
 );
