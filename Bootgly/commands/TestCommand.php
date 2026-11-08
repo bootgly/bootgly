@@ -40,11 +40,13 @@ use function constant;
 use function count;
 use function defined;
 use function dirname;
+use function error_get_last;
 use function escapeshellarg;
 use function explode;
 use function fclose;
 use function file_get_contents;
 use function file_put_contents;
+use function fopen;
 use function function_exists;
 use function fwrite;
 use function get_cfg_var;
@@ -93,6 +95,7 @@ use function round;
 use function rtrim;
 use function scandir;
 use function sort;
+use function stat;
 use function str_contains;
 use function str_ends_with;
 use function str_pad;
@@ -102,6 +105,7 @@ use function str_starts_with;
 use function stream_get_meta_data;
 use function stream_isatty;
 use function strlen;
+use function strpos;
 use function strtolower;
 use function substr;
 use function substr_count;
@@ -559,6 +563,11 @@ class TestCommand extends Command
       elseif ($registry === null && BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
          // # Kit — the working directory decides the scope
          $paths = $this->survey();
+         // ? A registry that exists but cannot be read was already reported:
+         //   situating against an empty list would blame the registration
+         if ($paths === null) {
+            return false;
+         }
          $situation = $this->situate($paths);
 
          // ? Standing outside projects/ — ask on a terminal, instruct headless
@@ -850,13 +859,62 @@ class TestCommand extends Command
     * to the author registry, which would hand a registry-less kit the
     * framework's own Demo entries — poisoning both the matcher and the picker.
     *
-    * @return array<string>
+    * @return null|array<string> `null` when a registry exists but cannot be
+    *    read (already reported on STDERR); an empty list when there is none.
     */
-   private function survey (): array
+   private function survey (): null|array
    {
       // !
       $file = BOOTGLY_WORKING_DIR . 'projects/Bootgly.projects.php';
-      $loaded = is_file($file) === true ? include $file : [];
+      $name = basename($file);
+
+      // ? Not a readable regular file: absent (an empty kit) or unreadable.
+      //   `is_file()` is also false when `stat()` is denied — an SELinux
+      //   label without a relabel, a parent without search permission — so
+      //   a name the directory still lists (or a directory that cannot be
+      //   listed) is a registry the process may not read, never "no registry"
+      $reason = null;
+      $listed = true;
+      if (is_file($file) === false) {
+         $directory = dirname($file);
+         $entries = is_dir($directory) === true ? @scandir($directory) : [];
+         if ($entries !== false && in_array($name, $entries, true) === false) {
+            return [];
+         }
+         $listed = $entries !== false;
+         // ? Present but not a regular file (a directory, a FIFO, a device):
+         //   never opened — a FIFO would block the run, a device be included
+         $status = @stat($file);
+         if (is_array($status) && ((int) $status['mode'] & 0170000) !== 0100000) {
+            $reason = 'not a regular file';
+         }
+      }
+      if ($reason === null) {
+         $Handle = @fopen($file, 'rb');
+         if ($Handle === false) {
+            $error = error_get_last()['message'] ?? '';
+            $marker = 'Failed to open stream: ';
+            $offset = strpos($error, $marker);
+            $reason = $offset === false
+               ? 'cannot be opened'
+               : substr($error, $offset + strlen($marker));
+            // ? A directory that cannot be listed hid an absent registry
+            if ($listed === false && str_contains($reason, 'No such file or directory')) {
+               return [];
+            }
+         }
+         else {
+            fclose($Handle);
+         }
+      }
+      if ($reason !== null) {
+         $hint = 'check its permissions (and its SELinux label on a bind mount)';
+         fwrite(STDERR, "[test] project registry unreadable: {$file} ({$reason}) — {$hint}." . PHP_EOL);
+
+         return null;
+      }
+
+      $loaded = include $file;
       // ? A registry that returns something else is NOT an empty kit: saying
       //   "no registered projects" would send the user to register what is
       //   already there, in the file the runner just discarded
@@ -867,7 +925,7 @@ class TestCommand extends Command
             . ' cannot be read.' . PHP_EOL
          );
 
-         return [];
+         return null;
       }
 
       // @@ Defense against a hand-edited registry: only path-safe keys count

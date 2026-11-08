@@ -26,5 +26,7 @@ return new Suite(
       'TestCommand-crash-01',
       // # TEST-14: a closure suite that ran none of its cases fails the run
       'TestCommand-vacant-01',
+      // # 1.1.1: an unreadable project registry is named as such
+      'TestCommand-registry-01',
    ]
 );
