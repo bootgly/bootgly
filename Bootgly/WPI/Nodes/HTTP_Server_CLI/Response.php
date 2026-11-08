@@ -729,10 +729,9 @@ class Response extends Server\Response
       $this->code( 401);
 
       if ($Method instanceof Authentication\Basic) {
-         $this->Header->set(
-            'WWW-Authenticate',
-            "Basic realm=\"{$Method->realm}\""
-         );
+         // ! RFC 9110 quoted-string: escape the backslash first, then the quote
+         $realm = str_replace(['\\', '"'], ['\\\\', '\\"'], $Method->realm);
+         $this->Header->set('WWW-Authenticate', "Basic realm=\"{$realm}\"");
       }
 
       return $this;

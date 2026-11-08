@@ -43,5 +43,7 @@ return new Suite(
       '13.2-access_log_sanitization',
       // # 1.1.0: the `clock` argument takes a Clock (a closure is deprecated)
       '2.5-rate_limit_clock',
+      // # 1.1.1: no Bearer error code without a token; the Basic realm is a quoted-string
+      '11.5-authentication_challenge_errors',
    ]
 );

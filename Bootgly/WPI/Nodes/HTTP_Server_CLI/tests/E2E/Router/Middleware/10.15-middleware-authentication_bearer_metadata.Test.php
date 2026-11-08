@@ -29,9 +29,10 @@ return new Test(
       return $Response(body: 'handler executed');
    },
 
+   // @ The request carries no token: no error code (RFC 6750 §3.1)
    test: function ($response) {
       return str_contains($response, 'HTTP/1.1 401 Unauthorized')
-         && str_contains($response, "\r\nWWW-Authenticate: Bearer realm=\"mcp \\\"tools\\\"\", error=\"invalid_token\", resource_metadata=\"https://mcp.example.com/.well-known/oauth-protected-resource\"\r\n")
+         && str_contains($response, "\r\nWWW-Authenticate: Bearer realm=\"mcp \\\"tools\\\"\", resource_metadata=\"https://mcp.example.com/.well-known/oauth-protected-resource\"\r\n")
          && str_contains($response, 'handler executed') === false
             ?: 'Bearer challenge did not advertise resource_metadata';
    }

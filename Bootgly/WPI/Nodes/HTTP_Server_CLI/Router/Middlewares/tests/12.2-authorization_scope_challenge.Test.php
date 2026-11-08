@@ -167,7 +167,8 @@ return new Test(
       $Result = $Middleware->process($Request, $Response, $handler);
       [$Request, $Response] = $createMocks();
       $Expected = new Authentication(new Authenticating($Bearer))->process($Request, $Response, $handler);
-      $unauthorized = "Bearer realm=\"mcp\", error=\"invalid_token\", resource_metadata=\"{$metadata}\"";
+      // ! No token either: the challenge carries no error code (RFC 6750 §3.1)
+      $unauthorized = "Bearer realm=\"mcp\", resource_metadata=\"{$metadata}\"";
 
       yield new Assertion(description: 'No identity with a Bearer does not call the handler')
          ->expect($called)

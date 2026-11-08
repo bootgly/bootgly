@@ -37,9 +37,20 @@ return new Test(
    },
 
    test: function (array $responses) {
+      // ! Only `Bearer a.b` carries a token: every other header lacks Bearer
+      //   credentials, so its challenge has no error code (RFC 6750 §3.1)
+      $challenges = [
+         "WWW-Authenticate: Bearer realm=\"Protected area\"\r\n",
+         "WWW-Authenticate: Bearer realm=\"Protected area\"\r\n",
+         "WWW-Authenticate: Bearer realm=\"Protected area\"\r\n",
+         "WWW-Authenticate: Bearer realm=\"Protected area\", error=\"invalid_token\"\r\n",
+         "WWW-Authenticate: Bearer realm=\"Protected area\"\r\n",
+         "WWW-Authenticate: Bearer realm=\"Protected area\"\r\n",
+         "WWW-Authenticate: Bearer realm=\"Protected area\"\r\n",
+      ];
       foreach ($responses as $index => $response) {
          if (str_contains($response, 'HTTP/1.1 401 Unauthorized') === false
-            || str_contains($response, 'WWW-Authenticate: Bearer realm="Protected area", error="invalid_token"') === false
+            || str_contains($response, $challenges[$index] ?? "\0") === false
             || str_contains($response, 'handler executed') !== false
          ) {
             return "Authorization parser fuzz case {$index} was not rejected safely";

@@ -12,7 +12,9 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Authentication;
 
 
 use function method_exists;
+use function preg_match;
 use Closure;
+use InvalidArgumentException;
 
 use Bootgly\WPI\Modules\HTTP\Server\Response\Authentication\Basic as BasicChallenge;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
@@ -50,10 +52,24 @@ class Basic extends Guard
    /**
     * Configure Basic credential resolution.
     *
+    * The `realm` is sent as an RFC 9110 quoted-string (`\` and `"` escaped);
+    * a realm holding a control character other than HTAB (CR, LF, NUL, DEL, …)
+    * cannot travel in one, so it is refused here, never at request time.
+    *
     * @param Closure(string,string,Request):mixed $Resolver
+    *
+    * @throws InvalidArgumentException When the realm holds a control character
+    *         other than HTAB.
     */
    public function __construct (Closure $Resolver, string $realm = 'Protected area')
    {
+      // ? RFC 9110 qdtext: HTAB is the only control character allowed
+      if (preg_match('/[\x00-\x08\x0A-\x1F\x7F]/', $realm) === 1) {
+         throw new InvalidArgumentException(
+            'The Basic realm must not contain control characters other than HTAB.'
+         );
+      }
+
       parent::__construct($realm);
 
       // * Config

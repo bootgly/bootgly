@@ -17,7 +17,8 @@ return new Test(
    },
    // @ No Authentication middleware ran: the request carries no identity at
    //   all, so the Scope answers as the authentication would (401), never
-   //   with a 403 insufficient_scope.
+   //   with a 403 insufficient_scope. No token either, so the challenge
+   //   carries no error code (RFC 6750 §3.1).
    middlewares: [
       new Authorization(new Authorizing(
          new Scope('mcp:write', Bearer: new Bearer(
@@ -35,7 +36,7 @@ return new Test(
 
    test: function ($response) {
       return str_contains($response, 'HTTP/1.1 401 Unauthorized')
-         && str_contains($response, "\r\nWWW-Authenticate: Bearer realm=\"mcp\", error=\"invalid_token\", resource_metadata=\"https://mcp.example.com/.well-known/oauth-protected-resource\"\r\n")
+         && str_contains($response, "\r\nWWW-Authenticate: Bearer realm=\"mcp\", resource_metadata=\"https://mcp.example.com/.well-known/oauth-protected-resource\"\r\n")
          && str_contains($response, 'insufficient_scope') === false
          && str_contains($response, 'handler executed') === false
             ?: 'Scope middleware did not answer the Bearer 401 challenge without identity';

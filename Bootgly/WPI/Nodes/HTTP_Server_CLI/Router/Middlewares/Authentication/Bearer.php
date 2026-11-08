@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Authentication;
 
 
 use function implode;
+use function is_object;
 use function preg_match;
 use Closure;
 use InvalidArgumentException;
@@ -87,6 +88,13 @@ class Bearer extends Guard
     * once at configuration time.
     */
    protected string $challenge;
+   /**
+    * `WWW-Authenticate` value of the `401` challenge for a request that
+    * carries no Bearer token at all: `realm`, `scope` and
+    * `resource_metadata` only — no `error`, `error_description` or
+    * `error_uri` (RFC 6750 §3.1). Built once at configuration time.
+    */
+   protected string $invitation;
 
 
    /**
@@ -152,6 +160,11 @@ class Bearer extends Guard
          'scope' => $this->scope,
          'resource_metadata' => $this->metadata,
       ]);
+      $this->invitation = $this->format('Bearer', [
+         'realm' => $this->realm,
+         'scope' => $this->scope,
+         'resource_metadata' => $this->metadata,
+      ]);
    }
 
    /**
@@ -179,9 +192,24 @@ class Bearer extends Guard
 
    /**
     * Challenge the client with `WWW-Authenticate: Bearer`.
+    *
+    * A request that carries no Bearer token at all (no `Authorization`
+    * header, an empty one, or another scheme) gets the challenge without
+    * error information (RFC 6750 §3.1): `realm`, `scope` and
+    * `resource_metadata` only. A request whose token was refused gets the
+    * configured `error` (`invalid_token` by default), `error_description`
+    * and `error_uri`. The request is read from the Response it answers
+    * (`$Response->Request`); without one, the error challenge is sent.
     */
    public function challenge (object $Response): object
    {
+      // ? No Bearer credentials at all: no error code (RFC 6750 §3.1)
+      $Request = $Response->Request ?? null;
+      if (is_object($Request) && $this->extract($Request) === '') {
+         return $this->announce($Response, $this->invitation);
+      }
+
+      // :
       return $this->announce($Response, $this->challenge);
    }
 
