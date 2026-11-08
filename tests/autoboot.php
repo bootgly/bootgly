@@ -254,5 +254,9 @@ return new Suites(
       // # ADI/Casters — the scalar casting vocabulary (strict / loose modes)
       //   (appended last to keep every suite index above stable)
       'Bootgly/ADI/Casters/',
+      // # MCP transports — Streamable HTTP over the router (live 2-worker server)
+      //   and stdio for Console (appended last to keep every suite index above stable)
+      'Bootgly/WPI/Nodes/HTTP_Server_CLI/Router/MCP/',
+      'Bootgly/CLI/MCP/',
    ]
 );
