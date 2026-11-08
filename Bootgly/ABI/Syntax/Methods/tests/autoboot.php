@@ -15,5 +15,6 @@ return new Suite(
    suiteName: __NAMESPACE__,
    tests: [
       '1.1-analyzer-camelcase',
+      '1.2-analyzer-verb-form',
    ]
 );

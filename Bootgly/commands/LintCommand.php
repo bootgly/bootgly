@@ -17,19 +17,24 @@ use const JSON_UNESCAPED_SLASHES;
 use const JSON_UNESCAPED_UNICODE;
 use const PHP_BINARY;
 use const PHP_EOL;
+use function array_map;
 use function array_slice;
+use function basename;
 use function constant;
 use function count;
 use function defined;
 use function dirname;
+use function explode;
 use function fclose;
 use function function_exists;
 use function fwrite;
 use function getcwd;
 use function implode;
+use function in_array;
 use function is_array;
 use function is_dir;
 use function is_file;
+use function is_link;
 use function is_writable;
 use function json_encode;
 use function lstat;
@@ -55,12 +60,19 @@ use Throwable;
 use const Bootgly\CLI;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ABI\Syntax\Analyzers;
+use Bootgly\ABI\Syntax\Analyzers\Issue;
 use Bootgly\ABI\Syntax\Analyzers\Result;
+use Bootgly\ABI\Syntax\Analyzers\Rules;
 use Bootgly\ABI\Syntax\Builtins;
+use Bootgly\ABI\Syntax\Casing;
 use Bootgly\ABI\Syntax\Imports;
+use Bootgly\ABI\Syntax\Lint;
+use Bootgly\ABI\Syntax\Lint\Scope;
 use Bootgly\ABI\Syntax\Methods;
 use Bootgly\ABI\Syntax\Nullables;
 use Bootgly\ABI\Syntax\Promotions;
+use Bootgly\ABI\Syntax\Sections;
+use Bootgly\ABI\Syntax\Spacing;
 use Bootgly\API\Environment\Agent;
 use Bootgly\API\Environment\Workspaces;
 use Bootgly\API\Projects;
@@ -79,41 +91,44 @@ class LintCommand extends Command
    public string $description = 'Lint and fix code style violations';
 
    /**
-    * The submodules — one per style rule, each behind an `Analyzers` facade.
-    * `fixable` says whether the facade also formats: `--fix` and `--dry-run`
-    * are honored only there; a check-only submodule reports and writes nothing.
+    * The subcommands: `check` runs the rules a `bootgly.Lint.php` enables;
+    * the per-rule subcommands are deprecated wrappers over it, kept through
+    * 1.x, each restricted to its own rule.
     *
-    * @var array<string,array{description:string,facade:class-string<Analyzers>,fixable:bool,arguments:array<string,string>}>
+    * @var array<string,array{description:string,deprecated:bool,arguments:array<string,string>}>
     */
    public array $arguments = [ // @phpstan-ignore property.phpDocType
+      'check' => [
+         'description' => 'Check the rules bootgly.Lint.php enables (none: imports, nullables, promotions, methods)',
+         'deprecated'  => false,
+         'arguments'   => [
+            '[path]' => 'File or directory inside the configured paths (default: every configured path; no bootgly.Lint.php: Bootgly/, in a kit the current directory under projects/)'
+         ]
+      ],
       'imports' => [
-         'description' => 'Lint import code style for use statements',
-         'facade'      => Imports::class,
-         'fixable'     => true,
+         'description' => 'Deprecated — use `bootgly lint check` (import rule only)',
+         'deprecated'  => true,
          'arguments'   => [
             '[path]' => 'File or directory path (default: Bootgly/; in a kit: the current directory under projects/)'
          ]
       ],
       'nullables' => [
-         'description' => 'Lint nullable shorthands (?T) in parameter, return and property types',
-         'facade'      => Nullables::class,
-         'fixable'     => true,
+         'description' => 'Deprecated — use `bootgly lint check` (nullable rule only)',
+         'deprecated'  => true,
          'arguments'   => [
             '[path]' => 'File or directory path (default: Bootgly/; in a kit: the current directory under projects/)'
          ]
       ],
       'promotions' => [
-         'description' => 'Lint constructor property promotion (check-only)',
-         'facade'      => Promotions::class,
-         'fixable'     => false,
+         'description' => 'Deprecated — use `bootgly lint check` (promotion rule only)',
+         'deprecated'  => true,
          'arguments'   => [
             '[path]' => 'File or directory path (default: Bootgly/; in a kit: the current directory under projects/)'
          ]
       ],
       'methods' => [
-         'description' => 'Lint multi-word (camelCase) method names (check-only)',
-         'facade'      => Methods::class,
-         'fixable'     => false,
+         'description' => 'Deprecated — use `bootgly lint check` (method naming rule only)',
+         'deprecated'  => true,
          'arguments'   => [
             '[path]' => 'File or directory path (default: Bootgly/; in a kit: the current directory under projects/)'
          ]
@@ -133,6 +148,23 @@ class LintCommand extends Command
    /** The running framework's root — a kit pins it as the `Bootgly/` submodule. */
    protected string $framework = BOOTGLY_ROOT_BASE;
 
+   // * Metadata
+   /**
+    * The analyzer behind each rule, and whether it also formats — `--fix`
+    * and `--dry-run` act only on the fixable rules.
+    *
+    * @var array<string,array{class-string<Analyzers>,bool}>
+    */
+   private const array FACADES = [
+      'imports'    => [Imports::class, true],
+      'nullables'  => [Nullables::class, true],
+      'promotions' => [Promotions::class, false],
+      'methods'    => [Methods::class, false],
+      'spacing'    => [Spacing::class, true],
+      'casing'     => [Casing::class, false],
+      'sections'   => [Sections::class, false],
+   ];
+
 
    public function run (array $arguments = [], array $options = []): bool
    {
@@ -143,120 +175,240 @@ class LintCommand extends Command
          return $this->help($arguments);
       }
 
-      return $this->lint(
-         $submodule,
+      // : `check`, or a deprecated wrapper restricted to its rule
+      return $this->check(
          array_slice($arguments, 1),
-         $options
+         $options,
+         $submodule === 'check' ? null : Rules::from($submodule)
       );
    }
 
-   // # Lint
+   // # Check
    /**
+    * Lint the configured trees with the configured rules — or, from a
+    * deprecated subcommand, with that one rule.
+    *
     * @param array<int,string> $arguments
     * @param array<string,mixed> $options
+    * @param null|Rules $only The rule of a deprecated subcommand, null for `check`
     */
-   private function lint (string $submodule, array $arguments, array $options): bool
+   private function check (array $arguments, array $options, null|Rules $only): bool
    {
       $Output = CLI->Terminal->Output;
 
       // ! Agent detection
       $Agent = Agent::detect();
 
-      // ! Path — in a kit it follows the working directory; elsewhere the
-      //   working base, with the framework source as the default
-      $path = $arguments[0] ?? null;
-      $kit = Workspaces::detect() === Workspaces::Kit;
-
-      if ($kit === true) {
-         $path = $this->resolve($path);
-      }
-      else if ($path === null) {
-         $path = BOOTGLY_WORKING_DIR . 'Bootgly/';
-      }
-      else if (!str_starts_with($path, '/')) {
-         $path = BOOTGLY_WORKING_DIR . $path;
-      }
-
-      // ! Submodule
-      /** @var array{description:string,facade:class-string<Analyzers>,fixable:bool,arguments:array<string,string>} $meta */
-      $meta = $this->arguments[$submodule];
-      $fixable = $meta['fixable'];
-
       // ! Options
       $fix = isset($options['fix']);
       $dryRun = isset($options['dry-run']);
+      $mode = $fix ? 'fix' : ($dryRun ? 'dry-run' : 'check');
 
-      // ? A check-only submodule has no formatter: say so, then run the check
+      // ! What the agent document opens with — the legacy shape for a wrapper
+      $head = $only !== null
+         ? [
+            'submodule'  => $only->value,
+            'fixable'    => self::FACADES[$only->value][1],
+            'deprecated' => 'use bootgly lint check',
+         ]
+         : ['command' => 'check'];
+
+      // ! Configuration — the nearest bootgly.Lint.php, or the defaults; a
+      //   broken file fails the run, it never falls back
+      $kit = Workspaces::detect() === Workspaces::Kit;
+      $cwd = getcwd();
+      $file = Lint::discover($cwd !== false ? $cwd : BOOTGLY_WORKING_DIR, BOOTGLY_WORKING_DIR);
+      $Lint = null;
+      $base = null;
+      if ($file !== null) {
+         $relativeFile = str_replace(BOOTGLY_WORKING_DIR, '', $file);
+         try {
+            $Lint = Lint::load($file);
+         }
+         catch (Throwable $Throwable) {
+            return $this->refuse($Agent, $head, $mode, "Malformed {$relativeFile}: {$Throwable->getMessage()}");
+         }
+         $base = dirname($file);
+      }
+
+      // ! Rules
+      /** @var array<int,Rules> $rules */
+      $rules = $only !== null
+         ? [$only]
+         : ($Lint !== null ? $Lint->rules : [Rules::Imports, Rules::Nullables, Rules::Promotions, Rules::Methods]);
+      if ($only === null) {
+         $head['rules'] = array_map(static fn (Rules $Rule): string => $Rule->value, $rules);
+         $head['config'] = $file !== null ? str_replace(BOOTGLY_WORKING_DIR, '', $file) : null;
+      }
+      $fixable = false;
+      foreach ($rules as $Rule) {
+         $fixable = $fixable || self::FACADES[$Rule->value][1];
+      }
+
+      // ? Only check-only rules: say so, then run the check
       $refused = $fixable === false && ($fix || $dryRun);
       if ($refused) {
          $fix = false;
          $dryRun = false;
+         $mode = 'check';
+      }
+
+      // ! Path — in a kit it follows the working directory; elsewhere the
+      //   working base, with the framework source as the default
+      $path = $arguments[0] ?? null;
+      if ($kit === true) {
+         $path = $this->resolve($path);
+      }
+      else if ($path === null) {
+         $path = ($Lint !== null && $only === null) ? null : BOOTGLY_WORKING_DIR . 'Bootgly/';
+      }
+      else if (!str_starts_with($path, '/')) {
+         // # Under a bootgly.Lint.php, found from the working directory, a
+         //   relative path is read from there too
+         $path = ($Lint !== null && $only === null && $cwd !== false)
+            ? "{$cwd}/{$path}"
+            : BOOTGLY_WORKING_DIR . $path;
+      }
+      $narrowed = ($arguments[0] ?? null) !== null;
+
+      // ! Targets — the configured paths (narrowed by the path given) for
+      //   `check` under a bootgly.Lint.php; the path itself otherwise
+      $targets = [];
+      $message = null;
+      if ($Lint !== null && $only === null) {
+         [$targets, $message] = $this->narrow($Lint, (string) $base, $narrowed ? $path : null);
+      }
+      else if ($path !== null) {
+         // # A deprecated wrapper under a bootgly.Lint.php takes its path as
+         //   given, spelled as the configuration spells it — the excludes and
+         //   the exemptions must match it whatever `..` or link it went through
+         $targets = [$Lint !== null ? $this->spell($Lint, (string) $base, $path) : $path];
       }
 
       // ? A kit has no default outside projects/, and `--fix` never rewrites
       //   a pinned tree — the kit's next update would refuse it dirty
-      $message = match (true) {
-         $path === null && getcwd() === false
+      $message ??= match (true) {
+         $targets === [] && $cwd === false
             => 'The working directory no longer exists — pass an absolute path.',
-         $path === null
+         $targets === []
             => 'No default path outside projects/ in a kit — pass a path, or run it from a project directory (projects/<Name>/).',
-         $fix === true && $this->overlap($path) === true
-            => '--fix never rewrites a pinned tree — Bootgly/, Console/ and Web/ are read-only submodules of the kit.',
          default => null
       };
-
-      if ($message !== null) {
-         return $this->refuse($Agent, $submodule, $fixable, $fix ? 'fix' : ($dryRun ? 'dry-run' : 'check'), $message);
+      if ($message === null && $fix === true) {
+         foreach ($targets as $target) {
+            if ($this->overlap($target, $Lint, $base) === true) {
+               $message = '--fix never rewrites a pinned tree — Bootgly/, Console/ and Web/ are read-only submodules of the kit.';
+               break;
+            }
+         }
       }
-      /** @var string $path */
+      if ($message !== null) {
+         return $this->refuse($Agent, $head, $mode, $message);
+      }
 
-      // @ Collect PHP files
-      $files = $this->collect($path);
-      // ! The real directory every collected name must still land in — a rewrite
-      //   acts on the name's directory as the kernel resolves it at write time
-      $scope = realpath(is_dir($path) ? $path : dirname($path));
-      $scope = ($scope === false) ? null : rtrim($scope, '/');
+      // @ Collect PHP files — each with the real directory a rewrite must
+      //   still land in: the tree it was collected from
+      /** @var array<string,null|string> $files file => scope */
+      $files = [];
+      $missing = [];
+      /** @var array<string,true> $links */
+      $links = [];
+      foreach ($targets as $target) {
+         if (is_dir($target) === false && is_file($target) === false) {
+            $missing[] = str_replace(BOOTGLY_WORKING_DIR, '', $target);
+            continue;
+         }
+         // ! A file named through a link: refused at the scan, said as such
+         if (is_link($target) && is_file($target)) {
+            $links[$target] = true;
+         }
+         $scope = realpath(is_dir($target) ? $target : dirname($target));
+         $scope = ($scope === false) ? null : rtrim($scope, '/');
+         // ! The built-in skips (vendor/, examples/, vs/) hold wherever the
+         //   configuration does not govern: no file, or a target outside its directory
+         $defaults = $Lint === null || $this->relate(rtrim($target, '/') . '/x', $base) === null;
+         foreach ($this->collect($target, $defaults) as $collected) {
+            // ? Excluded by the configuration
+            $local = $this->relate($collected, $base);
+            if ($Lint !== null && $local !== null && $Lint->exclude($local)) {
+               continue;
+            }
+            $files[$collected] ??= $scope;
+         }
+      }
 
       // ? Nothing to scan: an existing path without PHP files passes, a path
       //   that is not there fails — a gate must never go green on a typo
-      if (count($files) === 0) {
-         $missing = is_dir($path) === false && is_file($path) === false;
-         $relative = str_replace(BOOTGLY_WORKING_DIR, '', $path);
+      if ($files === [] || $missing !== []) {
+         $relative = implode(', ', $missing !== [] ? $missing : array_map(
+            static fn (string $target): string => str_replace(BOOTGLY_WORKING_DIR, '', $target),
+            $targets
+         ));
+         $notFound = $missing !== [];
+         // ! No file checked: on a full check, no exemption matched one
+         $stale = ($Lint !== null && $notFound === false)
+            ? $this->stale($Lint, $rules, [], [], $only === null && $narrowed === false)
+            : [];
+         $failed = $notFound || $stale !== [];
 
          if ($Agent->detected) {
-            echo json_encode([
-               'result'    => $missing ? 'failed' : 'passed',
-               'submodule' => $submodule,
-               'fixable'   => $fixable,
+            echo json_encode($head + [
+               'result'    => $failed ? 'failed' : 'passed',
                'agent'     => $Agent->name,
-               'mode'      => $fix ? 'fix' : ($dryRun ? 'dry-run' : 'check'),
-               'message'   => $missing ? "Path not found: {$relative}" : "No PHP files found in: {$relative}",
+               'mode'      => $mode,
+               'message'   => $notFound ? "Path not found: {$relative}" : "No PHP files found in: {$relative}",
                'files'     => ['scanned' => 0, 'failed' => 0, 'fixed' => 0, 'skipped' => 0],
-               'issues'    => ['total' => 0, 'unresolved' => 0],
+               'issues'    => ['total' => 0, 'unresolved' => 0, 'exempted' => 0],
                'report'    => [],
                'skipped'   => [],
+               'exemptions' => ['applied' => 0, 'stale' => $stale],
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . PHP_EOL;
          }
-         else if ($missing) {
+         else if ($notFound) {
             $Output->render("@.;@#Red: Path not found: {$relative} @;@..;");
          }
          else {
             $Output->render("@.;@#Yellow: No PHP files found in: {$relative} @;@..;");
+            foreach ($stale as $entry) {
+               $symbol = $entry['symbol'] !== null ? " {$entry['symbol']}" : '';
+               $Output->render("@#Red: ✗ Stale exemption: {$entry['rule']} {$entry['path']}{$symbol} — {$entry['why']} @;@.;");
+            }
          }
 
-         return $missing === false;
+         return $failed === false;
       }
 
       // @ Section title (human output)
-      $title = 'Lint > ' . ucfirst($submodule);
       if (!$Agent->detected) {
+         $title = $only !== null
+            ? 'Lint > ' . ucfirst($only->value)
+            : 'Lint > Check (' . implode(', ', array_map(static fn (Rules $Rule): string => $Rule->value, $rules)) . ')';
          $Output->render("@.;@#Cyan: {$title} @;@.;");
          $Output->render("@#Black: ─────────────────────────────────────── @;@.;");
 
+         if ($only !== null) {
+            $Output->render("@#Yellow: ! `lint {$only->value}` is deprecated — use `bootgly lint check` @;@.;");
+         }
+         if ($file !== null) {
+            $relativeFile = str_replace(BOOTGLY_WORKING_DIR, '', $file);
+            $Output->render("@#Black: Config: {$relativeFile} @;@.;");
+         }
          if ($refused) {
+            $subject = $only !== null ? "{$only->value} is" : 'every enabled rule is';
             $Output->render(
-               "@#Yellow: ! {$submodule} is check-only: --fix and --dry-run are ignored, nothing is written @;@.;"
+               "@#Yellow: ! {$subject} check-only: --fix and --dry-run are ignored, nothing is written @;@.;"
             );
+         }
+      }
+
+      // ! Analyzers — one per rule; imports resolves names against PHP's builtins
+      /** @var array<string,Analyzers> $Facades */
+      $Facades = [];
+      foreach ($rules as $Rule) {
+         $class = self::FACADES[$Rule->value][0];
+         $Facades[$Rule->value] = new $class;
+         if ($Rule === Rules::Imports) {
+            Builtins::load();
          }
       }
 
@@ -268,34 +420,39 @@ class LintCommand extends Command
       //   --fix (a comment in its import block, a rewrite that would not
       //   parse), a --dry-run or a plain check keeps its issues unresolved
       $unresolved = 0;
+      // ! Exemptions: the ones a checked file fell under, the ones that waived something
+      /** @var array<int,true> */
+      $judged = [];
+      /** @var array<int,true> */
+      $applied = [];
+      $exempted = 0;
+      // ! The trees --fix never rewrites, whatever the paths and excludes say
+      $pins = ($fix || $dryRun) ? $this->pin() : [];
       /** @var array<int,array{file:string,notice:string}> Files an analyzer declined, and why */
       $skipped = [];
 
       /** @var array<int,array{file:string,issues:array<int,array{type:string,symbol:string,kind:string,line:int,message:string}>,fixed:bool}> */
       $report = [];
 
-      // * imports — the only submodule that resolves names against PHP's builtins
-      if ($submodule === 'imports') {
-         Builtins::load();
-      }
+      foreach ($files as $file => $scope) {
+         $relativePath = str_replace(BOOTGLY_WORKING_DIR, '', $file);
 
-      $Facade = new $meta['facade'];
-
-      foreach ($files as $file) {
          // ? Collected as a regular file, read as one: a name that became a
          //   link (or anything else) since is not read — content must never
          //   flow into the tree through a name someone planted
          $entry = @lstat($file);
          if ($entry === false || ((int) $entry['mode'] & 0170000) !== 0100000) {
-            $relativePath = str_replace(BOOTGLY_WORKING_DIR, '', $file);
-            $skipped[] = ['file' => $relativePath, 'notice' => 'No longer a regular file — not analyzed'];
+            $notice = isset($links[$file])
+               ? 'A link — not analyzed (name its target)'
+               : 'No longer a regular file — not analyzed';
+            $skipped[] = ['file' => $relativePath, 'notice' => $notice];
             if (!$Agent->detected) {
-               $Output->render("@.;@#White: {$relativePath} @;\n  @#Yellow: ! @; No longer a regular file — not analyzed\n");
+               $Output->render("@.;@#White: {$relativePath} @;\n  @#Yellow: ! @; {$notice}\n");
             }
 
             continue;
          }
-         $mode = (int) $entry['mode'] & 0o777;
+         $permissions = (int) $entry['mode'] & 0o777;
 
          // ? A name the rewrite would not land on as collected is neither read nor
          //   written: a backslash is a separator elsewhere (normalized, it would
@@ -312,7 +469,6 @@ class LintCommand extends Command
             default => null
          };
          if ($notice !== null) {
-            $relativePath = str_replace(BOOTGLY_WORKING_DIR, '', $file);
             $skipped[] = ['file' => $relativePath, 'notice' => $notice];
             if (!$Agent->detected) {
                $Output->render("@.;@#White: {$relativePath} @;\n  @#Yellow: ! @; {$notice}\n");
@@ -321,140 +477,211 @@ class LintCommand extends Command
             continue;
          }
 
-         $Result = $Facade->analyze($file);
+         // ! Where the file sits for the configuration — exemption globs match there
+         $local = $Lint !== null ? $this->relate($file, $base) : null;
 
-         // ? Declined — said out loud, counted apart, never green by silence;
-         //   whatever issues came with the notice are still reported below
-         if ($Result->notice !== null) {
-            $relativePath = str_replace(BOOTGLY_WORKING_DIR, '', $file);
-            $skipped[] = ['file' => $relativePath, 'notice' => $Result->notice];
-            if (!$Agent->detected) {
-               $Output->render("@.;@#White: {$relativePath} @;\n  @#Yellow: ! @; {$Result->notice}\n");
+         // @ Every rule, its issues minus what an exemption waives
+         /** @var array<string,array{Result,array<int,Issue>}> $Analyses */
+         $Analyses = [];
+         $found = 0;
+         foreach ($rules as $Rule) {
+            $Result = $Facades[$Rule->value]->analyze($file);
+
+            // ? Declined — said out loud, counted apart, never green by silence;
+            //   whatever issues came with the notice are still reported below
+            if ($Result->notice !== null) {
+               $skipped[] = ['file' => $relativePath, 'notice' => $Result->notice];
+               if (!$Agent->detected) {
+                  $Output->render("@.;@#White: {$relativePath} @;\n  @#Yellow: ! @; {$Result->notice}\n");
+               }
             }
+
+            $kept = $this->exempt($Lint, $Rule, $local, $Result, $judged, $applied, $exempted);
+            $Analyses[$Rule->value] = [$Result, $kept];
+            $found += count($kept);
          }
 
-         if ($Result->failed === false) {
+         if ($found === 0) {
             continue;
          }
 
          $totalFiles++;
-         $issueCount = count($Result->issues);
-         $totalIssues += $issueCount;
-         // ! What the entry reports: what was found — or, after a rewrite that
-         //   left issues, what remains
-         $reported = $Result->issues;
-
-         $relativePath = str_replace(BOOTGLY_WORKING_DIR, '', $file);
-         $fixed = false;
+         $totalIssues += $found;
 
          // @ Display (human output)
          if (!$Agent->detected) {
             $Output->render("@.;@#White: {$relativePath} @;\n");
 
-            foreach ($Result->issues as $Issue) {
-               $Output->render("  @#Red: ✗ @; Line {$Issue->line}: {$Issue->message}\n");
+            foreach ($Analyses as $value => [, $kept]) {
+               $label = $only !== null ? '' : "[{$value}] ";
+               foreach ($kept as $Issue) {
+                  $Output->render("  @#Red: ✗ @; Line {$Issue->line}: {$label}{$Issue->message}\n");
+               }
             }
          }
 
-         // ? A block the formatter refuses to rewrite is not fixable — saying otherwise
-         //   would report a fix that never happened; a declined file is reported, never rewritten
-         $rewritable = $Result->notice === null;
-         foreach ($Result->issues as $Issue) {
-            if ($Issue->type === 'comment_in_imports') {
-               $rewritable = false;
-               break;
+         // @ Fix — rule by rule, each on the file as the previous one left it
+         $rewritten = false;
+         if ($fix || $dryRun) {
+            foreach ($rules as $Rule) {
+               [$Result, $kept] = $Analyses[$Rule->value];
+               $Facade = $Facades[$Rule->value];
+               if (self::FACADES[$Rule->value][1] === false || $kept === []) {
+                  continue;
+               }
+               $prefix = $only !== null ? '' : "[{$Rule->value}] ";
+
+               // ! After an earlier rewrite, this rule reads the file as it is now
+               if ($rewritten) {
+                  $Result = $Facade->analyze($file);
+                  $kept = $this->exempt($Lint, $Rule, $local, $Result, $judged, $applied, $exempted, false);
+                  if ($kept === []) {
+                     continue;
+                  }
+               }
+
+               // ? A block the formatter refuses to rewrite is not fixable — saying
+               //   otherwise would report a fix that never happened; a declined
+               //   file is reported, never rewritten; an exempted import is part
+               //   of the one block the import formatter rewrites whole
+               $reason = null;
+               if ($Result->notice !== null) {
+                  $reason = 'the analyzer declined the file';
+               }
+               if ($directory !== null) {
+                  foreach ($pins as $pinned) {
+                     if (str_starts_with("{$directory}/", $pinned)) {
+                        $reason = 'it sits in a pinned tree';
+                        break;
+                     }
+                  }
+               }
+               foreach ($kept as $Issue) {
+                  if ($Issue->type === 'comment_in_imports') {
+                     $reason = 'the import block carries a comment';
+                     break;
+                  }
+               }
+               if ($Rule === Rules::Imports && count($kept) !== count($Result->issues)) {
+                  $reason = 'an exemption covers part of the import block';
+               }
+               if ($reason !== null) {
+                  if (!$Agent->detected) {
+                     $Output->render("@#Yellow:   ! {$prefix}Left untouched — {$reason} @;\n\n");
+                  }
+                  continue;
+               }
+
+               $issueCount = count($kept);
+               if ($dryRun) {
+                  if (!$Agent->detected) {
+                     $Output->render("@#Cyan:   [dry-run] {$prefix}Would fix {$issueCount} issue(s) @;\n\n");
+                  }
+                  continue;
+               }
+
+               // ! Only what is not waived is rewritten
+               $corrected = $this->format($Facade, $Rule === Rules::Imports
+                  ? $Result
+                  : new Result(file: $Result->file, source: $Result->source, issues: $kept)
+               );
+
+               if ($corrected === null) {
+                  if (!$Agent->detected) {
+                     $Output->render("@#Red:   ✗ {$prefix}No formatter for this result — skipped @;\n\n");
+                  }
+               }
+               else if ($corrected === $Result->source) {
+                  // ? The formatter had nothing to rewrite: the issues stay
+                  if (!$Agent->detected) {
+                     $Output->render("@#Yellow:   ! {$prefix}Left untouched — nothing to rewrite for these issues @;\n\n");
+                  }
+               }
+               else if (is_writable($file) === false || is_writable(dirname($file)) === false) {
+                  // ? Not ours to write — the file, or the directory the sibling
+                  //   temporary must land in: the issues stay, the run goes on
+                  if (!$Agent->detected) {
+                     $Output->render("@#Yellow:   ! {$prefix}Left untouched — the file or its directory is not writable @;\n\n");
+                  }
+               }
+               else if (($valid = $this->validate($corrected)) !== true) {
+                  if (!$Agent->detected) {
+                     $Output->render($valid === null
+                        ? "@#Red:   ✗ {$prefix}Could not validate the fix (no php -l available) — skipped @;\n\n"
+                        : "@#Red:   ✗ {$prefix}Fix produced invalid PHP — skipped @;\n\n"
+                     );
+                  }
+               }
+               else if (new File($file, (string) $scope)->replace($corrected, $permissions) === false) {
+                  // ? The rewrite went to a sibling temporary and was discarded:
+                  //   the file on disk is byte-identical to what was analyzed.
+                  //   The scanned tree is the jail, judged when the file is
+                  //   written: a directory swapped for a link out of the tree
+                  //   since the check above (while `php -l` validated the fix)
+                  //   is refused, never written through.
+                  //   A rename replaces the NAME: a name that became a link since
+                  //   collection is discarded, never written through. The new
+                  //   inode keeps the mode read at collection only — no
+                  //   setuid/setgid/sticky bits, ACLs or old owner, and a hard
+                  //   link to the old inode keeps the old content
+                  if (!$Agent->detected) {
+                     $Output->render("@#Yellow:   ! {$prefix}Left untouched — the rewrite could not replace the file @;\n\n");
+                  }
+               }
+               else {
+                  $rewritten = true;
+               }
             }
          }
 
-         // @ Fix
-         if (($fix || $dryRun) && $rewritable === false) {
+         // ! Fixed means RESOLVED: what was written is analyzed again, and only
+         //   a clean file counts — what remains is reported as it stands now,
+         //   not as it was; what was fixed, as it was
+         $fixed = false;
+         /** @var array<int,array{string,Issue}> $reported */
+         $reported = [];
+         if ($rewritten) {
+            foreach ($rules as $Rule) {
+               $Result = $Facades[$Rule->value]->analyze($file);
+               foreach ($this->exempt($Lint, $Rule, $local, $Result, $judged, $applied, $exempted, false) as $Issue) {
+                  $reported[] = [$Rule->value, $Issue];
+               }
+            }
+            $fixed = $reported === [];
+            if ($fixed) {
+               $fixedFiles++;
+               foreach ($Analyses as $value => [, $kept]) {
+                  foreach ($kept as $Issue) {
+                     $reported[] = [$value, $Issue];
+                  }
+               }
+            }
             if (!$Agent->detected) {
-               $Output->render(
-                  "@#Yellow:   ! Left untouched — the import block carries a comment @;\n\n"
+               $remaining = $fixed ? 0 : count($reported);
+               $Output->render($fixed
+                  ? "@#Green:   ✓ Fixed {$found} issue(s) @;\n\n"
+                  : "@#Yellow:   ! Rewritten, but {$remaining} issue(s) remain @;\n\n"
                );
             }
          }
-         else if ($fix || $dryRun) {
-            $corrected = $this->format($Facade, $Result);
-
-            if ($corrected === null) {
-               if (!$Agent->detected) {
-                  $Output->render("@#Red:   ✗ No formatter for this result — skipped @;\n\n");
-               }
-            }
-            else if ($dryRun) {
-               if (!$Agent->detected) {
-                  $Output->render("@#Cyan:   [dry-run] Would fix {$issueCount} issue(s) @;\n\n");
-               }
-            }
-            else if ($corrected === $Result->source) {
-               // ? The formatter had nothing to rewrite: the issues stay
-               if (!$Agent->detected) {
-                  $Output->render("@#Yellow:   ! Left untouched — nothing to rewrite for these issues @;\n\n");
-               }
-            }
-            else if (is_writable($file) === false || is_writable(dirname($file)) === false) {
-               // ? Not ours to write — the file, or the directory the sibling
-               //   temporary must land in: the issues stay, the run goes on
-               if (!$Agent->detected) {
-                  $Output->render("@#Yellow:   ! Left untouched — the file or its directory is not writable @;\n\n");
-               }
-            }
-            else if (($valid = $this->validate($corrected)) !== true) {
-               if (!$Agent->detected) {
-                  $Output->render($valid === null
-                     ? "@#Red:   ✗ Could not validate the fix (no php -l available) — skipped @;\n\n"
-                     : "@#Red:   ✗ Fix produced invalid PHP — skipped @;\n\n"
-                  );
-               }
-            }
-            else if (new File($file, (string) $scope)->replace($corrected, $mode) === false) {
-               // ? The rewrite went to a sibling temporary and was discarded:
-               //   the file on disk is byte-identical to what was analyzed.
-               //   The scanned tree is the jail, judged when the file is
-               //   written: a directory swapped for a link out of the tree
-               //   since the check above (while `php -l` validated the fix)
-               //   is refused, never written through.
-               //   A rename replaces the NAME: a name that became a link since
-               //   collection is discarded, never written through. The new
-               //   inode keeps the mode read at collection only — no
-               //   setuid/setgid/sticky bits, ACLs or old owner, and a hard
-               //   link to the old inode keeps the old content
-               if (!$Agent->detected) {
-                  $Output->render("@#Yellow:   ! Left untouched — the rewrite could not replace the file @;\n\n");
-               }
-            }
-            else {
-               // ! Fixed means RESOLVED: what was written is analyzed again,
-               //   and only a clean file counts — what remains is reported
-               //   as it stands now, not as it was; what was fixed, as it was
-               $Result = $Facade->analyze($file);
-               $fixed = $Result->failed === false;
-               if ($fixed) {
-                  $fixedFiles++;
-               }
-               else {
-                  $reported = $Result->issues;
-                  $issueCount = count($reported);
-               }
-               if (!$Agent->detected) {
-                  $Output->render($fixed
-                     ? "@#Green:   ✓ Fixed {$issueCount} issue(s) @;\n\n"
-                     : "@#Yellow:   ! Rewritten, but {$issueCount} issue(s) remain @;\n\n"
-                  );
+         else {
+            foreach ($Analyses as $value => [, $kept]) {
+               foreach ($kept as $Issue) {
+                  $reported[] = [$value, $Issue];
                }
             }
          }
 
          if ($fixed === false) {
-            $unresolved += $issueCount;
+            $unresolved += count($reported);
          }
 
          // @ Collect report entry
          if ($Agent->detected) {
             $issueEntries = [];
-            foreach ($reported as $Issue) {
+            foreach ($reported as [$value, $Issue]) {
                $issueEntries[] = [
+                  'rule'    => $value,
                   'type'    => $Issue->type,
                   'symbol'  => $Issue->symbol,
                   'kind'    => $Issue->kind,
@@ -471,13 +698,15 @@ class LintCommand extends Command
          }
       }
 
+      // @ Stale exemptions
+      $stale = $Lint !== null ? $this->stale($Lint, $rules, $judged, $applied, $only === null && $narrowed === false) : [];
+      $passed = $unresolved === 0 && $stale === [];
+
       // @ Output
       if ($Agent->detected) {
          // @ JSON output for AI agents
-         echo json_encode([
-            'result'    => $unresolved === 0 ? 'passed' : 'failed',
-            'submodule' => $submodule,
-            'fixable'   => $fixable,
+         echo json_encode($head + [
+            'result'    => $passed ? 'passed' : 'failed',
             'agent'     => $Agent->name,
             'mode'      => $fix ? 'fix' : ($dryRun ? 'dry-run' : 'check'),
             'files'     => [
@@ -489,18 +718,24 @@ class LintCommand extends Command
             'issues' => [
                'total'      => $totalIssues,
                'unresolved' => $unresolved,
+               'exempted'   => $exempted,
             ],
             'report'  => $report,
             'skipped' => $skipped,
+            'exemptions' => [
+               'applied' => count($applied),
+               'stale'   => $stale,
+            ],
          ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . PHP_EOL;
 
-         return $unresolved === 0;
+         return $passed;
       }
 
       // @ Summary (human output)
       $Output->render("\n");
       if ($totalIssues === 0) {
-         $Output->render("@#Green: ✓ No {$submodule} issues found. @;@.;");
+         $subject = $only !== null ? $only->value : 'lint';
+         $Output->render("@#Green: ✓ No {$subject} issues found. @;@.;");
       }
       else {
          $Output->render("@#Yellow: Found {$totalIssues} issue(s) in {$totalFiles} file(s). @;@.;");
@@ -512,6 +747,13 @@ class LintCommand extends Command
             $Output->render("@#Yellow: ! {$unresolved} issue(s) remain. @;@.;");
          }
       }
+      if ($exempted > 0) {
+         $Output->render("@#Black: {$exempted} issue(s) waived by exemptions. @;@.;");
+      }
+      foreach ($stale as $entry) {
+         $symbol = $entry['symbol'] !== null ? " {$entry['symbol']}" : '';
+         $Output->render("@#Red: ✗ Stale exemption: {$entry['rule']} {$entry['path']}{$symbol} — {$entry['why']} @;@.;");
+      }
 
       $Output->render("@#Black: ─────────────────────────────────────── @;@..;");
 
@@ -521,7 +763,280 @@ class LintCommand extends Command
       }
 
       // : Green only when nothing is left — in every mode
-      return $unresolved === 0;
+      return $passed;
+   }
+
+   /**
+    * List the stale exemptions of the rules run: judged and waiving nothing;
+    * on a full `check`, also the ones no checked file fell under (a glob that
+    * matches nothing).
+    *
+    * @param Lint $Lint
+    * @param array<int,Rules> $rules The rules run
+    * @param array<int,true> $judged Exemptions a checked file fell under, by index
+    * @param array<int,true> $applied Exemptions that waived an issue, by index
+    * @param bool $full Whether every configured path was checked
+    *
+    * @return array<int,array{rule:string,path:string,symbol:null|string,reason:string,why:string}>
+    */
+   private function stale (Lint $Lint, array $rules, array $judged, array $applied, bool $full): array
+   {
+      $stale = [];
+      foreach ($Lint->Exemptions as $index => $Exemption) {
+         if (in_array($Exemption->rule, $rules, true) === false || isset($applied[$index])) {
+            continue;
+         }
+         $why = match (true) {
+            isset($judged[$index]) => 'waives nothing in the files it matches',
+            $full => 'matches no checked file',
+            default => null
+         };
+         if ($why === null) {
+            continue;
+         }
+         $stale[] = [
+            'rule'   => $Exemption->rule->value,
+            'path'   => $Exemption->path,
+            'symbol' => $Exemption->symbol,
+            'reason' => $Exemption->reason,
+            'why'    => $why,
+         ];
+      }
+
+      return $stale;
+   }
+
+   /**
+    * Remove from a result's issues what the configuration's exemptions waive,
+    * recording which exemptions a file fell under and which waived something.
+    *
+    * @param null|Lint $Lint The configuration, null for the defaults
+    * @param Rules $Rule The rule that produced the result
+    * @param null|string $local The file relative to the configuration's directory, null outside it
+    * @param Result $Result
+    * @param array<int,true> $judged Exemptions a checked file fell under, by index
+    * @param array<int,true> $applied Exemptions that waived an issue, by index
+    * @param int $exempted How many issues were waived
+    * @param bool $count Whether the waived issues are counted (false on a re-analysis)
+    *
+    * @return array<int,Issue> The issues left
+    */
+   private function exempt (
+      null|Lint $Lint,
+      Rules $Rule,
+      null|string $local,
+      Result $Result,
+      array &$judged,
+      array &$applied,
+      int &$exempted,
+      bool $count = true
+   ): array
+   {
+      // ?: Nothing can be waived
+      if ($Lint === null || $local === null) {
+         return $Result->issues;
+      }
+
+      // ! The exemptions this file falls under were judged, issues or not
+      $Selected = $Lint->select($Rule, $local);
+      foreach ($Selected as $index => $Exemption) {
+         $judged[$index] = true;
+      }
+      // ?: Nothing to waive
+      if ($Selected === [] || $Result->issues === []) {
+         return $Result->issues;
+      }
+
+      // ! The enclosing class of each line — only when a symbol names one
+      $Scope = null;
+      foreach ($Selected as $Exemption) {
+         if ($Exemption->symbol !== null && str_contains($Exemption->symbol, '::')) {
+            $Scope ??= new Scope($Result->source);
+         }
+      }
+
+      // @@
+      $kept = [];
+      foreach ($Result->issues as $Issue) {
+         $class = $Scope !== null ? $Scope->find($Issue->line) : '';
+         $waived = false;
+         foreach ($Selected as $index => $Exemption) {
+            if ($Exemption->cover($Issue, $class)) {
+               $applied[$index] = true;
+               $waived = true;
+               break;
+            }
+         }
+         if ($waived) {
+            if ($count) {
+               $exempted++;
+            }
+            continue;
+         }
+         $kept[] = $Issue;
+      }
+
+      return $kept;
+   }
+
+   /**
+    * Narrow the configured paths by the path given: the configured trees
+    * inside it, or the path itself when it lies inside a configured tree.
+    *
+    * @param Lint $Lint
+    * @param string $base The configuration's directory
+    * @param null|string $path The absolute path given, null for every configured path
+    *
+    * @return array{array<int,string>,null|string} The targets, and why there are none
+    */
+   private function narrow (Lint $Lint, string $base, null|string $path): array
+   {
+      // ! The configured trees, absolute
+      $configured = [];
+      foreach ($Lint->paths as $entry) {
+         $entry = $this->normalize($entry);
+         $configured[] = $entry === '' ? $base : "{$base}/{$entry}";
+      }
+
+      // ?: No path — every configured tree
+      if ($path === null) {
+         return [$configured, null];
+      }
+
+      // ? A path that is not there is a typo, never an empty pass
+      $target = realpath($path);
+      if ($target === false) {
+         $relative = str_replace(BOOTGLY_WORKING_DIR, '', $path);
+
+         return [[], "Path not found: {$relative}"];
+      }
+      $target = rtrim($target, '/');
+
+      // @@ Inside a configured tree, or holding some — always answered as
+      //   the configured spelling, never through a link, so the excludes and
+      //   the exemptions match the narrowed files as they match a full run
+      $targets = [];
+      foreach ($configured as $tree) {
+         $real = realpath($tree);
+         if ($real === false) {
+            continue;
+         }
+         $real = rtrim($real, '/');
+         if ($target === $real || str_starts_with("{$target}/", "{$real}/")) {
+            return [[$tree . substr($target, strlen($real))], null];
+         }
+         if (str_starts_with("{$real}/", "{$target}/")) {
+            $targets[] = $tree;
+         }
+      }
+
+      // :
+      if ($targets === []) {
+         $relative = str_replace(BOOTGLY_WORKING_DIR, '', $path);
+
+         return [[], "Path outside the configured paths: {$relative}"];
+      }
+
+      return [$targets, null];
+   }
+
+   /**
+    * Spell a path the way the configuration does: inside a configured tree,
+    * through that tree's spelling; anywhere else, its real path. A file keeps
+    * its name (a file link is never resolved through; a directory link is,
+    * so its files meet the excludes), and a path that is not
+    * there is returned as given — the scan reports it missing.
+    *
+    * @param Lint $Lint
+    * @param string $base The configuration's directory (a real path)
+    * @param string $path An absolute path
+    *
+    * @return string
+    */
+   private function spell (Lint $Lint, string $base, string $path): string
+   {
+      // ! A file keeps its own name — only its directory is spelled: a file
+      //   link is still a link when the scan meets it, and is refused there;
+      //   a directory (linked or not) resolves, so its files meet the excludes
+      $leaf = '';
+      $directory = $path;
+      if (is_dir($path) === false && (is_link($path) || is_file($path))) {
+         $leaf = '/' . basename($path);
+         $directory = dirname($path);
+      }
+
+      // ?: Not there
+      $target = realpath($directory);
+      if ($target === false) {
+         return $path;
+      }
+      $target = rtrim($target, '/');
+
+      // @@ Inside a configured tree
+      foreach ($Lint->paths as $entry) {
+         $entry = $this->normalize($entry);
+         $tree = $entry === '' ? $base : "{$base}/{$entry}";
+         $real = realpath($tree);
+         if ($real === false) {
+            continue;
+         }
+         $real = rtrim($real, '/');
+         if ($target === $real || str_starts_with("{$target}/", "{$real}/")) {
+            return $tree . substr($target, strlen($real)) . $leaf;
+         }
+      }
+
+      // :
+      return "{$target}{$leaf}";
+   }
+
+   /**
+    * A file's path relative to the configuration's directory.
+    *
+    * @param string $file An absolute file path
+    * @param null|string $base The configuration's directory
+    *
+    * @return null|string The relative path, `/`-separated, or null outside the directory
+    */
+   private function relate (string $file, null|string $base): null|string
+   {
+      // ?: No configuration
+      if ($base === null) {
+         return null;
+      }
+
+      // ! As written, without `.` segments or doubled separators — every
+      //   target is spelled from the configuration's directory
+      $local = $this->normalize($file);
+      if (str_starts_with($local, "{$base}/") === false) {
+         return null;
+      }
+
+      // :
+      return substr($local, strlen($base) + 1);
+   }
+
+   /**
+    * Drop the `.` segments and doubled separators of a path, lexically — what
+    * a configuration pattern is matched against never carries them.
+    *
+    * @param string $path
+    *
+    * @return string The path without `.` segments ('' for the current directory)
+    */
+   private function normalize (string $path): string
+   {
+      $absolute = str_starts_with($path, '/');
+      $segments = [];
+      foreach (explode('/', $path) as $segment) {
+         if ($segment === '' || $segment === '.') {
+            continue;
+         }
+         $segments[] = $segment;
+      }
+      $normalized = implode('/', $segments);
+
+      return $absolute ? "/{$normalized}" : $normalized;
    }
 
    /**
@@ -538,7 +1053,7 @@ class LintCommand extends Command
       if ($Facade instanceof Imports && $Result instanceof Imports\Analyzer\Result) {
          return $Facade->format($Result);
       }
-      if ($Facade instanceof Nullables) {
+      if ($Facade instanceof Nullables || $Facade instanceof Spacing) {
          return $Facade->format($Result);
       }
 
@@ -569,7 +1084,7 @@ class LintCommand extends Command
          // # Arguments
          $content = '';
          foreach ($this->arguments as $name => $value) {
-            /** @var array{description: string, fixable: bool, arguments: array<string,string>}|string $value */
+            /** @var array{description: string, deprecated: bool, arguments: array<string,string>}|string $value */
             $description = is_array($value) ? $value['description'] : $value;
             $label = $name;
             $content .= '@#Yellow:' . $name . '@;';
@@ -597,27 +1112,23 @@ class LintCommand extends Command
          // # Usage
          $Fieldset = new Fieldset($Output);
          $Fieldset->title = '@#green: Lint usage @;';
-         $Fieldset->content = 'bootgly lint @#Black: <submodule> @;@.;';
-         $Fieldset->content .= 'bootgly lint @#Black: <submodule> [path] @;@.;';
-         $Fieldset->content .= 'bootgly lint @#Black: <submodule> [path] --fix @;';
+         $Fieldset->content = 'bootgly lint check @#Black: [path] @;@.;';
+         $Fieldset->content .= 'bootgly lint check @#Black: [path] --fix @;@.;';
+         $Fieldset->content .= 'bootgly lint check @#Black: [path] --dry-run @;@.;';
+         $Fieldset->content .= '@#Black:Rules, paths, excludes and exemptions come from bootgly.Lint.php (nearest one up from the current directory).@;';
          $Fieldset->render();
 
          // # Examples — a kit runs them from a project directory
          if (Workspaces::detect() === Workspaces::Kit) {
             $examples = '@#Black:cd projects/<Name>@;' . PHP_EOL;
-            $examples .= '@#Black:bootgly lint imports@;' . PHP_EOL;
-            $examples .= '@#Black:bootgly lint imports Models/ --fix@;' . PHP_EOL;
-            $examples .= '@#Black:bootgly lint nullables --dry-run@;' . PHP_EOL;
-            $examples .= '@#Black:bootgly lint promotions@;' . PHP_EOL;
-            $examples .= '@#Black:bootgly lint methods Controllers/@;';
+            $examples .= '@#Black:bootgly lint check@;' . PHP_EOL;
+            $examples .= '@#Black:bootgly lint check Models/ --fix@;' . PHP_EOL;
+            $examples .= '@#Black:bootgly lint check --dry-run@;';
          }
          else {
-            $examples = '@#Black:bootgly lint imports@;' . PHP_EOL;
-            $examples .= '@#Black:bootgly lint imports Bootgly/ABI/ --fix@;' . PHP_EOL;
-            $examples .= '@#Black:bootgly lint nullables --dry-run@;' . PHP_EOL;
-            $examples .= '@#Black:bootgly lint nullables app/ --fix@;' . PHP_EOL;
-            $examples .= '@#Black:bootgly lint promotions@;' . PHP_EOL;
-            $examples .= '@#Black:bootgly lint methods app/@;';
+            $examples = '@#Black:bootgly lint check@;' . PHP_EOL;
+            $examples .= '@#Black:bootgly lint check Bootgly/ABI/ --fix@;' . PHP_EOL;
+            $examples .= '@#Black:bootgly lint check --dry-run@;';
          }
          $Fieldset = new Fieldset($Output);
          $Fieldset->title = '@#green: Lint examples @;';
@@ -625,11 +1136,11 @@ class LintCommand extends Command
          $Fieldset->render();
       }
       else if ( isSet($this->arguments[$arguments[0]]) ) {
-         // @ Show usage for a valid submodule
+         // @ Show usage for a valid subcommand
          $submodule = $arguments[0];
-         /** @var array{description: string, fixable: bool, arguments: array<string,string>} $meta */
+         /** @var array{description: string, deprecated: bool, arguments: array<string,string>} $meta */
          $meta = $this->arguments[$submodule];
-         $fixable = $meta['fixable'];
+         $fixable = $meta['deprecated'] === false || self::FACADES[$submodule][1];
 
          $Output->write(PHP_EOL);
          $Output->render("@#Black: {$meta['description']}@;@.;");
@@ -648,7 +1159,7 @@ class LintCommand extends Command
             $Fieldset->render();
          }
 
-         // # Usage — a check-only submodule has no --fix / --dry-run
+         // # Usage — a check-only rule has no --fix / --dry-run
          $Fieldset = new Fieldset($Output);
          $Fieldset->title = "@#Cyan: Lint {$submodule} usage @;";
          $Fieldset->content = "bootgly lint {$submodule} @#Black: [path] @;";
@@ -737,7 +1248,7 @@ class LintCommand extends Command
     *
     * @return bool
     */
-   private function overlap (string $path): bool
+   private function overlap (string $path, null|Lint $Lint = null, null|string $base = null): bool
    {
       $target = realpath($path);
 
@@ -747,6 +1258,47 @@ class LintCommand extends Command
       }
       $target = rtrim($target, '/') . '/';
 
+      // @@ Inside a pinned tree, or holding one
+      foreach ($this->pin() as $pinned) {
+         // ?: Inside it
+         if (str_starts_with($target, $pinned)) {
+            return true;
+         }
+         // ?: Holding it — unless the scan skips it anyway: without a
+         //   configuration, a `vendor/` between them (a framework installed
+         //   through Composer); under one, a tree its excludes cover whole
+         //   (a pattern that matches the directory AND what lies deep in it —
+         //   `Bootgly/*` matches the first only). The write itself is guarded
+         //   again, file by file
+         if (str_starts_with($pinned, $target)) {
+            if ($Lint === null) {
+               if (str_contains('/' . substr($pinned, strlen($target)), '/vendor/') === false) {
+                  return true;
+               }
+               continue;
+            }
+            $directory = rtrim($pinned, '/');
+            $local = ($base !== null && str_starts_with($directory, "{$base}/"))
+               ? substr($directory, strlen($base) + 1) . '/'
+               : null;
+            if ($local === null || $Lint->exclude($local) === false || $Lint->exclude("{$local}a/b/c.php") === false) {
+               return true;
+            }
+         }
+      }
+
+      // :
+      return false;
+   }
+
+   /**
+    * List the pinned trees of this workspace — the read-only submodules
+    * `--fix` must never rewrite — as real paths ending in `/`.
+    *
+    * @return array<int,string>
+    */
+   private function pin (): array
+   {
       // ! The pinned trees of this workspace
       $Workspace = Workspaces::detect();
       $trees = [];
@@ -772,27 +1324,17 @@ class LintCommand extends Command
          }
       }
 
-      // @@ Inside a pinned tree, or holding one
+      // @@ As real paths
+      $pinned = [];
       foreach ($trees as $tree) {
-         $pinned = realpath($tree);
-         if ($pinned === false) {
-            continue;
-         }
-         $pinned = rtrim($pinned, '/') . '/';
-
-         // ?: Inside it
-         if (str_starts_with($target, $pinned)) {
-            return true;
-         }
-         // ?: Holding it — unless the scan skips it anyway (a `vendor/` between
-         //   them: a framework installed through Composer)
-         if (str_starts_with($pinned, $target) && str_contains('/' . substr($pinned, strlen($target)), '/vendor/') === false) {
-            return true;
+         $real = realpath($tree);
+         if ($real !== false) {
+            $pinned[] = rtrim($real, '/') . '/';
          }
       }
 
       // :
-      return false;
+      return $pinned;
    }
 
    /**
@@ -800,27 +1342,25 @@ class LintCommand extends Command
     * JSON document or as a human alert.
     *
     * @param Agent $Agent The detected agent, if any
-    * @param string $submodule The submodule that was asked for
-    * @param bool $fixable Whether the submodule formats
+    * @param array<string,mixed> $head What the agent document opens with — the subcommand and its shape
     * @param string $mode `check`, `fix` or `dry-run`
     * @param string $message Why the run is refused
     *
     * @return false
     */
-   private function refuse (Agent $Agent, string $submodule, bool $fixable, string $mode, string $message): false
+   private function refuse (Agent $Agent, array $head, string $mode, string $message): false
    {
       if ($Agent->detected) {
-         echo json_encode([
+         echo json_encode($head + [
             'result'    => 'failed',
-            'submodule' => $submodule,
-            'fixable'   => $fixable,
             'agent'     => $Agent->name,
             'mode'      => $mode,
             'message'   => $message,
             'files'     => ['scanned' => 0, 'failed' => 0, 'fixed' => 0, 'skipped' => 0],
-            'issues'    => ['total' => 0, 'unresolved' => 0],
+            'issues'    => ['total' => 0, 'unresolved' => 0, 'exempted' => 0],
             'report'    => [],
             'skipped'   => [],
+            'exemptions' => ['applied' => 0, 'stale' => []],
          ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . PHP_EOL;
       }
       else {
@@ -834,10 +1374,12 @@ class LintCommand extends Command
     * Collect all PHP files from a path.
     *
     * @param string $path File or directory path
+    * @param bool $defaults Whether the built-in skips apply (no bootgly.Lint.php):
+    *                       `vendor/`, `examples/` and `vs/` inside the scanned path
     *
     * @return array<int,string>
     */
-   private function collect (string $path): array
+   private function collect (string $path, bool $defaults = true): array
    {
       if (is_file($path)) {
          return [$path];
@@ -848,14 +1390,14 @@ class LintCommand extends Command
       }
 
       $files = [];
-      /** @var RecursiveIteratorIterator<RecursiveDirectoryIterator> $iterator */
-      $iterator = new RecursiveIteratorIterator(
+      /** @var RecursiveIteratorIterator<RecursiveDirectoryIterator> $Iterator */
+      $Iterator = new RecursiveIteratorIterator(
          new RecursiveDirectoryIterator($path)
       );
 
       $root = rtrim($path, '/') . '/';
       /** @var \SplFileInfo $file */
-      foreach ($iterator as $file) {
+      foreach ($Iterator as $file) {
          // ? A link is scanned where it points, never through the name that
          //   points — `--fix` must never write outside the tree it was given
          if ($file->isLink()) {
@@ -864,14 +1406,15 @@ class LintCommand extends Command
          if ($file->isFile() && str_ends_with($file->getPathname(), '.php')) {
             $pathname = $file->getPathname();
 
-            // @ Skip vendor, examples and vs INSIDE the scanned path — tests
-            //   are code and are linted too; what the caller named is scanned
-            //   whatever its ancestors are called
+            // @ Without a bootgly.Lint.php, skip vendor, examples and vs INSIDE
+            //   the scanned path — tests are code and are linted too; what the
+            //   caller named is scanned whatever its ancestors are called. A
+            //   configuration says what it excludes instead
             $relative = '/' . substr($pathname, strlen($root));
-            if (str_contains($relative, '/vendor/')
+            if ($defaults && (str_contains($relative, '/vendor/')
                || str_contains($relative, '/examples/')
                || str_contains($relative, '/vs/')
-            ) {
+            )) {
                continue;
             }
 

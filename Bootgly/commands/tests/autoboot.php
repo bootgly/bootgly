@@ -91,5 +91,7 @@ return new Suite(
       '1.15-project-migrate-names',
       // # project stop ends the retirees of a recycling server with its workers
       '9.2-project-stop-retirees',
+      // # lint check: bootgly.Lint.php paths, rules, exemptions; deprecated wrappers
+      '10.4-lint-check-config',
    ]
 );

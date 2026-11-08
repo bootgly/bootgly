@@ -27,6 +27,8 @@ use function array_pop;
 use function count;
 use function file_get_contents;
 use function is_array;
+use function ltrim;
+use function str_contains;
 use function str_starts_with;
 use function strtolower;
 use function substr;
@@ -35,12 +37,15 @@ use function token_get_all;
 use Bootgly\ABI\Syntax\Analyzers;
 use Bootgly\ABI\Syntax\Analyzers\Issue;
 use Bootgly\ABI\Syntax\Analyzers\Result;
+use Bootgly\ABI\Syntax\Methods\Analyzer\Verbs;
 
 
 /**
- * Reports every method whose name is more than one word — an uppercase letter
- * after the first character, the camelCase seam. Bootgly names methods with a
- * single verb.
+ * Reports every method whose name is not one base-form verb: more than one
+ * word (an uppercase letter after the first character, the camelCase seam),
+ * or one word that is a past form, a predicate, a plural or third-person
+ * form, a noun or an adjective (`Analyzer\Verbs`). Bootgly names methods
+ * with a single verb in the infinitive; the `-ing` form of a loop passes.
  *
  * Only methods count: functions declared in the body of a class, interface,
  * trait or enum (anonymous classes included). Closures, arrow functions and
@@ -67,6 +72,9 @@ class Analyzer extends Analyzers
    private const array IMPOSED = [
       // # IteratorAggregate
       'getiterator' => true,
+      // # Iterator / SeekableIterator / Countable / Serializable
+      'current' => true, 'key' => true, 'next' => true, 'rewind' => true, 'valid' => true,
+      'seek' => true, 'count' => true, 'serialize' => true, 'unserialize' => true,
       // # ArrayAccess
       'offsetexists' => true, 'offsetget' => true, 'offsetset' => true, 'offsetunset' => true,
       // # JsonSerializable
@@ -92,11 +100,31 @@ class Analyzer extends Analyzers
       'gettype' => true, 'isreadable' => true, 'iswritable' => true, 'isexecutable' => true,
       'getbasename' => true, 'getpath' => true, 'getpathinfo' => true, 'getfileinfo' => true,
       'openfile' => true, 'setfileclass' => true, 'setinfoclass' => true,
+      // # php_user_filter
+      'oncreate' => true, 'onclose' => true,
    ];
+   /**
+    * Method names PHP's stream wrapper protocol calls by name — a wrapper
+    * class implements no interface, so they are exempt wherever they appear.
+    */
+   private const array PROTOCOL = [
+      'dir_closedir' => true, 'dir_opendir' => true, 'dir_readdir' => true, 'dir_rewinddir' => true,
+      'stream_cast' => true, 'stream_close' => true, 'stream_eof' => true, 'stream_flush' => true,
+      'stream_lock' => true, 'stream_metadata' => true, 'stream_open' => true, 'stream_read' => true,
+      'stream_seek' => true, 'stream_set_option' => true, 'stream_stat' => true, 'stream_tell' => true,
+      'stream_truncate' => true, 'stream_write' => true, 'url_stat' => true,
+   ];
+   private readonly Verbs $Verbs;
 
+
+   public function __construct ()
+   {
+      // * Metadata
+      $this->Verbs = new Verbs;
+   }
 
    /**
-    * Analyze a PHP file for multi-word method names.
+    * Analyze a PHP file for method names that are not one base-form verb.
     *
     * @param string $file Absolute path to the PHP file
     *
@@ -211,39 +239,40 @@ class Analyzer extends Analyzers
          /** @var int $line */
          $line = $named[2];
 
-         if ($this->check($name, $frame[1]) === false) {
+         // ? Magic methods are never the author's choice; a PHP-imposed name is
+         //   not either — but only in a class that inherits it from somewhere
+         $lower = strtolower($name);
+         if (str_starts_with($name, '__') || isset(self::PROTOCOL[$lower]) || ($frame[1] && isset(self::IMPOSED[$lower]))) {
             continue;
          }
 
-         $issues[] = new Issue(
-            type: 'multiword_method',
-            symbol: $name,
-            kind: 'method',
-            line: $line,
-            message: "Multi-word method name: {$name}() → use a single-word verb"
-         );
+         // @ One word — an uppercase letter after the first character, or an
+         //   underscore inside the name, starts a second word
+         $rest = substr($name, 1);
+         if ($rest !== strtolower($rest) || str_contains(ltrim($name, '_'), '_')) {
+            $issues[] = new Issue(
+               type: 'multiword_method',
+               symbol: $name,
+               kind: 'method',
+               line: $line,
+               message: "Multi-word method name: {$name}() → use a single-word verb"
+            );
+            continue;
+         }
+
+         // @ A base-form verb
+         $reason = $this->Verbs->check($name);
+         if ($reason !== null) {
+            $issues[] = new Issue(
+               type: 'verb_form',
+               symbol: $name,
+               kind: 'method',
+               line: $line,
+               message: "Method name is not a base-form verb: {$name}() {$reason} → name the action in the infinitive"
+            );
+         }
       }
 
       return new Result(file: $file, source: $source, issues: $issues);
-   }
-
-   /**
-    * Whether a method name breaks the single-word rule.
-    *
-    * @param string $name The declared name
-    * @param bool $inherits Whether the class extends or implements something — only then can a name be PHP's
-    */
-   private function check (string $name, bool $inherits): bool
-   {
-      // ? Magic methods are never the author's choice; a PHP-imposed name is
-      //   not either — but only in a class that inherits it from somewhere
-      if (str_starts_with($name, '__') || ($inherits && isset(self::IMPOSED[strtolower($name)]))) {
-         return false;
-      }
-
-      // : An uppercase letter after the first character is a second word
-      $rest = substr($name, 1);
-
-      return $rest !== strtolower($rest);
    }
 }

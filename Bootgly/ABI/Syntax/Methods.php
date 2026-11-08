@@ -15,8 +15,10 @@ use Bootgly\ABI\Syntax\Analyzers\Result;
 
 
 /**
- * `bootgly lint methods` — multi-word (camelCase) method names; Bootgly names
- * methods with a single verb. Check-only.
+ * The `methods` lint rule (`Rules::Methods`) — method names that are not one
+ * base-form verb: multi-word (camelCase or snake_case), past forms,
+ * predicates, plural or third-person forms, nouns and adjectives; Bootgly
+ * names methods with a single verb. Check-only.
  */
 class Methods extends Analyzers
 {
@@ -30,7 +32,7 @@ class Methods extends Analyzers
    }
 
    /**
-    * Analyze a PHP file for multi-word method names.
+    * Analyze a PHP file for method names that are not one base-form verb.
     *
     * @param string $file Absolute path to the PHP file
     *

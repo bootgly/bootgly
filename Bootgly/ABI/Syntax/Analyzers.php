@@ -20,13 +20,13 @@ use Bootgly\ABI\Syntax\Analyzers\Result;
 
 
 /**
- * The contract every `bootgly lint` submodule analyzes through.
+ * The contract every `bootgly lint` rule analyzes through.
  *
  * An analyzer reads one PHP file and reports every style violation it is
  * responsible for as a `Result` — the file, its source and its issues. The
- * submodule facades (`Imports`, `Nullables`, `Promotions`, `Methods`) and the
- * analyzers behind them all extend it, so the lint command holds them by this
- * type alone.
+ * rule facades (`Casing`, `Imports`, `Methods`, `Nullables`, `Promotions`,
+ * `Sections`, `Spacing` — one per `Analyzers\Rules` case) and the analyzers
+ * behind them all extend it, so the lint command holds them by this type alone.
  *
  * Every analyzer works on `token_get_all()` output — never on the raw source
  * with a regular expression — so a construct is recognized by what PHP parsed

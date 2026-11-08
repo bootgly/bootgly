@@ -258,5 +258,11 @@ return new Suites(
       //   and stdio for Console (appended last to keep every suite index above stable)
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/Router/MCP/',
       'Bootgly/CLI/MCP/',
+      // # ABI/Syntax — the lint configuration and the analyzers behind `lint check`
+      //   (appended last to keep every suite index above stable)
+      'Bootgly/ABI/Syntax/Lint/',
+      'Bootgly/ABI/Syntax/Spacing/',
+      'Bootgly/ABI/Syntax/Casing/',
+      'Bootgly/ABI/Syntax/Sections/',
    ]
 );
