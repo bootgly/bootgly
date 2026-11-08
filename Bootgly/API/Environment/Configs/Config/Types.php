@@ -13,6 +13,7 @@ namespace Bootgly\API\Environment\Configs\Config;
 
 use function strtolower;
 use InvalidArgumentException;
+use SensitiveParameter;
 
 use Bootgly\ADI\Casters;
 use Bootgly\ADI\Casters\Modes;
@@ -34,9 +35,11 @@ enum Types
    /**
     * Parse a scalar value according to this config type.
     *
+    * The value is a sensitive parameter: exception traces never carry it.
+    *
     * @throws InvalidArgumentException when the value is ambiguous or invalid.
     */
-   public function cast (string|int|float|bool $value): string|int|float|bool
+   public function cast (#[SensitiveParameter] string|int|float|bool $value): string|int|float|bool
    {
       // ! The strict ADI caster of this config type.
       $Caster = match ($this) {
@@ -51,7 +54,7 @@ enum Types
          $cast = $Caster->cast($value, Modes::Strict);
       }
       catch (InvalidArgumentException) {
-         self::fail(strtolower($this->name), $value);
+         self::fail(strtolower($this->name));
       }
 
       // :
@@ -63,7 +66,7 @@ enum Types
     *
     * @throws InvalidArgumentException always.
     */
-   private static function fail (string $type, string|int|float|bool $value): never
+   private static function fail (string $type): never
    {
       throw new InvalidArgumentException("Invalid {$type} config value.");
    }

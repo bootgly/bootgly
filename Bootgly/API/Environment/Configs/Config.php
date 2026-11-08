@@ -16,6 +16,7 @@ use function getenv;
 use function is_scalar;
 use AllowDynamicProperties;
 use RuntimeException;
+use SensitiveParameter;
 
 use Bootgly\API\Environment\Configs\Config\Types;
 
@@ -117,11 +118,12 @@ class Config
     *
     * Resolution order is process env, local config env, then `$default`. When
     * `$required` is true, missing or empty values throw and defaults are not
-    * used. `$cast` applies strict scalar parsing after resolution.
+    * used. `$cast` applies strict scalar parsing after resolution. The default
+    * is a sensitive parameter: exception traces never carry it.
     *
     * @throws RuntimeException when `$required` is true and the value is absent.
     */
-   public function bind (string $key = '', mixed $default = null, null|Types $cast = null, bool $required = false): self
+   public function bind (string $key = '', #[SensitiveParameter] mixed $default = null, null|Types $cast = null, bool $required = false): self
    {
       if ($key !== '') {
          $env = getenv($key);

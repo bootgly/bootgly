@@ -51,5 +51,7 @@ return new Suite(
       '8.x-config_schema_build',
       '8.x-config_schema_failures',
       '8.x-configs_schema_load',
+      // # 1.2.0: cast failures keep values and defaults out of exception traces.
+      '1.x-config_trace_redaction',
    ]
 );
