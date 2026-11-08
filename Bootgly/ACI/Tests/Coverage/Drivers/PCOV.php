@@ -13,6 +13,7 @@ namespace Bootgly\ACI\Tests\Coverage\Drivers;
 
 use function extension_loaded;
 use function function_exists;
+use function ini_get;
 use LogicException;
 
 use Bootgly\ACI\Tests\Coverage\Driver;
@@ -44,6 +45,15 @@ final class PCOV extends Driver
    {
       if (! extension_loaded('pcov')) {
          throw new LogicException('Pcov coverage requires ext-pcov');
+      }
+
+      // ? Loaded but disabled (the production default) collects nothing:
+      //   pcov\collect() returns null instead of a hit map
+      if ((bool) ini_get('pcov.enabled') === false) {
+         throw new LogicException(
+            'PCOV is loaded but disabled; set pcov.enabled=1 '
+            . '(e.g. php -d pcov.enabled=1 bootgly test --coverage).'
+         );
       }
    }
 

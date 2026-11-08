@@ -124,5 +124,11 @@ return new Suite(
       '7.2.13-Coverage-Native_arrow_pending',
       '9.4.1-Suite-unreached_and_abort',
       '5.3.3-Fake-Clock-system_clock_double',
+      '7.3.1-Coverage-Gate_floor',
+      '7.3.2-Coverage-Gate_classes',
+      '7.3.3-Coverage-Changes_parse',
+      '7.3.4-Coverage-Changes_fetch',
+      '7.3.5-Coverage-paths_and_changes',
+      '7.3.6-Coverage-runner_honesty_and_gate',
    ]
 );

@@ -95,6 +95,7 @@ use function round;
 use function rtrim;
 use function scandir;
 use function sort;
+use function sprintf;
 use function stat;
 use function str_contains;
 use function str_ends_with;
@@ -111,6 +112,7 @@ use function substr;
 use function substr_count;
 use function unlink;
 use Closure;
+use InvalidArgumentException;
 use LogicException;
 use RuntimeException;
 use stdClass;
@@ -138,10 +140,12 @@ use Bootgly\ACI\Tests\Benchmark\Runner;
 use Bootgly\ACI\Tests\Benchmark\Runtime;
 use Bootgly\ACI\Tests\Benchmark\Summary;
 use Bootgly\ACI\Tests\Coverage;
+use Bootgly\ACI\Tests\Coverage\Changes;
 use Bootgly\ACI\Tests\Coverage\Drivers\Native;
 use Bootgly\ACI\Tests\Coverage\Drivers\Nothing;
 use Bootgly\ACI\Tests\Coverage\Drivers\PCOV;
 use Bootgly\ACI\Tests\Coverage\Drivers\XDebug;
+use Bootgly\ACI\Tests\Coverage\Gate;
 use Bootgly\ACI\Tests\Results;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Tests\Suites;
@@ -171,6 +175,21 @@ class TestCommand extends Command
     * nests one level; a suite that re-enters ITSELF would nest forever.
     */
    private const int GENERATIONS = 4;
+   /**
+    * INI settings the assertions re-exec carries to the child interpreter:
+    * the coverage backends read them at startup, so a `-d` given to the
+    * parent would otherwise be lost (`opcache.enable_cli=0` for the Native
+    * driver, `pcov.enabled=1` for PCOV, `xdebug.mode=coverage`).
+    *
+    * @var array<int,string>
+    */
+   private const array SETTINGS = [
+      'opcache.enable_cli',
+      'pcov.directory',
+      'pcov.enabled',
+      'pcov.exclude',
+      'xdebug.mode',
+   ];
 
    // * Config
    public int $group = 1;
@@ -190,7 +209,10 @@ class TestCommand extends Command
       'Coverage driver: @#Cyan:xdebug | pcov | native | nothing@;' => ['--coverage-driver=DRIVER'],
       'Native driver mode: @#Cyan:strict | parity@; @#Black:(default: strict)@;' => ['--coverage-native-mode=MODE'],
       'Coverage report: @#Cyan:text | html | clover@; @#Black:(default: text)@;' => ['--coverage-report=FORMAT[:PATH]'],
-      'Restrict the coverage report to changed lines' => ['--coverage-diff'],
+      'Show uncovered/covered lines per file; with a git RANGE, measure only the lines it changed' => ['--coverage-diff[=RANGE]'],
+      'Measure every PHP source under DIR — files no test loaded count at zero' => ['--coverage-path=DIR'],
+      'Fail when covered statements are below PERCENT @#Black:(0-100)@;' => ['--coverage-floor=PERCENT'],
+      'Fail when a class, trait or enum has no covered statement' => ['--coverage-classes'],
       'Output view, rendering only: @#Cyan:list | heatmap@; @#Black:(default: heatmap on a terminal)@;' => ['--view=MODE'],
       'Stop at the first failing case @#Black:(default: report every failure)@;' => ['--fail-fast'],
       'Show help information' => ['--help', '-h'],
@@ -213,6 +235,8 @@ class TestCommand extends Command
    private bool $sweeping = false;
    /** Failed test cases accumulated across heatmap-mode suites */
    private int $failures = 0;
+   /** Whether the coverage step passed — a failed gate or measurement fails the run */
+   private bool $gated = true;
    /** Set once the sweep reached its own end — an abrupt end leaves it false */
    private bool $completed = false;
    /** The running sweep — the verdict handler reads its tally after an abrupt end */
@@ -259,18 +283,30 @@ class TestCommand extends Command
          $argv = (array) ($_SERVER['argv'] ?? []);
          $command = $argv === [] ? [BOOTGLY_ROOT_DIR . 'bootgly', 'test'] : $argv;
 
+         // ! The re-exec'd interpreter only gets the `-d` flags passed here:
+         //   carry the coverage settings a `php -d … bootgly test --coverage…`
+         //   line exists to set, or the child measures with the INI defaults
+         $settings = ['-d', 'zend.assertions=1', '-d', 'bootgly.assertions=1'];
+         foreach (self::SETTINGS as $setting) {
+            $value = ini_get($setting);
+            if ($value !== false) {
+               $settings[] = '-d';
+               $settings[] = "{$setting}={$value}";
+            }
+         }
+
          // @ Replace this process when the platform allows it...
          if (function_exists('pcntl_exec')) {
             pcntl_exec(
                PHP_BINARY,
-               ['-d', 'zend.assertions=1', '-d', 'bootgly.assertions=1', ...$command],
+               [...$settings, ...$command],
                getenv()
             );
          }
 
          // @ ...or degrade to a child run with the same exit code.
-         $line = escapeshellarg(PHP_BINARY) . ' -d zend.assertions=1 -d bootgly.assertions=1';
-         foreach ($command as $part) {
+         $line = escapeshellarg(PHP_BINARY);
+         foreach ([...$settings, ...$command] as $part) {
             $part = escapeshellarg($part);
             $line .= " {$part}";
          }
@@ -369,10 +405,13 @@ class TestCommand extends Command
                ? 'no suite ran'
                : "{$Suites->total} suites: {$failed} failed,"
                   . " {$Suites->skipped} skipped, {$Suites->passed} passed";
+            if ($this->gated === false) {
+               $tally .= ', coverage failed';
+            }
             // ? A sweep that ended early because a case failed is FAILED, not
             //   incomplete — exit-on-failure is a deliberate end, not a hijack.
             $verdict = match (true) {
-               $failed > 0 => 'FAILED',
+               $failed > 0, $this->gated === false => 'FAILED',
                $this->completed === false => 'INCOMPLETE',
                default => 'PASSED',
             };
@@ -684,26 +723,121 @@ class TestCommand extends Command
          ? strtolower((string) $options['coverage-native-mode'])
          : Native::MODE_STRICT;
       $coverageDiff = isset($options['coverage-diff']);
+      $coverageRange = is_string($options['coverage-diff'] ?? null)
+         ? $options['coverage-diff']
+         : null;
+      $coveragePath = $options['coverage-path'] ?? null;
+      $coverageFloor = $options['coverage-floor'] ?? null;
+      $coverageClasses = isset($options['coverage-classes']);
+
+      // ? Coverage inputs are checked before any suite runs: a gate that
+      //   cannot be evaluated must fail the run up front, not after it
+      $Gate = null;
+      if ($coverageFloor !== null || $coverageClasses) {
+         if (
+            $coverageFloor !== null
+            && (is_string($coverageFloor) === false || preg_match('/^\d+(?:\.\d{1,4})?$/', $coverageFloor) !== 1)
+         ) {
+            fwrite(STDERR, '[test] --coverage-floor takes a percentage between 0 and 100 with up to four decimals, e.g. --coverage-floor=80' . PHP_EOL);
+
+            return false;
+         }
+
+         try {
+            $Gate = new Gate(
+               floor: $coverageFloor === null ? null : (float) $coverageFloor,
+               classes: $coverageClasses
+            );
+         }
+         catch (InvalidArgumentException $Exception) {
+            fwrite(STDERR, "[test] {$Exception->getMessage()}" . PHP_EOL);
+
+            return false;
+         }
+      }
+
+      $coveragePaths = [];
+      if ($coveragePath !== null) {
+         $directory = is_string($coveragePath) ? realpath($coveragePath) : false;
+         if ($directory === false || is_dir($directory) === false) {
+            $given = is_string($coveragePath) ? $coveragePath : '';
+            fwrite(STDERR, "[test] --coverage-path is not a directory: '{$given}'" . PHP_EOL);
+
+            return false;
+         }
+
+         $coveragePaths[] = rtrim(str_replace('\\', '/', $directory), '/');
+      }
+
+      $coverageChanges = null;
+      if ($coverageRange !== null) {
+         try {
+            $Changes = new Changes($coverageRange, BOOTGLY_WORKING_DIR);
+            $coverageChanges = $Changes->fetch();
+         }
+         catch (InvalidArgumentException | RuntimeException $Exception) {
+            fwrite(STDERR, "[test] {$Exception->getMessage()}" . PHP_EOL);
+
+            return false;
+         }
+      }
 
       // @ Build Coverage instance when requested
+      $gated = true;
       $Coverage = null;
-      if ($coverageEnabled || $coverageDriver !== null || $coverageReport !== null || $coverageDiff) {
+      if (
+         $coverageEnabled || $coverageDriver !== null || $coverageReport !== null || $coverageDiff
+         || $coveragePaths !== [] || $Gate !== null
+      ) {
          $Coverage = ($GLOBALS['BOOTGLY_COVERAGE'] ?? null) instanceof Coverage
             ? $GLOBALS['BOOTGLY_COVERAGE']
             : null;
 
          if ($Coverage === null) {
-            $Driver = match (true) {
-               $coverageDriver === null || $coverageDriver === '' => Coverage::detect(),
-               $coverageDriver === 'xdebug'  => new XDebug(),
-               $coverageDriver === 'pcov'    => new PCOV(),
-               $coverageDriver === 'native'  => new Native(explicit: true, mode: $coverageNativeMode),
-               $coverageDriver === 'nothing' => new Nothing(),
-               default => throw new LogicException('Unknown coverage driver: ' . $coverageDriver),
-            };
+            // ? A driver that cannot measure (unknown name, extension loaded
+            //   in a mode that collects nothing) stops the run with its reason
+            try {
+               $Driver = match (true) {
+                  $coverageDriver === null || $coverageDriver === '' => Coverage::detect(),
+                  $coverageDriver === 'xdebug'  => new XDebug(),
+                  $coverageDriver === 'pcov'    => new PCOV(),
+                  $coverageDriver === 'native'  => new Native(explicit: true, mode: $coverageNativeMode),
+                  $coverageDriver === 'nothing' => new Nothing(),
+                  default => throw new LogicException("Unknown coverage driver: {$coverageDriver}"),
+               };
+            }
+            catch (LogicException $Exception) {
+               fwrite(STDERR, "[test] Coverage: {$Exception->getMessage()}" . PHP_EOL);
+
+               return false;
+            }
+
+            // ? Driver honesty: auto-detection found no backend, so the run
+            //   would measure nothing and still write a report
+            if ($Driver instanceof Nothing && $coverageDriver !== 'nothing') {
+               fwrite(
+                  STDERR,
+                  '[test] Coverage: no coverage driver is loaded — nothing would be measured, so no report is written.' . PHP_EOL
+                  . '[test] Load Xdebug (XDEBUG_MODE=coverage) or PCOV, or use the pure-PHP driver:' . PHP_EOL
+                  . '[test]    php -d opcache.enable_cli=0 bootgly test --coverage-driver=native' . PHP_EOL
+               );
+
+               return false;
+            }
 
             $Coverage = new Coverage($Driver);
             $Coverage->start();
+         }
+
+         if ($Coverage->Driver instanceof Nothing) {
+            // ? A gate never passes on a driver that measures nothing
+            if ($Gate !== null) {
+               fwrite(STDERR, '[test] Coverage gate: the nothing driver measures nothing, so no threshold can pass.' . PHP_EOL);
+
+               return false;
+            }
+
+            fwrite(STDERR, '[test] Coverage: the nothing driver measures nothing — the report is empty.' . PHP_EOL);
          }
 
          if ($Coverage->Driver instanceof Native && ! Results::$enabled) {
@@ -711,6 +845,8 @@ class TestCommand extends Command
             echo "Coverage (native): ensure opcache.enable_cli=0 for accurate results." . PHP_EOL;
          }
          $Coverage->diff = $coverageDiff;
+         $Coverage->paths = $coveragePaths;
+         $Coverage->changes = $coverageChanges;
       }
 
 
@@ -815,22 +951,92 @@ class TestCommand extends Command
             $Coverage->targets = array_values(array_unique($targets));
          }
 
-         $Coverage->stop();
-
-         // Parse "format[:path]" from the option value (default: text to stdout)
-         $reportOption = $coverageReport ?? 'text';
-         $parts  = explode(':', $reportOption, 2);
-         $format = $parts[0];
-         $path   = $parts[1] ?? null;
-
-         $rendered = $Coverage->report($format);
-
-         if ($path !== null) {
-            file_put_contents($path, $rendered);
+         // ? A measured path replaces the suite scopes: the report covers
+         //   every source under it, loaded or not
+         if ($coveragePaths !== []) {
+            $Coverage->includes = array_map(
+               static fn (string $path): string => "{$path}/",
+               $coveragePaths
+            );
+            $Coverage->targets = [];
          }
-         else {
-            echo $rendered;
+
+         // ? A measurement that cannot complete (a measured path that is not
+         //   a readable directory) fails the run with its reason, never a trace
+         try {
+            $Coverage->stop();
          }
+         catch (LogicException | RuntimeException $Exception) {
+            $gated = false;
+            fwrite(STDERR, "[test] Coverage: {$Exception->getMessage()}" . PHP_EOL);
+            Results::$coverage = ['gate' => 'failed', 'failures' => [$Exception->getMessage()]];
+         }
+
+         if ($gated) {
+            // Parse "format[:path]" from the option value (default: text to stdout)
+            $reportOption = $coverageReport ?? 'text';
+            $parts  = explode(':', $reportOption, 2);
+            $format = $parts[0];
+            $path   = $parts[1] ?? null;
+
+            $rendered = $Coverage->report($format);
+
+            if ($path !== null) {
+               file_put_contents($path, $rendered);
+            }
+            else {
+               echo $rendered;
+            }
+         }
+
+         // ? Changed sources the driver cannot reach are neither covered nor
+         //   unchanged: a gate cannot pass over them
+         if ($gated && $Coverage->unmeasured !== []) {
+            $count = count($Coverage->unmeasured);
+            $reasons = ["Coverage: {$count} changed source(s) in scope that the native driver cannot measure:"];
+            foreach ($Coverage->unmeasured as $file) {
+               $reasons[] = "  {$file}";
+            }
+            foreach ($reasons as $reason) {
+               fwrite(STDERR, "[test] {$reason}" . PHP_EOL);
+            }
+
+            if ($Gate !== null) {
+               $gated = false;
+               Results::$coverage = ['gate' => 'failed', 'failures' => $reasons];
+            }
+         }
+
+         // @ Gate
+         if ($Gate !== null && $gated && $coverageChanges !== null && $Coverage->data === []) {
+            // ? A range that changed no statement in the measured scope leaves
+            //   nothing to gate (e.g. a change to docs or tests only)
+            fwrite(STDERR, "[test] Coverage gate: '{$coverageRange}' changed no statement in the measured scope — nothing to check." . PHP_EOL);
+            Results::$coverage = ['gate' => 'skipped', 'failures' => []];
+         }
+         else if ($Gate !== null && $gated) {
+            $gated = $Gate->check($Coverage->data);
+            Results::$coverage = [
+               'gate' => $gated ? 'passed' : 'failed',
+               'failures' => $Gate->failures,
+            ];
+
+            if ($gated === false) {
+               foreach ($Gate->failures as $failure) {
+                  fwrite(STDERR, "[test] {$failure}" . PHP_EOL);
+               }
+            }
+            else if (Results::$enabled === false) {
+               fwrite(STDOUT, sprintf(
+                  'Coverage gate: passed — %.2f%% of %d statements covered.' . PHP_EOL,
+                  $Gate->percent,
+                  $Gate->statements
+               ));
+            }
+         }
+
+         // * Metadata
+         $this->gated = $gated;
       }
 
       // @ JSON output for AI agents — the wrapper in `bootgly` extracts the
@@ -843,7 +1049,7 @@ class TestCommand extends Command
       $this->completed = true;
 
       // :
-      return $Suites->failed === 0 && $this->failures === 0;
+      return $Suites->failed === 0 && $this->failures === 0 && $gated;
    }
 
    // # Help
@@ -1199,6 +1405,8 @@ class TestCommand extends Command
       $examples .= '@#Black:bootgly test --view=heatmap@;' . PHP_EOL;
       $examples .= '@#Black:bootgly test 23 --fail-fast@;  (stop at the first failing case)' . PHP_EOL;
       $examples .= '@#Black:php -d opcache.enable_cli=0 bootgly test 8 --coverage-driver=native@;' . PHP_EOL;
+      $examples .= '@#Black:bootgly test --coverage --coverage-path=Bootgly/ --coverage-floor=80 --coverage-classes@;  (coverage gate)' . PHP_EOL;
+      $examples .= '@#Black:bootgly test --coverage --coverage-diff=origin/main...HEAD --coverage-path=Bootgly/ --coverage-floor=90@;  (gate on changed lines)' . PHP_EOL;
       $examples .= '@#Black:AI_AGENT=1 bootgly test@;  (JSON results for AI agents — every failure; add --fail-fast to stop at the first)';
       $Fieldset = new Fieldset($Output);
       $Fieldset->title = '@#green: Test examples @;';

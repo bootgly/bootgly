@@ -31,6 +31,16 @@ class Results
     * @var array<int,array{suite:string,case:int,file:string,status:string,message:?string,elapsed_ms:float}>
     */
    public static array $cases = [];
+   /**
+    * Coverage outcome of the run, `null` when no gate ran and the coverage
+    * measurement did not fail: `gate` is `passed`, `failed` (a rule failed,
+    * or the measurement itself failed) or `skipped` (a diff range changed
+    * nothing in the measured scope); `failures` holds the reasons. A failed
+    * outcome fails the document's `result`.
+    *
+    * @var null|array{gate:string,failures:array<int,string>}
+    */
+   public static null|array $coverage = null;
 
    // * Metadata
    // # Suites
@@ -125,7 +135,9 @@ class Results
       }
 
       $result = [
-         'result'     => ($casesFailed > 0 || self::$suitesFailed > 0) ? 'failed' : 'passed',
+         'result'     => ($casesFailed > 0 || self::$suitesFailed > 0 || (self::$coverage['gate'] ?? null) === 'failed')
+         ? 'failed'
+         : 'passed',
          'agent'      => self::$agent,
          'suites'     => [
             'total'   => self::$suitesTotal,
@@ -145,6 +157,10 @@ class Results
 
       if ($failures !== []) {
          $result['failures'] = $failures;
+      }
+
+      if (self::$coverage !== null) {
+         $result['coverage'] = self::$coverage;
       }
 
       return $result;
