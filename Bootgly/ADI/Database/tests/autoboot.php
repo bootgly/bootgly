@@ -188,5 +188,7 @@ return new Suite(
       // # 1.1.0 (Phase 4): bytea decodes from hex and escape output alike, so
       //   the driver pins only what a stock connection pooler tracks
       '7.42-postgresql_bytea_formats',
+      // # 1.2.0: TLS `verify`/`name` flags read the strict boolean caster
+      '1.5-config_secure_flag_forms',
    ]
 );

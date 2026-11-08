@@ -251,5 +251,8 @@ return new Suites(
       // # ABI/Clock — the injectable wall/monotonic clock and its Stopwatch
       //   (appended last to keep every suite index above stable)
       'Bootgly/ABI/Clock/',
+      // # ADI/Casters — the scalar casting vocabulary (strict / loose modes)
+      //   (appended last to keep every suite index above stable)
+      'Bootgly/ADI/Casters/',
    ]
 );

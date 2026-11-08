@@ -21,6 +21,8 @@ use RuntimeException;
 use stdClass;
 
 use Bootgly\ABI\Events\Emitter;
+use Bootgly\ADI\Casters;
+use Bootgly\ADI\Casters\Modes;
 use Bootgly\ADI\Databases\SQL as SQLDatabase;
 use Bootgly\ADI\Databases\SQL\Builder;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Locks;
@@ -518,9 +520,13 @@ class Users
          return null;
       }
 
+      // @ The driver's scalar key shape (int or string) as a string.
+      /** @var string $id */
+      $id = Casters::String->cast($id, Modes::Strict);
+
       // :
       return [
-         'id' => (string) $id,
+         'id' => $id,
          'email' => $email,
          'secret' => $secret,
          'verified' => $verified !== null,

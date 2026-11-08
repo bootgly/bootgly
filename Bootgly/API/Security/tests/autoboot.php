@@ -74,5 +74,7 @@ return new Suite(
       '1.50-jwt_remote_destination_policy',
       // # 1.1.0: token time and the remote JWKS origin floor read an injected Clock
       '1.51-security_clock_seams',
+      // # 1.2.0: account rows and refresh records keep their scalar shapes
+      '1.52-security_row_casts',
    ]
 );

@@ -42,5 +42,8 @@ return new Suite(
 
       // # 1.1.0 (Phase 4): `Parameters` nodes map into the session parameters.
       '5.x-database_config_parameters',
+
+      // # 1.2.0: Types delegate to the ADI Casters strict mode (edge forms pinned).
+      '1.x-config_types_parity',
    ]
 );

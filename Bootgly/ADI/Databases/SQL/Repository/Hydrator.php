@@ -17,13 +17,14 @@ use function is_float;
 use function is_int;
 use function is_object;
 use function is_string;
-use function ltrim;
-use function preg_match;
-use function substr;
+use function var_export;
+use InvalidArgumentException;
 use ReflectionNamedType;
 use ReflectionProperty;
 use RuntimeException;
 
+use Bootgly\ADI\Casters;
+use Bootgly\ADI\Casters\Modes;
 use Bootgly\ADI\Database\Operation\Result;
 use Bootgly\ADI\Databases\SQL\Model;
 
@@ -185,34 +186,6 @@ class Hydrator
    }
 
    /**
-    * Narrow one decoded value into an int property without losing precision.
-    */
-   private function narrow (bool|float|int|string $value, ReflectionProperty $Property): int
-   {
-      // ? Only an exact decimal string can carry more than an int holds. The
-      //   MySQL decoder hands one back for a `BIGINT UNSIGNED` past 2^63, and
-      //   PHP saturates it to PHP_INT_MAX — a key that matches no row, so the
-      //   next save() targets nothing and reports success. Same contract the
-      //   write side already applies to a generated key.
-      if (is_string($value) && preg_match('/^[+-]?[0-9]+$/', $value) === 1) {
-         $sign = $value[0] === '-' ? '-' : '';
-         $digits = ltrim($value[0] === '+' || $value[0] === '-' ? substr($value, 1) : $value, '0');
-         $canonical = $digits === '' ? '0' : "{$sign}{$digits}";
-
-         if ((string) (int) $value !== $canonical) {
-            $property = "{$Property->getDeclaringClass()->getName()}::\${$Property->getName()}";
-
-            throw new RuntimeException(
-               "ORM cannot hydrate a value beyond PHP_INT_MAX into an int property: {$property} ({$value}) — declare it as null|int|string."
-            );
-         }
-      }
-
-      // :
-      return (int) $value;
-   }
-
-   /**
     * Cast one decoded value to the declared property type.
     */
    private function cast (mixed $value, ReflectionProperty $Property): mixed
@@ -241,13 +214,44 @@ class Hydrator
             return $value;
          }
 
-         return match ($Type->getName()) {
-            'bool' => (bool) $value,
-            'float' => (float) $value,
-            'int' => $this->narrow($value, $Property),
-            'string' => (string) $value,
-            default => $value,
-         };
+         $type = $Type->getName();
+         // ?: Already the property type — the common driver shape needs no cast.
+         if (
+            ($type === 'int' && is_int($value))
+            || ($type === 'string' && is_string($value))
+            || ($type === 'bool' && is_bool($value))
+            || ($type === 'float' && is_float($value))
+         ) {
+            return $value;
+         }
+
+         // @ Driver values follow PHP's casts (`Modes::Loose`).
+         if ($type !== 'int') {
+            return match ($type) {
+               'bool' => Casters::Boolean->cast($value, Modes::Loose),
+               'float' => Casters::Float->cast($value, Modes::Loose),
+               'string' => Casters::String->cast($value, Modes::Loose),
+               default => $value,
+            };
+         }
+
+         // @ Only an int can be refused: the MySQL decoder hands back an exact
+         //   decimal string for a `BIGINT UNSIGNED` past 2^63, and PHP saturates
+         //   it to PHP_INT_MAX — a key that matches no row, so the next save()
+         //   targets nothing and reports success. Same contract the write side
+         //   already applies to a generated key.
+         try {
+            return Casters::Integer->cast($value, Modes::Loose);
+         }
+         catch (InvalidArgumentException) {
+            $property = "{$Property->getDeclaringClass()->getName()}::\${$Property->getName()}";
+            // ! A float renders exactly and without PHP's NAN-to-string warning.
+            $value = is_float($value) ? var_export($value, true) : $value;
+
+            throw new RuntimeException(
+               "ORM cannot hydrate a value beyond PHP_INT_MAX into an int property: {$property} ({$value}) — declare it as null|int|string."
+            );
+         }
       }
 
       return $value;

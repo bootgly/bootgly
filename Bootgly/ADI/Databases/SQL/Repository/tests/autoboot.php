@@ -37,5 +37,8 @@ return new Suite(
       // # 1.1.0 (REPO-14/REPO-15): the repository's own predicates never join a
       //   caller's OR, and a caller's predicates replay in call order
       '12.19-orm_selection_guards',
+      // # 1.2.0: hydration casts go through the ADI Casters loose mode; an int
+      //   the range cannot hold (float, INF, NAN) is refused, never wrapped
+      '12.20-orm_hydrate_casts',
    ]
 );

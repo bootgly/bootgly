@@ -11,16 +11,14 @@
 namespace Bootgly\ADI\Database;
 
 
-use const FILTER_NULL_ON_FAILURE;
-use const FILTER_VALIDATE_BOOLEAN;
-use function filter_var;
 use function in_array;
 use function is_array;
 use function is_bool;
 use function is_scalar;
-use function is_string;
-use function trim;
 use InvalidArgumentException;
+
+use Bootgly\ADI\Casters;
+use Bootgly\ADI\Casters\Modes;
 
 
 /**
@@ -322,8 +320,9 @@ class Config
 
    /**
     * Read one boolean TLS flag: absent stays `null` (derived from the mode), a
-    * boolean or boolean-like scalar is accepted, anything else — an empty or
-    * blank string included — is refused: a flag that cannot be read must never
+    * boolean, `0`/`1` or a boolean word (`Casters::Boolean`, strict) is
+    * accepted, anything else — an empty or blank string, a float included — is
+    * refused: a flag that cannot be read must never
     * resolve to "off" in silence. `$host` names the replica the flag belongs to.
     *
     * @throws InvalidArgumentException when the flag is neither boolean nor absent
@@ -338,11 +337,11 @@ class Config
          return $flag;
       }
 
-      $flag = is_string($flag) ? trim($flag) : $flag;
-      $parsed = is_scalar($flag) && $flag !== ''
-         ? filter_var($flag, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE)
-         : null;
-      if ($parsed === null) {
+      try {
+         /** @var bool $parsed */
+         $parsed = Casters::Boolean->cast($flag, Modes::Strict);
+      }
+      catch (InvalidArgumentException) {
          $where = $host === '' ? '' : " (replica {$host})";
 
          throw new InvalidArgumentException("Database TLS `{$key}` must be a boolean{$where}.");
