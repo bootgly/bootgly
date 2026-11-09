@@ -13,14 +13,13 @@ namespace Bootgly\WPI\Modules\HTTP\Server\Response\Raw;
 
 abstract class Header
 {
-   // * Config
+   // * Data
    // Fields
    /** @var array<string, string|true> */
    protected array $preset;
    /** @var array<string, string> */
    protected array $prepared;
 
-   // * Data
    /** @var array<string, string> */
    protected array $fields;
    protected string $raw;

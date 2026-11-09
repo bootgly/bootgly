@@ -55,10 +55,10 @@ use Bootgly\CLI\UI\Components\Timeline\Step;
  */
 class Wizard extends Component
 {
+   // * Config
    public Input $Input;
    public Output $Output;
 
-   // * Config
    /** Heading repainted above the frame (rendered once on non-interactive output) */
    public string $title;
    /** Guide rows (`│`) reserved for the step content, between the active step and the next */

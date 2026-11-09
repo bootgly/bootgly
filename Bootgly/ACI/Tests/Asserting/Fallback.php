@@ -99,7 +99,7 @@ class Fallback
          );
 
          // @ Prepend and append values
-         $values = array_map(function($value) {
+         $values = array_map(function ($value) {
             return "\033[93m" . $value . "\033[0m";
          }, $values);
 

@@ -37,11 +37,11 @@ final class Client
    public string $buffer = '';
 
 
-   public function __construct (string $uri = 'tcp://127.0.0.1:8085', null|array $context = null)
+   public function __construct (string $URI = 'tcp://127.0.0.1:8085', null|array $context = null)
    {
       $options = $context ?? [];
       $Socket = stream_socket_client(
-         $uri,
+         $URI,
          $errno,
          $error,
          5,
@@ -142,7 +142,7 @@ final class Client
    /**
     * Check whether the server closed the connection (EOF), within a timeout.
     */
-   public function closed (float $timeout = 2.0): bool
+   public function detect (float $timeout = 2.0): bool
    {
       $deadline = microtime(true) + $timeout;
 

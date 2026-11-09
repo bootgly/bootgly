@@ -130,10 +130,9 @@ class Decoder_Downloading extends Decoders implements Disconnecting
       1280, 1536, 1792, 2048, 2560, 3072,
    ];
 
-   // * Config
+   // * Data
    private string $boundary;
 
-   // * Data
    //   Owning Request, bound at the decoder install site in Request::decode():
    //   body continuations must never resolve the worker-global Request —
    //   another connection may replace or claim it between transport reads.

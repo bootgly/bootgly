@@ -54,9 +54,11 @@ final class Series
       'bytes_read',
    ];
 
+   // * Data
    private int $originNS;
    private int $deadlineNS;
 
+   // * Metadata
    /** @var array<int,int> Contiguous fixed-size vector. */
    private array $sent;
    /** @var array<int,int> Contiguous fixed-size vector. */

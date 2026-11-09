@@ -16,7 +16,7 @@ return new Test(
    // ! A middleware that rejects every request — a probe must never see it
    middlewares: [
       new class implements Middleware {
-         public function process (object $Request, object $Response, Closure $next): object
+         public function process (object $Request, object $Response, Closure $Next): object
          {
             /** @var Response $Response */
             return $Response(code: 401, body: 'blocked by middleware');

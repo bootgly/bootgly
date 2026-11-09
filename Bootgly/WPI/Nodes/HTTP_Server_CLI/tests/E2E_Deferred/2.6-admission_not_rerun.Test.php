@@ -21,11 +21,11 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
 $Admission = new class implements Middleware {
    public int $runs = 0;
 
-   public function process (object $Request, object $Response, Closure $next): object
+   public function process (object $Request, object $Response, Closure $Next): object
    {
       $this->runs++;
 
-      return $next($Request, $Response);
+      return $Next($Request, $Response);
    }
 };
 $Route = new Boundary('route');

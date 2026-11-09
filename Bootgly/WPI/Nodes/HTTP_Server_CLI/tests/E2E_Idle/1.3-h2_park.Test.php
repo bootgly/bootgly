@@ -64,7 +64,7 @@ return new Test(
          }
          $Probe->status = (int) ($map[':status'] ?? 0);
          $Probe->body = (string) ($data['payload'] ?? '');
-         $Probe->open = $H2->closed(0.2) === false;
+         $Probe->open = $H2->detect(0.2) === false;
          $H2->close();
       }
       catch (Throwable $Throwable) {

@@ -44,8 +44,6 @@ class Progress extends Component
    use Modifiable;
 
 
-   private Output $Output;
-
    // * Config
    public float $throttle;
    /** Tracks per visual line — multi-bar grid layout (null = one per line) */
@@ -54,6 +52,7 @@ class Progress extends Component
    public Precision $Precision;
 
    // * Data
+   private Output $Output;
    public float $current;
    public float $total;
    public float $percent;

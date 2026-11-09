@@ -43,9 +43,9 @@ return new Test(
          return false;
       };
       $metadata = 'https://mcp.example.com/.well-known/oauth-protected-resource';
-      $refuse = static function (Closure $configure): bool {
+      $refuse = static function (Closure $Configure): bool {
          try {
-            $configure();
+            $Configure();
          }
          catch (InvalidArgumentException) {
             return true;

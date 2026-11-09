@@ -57,6 +57,32 @@ final class Native extends Driver
     */
    public const string MODE_PARITY = 'parity';
 
+   // * Config
+   /**
+    * Whether the user explicitly requested Native (vs auto-detect).
+    */
+   public bool $explicit = false;
+   /**
+    * Instrumentation profile selected for this driver instance.
+    */
+   public string $profile;
+
+   // * Data
+   /**
+    * Path fragments that must NEVER be instrumented (driver internals,
+    * vendor code, etc.). Compared as forward-slash-normalized
+    * substrings of the absolute path.
+    *
+    * @var array<int,string>
+    */
+   public static array $excludes = [
+      self::ENGINE,
+      '/vendor/',
+      '/storage/',
+      '/tmp/',
+   ];
+
+   // * Metadata
    /**
     * On/off switch read by `autoboot.php` to decide whether to route
     * autoload includes through the coverage filter.
@@ -74,29 +100,6 @@ final class Native extends Driver
     * @var array<int,string>
     */
    public static array $stack = [];
-
-   /**
-    * Path fragments that must NEVER be instrumented (driver internals,
-    * vendor code, etc.). Compared as forward-slash-normalized
-    * substrings of the absolute path.
-    *
-    * @var array<int,string>
-    */
-   public static array $excludes = [
-      self::ENGINE,
-      '/vendor/',
-      '/storage/',
-      '/tmp/',
-   ];
-
-   /**
-    * Whether the user explicitly requested Native (vs auto-detect).
-    */
-   public bool $explicit = false;
-   /**
-    * Instrumentation profile selected for this driver instance.
-    */
-   public string $profile;
 
    /**
     * Whether the stream filter was registered in this PHP process.

@@ -116,8 +116,8 @@ return new Test(
             [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
             $pipes
          );
-         $acl = is_resource($Setfacl) && proc_close($Setfacl) === 0;
-         if ($acl === false) {
+         $ACL = is_resource($Setfacl) && proc_close($Setfacl) === 0;
+         if ($ACL === false) {
             yield (new Assertion(description: 'Default ACL leg: no setfacl here, or the temporary filesystem refuses ACLs'))->skip();
          }
          else {

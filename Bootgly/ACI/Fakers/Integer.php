@@ -21,6 +21,7 @@ use Bootgly\ACI\Faker;
  */
 final class Integer extends Faker
 {
+   // * Data
    /**
     * Minimum generated integer value.
     */

@@ -49,6 +49,7 @@ use Throwable;
  */
 final class Proxy
 {
+   // * Metadata
    /**
     * @var array<string, true>
     */

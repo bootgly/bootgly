@@ -43,7 +43,7 @@ use function usleep;
 class Client
 {
    public static int $port = 8084;
-   public static bool $tls = false;
+   public static bool $TLS = false;
 
 
    /**
@@ -251,8 +251,8 @@ class Client
     */
    private static function dial ()
    {
-      $address = (self::$tls ? 'ssl://' : 'tcp://') . '127.0.0.1:' . self::$port;
-      $Context = self::$tls
+      $address = (self::$TLS ? 'ssl://' : 'tcp://') . '127.0.0.1:' . self::$port;
+      $Context = self::$TLS
          ? stream_context_create(['ssl' => ['verify_peer' => false, 'verify_peer_name' => false]])
          : stream_context_create();
 

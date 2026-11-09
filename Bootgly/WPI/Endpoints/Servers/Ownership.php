@@ -27,6 +27,7 @@ use WeakMap;
  */
 final class Ownership
 {
+   // * Metadata
    /**
     * Both collections are created on demand, never by the mere act of opening
     * or closing a scope. `attach()` is reachable only from a deferred response,

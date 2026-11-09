@@ -345,14 +345,14 @@ return new Test(
       ) {
          $failures['defer'] = $defer;
       }
-      $sse = $Probe->wires['sse'] ?? '';
+      $SSE = $Probe->wires['sse'] ?? '';
       if (
-         substr_count($sse, 'HTTP/1.1 ') !== 1
-         || str_contains($sse, 'HTTP/1.1 200 OK') === false
-         || str_contains($sse, 'Content-Type: text/event-stream') === false
-         || str_contains($sse, 'L4-HANDLED-STALE-409')
+         substr_count($SSE, 'HTTP/1.1 ') !== 1
+         || str_contains($SSE, 'HTTP/1.1 200 OK') === false
+         || str_contains($SSE, 'Content-Type: text/event-stream') === false
+         || str_contains($SSE, 'L4-HANDLED-STALE-409')
       ) {
-         $failures['sse'] = $sse;
+         $failures['sse'] = $SSE;
       }
       foreach (['defer_control', 'sse_control'] as $name) {
          $wire = $Probe->wires[$name] ?? '';

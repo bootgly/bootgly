@@ -15,8 +15,8 @@ return new Test(
 
       $Database = new SQL;
       $Database->Pool->attach($Database->Connection->attach($client));
-      $sql = 'SELECT $1::int AS value';
-      $Operation = $Database->query($sql, [42]);
+      $SQL = 'SELECT $1::int AS value';
+      $Operation = $Database->query($SQL, [42]);
       $expected = $Operation->write;
 
       yield assert(

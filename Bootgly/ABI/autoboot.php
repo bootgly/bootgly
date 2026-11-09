@@ -157,7 +157,7 @@ namespace {
     */
    // mb_strlen
    if (!\function_exists('mb_strlen')) {
-      function mb_strlen(string $string, string|null $encoding = 'UTF-8'): int|false
+      function mb_strlen (string $string, string|null $encoding = 'UTF-8'): int|false
       {
          $encoding = __String::encoding($encoding);
 
@@ -180,7 +180,7 @@ namespace {
 
    // mb_convert_case
    if (!\function_exists('mb_convert_case')) {
-      function mb_convert_case(string $string, int $mode, string|null $encoding = 'UTF-8'): string
+      function mb_convert_case (string $string, int $mode, string|null $encoding = 'UTF-8'): string
       {
          if ($string === '') {
             return '';
@@ -299,7 +299,7 @@ namespace {
 
    // mb_strtoupper
    if (!function_exists('mb_strtoupper')) {
-      function mb_strtoupper(string $string, string|null $encoding = 'UTF-8'): string
+      function mb_strtoupper (string $string, string|null $encoding = 'UTF-8'): string
       {
          return mb_convert_case($string, 0, $encoding);
       }
@@ -307,7 +307,7 @@ namespace {
 
    // mb_strtolower
    if (!function_exists('mb_strtolower')) {
-      function mb_strtolower(string $string, string|null $encoding = 'UTF-8'): string
+      function mb_strtolower (string $string, string|null $encoding = 'UTF-8'): string
       {
          return mb_convert_case($string, 1, $encoding);
       }
@@ -315,7 +315,7 @@ namespace {
 
    // mb_substr
    if (!function_exists('mb_substr')) {
-      function mb_substr(string $string, int $start, int|null $length = null, string|null $encoding = 'UTF-8'): string
+      function mb_substr (string $string, int $start, int|null $length = null, string|null $encoding = 'UTF-8'): string
       {
          $encoding = __String::encoding($encoding);
          if ('CP850' === $encoding || 'ASCII' === $encoding) {
@@ -361,7 +361,7 @@ namespace {
       /**
        * @return array<int,string>
        */
-      function mb_str_split(string $string, int $length = 1, string|null $encoding = 'UTF-8'): array
+      function mb_str_split (string $string, int $length = 1, string|null $encoding = 'UTF-8'): array
       {
          // ? Split into code points with PCRE (UTF-8)
          $chars = \preg_split('//u', $string, -1, \PREG_SPLIT_NO_EMPTY);
@@ -379,7 +379,7 @@ namespace {
 
    // mb_stripos
    if (!function_exists('mb_stripos')) {
-      function mb_stripos(string $haystack, string $needle, int $offset = 0, string|null $encoding = 'UTF-8'): int|false
+      function mb_stripos (string $haystack, string $needle, int $offset = 0, string|null $encoding = 'UTF-8'): int|false
       {
          // @ Case-fold both strings (map-based folding preserves character counts)
          $haystack = mb_strtolower($haystack, $encoding);
@@ -405,7 +405,7 @@ namespace {
 
    // mb_strwidth
    if (!function_exists('mb_strwidth')) {
-      function mb_strwidth(string $string, string|null $encoding = 'UTF-8'): int
+      function mb_strwidth (string $string, string|null $encoding = 'UTF-8'): int
       {
          // @ East Asian Wide + Fullwidth ranges take two columns; everything else takes one
          $wide = 0;
@@ -424,7 +424,7 @@ namespace {
 
    // mb_strimwidth
    if (!function_exists('mb_strimwidth')) {
-      function mb_strimwidth(string $string, int $start, int $width, string $trim_marker = '', string|null $encoding = 'UTF-8'): string
+      function mb_strimwidth (string $string, int $start, int $width, string $trim_marker = '', string|null $encoding = 'UTF-8'): string
       {
          // ! Slice from the character offset
          $string = mb_substr($string, $start, null, $encoding);
@@ -457,7 +457,7 @@ namespace {
 
    // mb_str_pad
    if (!function_exists('mb_str_pad')) {
-      function mb_str_pad(string $string, int $length, string $pad_string = ' ', int $pad_type = \STR_PAD_RIGHT, string|null $encoding = 'UTF-8'): string
+      function mb_str_pad (string $string, int $length, string $pad_string = ' ', int $pad_type = \STR_PAD_RIGHT, string|null $encoding = 'UTF-8'): string
       {
          // ? Nothing to pad
          $missing = $length - (int) mb_strlen($string, $encoding);
@@ -485,7 +485,7 @@ namespace {
 
    // mb_chr
    if (!function_exists('mb_chr')) {
-      function mb_chr(int $codepoint, string|null $encoding = 'UTF-8'): string|false
+      function mb_chr (int $codepoint, string|null $encoding = 'UTF-8'): string|false
       {
          // ? UTF-8 encode by codepoint range (1–4 bytes)
          if ($codepoint < 0 || $codepoint > 0x10FFFF || ($codepoint >= 0xD800 && $codepoint <= 0xDFFF)) {
@@ -512,7 +512,7 @@ namespace {
 
    // mb_scrub
    if (!function_exists('mb_scrub')) {
-      function mb_scrub(string $string, string|null $encoding = null): string
+      function mb_scrub (string $string, string|null $encoding = null): string
       {
          // ? Well-formed UTF-8 — or another encoding, which has no converter without ext-mbstring
          if (__String::encoding($encoding) !== 'UTF-8' || \preg_match('//u', $string) === 1) {

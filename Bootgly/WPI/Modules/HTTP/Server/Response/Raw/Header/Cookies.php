@@ -17,9 +17,9 @@ use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header\Cookie;
 
 abstract class Cookies
 {
+   // * Config
    public Header $Header;
 
-   // * Config
    // ...
 
    // * Data

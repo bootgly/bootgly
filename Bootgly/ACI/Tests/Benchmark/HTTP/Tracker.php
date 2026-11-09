@@ -60,12 +60,15 @@ final class Tracker
    private const string TRAILERS = 'trailers';
    private const string EOF = 'eof';
 
+   // * Data
    private string $defaultMethod;
    private int $lineLimit;
    private int $headerLimit;
    private int $bodyLimit;
    private int $informationalLimit;
+   private null|Histogram $Histogram;
 
+   // * Metadata
    /** @var list<array{bytes: int, offset: int, method: string}> */
    private array $writes = [];
    private int $writeFastBytes = 0;
@@ -79,7 +82,6 @@ final class Tracker
    // # Optional per-logical-request latency correlation
    // ? Pipeline 1 stays scalar. A compressed FIFO is materialized only when
    //   more than one distinct send timestamp is simultaneously outstanding.
-   private null|Histogram $Histogram;
    private int $receivedNS = 0;
    private int $timestampFastNS = 0;
    private int $timestampFastCount = 0;

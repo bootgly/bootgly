@@ -103,10 +103,10 @@ return new Test(
          Fiber::suspend($value);
       };
       // ! A deferred handler: what it caught, and that its finally ran
-      $handle = static function (Closure $work, array &$log, null|Select $Stop = null): Fiber {
-         return new Fiber(static function () use ($work, &$log, $Stop): void {
+      $handle = static function (Closure $Work, array &$log, null|Select $Stop = null): Fiber {
+         return new Fiber(static function () use ($Work, &$log, $Stop): void {
             try {
-               $work();
+               $Work();
                $log[] = 'returned';
             }
             catch (Throwable $Throwable) {
@@ -133,7 +133,7 @@ return new Test(
       //   until the leg's outcome is reached or the hard deadline passes — a
       //   stalled host costs one more slice, never a false verdict. What
       //   escaped the loop is returned.
-      $run = static function (Select $Select, Closure $done, float $bound): null|string {
+      $run = static function (Select $Select, Closure $Done, float $bound): null|string {
          $deadline = microtime(true) + $bound;
 
          do {
@@ -148,7 +148,7 @@ return new Test(
             catch (Throwable $Throwable) {
                return "{$Throwable->getMessage()}";
             }
-         } while ($done() === false && microtime(true) < $deadline);
+         } while ($Done() === false && microtime(true) < $deadline);
 
          return null;
       };

@@ -75,12 +75,12 @@ return new Test(
          return false;
       };
       // ! Run work in a child process; its outcome comes back through a file
-      $spawn = static function (string $tag, Closure $work) use ($dir, &$PIDs): int {
+      $spawn = static function (string $tag, Closure $Work) use ($dir, &$PIDs): int {
          $PID = pcntl_fork();
          if ($PID === 0) {
             $result = ['escape' => null, 'written' => null];
             try {
-               $result['written'] = $work();
+               $result['written'] = $Work();
             }
             catch (Throwable $Throwable) {
                $result['escape'] = $Throwable::class . ': ' . $Throwable->getMessage();

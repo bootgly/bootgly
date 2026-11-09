@@ -57,17 +57,17 @@ class PostgreSQL extends Dialect
     */
    public function rebase (string $sql, int $offset): string
    {
-      $sql = preg_replace_callback(
+      $rebased = preg_replace_callback(
          '/\$(\d+)/',
          fn (array $matches): string => $this->mark($offset + (int) $matches[1]),
          $sql
       );
 
-      if ($sql === null) {
+      if ($rebased === null) {
          throw new InvalidArgumentException('SQL subquery placeholders could not be rewritten.');
       }
 
-      return $sql;
+      return $rebased;
    }
 
    /**
@@ -85,20 +85,20 @@ class PostgreSQL extends Dialect
     */
    public function slice (null|int $limited, int $offset): string
    {
-      $sql = '';
+      $SQL = '';
 
       if ($limited !== null) {
-         $sql = " LIMIT {$limited}";
+         $SQL = " LIMIT {$limited}";
       }
 
       // @ PostgreSQL is the one dialect whose grammar takes OFFSET on its own,
       //   so the offset-only form needs no row count to stand in for.
       if ($offset > 0) {
-         $sql = "{$sql} OFFSET {$offset}";
+         $SQL = "{$SQL} OFFSET {$offset}";
       }
 
       // :
-      return $sql;
+      return $SQL;
    }
 
    /**

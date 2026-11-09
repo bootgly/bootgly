@@ -62,11 +62,10 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Committing;
 
 class File implements Committing
 {
-   // * Config
+   // * Data
    protected static string $path = '';
    protected static string $prefix = 'session_';
 
-   // * Data
    /** Canonical, validated directory pinned to this handler instance. */
    private string $directory;
 

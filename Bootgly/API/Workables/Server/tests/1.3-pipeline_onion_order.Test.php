@@ -22,10 +22,10 @@ return new Test(
          {
             $this->log = &$log;
          }
-         public function process (object $Request, object $Response, Closure $next): object
+         public function process (object $Request, object $Response, Closure $Next): object
          {
             $this->log[] = 'A-before';
-            $Response = $next($Request, $Response);
+            $Response = $Next($Request, $Response);
             $this->log[] = 'A-after';
 
             return $Response;
@@ -39,10 +39,10 @@ return new Test(
          {
             $this->log = &$log;
          }
-         public function process (object $Request, object $Response, Closure $next): object
+         public function process (object $Request, object $Response, Closure $Next): object
          {
             $this->log[] = 'B-before';
-            $Response = $next($Request, $Response);
+            $Response = $Next($Request, $Response);
             $this->log[] = 'B-after';
 
             return $Response;

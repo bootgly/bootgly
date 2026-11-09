@@ -162,10 +162,10 @@ final class Client
       ) {
          $body = $matches[1];
       }
-      $json = json_decode($body, true);
+      $JSON = json_decode($body, true);
 
       // :
-      return $Answer + ['json' => is_array($json) ? $json : null];
+      return $Answer + ['json' => is_array($JSON) ? $JSON : null];
    }
 
    /**

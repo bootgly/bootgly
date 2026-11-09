@@ -27,8 +27,6 @@ class Text
    use Positionable;
 
 
-   private Output $Output;
-
    // ! Coloring
    // @ type
    public const DEFAULT_COLORS = 1;
@@ -90,6 +88,7 @@ class Text
    // * Config
    public Text\Colors $Colors;
    // * Data
+   private Output $Output;
    // ...
    // * Metadata
    private null|string $color;

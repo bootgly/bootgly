@@ -75,7 +75,7 @@ return new class extends Command
 
          // ! Server
          $server = (new ReflectionClass($Server))->getName();
-         $php = PHP_VERSION;
+         $PHP = PHP_VERSION;
          // Runtime
          $runtime = [];
          $uptime = time() - $Server->started;
@@ -132,7 +132,7 @@ return new class extends Command
          $Fieldset->content = <<<OUTPUT
 
          @#Cyan:  Bootgly Server: @; {$server}
-         @#Cyan:  PHP version: @; {$php}\t\t\t
+         @#Cyan:  PHP version: @; {$PHP}\t\t\t
 
          @#Cyan:  Started time: @; {$runtime['started']}\t@:i: Uptime: @; {$uptimes}
          @#Cyan:  Workers count: @; {$workers}\t\t\t@:i: Load average: @; {$load}

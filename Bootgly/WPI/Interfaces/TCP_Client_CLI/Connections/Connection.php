@@ -42,11 +42,11 @@ use Bootgly\WPI\Interfaces\TCP_Client_CLI\Packages;
 
 class Connection extends Packages
 {
+   // * Config
    /** @var resource */
    public $Socket;
 
 
-   // * Config
    /** @var array<false|int> */
    public array $timers;
    public int $expiration;

@@ -48,10 +48,10 @@ use Bootgly\CLI\UX\Components\Form\Fields;
 
 class Form extends Component
 {
+   // * Config
    public Input $Input;
    public Output $Output;
 
-   // * Config
    public string $title;
    /** Per-field attempts forwarded to the field editors (0 = unlimited) */
    public int $attempts;

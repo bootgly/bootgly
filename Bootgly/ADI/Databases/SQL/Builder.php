@@ -57,20 +57,6 @@ class Builder
    use Aliasable;
    use Predicateable;
 
-   // * Fluent API
-   /**
-    * Combine the next predicate with AND.
-    */
-   public Conjunction $and {
-      get => new Conjunction($this, Junctions::And);
-   }
-   /**
-    * Combine the next predicate with OR.
-    */
-   public Conjunction $or {
-      get => new Conjunction($this, Junctions::Or);
-   }
-
    // * Config
    public private(set) Dialect $Dialect;
 
@@ -109,7 +95,7 @@ class Builder
    private array $expressionAliases = [];
    /** @var array<int,array{aggregate:Aggregates,column:string,alias:null|string,distinct:bool}> */
    private array $aggregations = [];
-   private null|self|Query $source = null;
+   private null|self|Query $Source = null;
    /** @var array<int,Predicate|PredicateGroup> */
    private array $filters = [];
    /** @var array<int,Predicate|PredicateGroup> */
@@ -124,6 +110,19 @@ class Builder
    private null|Query $Query = null;
    /** @var array<class-string<Dialect>,Query> */
    private array $Queries = [];
+   // * Fluent API
+   /**
+    * Combine the next predicate with AND.
+    */
+   public Conjunction $and {
+      get => new Conjunction($this, Junctions::And);
+   }
+   /**
+    * Combine the next predicate with OR.
+    */
+   public Conjunction $or {
+      get => new Conjunction($this, Junctions::Or);
+   }
 
 
    /**
@@ -184,7 +183,7 @@ class Builder
          }
 
          $this->table = null;
-         $this->source = $Table;
+         $this->Source = $Table;
          $this->sourceAlias = $this->identify($Alias);
          $this->record(__FUNCTION__, $Table, $Alias);
 
@@ -192,7 +191,7 @@ class Builder
       }
 
       $this->table = $this->identify($Table);
-      $this->source = null;
+      $this->Source = null;
       $this->sourceAlias = null;
 
       if ($Alias !== null) {
@@ -647,7 +646,7 @@ class Builder
       $this->guard();
       $prefix = $this->prepend($parameters);
 
-      $sql = match ($this->Mode) {
+      $SQL = match ($this->Mode) {
          Modes::Delete => $this->remove($parameters),
          Modes::Insert => $this->create($parameters),
          Modes::Select => $this->project($parameters),
@@ -655,7 +654,7 @@ class Builder
       };
 
       $reading = $this->Mode === Modes::Select && $this->Lock === null;
-      $this->Query = new Query("{$prefix}{$sql}", $parameters, $reading);
+      $this->Query = new Query("{$prefix}{$SQL}", $parameters, $reading);
 
       return $this->Query;
    }
@@ -691,30 +690,30 @@ class Builder
 
       $columns = $projections === [] ? '*' : implode(', ', $projections);
       $select = $this->distinct ? 'SELECT DISTINCT' : 'SELECT';
-      $sql = "{$select} {$columns} FROM {$table}";
+      $SQL = "{$select} {$columns} FROM {$table}";
 
       foreach ($this->joins as $Join) {
          $table = $this->render($Join['table'], table: true);
          $left = $this->target($Join['left'], exact: false);
          $right = $this->target($Join['right'], exact: false);
-         $sql = "{$sql} {$Join['join']->value} {$table} ON {$left} {$Join['operator']->value} {$right}";
+         $SQL = "{$SQL} {$Join['join']->value} {$table} ON {$left} {$Join['operator']->value} {$right}";
       }
 
       $filters = $this->combine($this->filters, $parameters);
 
       if ($filters !== '') {
-         $sql = "{$sql} WHERE {$filters}";
+         $SQL = "{$SQL} WHERE {$filters}";
       }
 
       if ($this->groups !== []) {
          $groups = implode(', ', $this->refer($this->groups));
-         $sql = "{$sql} GROUP BY {$groups}";
+         $SQL = "{$SQL} GROUP BY {$groups}";
       }
 
       $havings = $this->combine($this->havings, $parameters, exact: true);
 
       if ($havings !== '') {
-         $sql = "{$sql} HAVING {$havings}";
+         $SQL = "{$SQL} HAVING {$havings}";
       }
 
       if ($this->orders !== []) {
@@ -726,20 +725,20 @@ class Builder
          }
 
          $ordered = implode(', ', $orders);
-         $sql = "{$sql} ORDER BY {$ordered}";
+         $SQL = "{$SQL} ORDER BY {$ordered}";
       }
 
       // @ Row slicing is dialect-specific text: only PostgreSQL takes OFFSET on
       //   its own, and the row count MySQL and SQLite require in its place is a
       //   different sentinel in each. Deciding it here emitted SQL two of the
       //   three dialects reject outright.
-      $sql = "{$sql}{$this->Dialect->slice($this->limited, $this->offset)}";
+      $SQL = "{$SQL}{$this->Dialect->slice($this->limited, $this->offset)}";
 
       if ($this->Lock !== null) {
-         $sql = "{$sql} {$this->Lock->value}";
+         $SQL = "{$SQL} {$this->Lock->value}";
       }
 
-      return $sql;
+      return $SQL;
    }
 
    /**
@@ -767,9 +766,9 @@ class Builder
       $values = implode(', ', $rows);
       $table = $this->table ?? '';
       $conflict = $this->resolve();
-      $sql = "INSERT INTO {$this->render($table, table: true)} ({$columns}) VALUES {$values}{$conflict}";
+      $SQL = "INSERT INTO {$this->render($table, table: true)} ({$columns}) VALUES {$values}{$conflict}";
 
-      return $this->emit($sql);
+      return $this->emit($SQL);
    }
 
    /**
@@ -795,9 +794,9 @@ class Builder
       $filters = $this->combine($this->filters, $parameters);
 
       $table = $this->table ?? '';
-      $sql = "UPDATE {$this->render($table, table: true)} SET {$assignments} WHERE {$filters}";
+      $SQL = "UPDATE {$this->render($table, table: true)} SET {$assignments} WHERE {$filters}";
 
-      return $this->emit($sql);
+      return $this->emit($SQL);
    }
 
    /**
@@ -810,9 +809,9 @@ class Builder
       $filters = $this->combine($this->filters, $parameters);
 
       $table = $this->table ?? '';
-      $sql = "DELETE FROM {$this->render($table, table: true)} WHERE {$filters}";
+      $SQL = "DELETE FROM {$this->render($table, table: true)} WHERE {$filters}";
 
-      return $this->emit($sql);
+      return $this->emit($SQL);
    }
 
    /**
@@ -820,11 +819,11 @@ class Builder
     */
    private function guard (): void
    {
-      if ($this->table === null && $this->source === null) {
+      if ($this->table === null && $this->Source === null) {
          throw new InvalidArgumentException('SQL builder requires a table.');
       }
 
-      if ($this->source !== null && $this->Mode !== Modes::Select) {
+      if ($this->Source !== null && $this->Mode !== Modes::Select) {
          throw new InvalidArgumentException('SQL derived tables are only valid for SELECT.');
       }
 
@@ -940,17 +939,17 @@ class Builder
     *
     * @param array<int,mixed> $parameters
     */
-   private function embed (self|Query $query, array &$parameters): string
+   private function embed (self|Query $Embedded, array &$parameters): string
    {
-      $Query = $query instanceof self ? $query->compile($this->Dialect) : $query;
+      $Query = $Embedded instanceof self ? $Embedded->compile($this->Dialect) : $Embedded;
       $offset = count($parameters);
-      $sql = $this->Dialect->rebase($Query->SQL, $offset);
+      $SQL = $this->Dialect->rebase($Query->SQL, $offset);
 
       foreach ($Query->parameters as $parameter) {
          $parameters[] = $parameter;
       }
 
-      return $sql;
+      return $SQL;
    }
 
    /**
@@ -986,13 +985,13 @@ class Builder
     */
    private function derive (array &$parameters): string
    {
-      if ($this->source === null) {
+      if ($this->Source === null) {
          $table = $this->table ?? '';
 
          return $this->render($table, table: true);
       }
 
-      $query = $this->embed($this->source, $parameters);
+      $query = $this->embed($this->Source, $parameters);
       $alias = $this->sourceAlias ?? '';
 
       return "({$query}) AS {$alias}";
@@ -1001,12 +1000,12 @@ class Builder
    /**
     * Append RETURNING output columns when configured.
     */
-   private function emit (string $sql): string
+   private function emit (string $SQL): string
    {
       if ($this->outputs === []) {
-         return $sql;
+         return $SQL;
       }
 
-      return $this->Dialect->output($sql, $this->map($this->outputs));
+      return $this->Dialect->output($SQL, $this->map($this->outputs));
    }
 }

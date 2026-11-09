@@ -41,14 +41,14 @@ return new Test(
 
       // # SSLRequest
       $capabilities = Capabilities::PROTOCOL_41 | Capabilities::SSL;
-      $ssl = $Encoder->encode(Encoder::SSL, ['capabilities' => $capabilities], 1);
+      $SSL = $Encoder->encode(Encoder::SSL, ['capabilities' => $capabilities], 1);
 
       yield assert(
-         assertion: strlen($ssl) === 36
-            && substr($ssl, 0, 4) === "\x20\x00\x00\x01"
-            && substr($ssl, 4, 4) === pack('V', $capabilities)
-            && $ssl[12] === chr(Capabilities::CHARSET_UTF8MB4)
-            && substr($ssl, 13) === str_repeat("\0", 23),
+         assertion: strlen($SSL) === 36
+            && substr($SSL, 0, 4) === "\x20\x00\x00\x01"
+            && substr($SSL, 4, 4) === pack('V', $capabilities)
+            && $SSL[12] === chr(Capabilities::CHARSET_UTF8MB4)
+            && substr($SSL, 13) === str_repeat("\0", 23),
          description: 'SSLRequest is a 32-byte payload with capabilities, max packet and charset'
       );
 

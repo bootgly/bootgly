@@ -609,7 +609,7 @@ return new Test(
                $Responses = $Parse($wire);
                $report['count'] = count($Responses);
                $report['responses'] = array_map(
-                  static fn(array $R): array => [
+                  static fn (array $R): array => [
                      'advertised' => $R['advertised'],
                      'bytes' => strlen($R['body']),
                      'complete' => $R['complete'],

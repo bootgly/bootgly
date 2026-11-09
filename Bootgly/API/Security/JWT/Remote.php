@@ -346,8 +346,8 @@ class Remote implements KeyResolver
          if ($value !== null) {
             $record = $this->unpack($value, $now);
             if ($record !== null) {
-               $ttl = min($this->ttl, $record['expires'] - $now);
-               $Keys = $this->parse($record['body'], $this->status, $now, $ttl);
+               $TTL = min($this->ttl, $record['expires'] - $now);
+               $Keys = $this->parse($record['body'], $this->status, $now, $TTL);
             }
             else {
                $Keys = Failures::JWKS;
@@ -389,8 +389,8 @@ class Remote implements KeyResolver
          return $this->mark(Failures::Status, 'Remote JWKS returned a non-success status.', $Response->status);
       }
 
-      $ttl = $this->limit($Response);
-      $Keys = $this->parse($Response->body, $Response->status, $now, $ttl);
+      $TTL = $this->limit($Response);
+      $Keys = $this->parse($Response->body, $Response->status, $now, $TTL);
       if ($Keys instanceof Failures) {
          $this->Fault = $Keys;
          return $Keys;
@@ -415,7 +415,7 @@ class Remote implements KeyResolver
    /**
     * Parse and cache a JWKS body.
     */
-   private function parse (string $body, int $status, int $now, int $ttl): KeySet|Failures
+   private function parse (string $body, int $status, int $now, int $TTL): KeySet|Failures
    {
       if (strlen($body) > $this->size) {
          return $this->mark(Failures::JWKS, 'Remote JWKS response is too large.', $status);
@@ -442,7 +442,7 @@ class Remote implements KeyResolver
 
       $this->Keys = $Keys;
       $this->fetched = $now;
-      $this->expires = $ttl > 0 ? $now + $ttl : 0;
+      $this->expires = $TTL > 0 ? $now + $TTL : 0;
       $this->clear($status);
 
       return $Keys;

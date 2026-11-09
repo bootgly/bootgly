@@ -378,15 +378,15 @@ return new Test(
          description: 'vault refuses an injected custom atomic backend without a secret'
       );
 
-      $shared = null;
+      $Shared = null;
       try {
-         $shared = new Vault(new Cache(['driver' => 'redis']), secret: str_repeat('k', 32));
+         $Shared = new Vault(new Cache(['driver' => 'redis']), secret: str_repeat('k', 32));
       }
       catch (InvalidArgumentException) {
       }
 
       yield assert(
-         assertion: $shared instanceof Vault,
+         assertion: $Shared instanceof Vault,
          description: 'vault accepts an injected redis backend with a 32-byte shared secret'
       );
 

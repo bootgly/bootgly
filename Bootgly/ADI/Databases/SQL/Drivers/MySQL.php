@@ -88,9 +88,9 @@ class MySQL extends Driver
 
    // * Metadata
    /** @var array<int,Operation> */
-   private array $pipeline = [];
+   private array $Pipeline = [];
    /** @var array<int,Operation> */
-   private array $completed = [];
+   private array $Completed = [];
    private string $nonce = '';
    private bool $encrypted = false;
    // @ This driver tore its session down and must never drive a replacement
@@ -113,7 +113,7 @@ class MySQL extends Driver
    private bool $flushed = false;
    // @ Operation whose command has begun reaching the socket — a re-entry must
    //   never splice bytes into a packet that is already partly on the wire.
-   private null|Operation $writing = null;
+   private null|Operation $Writing = null;
    // @ The pool took the head away — its response is drained into a stand-in.
    private bool $abandoned = false;
    /**
@@ -238,7 +238,7 @@ class MySQL extends Driver
          //   id this one is about to displace. The head itself never skips —
          //   that is what makes a marker left behind by a dead owner cost one
          //   extra pass instead of a hang.
-         if (isset($this->pending[$Operation->SQL]) && ($this->pipeline[0] ?? null) !== $Operation) {
+         if (isset($this->pending[$Operation->SQL]) && ($this->Pipeline[0] ?? null) !== $Operation) {
             $Operation->write = '';
 
             return $Operation;
@@ -391,7 +391,7 @@ class MySQL extends Driver
          // ? Strict request-response — only the pipeline head owns the wire.
          $this->queue($Operation);
 
-         if ($this->pipeline[0] !== $Operation) {
+         if ($this->Pipeline[0] !== $Operation) {
             // @ A sibling command is on the wire — pump its read path.
             $this->read($Operation);
 
@@ -403,7 +403,7 @@ class MySQL extends Driver
             //   from a nested advance() — a sibling ahead of it that failed to
             //   encode hands the wire on. Writing it again here would run it
             //   twice and shift every answer behind it onto the wrong caller.
-            if ($this->pipeline[0] !== $Operation || $Operation->state !== OperationStates::Querying) {
+            if ($this->Pipeline[0] !== $Operation || $Operation->state !== OperationStates::Querying) {
                return $this->await($Operation, Scheduler::SCHEDULE_READ);
             }
          }
@@ -417,10 +417,10 @@ class MySQL extends Driver
             //   no answer ever retires, wedging every caller queued behind it.
             //   It leaves the FIFO instead, and the next command takes the wire.
             if ($Operation->finished) {
-               array_shift($this->pipeline);
-               $this->completed[] = $Operation;
+               array_shift($this->Pipeline);
+               $this->Completed[] = $Operation;
 
-               $Head = $this->pipeline[0] ?? null;
+               $Head = $this->Pipeline[0] ?? null;
 
                if ($Head !== null && $Head->finished === false && $Head->state === OperationStates::Querying) {
                   $this->advance($Head);
@@ -436,7 +436,7 @@ class MySQL extends Driver
          //   rendered once per command: a partial-flush re-entry keeps
          //   $writing === $Operation, and prepending to a remainder would
          //   splice a close into the middle of a packet already on the wire.
-         if ($this->closing !== [] && $this->writing !== $Operation) {
+         if ($this->closing !== [] && $this->Writing !== $Operation) {
             $closes = '';
 
             foreach ($this->closing as $statement => $queued) {
@@ -458,7 +458,7 @@ class MySQL extends Driver
          // ! A half-written command can never be reconciled with the server —
          //   the head only counts as flushed once the whole packet is out.
          $this->flushed = false;
-         $this->writing = $Operation;
+         $this->Writing = $Operation;
 
          if ($this->flush($Operation) === false) {
             return $Operation;
@@ -466,7 +466,7 @@ class MySQL extends Driver
 
          $this->clear();
          $this->flushed = true;
-         $this->writing = null;
+         $this->Writing = null;
          $this->free($Operation);
          $this->preparing = $Operation->statement !== '' && $Operation->prepared === false;
          $this->binary = $Operation->prepared;
@@ -509,7 +509,7 @@ class MySQL extends Driver
    public function owe (DatabaseOperation $Operation): bool
    {
       // ? Only the head ever writes.
-      if (($this->pipeline[0] ?? null) !== $Operation) {
+      if (($this->Pipeline[0] ?? null) !== $Operation) {
          return false;
       }
 
@@ -678,7 +678,7 @@ class MySQL extends Driver
    {
       $index = null;
 
-      foreach ($this->pipeline as $id => $Queued) {
+      foreach ($this->Pipeline as $id => $Queued) {
          if ($Queued === $Operation) {
             $index = $id;
 
@@ -693,7 +693,7 @@ class MySQL extends Driver
       if ($index !== null && ($index === 0 ? $this->flushed : $this->abandoned)) {
          $readers = 0;
 
-         foreach ($this->pipeline as $position => $Queued) {
+         foreach ($this->Pipeline as $position => $Queued) {
             if (
                $Queued !== $Operation
                && $Queued->finished === false
@@ -732,7 +732,7 @@ class MySQL extends Driver
    {
       $index = null;
 
-      foreach ($this->pipeline as $id => $Queued) {
+      foreach ($this->Pipeline as $id => $Queued) {
          if ($Queued === $Operation) {
             $index = $id;
 
@@ -749,7 +749,7 @@ class MySQL extends Driver
 
       // @ A sibling that never wrote just leaves the FIFO.
       if ($index !== 0) {
-         array_splice($this->pipeline, $index, 1);
+         array_splice($this->Pipeline, $index, 1);
 
          return;
       }
@@ -770,7 +770,7 @@ class MySQL extends Driver
       $Stand->statement = $Operation->statement;
       $Stand->prepared = $Operation->prepared;
 
-      $this->pipeline[0] = $Stand;
+      $this->Pipeline[0] = $Stand;
       $this->abandoned = true;
       $this->draining = true;
    }
@@ -804,7 +804,7 @@ class MySQL extends Driver
       }
 
       // ? A command is half on the wire: the reset would land inside it.
-      if ($this->writing !== null) {
+      if ($this->Writing !== null) {
          return false;
       }
 
@@ -825,13 +825,13 @@ class MySQL extends Driver
 
       // @ Its place in the FIFO is its place on the wire: behind a head whose
       //   command is whole on the wire, ahead of every command not written yet.
-      if ($this->pipeline !== [] && $this->flushed) {
-         array_splice($this->pipeline, 1, 0, [$Stand]);
+      if ($this->Pipeline !== [] && $this->flushed) {
+         array_splice($this->Pipeline, 1, 0, [$Stand]);
 
          return true;
       }
 
-      array_unshift($this->pipeline, $Stand);
+      array_unshift($this->Pipeline, $Stand);
       $this->flushed = true;
       $this->abandoned = true;
       $this->draining = true;
@@ -854,7 +854,7 @@ class MySQL extends Driver
       //    head is not work in flight either: nobody waits for its response,
       //    and the next operation handed this connection queues behind it and
       //    drains it.
-      foreach ($this->pipeline as $index => $Queued) {
+      foreach ($this->Pipeline as $index => $Queued) {
          if (($index === 0 && $this->abandoned) || $Queued === $this->Reset) {
             continue;
          }
@@ -904,8 +904,8 @@ class MySQL extends Driver
     */
    public function drain (): array
    {
-      $Completed = $this->completed;
-      $this->completed = [];
+      $Completed = $this->Completed;
+      $this->Completed = [];
 
       return $Completed;
    }
@@ -1038,7 +1038,7 @@ class MySQL extends Driver
          $Messages = $this->Decoder->decode($bytes);
 
          foreach ($Messages as $Message) {
-            $Active = $this->pipeline[0] ?? ($Operation->finished ? null : $Operation);
+            $Active = $this->Pipeline[0] ?? ($Operation->finished ? null : $Operation);
 
             if ($Active === null) {
                continue;
@@ -1050,18 +1050,18 @@ class MySQL extends Driver
             //   pool finished from the outside — an elapsed deadline — still owns
             //   the wire until the server stops answering it: leaving earlier
             //   would hand its remaining packets to the next co-located command.
-            if ($this->pipeline !== [] && $this->synced === false) {
+            if ($this->Pipeline !== [] && $this->synced === false) {
                continue;
             }
 
             if ($Active->finished) {
-               if (($this->pipeline[0] ?? null) === $Active) {
-                  array_shift($this->pipeline);
+               if (($this->Pipeline[0] ?? null) === $Active) {
+                  array_shift($this->Pipeline);
 
                   // ? An abandoned head is a stand-in the pool never assigned:
                   //   draining it must not release a connection a second time.
                   if ($this->abandoned === false) {
-                     $this->completed[] = $Active;
+                     $this->Completed[] = $Active;
                   }
 
                   if ($Active === $this->Reset) {
@@ -1073,7 +1073,7 @@ class MySQL extends Driver
 
                // ? The next head is the session reset, already on the wire: its
                //   response is drained like a stand-in's.
-               if ($this->Reset !== null && ($this->pipeline[0] ?? null) === $this->Reset) {
+               if ($this->Reset !== null && ($this->Pipeline[0] ?? null) === $this->Reset) {
                   $this->flushed = true;
                   $this->abandoned = true;
                   $this->draining = true;
@@ -1093,7 +1093,7 @@ class MySQL extends Driver
       //   command as COM_STMT_EXECUTE). Push it to the wire now: event-driven
       //   callers only wake on socket reads, and this request-response socket
       //   stays silent until the head writes.
-      $Head = $this->pipeline[0] ?? null;
+      $Head = $this->Pipeline[0] ?? null;
 
       if ($Head !== null && $Head !== $Operation && $Head->finished === false && $Head->state === OperationStates::Querying) {
          $this->advance($Head);
@@ -1107,13 +1107,13 @@ class MySQL extends Driver
     */
    private function queue (Operation $Operation): void
    {
-      foreach ($this->pipeline as $Queued) {
+      foreach ($this->Pipeline as $Queued) {
          if ($Queued === $Operation) {
             return;
          }
       }
 
-      $this->pipeline[] = $Operation;
+      $this->Pipeline[] = $Operation;
    }
 
    /**
@@ -1223,15 +1223,15 @@ class MySQL extends Driver
       // ! Session state — packets, statement ids and evictions die with the socket
       $this->clear();
       $this->closing = [];
-      $this->writing = null;
+      $this->Writing = null;
       $this->Reset = null;
       $this->statements = [];
       $this->pending = [];
       $this->Holders = [];
       $this->Decoder = new Decoder;
 
-      $Pipeline = $this->pipeline;
-      $this->pipeline = [];
+      $Pipeline = $this->Pipeline;
+      $this->Pipeline = [];
 
       // @@ Queued operations — completed[] hands the siblings to Pool::drain()
       foreach ($Pipeline as $Queued) {
@@ -1241,7 +1241,7 @@ class MySQL extends Driver
          }
 
          if ($Queued !== $Operation) {
-            $this->completed[] = $Queued;
+            $this->Completed[] = $Queued;
          }
       }
 
@@ -1573,15 +1573,15 @@ class MySQL extends Driver
 
       // # TLS
       $mode = $this->Config->secure['mode'];
-      $tls = $mode !== DatabaseConfig::SECURE_DISABLE && ($server & Capabilities::SSL) !== 0;
+      $TLS = $mode !== DatabaseConfig::SECURE_DISABLE && ($server & Capabilities::SSL) !== 0;
 
-      if ($tls === false && $mode !== DatabaseConfig::SECURE_DISABLE && $mode !== DatabaseConfig::SECURE_PREFER) {
+      if ($TLS === false && $mode !== DatabaseConfig::SECURE_DISABLE && $mode !== DatabaseConfig::SECURE_PREFER) {
          $Operation->quarantine = true;
 
          return $Operation->fail('MySQL server refused required TLS.');
       }
 
-      if ($tls) {
+      if ($TLS) {
          $this->capabilities |= Capabilities::SSL;
          $this->Connection->transition(ConnectionStates::SSLRequest);
          $Operation->write = $this->Encoder->encode(Encoder::SSL, [

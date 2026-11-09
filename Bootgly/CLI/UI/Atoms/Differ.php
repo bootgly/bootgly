@@ -32,8 +32,6 @@ use Bootgly\CLI\Terminal\Output;
  */
 class Differ extends Component
 {
-   private Output $Output;
-
    // * Config
    /** SGR decoration — null follows the TTY, false forces plain, true forces styled */
    public null|bool $decoration;
@@ -53,6 +51,7 @@ class Differ extends Component
    public string $toFile;
 
    // * Data
+   private Output $Output;
    /** @var list<string>|string The original text — string or list of lines */
    public array|string $from;
    /** @var list<string>|string The new text — string or list of lines */

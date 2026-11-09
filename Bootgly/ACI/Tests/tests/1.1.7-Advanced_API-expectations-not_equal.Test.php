@@ -52,14 +52,14 @@ return new Test(
          ->assert();
 
       // object
-      $object1 = new stdClass();
-      $object2 = new stdClass();
-      $object2->property = 'value';
+      $Object1 = new stdClass();
+      $Object2 = new stdClass();
+      $Object2->property = 'value';
       yield new Assertion(
          description: 'Not equal objects',
          fallback: 'Objects matched!'
       )
-         ->expect($object1, Op::NotEqual, $object2)
+         ->expect($Object1, Op::NotEqual, $Object2)
          ->assert();
    })
 );

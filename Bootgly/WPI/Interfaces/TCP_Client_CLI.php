@@ -83,39 +83,7 @@ class TCP_Client_CLI implements Clients
    /** @var array<int,class-string<Configuring>> Every Configs this node applies. */
    protected const array CONFIGS = [Configs::class];
 
-   public Logger $Logger {
-      get {
-         if ( isSet($this->Logger) === false ) {
-            $this->Logger = new Logger(channel: static::class);
-         }
-
-         return $this->Logger;
-      }
-   }
-
-
-   /** @var resource */
-   public $Socket;
-
-   // ! Event
-   /** Reactor in use by THIS instance (each client owns its own by default). */
-   public protected(set) Events & Loops & Scheduler $Event;
-
-   // ! Process
-   protected Process $Process;
-   // ! Console
-   protected Commands $Commands;
-
-
    // * Config
-   #protected string $resource;
-   // ! Defaulted, not merely typed: the encode and redirect paths read the
-   //   origin before `configure()` may ever have been called
-   protected null|string $host = null;
-   protected null|int $port = null;
-   protected int $workers;
-   /** @var array<string,mixed>|null Secure SSL/TLS Stream Context */
-   protected null|array $secure = null;
    /** TCP + TLS establishment budget in seconds (0 = unbounded). */
    public int|float $connectTimeout = 5;
    /**
@@ -126,6 +94,30 @@ class TCP_Client_CLI implements Clients
    public null|float $deadline = null;
    /** Optional absolute `hrtime(true)` deadline in nanoseconds. */
    public null|int $monotonicDeadline = null;
+
+   // * Data
+   public Logger $Logger {
+      get {
+         if ( isSet($this->Logger) === false ) {
+            $this->Logger = new Logger(channel: static::class);
+         }
+
+         return $this->Logger;
+      }
+   }
+
+   // ! Event
+   /** Reactor in use by THIS instance (each client owns its own by default). */
+   public protected(set) Events & Loops & Scheduler $Event;
+
+   #protected string $resource;
+   // ! Defaulted, not merely typed: the encode and redirect paths read the
+   //   origin before `configure()` may ever have been called
+   protected null|string $host = null;
+   protected null|int $port = null;
+   protected int $workers;
+   /** @var array<string,mixed>|null Secure SSL/TLS Stream Context */
+   protected null|array $secure = null;
    // # Mode
    protected int $mode;
    public const int MODE_DEFAULT = 1;
@@ -139,7 +131,6 @@ class TCP_Client_CLI implements Clients
     */
    public const int MODE_EMBEDDED = 4;
 
-   // * Data
    /** @var array<string,true> */
    protected array $Events = [];
    // # On
@@ -163,6 +154,14 @@ class TCP_Client_CLI implements Clients
    public private(set) null|Closure $Wait = null;
 
    // * Metadata
+   /** @var resource */
+   public $Socket;
+
+   // ! Process
+   protected Process $Process;
+   // ! Console
+   protected Commands $Commands;
+
    // # Error
    /** @var array<int|string|null> */
    public array $error = [];

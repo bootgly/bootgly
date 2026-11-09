@@ -36,8 +36,6 @@ use Bootgly\CLI\UI\Components\Grid\Cell;
  */
 class Grid extends Component
 {
-   private Output $Output;
-
    // * Config
    // # Geometry (outer rectangle; null width/height tracks the terminal size)
    /** Top screen row (1-based) */
@@ -57,6 +55,7 @@ class Grid extends Component
    public int $gap;
 
    // * Data
+   private Output $Output;
    /** @var array<int,Cell> The placed frames, in paint order */
    public private(set) array $Cells;
 

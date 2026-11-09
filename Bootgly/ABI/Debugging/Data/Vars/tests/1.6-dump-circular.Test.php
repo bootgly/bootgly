@@ -11,7 +11,7 @@ use Bootgly\ACI\Tests\Suite\Test;
 
 class DumpNode
 {
-   public null|DumpNode $next = null;
+   public null|DumpNode $Next = null;
    public string $label = 'n';
 }
 
@@ -22,11 +22,11 @@ return new Test(
 
       // @ Self-reference — true cycle marked
       $Node = new DumpNode;
-      $Node->next = $Node;
+      $Node->Next = $Node;
 
       $expected = <<<'DUMP'
       Bootgly\ABI\Debugging\Data\Vars\DumpNode {
-         +next: Bootgly\ABI\Debugging\Data\Vars\DumpNode *RECURSION*
+         +Next: Bootgly\ABI\Debugging\Data\Vars\DumpNode *RECURSION*
          +label: 'n'
       }
       DUMP;

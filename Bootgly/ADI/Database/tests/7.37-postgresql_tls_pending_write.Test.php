@@ -305,7 +305,7 @@ return new Test(
                   $PlainHolder = $PostgreSQL->query('SELECT 1');
                   $PostgreSQL->advance($PlainHolder);
                   $blocked = [
-                     'owner' => $Peek($PostgreSQL, 'writing') === $PlainHolder,
+                     'owner' => $Peek($PostgreSQL, 'Writing') === $PlainHolder,
                      'wrote' => $Peek($PostgreSQL, 'wrote'),
                   ];
                   $Wait(0.08);
@@ -313,7 +313,7 @@ return new Test(
                   $PlainNext = $PostgreSQL->query('SELECT 2');
                   $PostgreSQL->advance($PlainNext);
                   $withdrawn = [
-                     'owner' => $Peek($PostgreSQL, 'writing') === $PlainNext,
+                     'owner' => $Peek($PostgreSQL, 'Writing') === $PlainNext,
                      'holderFinished' => $PlainHolder->finished,
                      'holderError' => $PlainHolder->error,
                      'holderRevoked' => $PlainHolder->revoked,
@@ -369,7 +369,7 @@ return new Test(
                'finished' => $Holder->finished,
                'error' => $Holder->error,
                'write' => strlen($Holder->write),
-               'owner' => $Peek($PostgreSQL, 'writing') === $Holder,
+               'owner' => $Peek($PostgreSQL, 'Writing') === $Holder,
                'wrote' => $Peek($PostgreSQL, 'wrote'),
                'encrypted' => $Peek($PostgreSQL, 'encrypted'),
                'connected' => $Connection->connected,
@@ -393,7 +393,7 @@ return new Test(
                   $Holder->Pool = $Pool;
                   $Pool->advance($Holder);
                   $Result['before'] = [
-                     'owner' => $Peek($PostgreSQL, 'writing') === $Holder,
+                     'owner' => $Peek($PostgreSQL, 'Writing') === $Holder,
                      'finished' => $Holder->finished,
                      'error' => $Holder->error,
                      'connected' => $Connection->connected,
@@ -407,7 +407,7 @@ return new Test(
                   $Next = $PostgreSQL->query("SELECT 'B'");
                   $Result['nextPacket'] = strlen($Next->write);
                   $PostgreSQL->advance($Next);
-                  $Owner = $Peek($PostgreSQL, 'writing');
+                  $Owner = $Peek($PostgreSQL, 'Writing');
                   $Result['before'] = [
                      'owner' => $Owner === $Holder
                         ? 'holder'
@@ -439,7 +439,7 @@ return new Test(
                   }
 
                   $Result['after'] = [
-                     'owner' => $Peek($PostgreSQL, 'writing') === null ? 'none' : 'set',
+                     'owner' => $Peek($PostgreSQL, 'Writing') === null ? 'none' : 'set',
                      'holderFinished' => $Holder->finished,
                      'holderError' => $Holder->error,
                      'holderRevoked' => $Holder->revoked,
@@ -516,7 +516,7 @@ return new Test(
       $PlainHolder = $PlainPostgreSQL->query('SELECT 1');
       $PlainPostgreSQL->advance($PlainHolder);
       $plainBlocked = [
-         'owner' => $Peek($PlainPostgreSQL, 'writing') === $PlainHolder,
+         'owner' => $Peek($PlainPostgreSQL, 'Writing') === $PlainHolder,
          'wrote' => $Peek($PlainPostgreSQL, 'wrote'),
       ];
       $Wait(0.08);
@@ -524,7 +524,7 @@ return new Test(
       $PlainNext = $PlainPostgreSQL->query('SELECT 2');
       $PlainPostgreSQL->advance($PlainNext);
       $plainWithdrawn = [
-         'owner' => $Peek($PlainPostgreSQL, 'writing') === $PlainNext,
+         'owner' => $Peek($PlainPostgreSQL, 'Writing') === $PlainNext,
          'holderFinished' => $PlainHolder->finished,
          'holderError' => $PlainHolder->error,
          'holderRevoked' => $PlainHolder->revoked,

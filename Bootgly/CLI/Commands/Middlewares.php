@@ -26,7 +26,7 @@ class Middlewares
 
    // * Data
    /** @var array<Middleware> */
-   private array $stack = [];
+   private array $Stack = [];
 
    // * Metadata
    // ...
@@ -35,7 +35,7 @@ class Middlewares
    public function prepend (Middleware $Middleware): self
    {
       // @
-      array_unshift($this->stack, $Middleware);
+      array_unshift($this->Stack, $Middleware);
 
       // :
       return $this;
@@ -44,7 +44,7 @@ class Middlewares
    public function append (Middleware $Middleware): self
    {
       // @
-      $this->stack[] = $Middleware;
+      $this->Stack[] = $Middleware;
 
       // :
       return $this;
@@ -54,7 +54,7 @@ class Middlewares
    {
       // @
       foreach ($middlewares as $Middleware) {
-         $this->stack[] = $Middleware;
+         $this->Stack[] = $Middleware;
       }
 
       // :
@@ -74,16 +74,16 @@ class Middlewares
    public function process (Command $Command, array $arguments, array $options, Closure $handler): bool
    {
       // ? No middlewares — call handler directly
-      if ($this->stack === []) {
+      if ($this->Stack === []) {
          return $handler($Command, $arguments, $options);
       }
 
       // @ Build the onion from inside out (fold right)
       $Pipeline = array_reduce(
-         array: array_reverse($this->stack),
-         callback: function (Closure $next, Middleware $Middleware): Closure {
-            return function (Command $Command, array $arguments, array $options) use ($Middleware, $next): bool {
-               return $Middleware->process($Command, $arguments, $options, $next);
+         array: array_reverse($this->Stack),
+         callback: function (Closure $Next, Middleware $Middleware): Closure {
+            return function (Command $Command, array $arguments, array $options) use ($Middleware, $Next): bool {
+               return $Middleware->process($Command, $arguments, $options, $Next);
             };
          },
          initial: $handler

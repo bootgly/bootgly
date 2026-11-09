@@ -43,10 +43,10 @@ use Bootgly\CLI\UI\Components\Tree\Node;
  */
 class Filepicker
 {
+   // * Config
    public Input $Input;
    public Output $Output;
 
-   // * Config
    /** Header line above the tree */
    public string $prompt;
    /** Root directory to browse */

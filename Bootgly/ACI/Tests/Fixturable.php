@@ -19,6 +19,7 @@ namespace Bootgly\ACI\Tests;
  */
 trait Fixturable // @phpstan-ignore trait.unused
 {
+   // * Data
    /**
     * Fixture owned by the consuming test-related object.
     */

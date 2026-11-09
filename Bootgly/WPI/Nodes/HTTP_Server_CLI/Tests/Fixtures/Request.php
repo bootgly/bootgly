@@ -33,6 +33,7 @@ use Bootgly\ACI\Tests\Fixture;
  */
 final class Request extends Fixture
 {
+   // * Data
    public string $method = 'GET';
    public string $path = '/';
    public string $version = '1.1';

@@ -256,8 +256,8 @@ return new Test(
          //   request that slips through fails locally), and the canonical
          //   repository served by the local fixture
          $proxy = ['http.proxy', 'http://127.0.0.1:9'];
-         $ssh = ['core.sshCommand', 'echo >>WITNESS'];
-         $hermetic = [$proxy, $ssh];
+         $SSH = ['core.sshCommand', 'echo >>WITNESS'];
+         $hermetic = [$proxy, $SSH];
          $mirror = ["url.{$canon}.insteadOf", $repository];
          $ext = ['protocol.ext.allow', 'always'];
          // ! What a caller that wants ext exports: the helper beside the transports

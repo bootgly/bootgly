@@ -15,6 +15,7 @@ use function max;
  */
 class Width
 {
+   // * Data
    /**
     * Storage for column widths.
     *

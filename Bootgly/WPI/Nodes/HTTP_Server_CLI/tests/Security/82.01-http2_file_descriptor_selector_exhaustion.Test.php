@@ -411,7 +411,7 @@ return new Test(
          $controlState = $Await(
             $controlSocket,
             $controlWire,
-            static fn(array $state): bool =>
+            static fn (array $state): bool =>
                isset($state['pings'][$controlPrefacePing]),
          );
          if (! isset($controlState['pings'][$controlPrefacePing])) {
@@ -438,7 +438,7 @@ return new Test(
             $state = $Await(
                $Socket,
                $attackWires[$connection],
-               static fn(array $state): bool => isset($state['pings'][$ping]),
+               static fn (array $state): bool => isset($state['pings'][$ping]),
             );
             if (! isset($state['pings'][$ping])) {
                throw new RuntimeException(
@@ -469,7 +469,7 @@ return new Test(
             $state = $Await(
                $attackSockets[$connection],
                $attackWires[$connection],
-               static fn(array $state): bool =>
+               static fn (array $state): bool =>
                   count($state['headers']) >= $streamsPerConnection
                   && isset($state['pings'][$ping]),
                5.0,
@@ -515,7 +515,7 @@ return new Test(
             $state = $Await(
                $attackSockets[$connection],
                $attackWires[$connection],
-               static fn(array $state): bool =>
+               static fn (array $state): bool =>
                   count($state['data']) >= $streamsPerConnection
                   && isset($state['pings'][$ping]),
                5.0,
@@ -572,7 +572,7 @@ return new Test(
          $controlState = $Await(
             $controlSocket,
             $controlWire,
-            static fn(array $state): bool =>
+            static fn (array $state): bool =>
                isset($state['ended'][1])
                && isset($state['pings'][$armPing]),
             4.0,
@@ -635,7 +635,7 @@ return new Test(
          $controlState = $Await(
             $controlSocket,
             $controlWire,
-            static fn(array $state): bool =>
+            static fn (array $state): bool =>
                isset($state['pings'][$postWarningPing]),
             0.20,
          );
@@ -828,7 +828,7 @@ return new Test(
             if ($recorded === false) {
                $recorded = true;
                $Trace = array_map(
-                  static fn(array $frame): array => [
+                  static fn (array $frame): array => [
                      'file' => $frame['file'] ?? '',
                      'line' => $frame['line'] ?? 0,
                      'function' => $frame['function'] ?? '',

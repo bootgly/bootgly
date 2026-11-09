@@ -27,8 +27,6 @@ use Bootgly\CLI\UI\Components\Chart\Gradient;
  */
 abstract class Chart extends Component
 {
-   protected Output $Output;
-
    // * Config
    /** Frame columns — `null` derives from the terminal or the series */
    public null|int $width;
@@ -48,6 +46,7 @@ abstract class Chart extends Component
    }
 
    // * Data
+   protected Output $Output;
    /** @var array<string,float> label ⇒ value */
    public array $series;
 

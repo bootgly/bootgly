@@ -43,12 +43,15 @@ class Decoder_Chunked extends Decoder
     */
    private const int CHUNK_LINE_LIMIT = 8192;
 
+   // * Data
+   /** @var int Maximum decoded body size (0 = unbounded); driven by HTTP_Client_CLI::$maxResponseBytes. */
+   protected int $maxSize = 0;
+
+   // * Metadata
    /** @var string Accumulated raw body from decoded chunks. */
    protected string $body = '';
    /** @var string Partial leftover buffer between reads. */
    protected string $leftover = '';
-   /** @var int Maximum decoded body size (0 = unbounded); driven by HTTP_Client_CLI::$maxResponseBytes. */
-   protected int $maxSize = 0;
 
    public function __construct (int $maxSize = 0)
    {
@@ -93,9 +96,9 @@ class Decoder_Chunked extends Decoder
       // @ Parse chunks
       while (true) {
          // @ Find chunk-size line end
-         $eol = strpos($data, "\r\n");
+         $EOL = strpos($data, "\r\n");
          // ? A size line past the cap never ends — refused, never buffered (H-HCLI-1)
-         if (($eol === false ? strlen($data) : $eol) > self::CHUNK_LINE_LIMIT) {
+         if (($EOL === false ? strlen($data) : $EOL) > self::CHUNK_LINE_LIMIT) {
             $this->body     = '';
             $this->leftover = '';
 
@@ -105,11 +108,11 @@ class Decoder_Chunked extends Decoder
                'consumed' => $size,
             ];
          }
-         if ($eol === false) {
+         if ($EOL === false) {
             break; // Need more data
          }
 
-         $chunkSizeHex = substr($data, 0, $eol);
+         $chunkSizeHex = substr($data, 0, $EOL);
          // @ Strip chunk-extension (RFC 9112 §7.1.1) before parsing size
          $semicolon = strpos($chunkSizeHex, ';');
          if ($semicolon !== false) {
@@ -162,13 +165,13 @@ class Decoder_Chunked extends Decoder
          if ($chunkSize === 0) {
             // @ Consume trailer-section + terminating CRLF (RFC 9112 §7.1.3)
             // Structure after last-chunk line: [trailer-field CRLF]* CRLF
-            // We look for "\r\n\r\n" starting at $eol (from "0\r\n"):
-            //   - No trailers:   "0\r\n\r\n"     → found at $eol  (offset 0 from CRLF)
+            // We look for "\r\n\r\n" starting at $EOL (from "0\r\n"):
+            //   - No trailers:   "0\r\n\r\n"     → found at $EOL  (offset 0 from CRLF)
             //   - With trailers: "0\r\nX: v\r\n\r\n" → found after trailer fields
-            $trailerTermPos = strpos($data, "\r\n\r\n", $eol);
+            $trailerTermPos = strpos($data, "\r\n\r\n", $EOL);
             // ? The trailer section is a header section: capped like the head,
             //   whatever maxSize allows
-            if (($trailerTermPos === false ? strlen($data) : $trailerTermPos + 4) - $eol > Decoder_::MAX_HEADER_BYTES) {
+            if (($trailerTermPos === false ? strlen($data) : $trailerTermPos + 4) - $EOL > Decoder_::MAX_HEADER_BYTES) {
                $this->body     = '';
                $this->leftover = '';
 
@@ -239,7 +242,7 @@ class Decoder_Chunked extends Decoder
          }
 
          // @ Check if we have enough data for this chunk + trailing CRLF
-         $needed = $eol + 2 + $chunkSize + 2;
+         $needed = $EOL + 2 + $chunkSize + 2;
          if (strlen($data) < $needed) {
             break; // Need more data
          }
@@ -252,7 +255,7 @@ class Decoder_Chunked extends Decoder
          //   a boundary the origin chose rather than the one the protocol
          //   defines, which is what would carry into a pooled connection the
          //   day pipelined leftover is kept across requests.
-         $terminator = $eol + 2 + $chunkSize;
+         $terminator = $EOL + 2 + $chunkSize;
 
          if ($data[$terminator] !== "\r" || $data[$terminator + 1] !== "\n") {
             $this->body     = '';
@@ -266,7 +269,7 @@ class Decoder_Chunked extends Decoder
          }
 
          // @ Extract chunk data
-         $this->body .= substr($data, $eol + 2, $chunkSize);
+         $this->body .= substr($data, $EOL + 2, $chunkSize);
 
          // @ Advance past chunk-size line + CRLF + chunk-data + CRLF
          $data = substr($data, $needed);

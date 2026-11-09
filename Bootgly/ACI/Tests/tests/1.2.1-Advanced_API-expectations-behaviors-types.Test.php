@@ -51,7 +51,7 @@ return new Test(
       yield new Assertion(
          description: 'Validating callable',
       )
-         ->expect(function() {})
+         ->expect(function () {})
          ->to->be(Type::Callable)
          ->assert();
 

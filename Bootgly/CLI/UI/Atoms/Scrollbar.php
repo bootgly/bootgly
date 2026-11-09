@@ -38,8 +38,6 @@ class Scrollbar extends Component implements Boxing
    use Formattable;
 
 
-   private Output $Output;
-
    // * Config
    /** SGR decoration — null follows the TTY, false forces plain, true forces styled */
    public null|bool $decoration;
@@ -62,6 +60,7 @@ class Scrollbar extends Component implements Boxing
    public int $height;
 
    // * Data
+   private Output $Output;
    /** Total content rows/options behind the view */
    public int $total;
    /** First visible content index (0-based) */

@@ -24,16 +24,17 @@ use Random\Randomizer;
  */
 abstract class Faker
 {
-   /**
-    * Randomizer used by concrete fakers to generate deterministic values.
-    */
-   public private(set) Randomizer $Randomizer;
-
    // * Config
    /**
     * The seed used to initialize the Randomizer, if any.
     */
    public private(set) null|int $seed = null;
+
+   // * Metadata
+   /**
+    * Randomizer used by concrete fakers to generate deterministic values.
+    */
+   public private(set) Randomizer $Randomizer;
 
 
    /**

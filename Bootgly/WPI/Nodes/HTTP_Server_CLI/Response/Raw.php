@@ -26,9 +26,11 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header;
 
 trait Raw
 {
+   // * Data
    public Header $Header;
    public Body $Body;
 
+   // * Metadata
    // # Encode fast-lane cache: full wire bytes of the previous response,
    //   valid while every input it was derived from is identical. Inputs
    //   are pointer-stable on the hot path (status line untouched at 200,

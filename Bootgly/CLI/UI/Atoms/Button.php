@@ -46,8 +46,6 @@ class Button extends Component implements Boxing
    private const string ANSI = '/\e\[[0-9;]*m/';
 
 
-   private Output $Output;
-
    // * Config
    /** SGR decoration — null follows the TTY, false forces plain, true forces styled */
    public null|bool $decoration;
@@ -73,6 +71,7 @@ class Button extends Component implements Boxing
    public int $height;
 
    // * Data
+   private Output $Output;
    /** The press trigger — `function (Button $Button): mixed`; its return value
     *  comes back through `press()` */
    public null|Closure $Action;

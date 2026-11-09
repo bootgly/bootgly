@@ -19,10 +19,10 @@ return new Test(
       $Database = new SQL(['driver' => 'pgsql', 'pool' => ['min' => 0, 'max' => 1]]);
       $Database->Connection->attach($client);
       $Encoder = new Encoder;
-      $sql = 'SELECT $1::int AS value';
+      $SQL = 'SELECT $1::int AS value';
 
       // # Warm-up — the backend confirms the statement
-      $First = $Database->query($sql, [1]);
+      $First = $Database->query($SQL, [1]);
       $Database->advance($First);
       fread($server, 8192);
 
@@ -45,7 +45,7 @@ return new Test(
       );
 
       // # Runtime error (duplicate key) — the server-side statement stays valid
-      $Second = $Database->query($sql, [2]);
+      $Second = $Database->query($SQL, [2]);
       $Database->advance($Second);
       fread($server, 8192);
 
@@ -66,7 +66,7 @@ return new Test(
          description: 'A runtime SQLSTATE keeps the prepared statement cached'
       );
 
-      $Third = $Database->query($sql, [3]);
+      $Third = $Database->query($SQL, [3]);
 
       yield assert(
          assertion: $Third->prepared === true && $Third->write !== '' && $Third->write[0] === 'B',
@@ -90,7 +90,7 @@ return new Test(
       );
 
       // # Recovery — the queued Close rides ahead of the next batch
-      $Recovered = $Database->query($sql, [4]);
+      $Recovered = $Database->query($SQL, [4]);
       $Database->advance($Recovered);
       $wire = (string) fread($server, 8192);
       $close = $Encoder->encode(Encoder::CLOSE, [

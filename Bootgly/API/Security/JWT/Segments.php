@@ -65,13 +65,13 @@ class Segments
     */
    public function decode (string $segment, Failures $Failure): array|Failures
    {
-      $json = $this->unpack($segment);
-      if ($json === null) {
+      $JSON = $this->unpack($segment);
+      if ($JSON === null) {
          return $Failure;
       }
 
       try {
-         $decoded = json_decode($json, true, 512, JSON_THROW_ON_ERROR | JSON_BIGINT_AS_STRING);
+         $decoded = json_decode($JSON, true, 512, JSON_THROW_ON_ERROR | JSON_BIGINT_AS_STRING);
       }
       catch (JsonException) {
          return Failures::JSON;

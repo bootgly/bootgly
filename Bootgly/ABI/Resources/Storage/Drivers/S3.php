@@ -587,10 +587,10 @@ class S3 extends Driver
          $headers[$name] = $value;
       }
 
-      $uri = $path . ($canonicalQuery !== '' ? "?{$canonicalQuery}" : '');
+      $URI = $path . ($canonicalQuery !== '' ? "?{$canonicalQuery}" : '');
 
       // :
-      return [$uri, $headers];
+      return [$URI, $headers];
    }
 
    /**
@@ -601,7 +601,7 @@ class S3 extends Driver
     *
     * @return array{0:int,1:array<string,string|array<int,string>>,2:string}
     */
-   private function send (string $method, string $uri, array $headers, string $body, $sink = null): array
+   private function send (string $method, string $URI, array $headers, string $body, $sink = null): array
    {
       $transport = $this->scheme === 'https' ? 'tls' : 'tcp';
       $context = stream_context_create($this->scheme === 'https'
@@ -623,7 +623,7 @@ class S3 extends Driver
       stream_set_timeout($socket, self::TIMEOUT);
 
       // @ Build the raw request (Connection: close → read until EOF)
-      $raw = "{$method} {$uri} HTTP/1.1\r\n";
+      $raw = "{$method} {$URI} HTTP/1.1\r\n";
       $raw .= "Host: {$this->authority}\r\n";
       foreach ($headers as $name => $value) {
          $raw .= "{$name}: {$value}\r\n";
@@ -731,20 +731,20 @@ class S3 extends Driver
       $length = strlen($body);
 
       while ($offset < $length) {
-         $eol = strpos($body, "\r\n", $offset);
-         if ($eol === false) {
+         $EOL = strpos($body, "\r\n", $offset);
+         if ($EOL === false) {
             break;
          }
 
          // @ Chunk size (hex), ignoring any chunk extensions after ';'
-         $sizeLine = substr($body, $offset, $eol - $offset);
+         $sizeLine = substr($body, $offset, $EOL - $offset);
          $sizeHex = trim(explode(';', $sizeLine)[0]);
          $size = (int) hexdec($sizeHex);
          if ($size <= 0) {
             break;
          }
 
-         $offset = $eol + 2;
+         $offset = $EOL + 2;
          $output .= substr($body, $offset, $size);
          $offset += $size + 2;
       }
@@ -812,13 +812,13 @@ class S3 extends Driver
       }
 
       // ! Complete the multipart upload
-      $xml = '<CompleteMultipartUpload>';
+      $completion = '<CompleteMultipartUpload>';
       foreach ($etags as $number => $etag) {
-         $xml .= "<Part><PartNumber>{$number}</PartNumber><ETag>{$etag}</ETag></Part>";
+         $completion .= "<Part><PartNumber>{$number}</PartNumber><ETag>{$etag}</ETag></Part>";
       }
-      $xml .= '</CompleteMultipartUpload>';
+      $completion .= '</CompleteMultipartUpload>';
 
-      [$code, , $body] = $this->call('POST', $key, ['uploadId' => $uploadId], $xml, [
+      [$code, , $body] = $this->call('POST', $key, ['uploadId' => $uploadId], $completion, [
          'Content-Type' => 'application/xml',
       ]);
       // ? S3 can return 200 with an <Error> body on Complete
@@ -1129,15 +1129,15 @@ class S3 extends Driver
             }
             $buffer .= $chunk;
          }
-         $eol = strpos($buffer, "\r\n");
+         $EOL = strpos($buffer, "\r\n");
          // ? No chunk-size line left → connection ended mid-body (truncated)
-         if ($eol === false) {
+         if ($EOL === false) {
             return false;
          }
 
          // @ Chunk size (hex), ignoring any extensions after ';'
-         $size = (int) hexdec(trim(explode(';', substr($buffer, 0, $eol))[0]));
-         $buffer = substr($buffer, $eol + 2);
+         $size = (int) hexdec(trim(explode(';', substr($buffer, 0, $EOL))[0]));
+         $buffer = substr($buffer, $EOL + 2);
          // ?: Terminal zero-size chunk — the body is complete
          if ($size <= 0) {
             return true;

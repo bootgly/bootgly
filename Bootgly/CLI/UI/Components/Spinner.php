@@ -44,8 +44,6 @@ use Bootgly\CLI\UI\Atoms\Text\Effects;
  */
 class Spinner extends Component
 {
-   private Output $Output;
-
    // * Config
    /** @var array<string,array<string>> Named animation sets */
    public static array $Sets = [
@@ -77,6 +75,9 @@ class Spinner extends Component
    public null|Effects $effect;
    // # Templating
    public string $template;
+
+   // * Data
+   private Output $Output;
 
    // * Metadata
    public private(set) int $frame;

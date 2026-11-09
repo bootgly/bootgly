@@ -43,17 +43,17 @@ return new Test(
          return 'A freshly initialized chunked decoder must not be expired.';
       }
 
-      $decoded = new ReflectionProperty(Decoder_Chunked::class, 'decoded');
+      $Decoded = new ReflectionProperty(Decoder_Chunked::class, 'decoded');
 
       // @ 31 s past the ABSOLUTE start anchor → expired. A per-packet sliding
       //   window would have reset the anchor and never reached this.
-      $decoded->setValue($Decoder, time() - 31);
+      $Decoded->setValue($Decoder, time() - 31);
       if ($Decoder->expire() !== true) {
          return 'Decoder must expire 31s after its start anchor (absolute deadline).';
       }
 
       // @ 29 s past → still within the 30 s deadline.
-      $decoded->setValue($Decoder, time() - 29);
+      $Decoded->setValue($Decoder, time() - 29);
       if ($Decoder->expire() !== false) {
          return 'Decoder must NOT expire before the 30s absolute deadline.';
       }

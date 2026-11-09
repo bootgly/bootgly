@@ -41,7 +41,7 @@ return new Test(
 
    middlewares: [
       new class implements Middleware {
-         public function process (object $Request, object $Response, Closure $next): object
+         public function process (object $Request, object $Response, Closure $Next): object
          {
             $mode = $Request->Header->get('X-M5-Identity');
             $Session = $Request->Session;
@@ -56,7 +56,7 @@ return new Test(
                $Session->set('identity', false);
             }
 
-            return $next($Request, $Response);
+            return $Next($Request, $Response);
          }
       },
       new Authentication(new Authenticating(new SessionGuard)),

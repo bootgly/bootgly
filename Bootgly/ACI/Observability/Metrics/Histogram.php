@@ -28,8 +28,6 @@ class Histogram extends Metric
    /** @var list<float> */
    public const array BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0];
 
-   public Types $Type { get => Types::Histogram; }
-
    // * Config
    /** @var list<float> Upper bounds (le), ascending. */
    public private(set) array $buckets;
@@ -39,6 +37,9 @@ class Histogram extends Metric
    public private(set) array $counts;
    public private(set) float $sum = 0.0;
    public private(set) int $count = 0;
+
+   // * Metadata
+   public Types $Type { get => Types::Histogram; }
 
 
    /**

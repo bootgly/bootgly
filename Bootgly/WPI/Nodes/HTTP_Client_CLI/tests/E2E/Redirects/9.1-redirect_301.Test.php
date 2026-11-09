@@ -36,9 +36,9 @@ return new Test(
       // Dummy: redirect follow-up was already handled internally
       function (HTTP_Client_CLI $Client): Response {
          // Return a marker response so test can identify this is the dummy
-         $r = new Response;
-         $r->code = -1;
-         return $r;
+         $R = new Response;
+         $R->code = -1;
+         return $R;
       },
    ],
 

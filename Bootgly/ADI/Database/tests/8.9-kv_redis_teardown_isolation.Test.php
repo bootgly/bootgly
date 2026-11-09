@@ -239,7 +239,7 @@ return new Test(
 
          $stranded = $Retired === null
             ? -1
-            : count((new ReflectionProperty($Retired, 'completed'))->getValue($Retired));
+            : count((new ReflectionProperty($Retired, 'Completed'))->getValue($Retired));
 
          yield assert(
             assertion: $stranded === 0 && $Sibling->finished,

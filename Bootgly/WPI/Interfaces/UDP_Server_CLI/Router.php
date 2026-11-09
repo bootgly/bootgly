@@ -36,11 +36,12 @@ use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections\Connection\Lease;
  */
 class Router implements WPI\Connections\Packages
 {
-   public Logger $Logger;
-
-
+   // * Config
    public Server $Server;
    public Connections $Connections;
+
+   // * Data
+   public Logger $Logger;
    private int $batch;
 
 

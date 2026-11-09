@@ -25,9 +25,9 @@ class Tests
    use Resources;
 
 
+   // * Metadata
    public Suites $Suites;
 
-   // * Metadata
    // # Scope — recorded for suites that re-exec the runner (E2E children):
    // the registry a suite belongs to and the selector that picks it are facts
    // of the RUN, not of the working directory the child would guess from.

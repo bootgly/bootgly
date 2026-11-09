@@ -47,18 +47,18 @@ final class Parser
 
       $count     = count($lines);
       $diffs     = [];
-      $diff      = null;
+      $Diff      = null;
       $collected = [];
 
       for ($i = 0; $i < $count; $i++) {
          // ? A new git file section ends the still-open diff — extended headers
          //   after it must never feed the previous file's chunks
          if (str_starts_with($lines[$i], 'diff --git ')) {
-            if ($diff !== null) {
-               $this->fill($diff, $collected);
+            if ($Diff !== null) {
+               $this->fill($Diff, $collected);
 
-               $diffs[] = $diff;
-               $diff    = null;
+               $diffs[] = $Diff;
+               $Diff    = null;
             }
 
             $collected = [];
@@ -71,13 +71,13 @@ final class Parser
             && isset($lines[$i + 1])
             && preg_match('#^\+\+\+\h+"?(?P<file>[^\v\t"]+)#', $lines[$i + 1], $toMatch)
          ) {
-            if ($diff !== null) {
-               $this->fill($diff, $collected);
+            if ($Diff !== null) {
+               $this->fill($Diff, $collected);
 
-               $diffs[] = $diff;
+               $diffs[] = $Diff;
             }
 
-            $diff      = new Diff($fromMatch['file'], $toMatch['file']);
+            $Diff      = new Diff($fromMatch['file'], $toMatch['file']);
             $collected = [];
 
             $i++;
@@ -97,10 +97,10 @@ final class Parser
          }
       }
 
-      if ($diff !== null && $collected !== []) {
-         $this->fill($diff, $collected);
+      if ($Diff !== null && $collected !== []) {
+         $this->fill($Diff, $collected);
 
-         $diffs[] = $diff;
+         $diffs[] = $Diff;
       }
 
       return $diffs;
@@ -109,10 +109,10 @@ final class Parser
    /**
     * @param array<int, string> $lines
     */
-   private function fill (Diff $diff, array $lines): void
+   private function fill (Diff $Diff, array $lines): void
    {
       $chunks    = [];
-      $chunk     = null;
+      $Chunk     = null;
       $diffLines = [];
 
       foreach ($lines as $line) {
@@ -123,14 +123,14 @@ final class Parser
             $match,
             PREG_UNMATCHED_AS_NULL
          )) {
-            $chunk = new Chunk(
+            $Chunk = new Chunk(
                (int) $match['start'],
                isset($match['startrange']) ? max(0, (int) $match['startrange']) : 1,
                (int) $match['end'],
                isset($match['endrange']) ? max(0, (int) $match['endrange']) : 1,
             );
 
-            $chunks[]  = $chunk;
+            $chunks[]  = $Chunk;
             $diffLines = [];
 
             continue;
@@ -148,10 +148,10 @@ final class Parser
 
             $diffLines[] = new Line($type, $match['line']);
 
-            $chunk?->update($diffLines);
+            $Chunk?->update($diffLines);
          }
       }
 
-      $diff->update($chunks);
+      $Diff->update($chunks);
    }
 }

@@ -15,13 +15,13 @@ return new Test(
    response: function (Request $Request, Response $Response, Router $Router) {
       class World
       {
-         public static function response ($Request, Response $Response)
+         public static function respond ($Request, Response $Response)
          {
             return $Response(body: 'Hello World!!!');
          }
       }
 
-      $Router->route('/route3', __NAMESPACE__ . 'World::response', GET);
+      $Router->route('/route3', __NAMESPACE__ . 'World::respond', GET);
    },
 
    test: function ($response) {

@@ -32,7 +32,7 @@ return new Test(
       $make = static function (
          string $keys,
          array $options,
-         null|Closure $source = null,
+         null|Closure $Source = null,
          bool $strict = true
       ): array {
          $stream = fopen('php://memory', 'r+');
@@ -45,7 +45,7 @@ return new Test(
          $Textbox = new Textbox($Input, $Output);
          $Textbox->prompt = 'Search';
          $Textbox->options = $options;
-         $Textbox->source = $source;
+         $Textbox->source = $Source;
          $Textbox->strict = $strict;
 
          // :

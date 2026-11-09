@@ -13,6 +13,7 @@ namespace Bootgly\ABI\Debugging\Backtrace;
 
 class Call
 {
+   // * Config
    public null|string $file;
    public null|int $line;
    public string $function;

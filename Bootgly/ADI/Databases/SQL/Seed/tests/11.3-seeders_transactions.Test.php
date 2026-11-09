@@ -171,25 +171,25 @@ PHP);
          $failed = true;
       }
 
-      $sql = array_column($Database->queries, 'sql');
+      $SQL = array_column($Database->queries, 'sql');
 
       yield assert(
          assertion: $failed
-            && in_array('BEGIN', $sql, true)
-            && in_array('ROLLBACK', $sql, true)
-            && in_array('COMMIT', $sql, true) === false,
+            && in_array('BEGIN', $SQL, true)
+            && in_array('ROLLBACK', $SQL, true)
+            && in_array('COMMIT', $SQL, true) === false,
          description: 'Runner rolls back failed transactional seeders without committing'
       );
 
       $Database->queries = [];
       $Database->Recorder->fail = null;
       $ran = $Runner->run('failing');
-      $sql = array_column($Database->queries, 'sql');
+      $SQL = array_column($Database->queries, 'sql');
 
       yield assert(
          assertion: $ran === ['failing']
-            && in_array('BEGIN', $sql, true)
-            && in_array('COMMIT', $sql, true),
+            && in_array('BEGIN', $SQL, true)
+            && in_array('COMMIT', $SQL, true),
          description: 'Runner commits successful transactional seeders'
       );
 
@@ -204,12 +204,12 @@ PHP);
          $blocked = true;
       }
 
-      $sql = array_column($Database->queries, 'sql');
+      $SQL = array_column($Database->queries, 'sql');
 
       yield assert(
          assertion: $blocked
-            && str_contains($sql[0] ?? '', 'pg_try_advisory_lock')
-            && in_array('BEGIN', $sql, true) === false
+            && str_contains($SQL[0] ?? '', 'pg_try_advisory_lock')
+            && in_array('BEGIN', $SQL, true) === false
             && is_file("{$path}.lock") === false,
          description: 'Runner rejects held advisory locks and releases the local seeder lock'
       );

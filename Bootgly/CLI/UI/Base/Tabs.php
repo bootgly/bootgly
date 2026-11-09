@@ -55,10 +55,10 @@ class Tabs extends Component implements Boxing
    use Reportable;
 
 
+   // * Config
    public Input $Input;
    public Output $Output;
 
-   // * Config
    // # Geometry (the shared rectangle, 1-based screen coordinates)
    /** Top screen row (1-based) */
    public int $row;

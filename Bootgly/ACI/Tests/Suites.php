@@ -25,17 +25,6 @@ use Bootgly\ACI\Tests\Suite;
 
 class Suites
 {
-   // * Data
-   public Logger $Logger {
-      get {
-         if ( isSet($this->Logger) === false ) {
-            $this->Logger = new Logger(channel: static::class);
-         }
-
-         return $this->Logger;
-      }
-   }
-
    // * Config
    /**
     * The Test Suite directories.
@@ -50,6 +39,17 @@ class Suites
     * the iteration is where such a failure ends a fail-fast run.
     */
    public bool $sweeping = true;
+
+   // * Data
+   public Logger $Logger {
+      get {
+         if ( isSet($this->Logger) === false ) {
+            $this->Logger = new Logger(channel: static::class);
+         }
+
+         return $this->Logger;
+      }
+   }
 
    // * Metadata
    // # Status

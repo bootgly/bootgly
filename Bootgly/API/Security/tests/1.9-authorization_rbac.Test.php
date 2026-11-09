@@ -218,17 +218,17 @@ return new Test(
 
       $Seeder = require Projects::AUTHOR_DIR . 'Demo/HTTP_Server_CLI/database/seeders/authorization_rbac.php';
       $Queries = $Seeder->run(new RecordingSQL, new Seed);
-      $sql = [];
+      $SQL = [];
 
       foreach ($Queries as $Query) {
          $Normalized = new Normalized($Query);
-         $sql[] = $Normalized->SQL;
+         $SQL[] = $Normalized->SQL;
       }
 
       yield assert(
-         assertion: count($sql) === 4
-            && str_contains($sql[0], 'INSERT INTO "roles"')
-            && str_contains($sql[2], 'ON CONFLICT ("role_id", "permission_id")'),
+         assertion: count($SQL) === 4
+            && str_contains($SQL[0], 'INSERT INTO "roles"')
+            && str_contains($SQL[2], 'ON CONFLICT ("role_id", "permission_id")'),
          description: 'demo RBAC seeder compiles rerunnable role-permission inserts'
       );
    }

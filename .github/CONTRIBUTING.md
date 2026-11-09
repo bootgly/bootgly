@@ -67,7 +67,7 @@ Bootgly uses its own test runner — no third-party test framework.
 
 ```bash
 vendor/bin/phpstan analyse -c @/phpstan.neon   # must print: [OK] No errors
-bootgly lint imports                           # import order and missing imports
+bootgly lint check                             # every rule bootgly.Lint.php enables
 bootgly test <suite>                           # every suite your change touches
 ```
 

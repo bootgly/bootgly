@@ -36,6 +36,7 @@ class Mouse implements Reporting
    public bool $SGT;
    public bool $URXVT;
 
+   // * Data
    private Input $Input;
    private Output $Output;
 

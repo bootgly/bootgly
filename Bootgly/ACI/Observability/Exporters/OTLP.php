@@ -121,7 +121,7 @@ class OTLP implements Exporter
       // @ Encode (preserve float fractions; int64 fields are already strings)
       //   Fail loud — return '' on an encoding error rather than a misleading partial/`{}` body.
       try {
-         $json = json_encode(
+         $JSON = json_encode(
             $document,
             JSON_PRESERVE_ZERO_FRACTION | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
          );
@@ -131,7 +131,7 @@ class OTLP implements Exporter
       }
 
       // :
-      return $json . PHP_EOL;
+      return $JSON . PHP_EOL;
    }
 
    /**

@@ -133,13 +133,13 @@ class Decoder
       $type = $buffer[$offset];
 
       // @ Every reply header ends at the next CRLF
-      $crlf = strpos($buffer, "\r\n", $offset + 1);
-      if ($crlf === false) {
+      $CRLF = strpos($buffer, "\r\n", $offset + 1);
+      if ($CRLF === false) {
          return null;
       }
 
-      $line = substr($buffer, $offset + 1, $crlf - $offset - 1);
-      $next = $crlf + 2;
+      $line = substr($buffer, $offset + 1, $CRLF - $offset - 1);
+      $next = $CRLF + 2;
 
       switch ($type) {
          // # Simple string

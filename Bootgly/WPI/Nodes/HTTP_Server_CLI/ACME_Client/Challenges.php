@@ -61,6 +61,7 @@ use InvalidArgumentException;
  */
 class Challenges
 {
+   // * Data
    /** @var array<string,string> owner ID => normalized absolute directory */
    private static array $paths = [];
 

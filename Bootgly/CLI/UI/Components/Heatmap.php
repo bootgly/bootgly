@@ -46,8 +46,6 @@ class Heatmap extends Component
    use Formattable;
 
 
-   protected Output $Output;
-
    // * Config
    /** Grid columns — `null` follows the terminal, capped at 100 */
    public null|int $width;
@@ -67,6 +65,7 @@ class Heatmap extends Component
    public float $throttle;
 
    // * Data
+   protected Output $Output;
    /** @var array<int,string> Cells in execution order (palette state keys) */
    public array $cells;
 

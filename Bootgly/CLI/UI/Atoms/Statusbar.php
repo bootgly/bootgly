@@ -40,8 +40,6 @@ class Statusbar extends Component
    private const string ANSI = '/\e\[[0-9;]*m/';
 
 
-   private Output $Output;
-
    // * Config
    /** SGR decoration — null follows the TTY, false forces plain, true forces styled */
    public null|bool $decoration;
@@ -55,6 +53,9 @@ class Statusbar extends Component
    public null|int $width;
    /** @var array<int,string> SGR codes painting the bar (background + foreground) */
    public array $style;
+
+   // * Data
+   private Output $Output;
 
 
    public function __construct (Output $Output)

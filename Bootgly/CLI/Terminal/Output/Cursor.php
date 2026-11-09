@@ -38,6 +38,7 @@ class Cursor
    use Shapeable;
 
 
+   // * Data
    private Output $Output;
 
    // * Metadata
@@ -253,7 +254,7 @@ class Cursor
       return $this->Output->escape(self::_CURSOR_HIDDEN);
    }
 
-   public function __destruct()
+   public function __destruct ()
    {
       // ? A forked child inherits this cursor over the shared terminal — only
       //   the owning process may restore it, or a child's shutdown would emit

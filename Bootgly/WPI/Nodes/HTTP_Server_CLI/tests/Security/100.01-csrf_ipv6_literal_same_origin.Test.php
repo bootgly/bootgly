@@ -77,11 +77,11 @@ return new Test(
             $this->knownToken = $knownToken;
          }
 
-         public function process (object $Request, object $Response, Closure $next): object
+         public function process (object $Request, object $Response, Closure $Next): object
          {
             $Request->Session->set('_csrf_token', $this->knownToken);
 
-            return $next($Request, $Response);
+            return $Next($Request, $Response);
          }
       },
       new CSRF(checkOrigin: true),

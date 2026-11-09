@@ -17,10 +17,10 @@ return new Test(
    },
    middlewares: [
       new class implements Middleware {
-         public function process (object $Request, object $Response, \Closure $next): object
+         public function process (object $Request, object $Response, \Closure $Next): object
          {
             $Request->Session;
-            return $next($Request, $Response);
+            return $Next($Request, $Response);
          }
       },
       new Authentication(new Authenticating(new SessionGuard))

@@ -379,7 +379,7 @@ return new Test(
        *
        * @param Fiber<mixed,mixed,mixed,mixed> $Fiber
        */
-      $drive = static function (Fiber $Fiber, mixed $value, Peer $Peer, null|Closure $until = null, float $cap = 2.0): mixed {
+      $drive = static function (Fiber $Fiber, mixed $value, Peer $Peer, null|Closure $Until = null, float $cap = 2.0): mixed {
          $deadline = microtime(true) + $cap;
 
          // @@
@@ -390,7 +390,7 @@ return new Test(
                return $value;
             }
 
-            if ($until !== null && $until($value)) {
+            if ($Until !== null && $Until($value)) {
                return $value;
             }
 
@@ -1074,7 +1074,7 @@ return new Test(
          //   the peer pumped between them, until `$done` holds or `$bound`
          //   passes. Bounded: a lost resume fails the leg, never hangs it.
          $Loop = new Select($Connections);
-         $loop = static function (Peer $Peer, Closure $done, float $bound = 2.0) use ($Loop): void {
+         $loop = static function (Peer $Peer, Closure $Done, float $bound = 2.0) use ($Loop): void {
             $deadline = microtime(true) + $bound;
 
             // @@
@@ -1087,7 +1087,7 @@ return new Test(
 
                $Peer->pump();
             }
-            while ($done() === false && microtime(true) < $deadline);
+            while ($Done() === false && microtime(true) < $deadline);
          };
 
          // # (i) transact(): the real reactor runs the adopter

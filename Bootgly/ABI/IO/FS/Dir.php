@@ -215,7 +215,7 @@ class Dir implements FS
       $paths = [];
 
       if ($recursive) {
-         $iterator = new RecursiveIteratorIterator(
+         $Iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
             RecursiveIteratorIterator::SELF_FIRST,
             RecursiveIteratorIterator::CATCH_GET_CHILD
@@ -223,7 +223,7 @@ class Dir implements FS
 
          $paths[] = $dir;
 
-         foreach ($iterator as $SplFileInfo) {
+         foreach ($Iterator as $SplFileInfo) {
             if ($SplFileInfo instanceof SplFileInfo === false) {
                continue;
             }

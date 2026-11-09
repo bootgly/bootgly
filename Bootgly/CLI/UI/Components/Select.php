@@ -50,11 +50,9 @@ use Bootgly\CLI\UI\Base\Listbox;
  */
 class Select extends Component
 {
+   // * Config
    public Input $Input;
 
-   private Output $Output;
-
-   // * Config
    /** The title line above the list ('' = none; markup supported) */
    public string $title;
    /** Multiple selection (Space accumulates) — false keeps single selection:
@@ -71,6 +69,7 @@ class Select extends Component
    public array $locked;
 
    // * Data
+   private Output $Output;
    /** @var array<int,string> The options, top to bottom (plain text) */
    public array $options;
    /** @var array<int,string> Dim detail column per option index */

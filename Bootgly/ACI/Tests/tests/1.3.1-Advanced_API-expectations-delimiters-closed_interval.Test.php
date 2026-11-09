@@ -29,13 +29,13 @@ return new Test(
          ->assert();
 
       // DateTime
-      $date = new DateTime('2023-01-01');
+      $Date = new DateTime('2023-01-01');
       yield new Assertion(
          description: 'Between DateTime objects',
          fallback: 'DateTime objects not matched!'
       )
-         ->expect($date)
-         ->to->delimit($date, new DateTime('2023-01-02'))
+         ->expect($Date)
+         ->to->delimit($Date, new DateTime('2023-01-02'))
          ->assert();
    })
 );

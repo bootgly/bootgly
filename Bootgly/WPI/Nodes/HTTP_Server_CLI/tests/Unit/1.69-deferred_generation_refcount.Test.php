@@ -234,7 +234,7 @@ return new Test(
       };
       // ! Bounded run: short reactor slices, each ended by a deferred stop,
       //   until `$done` holds or the hard deadline passes
-      $run = static function (Select $Select, Closure $done, float $bound): null|string {
+      $run = static function (Select $Select, Closure $Done, float $bound): null|string {
          $deadline = microtime(true) + $bound;
 
          do {
@@ -249,7 +249,7 @@ return new Test(
             catch (Throwable $Throwable) {
                return "{$Throwable->getMessage()}";
             }
-         } while ($done() === false && microtime(true) < $deadline);
+         } while ($Done() === false && microtime(true) < $deadline);
 
          return null;
       };

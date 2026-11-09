@@ -186,7 +186,7 @@ return new Test(
 
             return $SQL . str_repeat(' ', $SQLSize - strlen($SQL));
          };
-         $Writing = new ReflectionProperty(PostgreSQL::class, 'writing');
+         $Writing = new ReflectionProperty(PostgreSQL::class, 'Writing');
          $Wrote = new ReflectionProperty(PostgreSQL::class, 'wrote');
          $Target->Pool->Config->timeout = 0.08;
          $Holder = null;

@@ -23,9 +23,9 @@ use Bootgly\CLI\UI\Components\Progress\Bar;
  */
 class Bars
 {
+   // * Data
    private Progress $Progress;
 
-   // * Data
    /** @var array<int,Bar> */
    public private(set) array $Bars;
 

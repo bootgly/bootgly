@@ -53,17 +53,6 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\TrustedProxy\Strategies
  */
 class TrustedProxy implements Middleware
 {
-   public Logger $Logger {
-      get {
-         if ( isSet($this->Logger) === false ) {
-            $this->Logger = new Logger(channel: static::class, global: true);
-         }
-
-         return $this->Logger;
-      }
-   }
-
-
    // * Config
    /** @var array<string> */
    public private(set) array $proxies;
@@ -84,6 +73,15 @@ class TrustedProxy implements Middleware
    public private(set) null|string $relay;
 
    // * Data
+   public Logger $Logger {
+      get {
+         if ( isSet($this->Logger) === false ) {
+            $this->Logger = new Logger(channel: static::class, global: true);
+         }
+
+         return $this->Logger;
+      }
+   }
    // ...
 
    // * Metadata

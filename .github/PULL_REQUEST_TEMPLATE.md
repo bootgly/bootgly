@@ -14,7 +14,7 @@
 - [ ] Naming and style conventions followed (single-word verb methods, `null|T`, space before `(`, semantic comments)
 - [ ] Tests added or updated in the native runner; a bug fix includes the test that reproduces the bug
 - [ ] `vendor/bin/phpstan analyse -c @/phpstan.neon` prints `[OK] No errors`
-- [ ] `bootgly lint imports` is clean and the touched suites pass (`bootgly test <suite>`)
+- [ ] `bootgly lint check` is clean and the touched suites pass (`bootgly test <suite>`)
 - [ ] Documentation updated in `bootgly_docs` — both `en-US` and `pt-BR` — when behavior or public API changes
 - [ ] Breaking change? Marked with `!` / `BREAKING CHANGE:` and targeted at the next major
 

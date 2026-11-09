@@ -14,7 +14,7 @@ return new Test(
    test: function () {
       // Offers when a view is available (HTML in play) and when it is not (API only)
       $offers = ['application/json', 'application/xml', 'text/html'];
-      $api = ['application/json', 'application/xml'];
+      $API = ['application/json', 'application/xml'];
 
       // @ Exact media type match
       yield assert(
@@ -70,13 +70,13 @@ return new Test(
 
       // @ HTML preferred but not offered (no view) → null
       yield assert(
-         assertion: Negotiation::choose(['text/html'], $api) === null,
+         assertion: Negotiation::choose(['text/html'], $API) === null,
          description: 'HTML wins the Accept but is not offered without a view'
       );
 
       // @ HTML unavailable degrades to the next acceptable offer
       yield assert(
-         assertion: Negotiation::choose(['text/html', 'application/json'], $api) === 'application/json',
+         assertion: Negotiation::choose(['text/html', 'application/json'], $API) === 'application/json',
          description: 'Negotiation degrades past an unoffered type to the next acceptable one'
       );
    }

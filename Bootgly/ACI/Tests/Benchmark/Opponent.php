@@ -16,7 +16,7 @@ use Closure;
 
 class Opponent
 {
-   // * Data
+   // * Config
    /**
     * Display name of the opponent.
     */
@@ -27,7 +27,6 @@ class Opponent
     */
    public readonly string $script;
 
-   // * Config
    /**
     * Version string of the opponent.
     */

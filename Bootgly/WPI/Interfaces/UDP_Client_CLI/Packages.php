@@ -28,6 +28,10 @@ use Bootgly\WPI\Interfaces\UDP_Client_CLI\Connections\Connection;
 
 class Packages implements WPI\Connections\Packages
 {
+   // * Config
+   // ...
+
+   // * Data
    public Logger $Logger {
       get {
          if ( isSet($this->Logger) === false ) {
@@ -38,10 +42,6 @@ class Packages implements WPI\Connections\Packages
       }
    }
 
-   // * Config
-   // ...
-
-   // * Data
    // # IO
    public string $output;
    public string $input;

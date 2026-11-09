@@ -18,15 +18,15 @@ return new Test(
       $Database = new SQL(['driver' => 'pgsql', 'statements' => 0, 'pool' => ['min' => 0, 'max' => 1]]);
       $Database->Connection->attach($client);
       $Encoder = new Encoder;
-      $sql = 'SELECT $1::int AS a';
+      $SQL = 'SELECT $1::int AS a';
 
       // # The cold batch flushes and stays in flight
-      $First = $Database->query($sql, [1]);
+      $First = $Database->query($SQL, [1]);
       $Database->advance($First);
       fread($server, 8192);
 
       // # A sibling composes a warm Bind of the same statement mid-flight
-      $Second = $Database->query($sql, [2]);
+      $Second = $Database->query($SQL, [2]);
 
       yield assert(
          assertion: $Second->statement === $First->statement

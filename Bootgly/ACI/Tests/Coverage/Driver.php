@@ -19,6 +19,7 @@ namespace Bootgly\ACI\Tests\Coverage;
  */
 abstract class Driver
 {
+   // * Metadata
    /**
     * Whether the backend is currently recording hits.
     */

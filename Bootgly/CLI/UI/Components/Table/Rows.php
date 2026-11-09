@@ -19,17 +19,15 @@ use Bootgly\CLI\UI\Components\Table;
 
 class Rows
 {
-   private Table $Table;
-
-   private Row $Row;
-
    // * Config
    // ...
 
    // * Data
+   private Table $Table;
    // ...
 
    // * Metadata
+   private Row $Row;
    // ...
 
 

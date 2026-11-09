@@ -27,7 +27,7 @@ trait Callers
    use Expectation;
 
 
-   // * Config
+   // * Data
    /**
     * @var array<mixed> $arguments
     */

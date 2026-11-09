@@ -48,7 +48,10 @@ final class Histogram
    private const int HALF_BUCKET_COUNT = self::SUB_BUCKET_COUNT >> 1;
    private const int FIRST_UNTRACKABLE_NS = self::SUB_BUCKET_COUNT << self::UNIT_MAGNITUDE;
 
+   // * Data
    private int $highestTrackableNS;
+
+   // * Metadata
    private int $countsLength;
 
    /** @var list<int> */

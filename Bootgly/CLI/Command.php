@@ -82,8 +82,7 @@ abstract class Command
     * @param null|object $context The context of the command.
     * @param null|Closure $Command The command to run.
     */
-   public function __construct
-   (
+   public function __construct (
       // * Config
       null|string $name = null,
       null|string $description = null,

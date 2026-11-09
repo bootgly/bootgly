@@ -10,7 +10,7 @@ return new Test(
    description: 'replace() swaps the whole file atomically, even when the write is interrupted',
    test: function () {
       // ! A child process that runs one probe and reports its result over a socket
-      $spawn = static function (Closure $probe): array {
+      $spawn = static function (Closure $Probe): array {
          $Pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
          if ($Pair === false) {
             throw new RuntimeException('Could not create the probe socket.');
@@ -22,7 +22,7 @@ return new Test(
          if ($PID === 0) {
             fclose($Pair[0]);
             try {
-               $result = (string) $probe();
+               $result = (string) $Probe();
             }
             catch (Throwable) {
                $result = 'error';

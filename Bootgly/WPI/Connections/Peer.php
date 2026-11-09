@@ -27,10 +27,10 @@ class Peer
     *
     * IPv4 peers arrive as `"127.0.0.1:8080"` and IPv6 peers as
     * `"[::1]:8080"`. A naïve `explode(':', $peer, 2)` on IPv6 yields
-    * `$ip = "[::1"` and `$port = "8080]"` (cast to 0), which silently
+    * `$IP = "[::1"` and `$port = "8080]"` (cast to 0), which silently
     * breaks every downstream IP-based security control: blacklist/ACL,
     * RateLimit buckets, TrustedProxy matching against `'::1'`, and
-    * forensic logs. Bracketed IPv6 is unwrapped so `$ip` matches the
+    * forensic logs. Bracketed IPv6 is unwrapped so `$IP` matches the
     * canonical unbracketed literal, and an IPv4-mapped address
     * (RFC 4291 §2.5.5.2 — every dual-stack listener presents an IPv4 hop
     * as `::ffff:a.b.c.d`) canonicalizes to the dotted quad, so ONE
@@ -48,7 +48,7 @@ class Peer
             return [$peer, 0];
          }
 
-         $ip = substr($peer, 1, $rb - 1);
+         $IP = substr($peer, 1, $rb - 1);
          $port = (int) substr($peer, $rb + 2);
       }
       else {
@@ -57,7 +57,7 @@ class Peer
             return [$peer, 0];
          }
 
-         $ip = substr($peer, 0, $separator);
+         $IP = substr($peer, 0, $separator);
          $port = (int) substr($peer, $separator + 1);
       }
 
@@ -67,14 +67,14 @@ class Peer
       //   the operator actually writes in TrustedProxy lists, blacklists
       //   and ACLs (MW-6). Only the dotted textual form getpeername()
       //   produces is unwrapped; anything else passes through verbatim.
-      if (strncasecmp($ip, '::ffff:', 7) === 0) {
-         $mapped = substr($ip, 7);
+      if (strncasecmp($IP, '::ffff:', 7) === 0) {
+         $mapped = substr($IP, 7);
          if (filter_var($mapped, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false) {
-            $ip = $mapped;
+            $IP = $mapped;
          }
       }
 
       // :
-      return [$ip, $port];
+      return [$IP, $port];
    }
 }

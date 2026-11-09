@@ -41,7 +41,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Pre;
 final class RecordingSQL extends SQL
 {
    /** @var WeakMap<Operation,int> */
-   public WeakMap $steps;
+   public WeakMap $Steps;
    /** @var array<int,string> */
    public array $advanced = [];
    /** @var array<int,null|object> */
@@ -56,7 +56,7 @@ final class RecordingSQL extends SQL
    {
       parent::__construct(['driver' => 'sqlite', 'pool' => ['min' => 0, 'max' => 0]]);
 
-      $this->steps = new WeakMap;
+      $this->Steps = new WeakMap;
       $this->Transaction = new RecordingTransaction;
    }
 
@@ -68,10 +68,10 @@ final class RecordingSQL extends SQL
          $query = $query->compile();
       }
 
-      $sql = is_string($query) ? $query : $query->SQL;
+      $SQL = is_string($query) ? $query : $query->SQL;
       $parameters = $query instanceof Query ? $query->parameters : $parameters;
 
-      return new Operation(null, $sql, $parameters);
+      return new Operation(null, $SQL, $parameters);
    }
 
    public function touch (null|object $Scope = null): void
@@ -90,8 +90,8 @@ final class RecordingSQL extends SQL
 
    public function advance (Operation $Operation): Operation
    {
-      $step = ($this->steps[$Operation] ?? 0) + 1;
-      $this->steps[$Operation] = $step;
+      $step = ($this->Steps[$Operation] ?? 0) + 1;
+      $this->Steps[$Operation] = $step;
       $this->advanced[] = $Operation->SQL;
 
       if ($Operation->SQL === 'WAIT' && $step === 1) {
@@ -144,14 +144,14 @@ final class RecordingTransaction extends Transaction
    {
       $this->events[] = 'query';
 
-      return $this->operation('QUERY');
+      return $this->compose('QUERY');
    }
 
    public function commit (): Operation
    {
       $this->events[] = 'commit';
 
-      return $this->operation('COMMIT');
+      return $this->compose('COMMIT');
    }
 
    public function rollback (null|string $name = null): Operation
@@ -162,13 +162,13 @@ final class RecordingTransaction extends Transaction
          throw new RuntimeException('rollback failed');
       }
 
-      return $this->operation('ROLLBACK');
+      return $this->compose('ROLLBACK');
    }
 
-   private function operation (string $sql): Operation
+   private function compose (string $SQL): Operation
    {
-      $Operation = new Operation(null, $sql);
-      $Operation->resolve(new Result(status: $sql));
+      $Operation = new Operation(null, $SQL);
+      $Operation->resolve(new Result(status: $SQL));
 
       return $Operation;
    }

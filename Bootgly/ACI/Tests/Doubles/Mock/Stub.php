@@ -25,16 +25,6 @@ use Throwable;
  */
 final class Stub
 {
-   /**
-    * Throwable to raise when this stub matches.
-    */
-   public null|Throwable $Throws = null;
-   /**
-    * Optional predicate used to accept/reject an argument list.
-    */
-   public null|Closure $Matcher = null;
-
-
    // * Config
    /**
     * The value to return when the stub is invoked.
@@ -45,6 +35,14 @@ final class Stub
     * The method this stub applies to.
     */
    public string $method;
+   /**
+    * Throwable to raise when this stub matches.
+    */
+   public null|Throwable $Throws = null;
+   /**
+    * Optional predicate used to accept/reject an argument list.
+    */
+   public null|Closure $Matcher = null;
 
 
    /**

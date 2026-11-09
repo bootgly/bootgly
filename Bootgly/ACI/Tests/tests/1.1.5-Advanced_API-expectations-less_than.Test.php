@@ -57,15 +57,15 @@ return new Test(
          ->assert();
 
       // object
-      $object1 = new stdClass();
-      $object2 = new stdClass();
-      $object2->property = 'value';
+      $Object1 = new stdClass();
+      $Object2 = new stdClass();
+      $Object2->property = 'value';
       yield new Assertion(
          description: 'Less than [objects]',
          fallback: 'Objects not matched!'
       )
-         // $object1 < $object2
-         ->expect($object1, Op::LessThan, $object2)
+         // $Object1 < $Object2
+         ->expect($Object1, Op::LessThan, $Object2)
          ->assert();
    })
 );

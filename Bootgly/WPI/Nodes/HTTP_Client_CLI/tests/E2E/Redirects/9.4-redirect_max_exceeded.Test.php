@@ -32,14 +32,14 @@ return new Test(
          return $response;
       },
       function (HTTP_Client_CLI $Client): Response {
-         $r = new Response;
-         $r->code = -1;
-         return $r;
+         $R = new Response;
+         $R->code = -1;
+         return $R;
       },
       function (HTTP_Client_CLI $Client): Response {
-         $r = new Response;
-         $r->code = -1;
-         return $r;
+         $Response = new Response;
+         $Response->code = -1;
+         return $Response;
       },
    ],
 

@@ -10,9 +10,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 return new Test(
    description: 'It should enforce the final-status contract across every code() range',
    test: new Assertions(Case: function (): Generator {
-      $throws = static function (Closure $call): bool {
+      $throws = static function (Closure $Call): bool {
          try {
-            $call();
+            $Call();
          }
          catch (InvalidArgumentException) {
             return true;

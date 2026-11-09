@@ -430,8 +430,8 @@ class ProjectsCommand extends Command
       }
 
       // ? No URL — interactive terminals choose the import source
-      $url = $arguments[0] ?? null;
-      if ($url === null || $url === '') {
+      $URL = $arguments[0] ?? null;
+      if ($URL === null || $URL === '') {
          if (BOOTGLY_TTY === false) {
             $Alert = new Alert($Output);
             $Alert->Type::Failure->set();
@@ -448,9 +448,9 @@ class ProjectsCommand extends Command
          $Textbox->prompt = 'Repository URL (git)';
          $Textbox->required = true;
          $Textbox->Validator = fn (string $answer): true|string => $this->vet($answer);
-         $url = $Textbox->ask();
+         $URL = $Textbox->ask();
          // ?
-         if ($url === '') {
+         if ($URL === '') {
             $Alert = new Alert($Output);
             $Alert->Type::Failure->set();
             $Alert->message = 'A repository URL is required.';
@@ -462,7 +462,7 @@ class ProjectsCommand extends Command
 
       // ? The URL — before the path (its default derives from it) and before
       //   anything is written or run: the Wizard step and the prompt land here too
-      $result = $this->vet($url);
+      $result = $this->vet($URL);
       if ($result !== true) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
@@ -473,7 +473,7 @@ class ProjectsCommand extends Command
       }
 
       // ! Target project path
-      $path = $arguments[1] ?? basename($url, '.git');
+      $path = $arguments[1] ?? basename($URL, '.git');
 
       // ? SHAPE only — a malformed or reserved path needs no kit to be refused,
       //   so it is judged before the bootstrap and before the clone. The
@@ -587,14 +587,14 @@ class ProjectsCommand extends Command
       // ! Redacted, then scrubbed — ONCE, for every site that displays it: a
       //   URL travels in READMEs and issues, `@` opens Output markup and a raw
       //   control byte reaches the terminal verbatim (OSC 52 writes the
-      //   clipboard). The clone below uses `$url` itself.
-      $shown = $this->clean(Remotes::redact($url));
+      //   clipboard). The clone below uses `$URL` itself.
+      $shown = $this->clean(Remotes::redact($URL));
 
       try {
          $Output->render("@#green:Fetching@; @#cyan:{$shown}@;@.;");
          // ! No shell, the network deadline, the transport allow-list and `--`
          //   before the URL (`Git::clone()`); stdin is never the terminal
-         $status = $Git->clone($url, $tmp, function (string $line) use ($Output): void {
+         $status = $Git->clone($URL, $tmp, function (string $line) use ($Output): void {
             $Output->write($line . PHP_EOL);
          });
          // ?
@@ -816,7 +816,7 @@ class ProjectsCommand extends Command
       }
 
       $all = isSet($options['all']);
-      $json = isSet($options['json']);
+      $JSON = isSet($options['json']);
 
       // @ One row per instance, in registry order
       $rows = [];
@@ -857,7 +857,7 @@ class ProjectsCommand extends Command
       }
 
       // ?: Machine output — the same rows, one document
-      if ($json === true) {
+      if ($JSON === true) {
          $Output->write(json_encode($rows, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL);
 
          return true;
@@ -1118,7 +1118,7 @@ class ProjectsCommand extends Command
       /** @var array{interfaces?: array<string>, name?: string, description?: string, version?: string, author?: string, port?: int|string} $meta */
       $meta = [];
       $interface = '';
-      $url = '';
+      $URL = '';
       $target = '';
 
       // ! The running build — an install screen must say WHICH code it is
@@ -1338,15 +1338,15 @@ class ProjectsCommand extends Command
       };
 
       // # From Git remote: URL → Path → Interface → Import
-      $git = function (Wizard $Wizard) use (&$url, &$target, &$options): void {
-         $Wizard->add('URL', function (Wizard $Wizard) use (&$url): null {
+      $git = function (Wizard $Wizard) use (&$URL, &$target, &$options): void {
+         $Wizard->add('URL', function (Wizard $Wizard) use (&$URL): null {
             $Textbox = new Textbox($Wizard->Input, $Wizard->Output);
             $Textbox->prompt = 'Repository URL (git)';
             $Textbox->required = true;
             $Textbox->Validator = fn (string $answer): true|string => $this->vet($answer);
-            $url = $Textbox->ask();
+            $URL = $Textbox->ask();
             // ?
-            if ($url === '') {
+            if ($URL === '') {
                $Alert = new Alert($Wizard->Output);
                $Alert->Type::Failure->set();
                $Alert->message = 'A repository URL is required.';
@@ -1359,8 +1359,8 @@ class ProjectsCommand extends Command
             return null;
          });
 
-         $Wizard->add('Path', function (Wizard $Wizard) use (&$url, &$target): string {
-            $default = basename($url, '.git');
+         $Wizard->add('Path', function (Wizard $Wizard) use (&$URL, &$target): string {
+            $default = basename($URL, '.git');
             $Textbox = new Textbox($Wizard->Input, $Wizard->Output);
             $Textbox->prompt = 'Project path (e.g. `App` or `App/API`)';
             $Textbox->required = true;
@@ -1395,9 +1395,9 @@ class ProjectsCommand extends Command
             return (string) $options['interfaces'];
          }, rows: 5);
 
-         $Wizard->add('Import', function () use (&$url, &$target, &$options): string {
+         $Wizard->add('Import', function () use (&$URL, &$target, &$options): string {
             // ? Delegated to the import subcommand (clone, validate, confirm, register)
-            if ($this->import([$url, $target], $options) === false) {
+            if ($this->import([$URL, $target], $options) === false) {
                throw new Exception('not imported');
             }
 
@@ -1506,7 +1506,7 @@ class ProjectsCommand extends Command
          $this->summarize("Project {$target}", [
             'Path'       => "projects/{$target}/",
             'Interface'  => (string) ($options['interfaces'] ?? 'CLI'),
-            'Source'     => $this->clean(Remotes::redact($url)),
+            'Source'     => $this->clean(Remotes::redact($URL)),
             'History'    => 'kept — the clone carries its own origin',
          ]);
 

@@ -73,6 +73,7 @@ class UDP_Client_CLI implements Clients
    /** @var array<int,class-string<Configuring>> Every Configs this node applies. */
    protected const array CONFIGS = [Configs::class];
 
+   // * Data
    public Logger $Logger {
       get {
          if ( isSet($this->Logger) === false ) {
@@ -83,20 +84,6 @@ class UDP_Client_CLI implements Clients
       }
    }
 
-
-   /** @var resource */
-   public $Socket;
-
-   // ! Event
-   public static Events & Loops $Event;
-
-   // ! Process
-   protected Process $Process;
-   // ! Console
-   protected Commands $Commands;
-
-
-   // * Config
    #protected string $resource;
    protected null|string $host;
    protected null|int $port;
@@ -107,7 +94,6 @@ class UDP_Client_CLI implements Clients
    public const int MODE_MONITOR = 2;
    public const int MODE_TEST = 3;
 
-   // * Data
    /** @var array<string,true> */
    protected array $Events = [];
    // ! On
@@ -121,6 +107,17 @@ class UDP_Client_CLI implements Clients
    public static null|Closure $onDatagramWrite = null;
 
    // * Metadata
+   /** @var resource */
+   public $Socket;
+
+   // ! Event
+   public static Events & Loops $Event;
+
+   // ! Process
+   protected Process $Process;
+   // ! Console
+   protected Commands $Commands;
+
    // # Error
    /** @var array<int|string|null> */
    public array $error = [];

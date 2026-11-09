@@ -37,7 +37,7 @@ return new Test(
       //   point the connection belongs to whoever took it in between.
       [$Database, $server] = $connect();
       $Pool = $Database->Pool;
-      $settled = new ReflectionProperty(Pool::class, 'settled');
+      $Settled = new ReflectionProperty(Pool::class, 'Settled');
 
       $Refused = $Database->query('INSERT INTO t (v) VALUES (1)');
       $Database->advance($Refused);
@@ -47,7 +47,7 @@ return new Test(
 
       yield assert(
          assertion: $Refused->finished
-            && isset($settled->getValue($Pool)[$Refused])
+            && isset($Settled->getValue($Pool)[$Refused])
             && count($Pool->idle) === 1,
          description: 'A failed operation settles its claim and gives the connection back'
       );
@@ -81,13 +81,13 @@ return new Test(
       fwrite($server, $failure('transient'));
       $Database->advance($Retried);
 
-      $marked = isset($settled->getValue($Pool)[$Retried]);
+      $marked = isset($Settled->getValue($Pool)[$Retried]);
 
       $Retried->retry();
       $Pool->assign($Retried);
 
       yield assert(
-         assertion: $marked && isset($settled->getValue($Pool)[$Retried]) === false,
+         assertion: $marked && isset($Settled->getValue($Pool)[$Retried]) === false,
          description: 'Assigning a connection clears the claim it settles'
       );
 

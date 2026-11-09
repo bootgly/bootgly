@@ -34,11 +34,11 @@ return new Test(
       $Cov->start();
       $Cov->stop();
 
-      $html = $Cov->report('HTML');
+      $HTML = $Cov->report('HTML');
       $expectedHTML = htmlspecialchars($file, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
       yield (new Assertion(description: 'HTML report escapes file paths with explicit UTF-8 flags'))
-         ->expect(str_contains($html, $expectedHTML))
+         ->expect(str_contains($HTML, $expectedHTML))
          ->to->be(true)
          ->assert();
 

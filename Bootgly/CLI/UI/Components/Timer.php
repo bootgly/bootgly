@@ -37,8 +37,6 @@ use Bootgly\CLI\Terminal\Output;
  */
 class Timer extends Component
 {
-   private Output $Output;
-
    // * Config
    /** Countdown total, in seconds */
    public float $seconds;
@@ -48,6 +46,9 @@ class Timer extends Component
    public null|Closure $Handler;
    // # Templating
    public string $template;
+
+   // * Data
+   private Output $Output;
 
    // * Metadata
    public private(set) string $description;

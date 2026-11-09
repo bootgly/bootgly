@@ -14,7 +14,7 @@ return new Test(
    },
    response: function (Request $Request, Response $Response, Router $Router)
    {
-      function response($Request, Response $Response)
+      function response ($Request, Response $Response)
       {
          return $Response(body: 'Hello!');
       }

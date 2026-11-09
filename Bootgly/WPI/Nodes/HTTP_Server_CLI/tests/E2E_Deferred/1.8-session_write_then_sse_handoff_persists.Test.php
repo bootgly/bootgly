@@ -22,7 +22,7 @@ $Probe = new class {
    /** @var array<string,mixed> */
    public array $seed = [];
    /** @var array<string,mixed> */
-   public array $sse = [];
+   public array $SSE = [];
    public string $stream = '';
    /** @var array<string,mixed> */
    public array $read = [];
@@ -43,8 +43,8 @@ return new Test(
          $headers = ['Cookie' => "PHPSID={$Probe->cookie}"];
          // ! An event stream has no Content-Length: `send()` returns at the
          //   head — keep reading the wire for the event itself
-         $Probe->sse = Client::send($Socket, Client::request('/deferred/session/sse', $testIndex, $headers), 4.0);
-         $Probe->stream = (string) ($Probe->sse['body'] ?? '');
+         $Probe->SSE = Client::send($Socket, Client::request('/deferred/session/sse', $testIndex, $headers), 4.0);
+         $Probe->stream = (string) ($Probe->SSE['body'] ?? '');
          $deadline = microtime(true) + 1.0;
          while (microtime(true) < $deadline && str_contains($Probe->stream, "\n\n") === false) {
             $read = [$Socket];
@@ -78,7 +78,7 @@ return new Test(
       $evidence = json_encode([
          'error' => $Probe->error,
          'cookie' => $Probe->cookie,
-         'sse' => $Probe->sse,
+         'sse' => $Probe->SSE,
          'stream' => $Probe->stream,
          'read' => $Probe->read
       ]);
@@ -90,8 +90,8 @@ return new Test(
          fallback: "No event stream: {$evidence}"
       )
          ->expect([
-            $Probe->sse['code'] ?? 0,
-            stripos($Probe->sse['head'] ?? '', 'text/event-stream') !== false,
+            $Probe->SSE['code'] ?? 0,
+            stripos($Probe->SSE['head'] ?? '', 'text/event-stream') !== false,
             str_contains($Probe->stream, '"sse":true')
          ])
          ->to->be([200, true, true])

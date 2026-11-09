@@ -16,9 +16,9 @@ return new Test(
       ]);
 
       // # SigV4 — deterministic signature at a fixed date (2013-05-24T00:00:00Z)
-      $sign = new ReflectionMethod($S3, 'sign');
+      $Sign = new ReflectionMethod($S3, 'sign');
       /** @var array{0:string,1:array<string,string>} $signed */
-      $signed = $sign->invoke($S3, 'GET', '/test.txt', [], '', [], 1369353600);
+      $signed = $Sign->invoke($S3, 'GET', '/test.txt', [], '', [], 1369353600);
       [, $headers] = $signed;
 
       // @ Re-derive the expected Authorization independently from the AWS SigV4 spec
@@ -52,23 +52,23 @@ return new Test(
 
       // @ x-amz-* extras must be folded into SignedHeaders (e.g. x-amz-copy-source)
       /** @var array{0:string,1:array<string,string>} $copy */
-      $copy = $sign->invoke($S3, 'PUT', '/dst', [], '', ['x-amz-copy-source' => '/examplebucket/src'], 1369353600);
+      $copy = $Sign->invoke($S3, 'PUT', '/dst', [], '', ['x-amz-copy-source' => '/examplebucket/src'], 1369353600);
       yield assert(
          assertion: str_contains((string) $copy[1]['Authorization'], 'x-amz-copy-source'),
          description: 'sign() signs x-amz-* extra headers'
       );
 
       // # Chunked transfer decoding
-      $dechunk = new ReflectionMethod($S3, 'dechunk');
+      $Dechunk = new ReflectionMethod($S3, 'dechunk');
       yield assert(
-         assertion: $dechunk->invoke($S3, "5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n") === 'hello world',
+         assertion: $Dechunk->invoke($S3, "5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n") === 'hello world',
          description: 'dechunk() decodes a chunked body'
       );
 
       // # Response parsing (status, headers, body)
-      $parse = new ReflectionMethod($S3, 'parse');
+      $Parse = new ReflectionMethod($S3, 'parse');
       /** @var array{0:int,1:array<string,string|array<int,string>>,2:string} $parsed */
-      $parsed = $parse->invoke($S3, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nETag: \"abc\"\r\n\r\nbody-bytes");
+      $parsed = $Parse->invoke($S3, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nETag: \"abc\"\r\n\r\nbody-bytes");
       yield assert(
          assertion: $parsed[0] === 200
             && ($parsed[1]['content-type'] ?? '') === 'text/plain'
@@ -77,7 +77,7 @@ return new Test(
          description: 'parse() extracts status, headers and body'
       );
       /** @var array{0:int,1:array<string,string|array<int,string>>,2:string} $chunked */
-      $chunked = $parse->invoke($S3, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n0\r\n\r\n");
+      $chunked = $Parse->invoke($S3, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n0\r\n\r\n");
       yield assert(
          assertion: $chunked[2] === 'abc',
          description: 'parse() de-chunks a chunked response body'

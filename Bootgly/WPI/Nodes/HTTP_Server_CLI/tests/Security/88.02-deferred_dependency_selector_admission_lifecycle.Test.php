@@ -163,7 +163,7 @@ $Census = static function (null|KVDatabase $KV, bool $ports = false) use ($Descr
 
 // @ Bounded read on a blocking stream: until $done($buffer), EOF or the bound
 //   (a bound that runs out is never reported as EOF)
-$Read = static function (mixed $stream, Closure $done, float $bound): array {
+$Read = static function (mixed $stream, Closure $Done, float $bound): array {
    $buffer = '';
    $eof = false;
    $deadline = microtime(true) + $bound;
@@ -173,7 +173,7 @@ $Read = static function (mixed $stream, Closure $done, float $bound): array {
    }
    stream_set_blocking($stream, true);
 
-   while ($done($buffer) === false) {
+   while ($Done($buffer) === false) {
       $left = $deadline - microtime(true);
       if ($left <= 0) {
          break;
@@ -192,7 +192,7 @@ $Read = static function (mixed $stream, Closure $done, float $bound): array {
       $buffer .= $chunk;
    }
 
-   return ['data' => $buffer, 'eof' => $eof, 'done' => $done($buffer)];
+   return ['data' => $buffer, 'eof' => $eof, 'done' => $Done($buffer)];
 };
 
 // @ A whole HTTP/1.1 response: header block plus its Content-Length body

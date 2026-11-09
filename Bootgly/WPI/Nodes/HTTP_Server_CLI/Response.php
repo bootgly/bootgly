@@ -127,40 +127,6 @@ class Response extends Server\Response
    use Raw;
 
 
-   private null|Packages $Package;
-   /**
-    * The Request this Response answers.
-    *
-    * On the synchronous cycle it is the live per-connection Request — the
-    * encoder scrubs its payload and reuses it once the cycle ends. Inside
-    * deferred work it is the private snapshot `Request::capture()` took for
-    * that generation: fields, files, authentication, identity, claims,
-    * attributes and the shared Session survive every `wait()`, unlike a
-    * `use ($Request)` of the live object.
-    */
-   public private(set) null|Request $Request;
-   private null|Router $Router;
-   private null|Route $Route;
-   private null|Exchange $Exchange;
-   private null|Cancellation $Cancellation;
-   /**
-    * Immediate clone source. A clone can promote the source response to a
-    * lifecycle without putting any registry lookup on requests that never
-    * clone, defer or mount SSE.
-    *
-    * Null once the deferred job this response ran ended without being
-    * abandoned, for a request that built no Session (see loop()): with its
-    * registry released, this self reference was the last edge of a completed
-    * clone that only the cycle collector could break. Its lifecycle is
-    * settled by then, so __clone() reads the Exchange the copy already
-    * carries instead. Null from birth for a detached stand-in (substitute()),
-    * which carries no Exchange at all.
-    */
-   private null|self $Owner;
-   private bool $capturing;
-   /** @var array<int,array{Request:Request,Response:self,Router:Router,Route:Route}> */
-   private array $Contexts;
-
    // * Config
    /**
     * Default budget, in seconds, a deferred response may stay parked on the
@@ -203,6 +169,39 @@ class Response extends Server\Response
    private bool $scoped;
 
    // * Metadata
+   private null|Packages $Package;
+   /**
+    * The Request this Response answers.
+    *
+    * On the synchronous cycle it is the live per-connection Request — the
+    * encoder scrubs its payload and reuses it once the cycle ends. Inside
+    * deferred work it is the private snapshot `Request::capture()` took for
+    * that generation: fields, files, authentication, identity, claims,
+    * attributes and the shared Session survive every `wait()`, unlike a
+    * `use ($Request)` of the live object.
+    */
+   public private(set) null|Request $Request;
+   private null|Router $Router;
+   private null|Route $Route;
+   private null|Exchange $Exchange;
+   private null|Cancellation $Cancellation;
+   /**
+    * Immediate clone source. A clone can promote the source response to a
+    * lifecycle without putting any registry lookup on requests that never
+    * clone, defer or mount SSE.
+    *
+    * Null once the deferred job this response ran ended without being
+    * abandoned, for a request that built no Session (see loop()): with its
+    * registry released, this self reference was the last edge of a completed
+    * clone that only the cycle collector could break. Its lifecycle is
+    * settled by then, so __clone() reads the Exchange the copy already
+    * carries instead. Null from birth for a detached stand-in (substitute()),
+    * which carries no Exchange at all.
+    */
+   private null|self $Owner;
+   private bool $capturing;
+   /** @var array<int,array{Request:Request,Response:self,Router:Router,Route:Route}> */
+   private array $Contexts;
    // # State (sets)
    public bool $chunked;
    public bool $encoded;
@@ -1347,7 +1346,7 @@ class Response extends Server\Response
    public function stash (string $buffer): void
    {
       // ! Consume the per-request TTL stamp
-      $ttl = $this->cache;
+      $TTL = $this->cache;
       $this->cache = 0;
 
       // ?
@@ -1360,7 +1359,7 @@ class Response extends Server\Response
       //   the point it diverts the body to the transport. The read is kept as
       //   a cheap backstop for a future caller that stashes mid-encode.
       if (
-         $ttl <= 0
+         $TTL <= 0
          || $this->cacheable === false
          || $this->cacheGeneration !== Cache::$generation
          || $Request === null
@@ -1554,7 +1553,7 @@ class Response extends Server\Response
 
       // ! Stable composition mirrors both encoders' fetch path and keeps
       //   the scheduling Request's exact variance available to deferred work.
-      Cache::store(Cache::compose($Request, $varyLanguage), $buffer, $ttl, $Request->URI);
+      Cache::store(Cache::compose($Request, $varyLanguage), $buffer, $TTL, $Request->URI);
    }
 
    /**
@@ -1677,6 +1676,7 @@ class Response extends Server\Response
 
       $Reference = WeakReference::create($Current);
       $Timer = new class {
+         // * Data
          public int $ID = 0;
       };
       $arm = static function () use (&$arm, $Event, $Reference, $Timer, $budget): void {
@@ -2290,6 +2290,7 @@ class Response extends Server\Response
       $claimed = false;
       $PreviousLease = null;
       $State = new class {
+         // * Data
          public bool $terminal = false;
          public bool $cancelled = false;
       };

@@ -455,7 +455,7 @@ return new Test(
       //   Response::wait() returns without suspending once the generation
       //   settled; a parked dial or handshake must then fail fast and by
       //   name, never burn the connect deadline at 100% CPU
-      $cpu = static function (): float {
+      $CPU = static function (): float {
          $usage = getrusage();
 
          return $usage['ru_utime.tv_sec'] + $usage['ru_utime.tv_usec'] / 1e6
@@ -465,15 +465,15 @@ return new Test(
       $fill();
       $Revoked = new HTTP(host: '127.0.0.1', port: (int) $port, connectTimeout: 3, timeout: 3);
       $Revoked->schedule(static fn (mixed $value = null): mixed => null);
-      $Fiber = new Fiber(function () use ($Revoked, &$results, $cpu): void {
-         $spent = $cpu();
+      $Fiber = new Fiber(function () use ($Revoked, &$results, $CPU): void {
+         $spent = $CPU();
          $started = microtime(true);
          $Answer = $Revoked->request('GET', '/dial');
          $results['H'] = [
             'code' => $Answer->code,
             'status' => $Answer->status,
             'elapsed' => microtime(true) - $started,
-            'cpu' => $cpu() - $spent
+            'cpu' => $CPU() - $spent
          ];
       });
       $Token = Cancellation::open($Fiber);
@@ -490,15 +490,15 @@ return new Test(
 
       $Muffled = new HTTP(host: '127.0.0.1', port: (int) $mutePort, secure: [], connectTimeout: 3, timeout: 3);
       $Muffled->schedule(static fn (mixed $value = null): mixed => null);
-      $Fiber = new Fiber(function () use ($Muffled, &$results, $cpu): void {
-         $spent = $cpu();
+      $Fiber = new Fiber(function () use ($Muffled, &$results, $CPU): void {
+         $spent = $CPU();
          $started = microtime(true);
          $Answer = $Muffled->request('GET', '/tls');
          $results['I'] = [
             'code' => $Answer->code,
             'status' => $Answer->status,
             'elapsed' => microtime(true) - $started,
-            'cpu' => $cpu() - $spent
+            'cpu' => $CPU() - $spent
          ];
       });
       $Token = Cancellation::open($Fiber);

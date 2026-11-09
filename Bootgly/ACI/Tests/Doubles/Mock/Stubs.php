@@ -19,10 +19,11 @@ use function count;
  */
 class Stubs
 {
+   // * Data
    /**
     * @var array<int,Stub>
     */
-   private array $list = [];
+   private array $List = [];
 
 
    /**
@@ -30,7 +31,7 @@ class Stubs
     */
    public function add (Stub $Stub): void
    {
-      $this->list[] = $Stub;
+      $this->List[] = $Stub;
    }
 
    /**
@@ -38,7 +39,7 @@ class Stubs
     */
    public function reset (): void
    {
-      $this->list = [];
+      $this->List = [];
    }
 
    /**
@@ -47,9 +48,9 @@ class Stubs
    public function match (string $method, array $arguments): null|Stub
    {
       // LIFO so a later stub() call shadows earlier ones for the same method.
-      for ($i = count($this->list) - 1; $i >= 0; $i--) {
-         if ($this->list[$i]->check($method, $arguments)) {
-            return $this->list[$i];
+      for ($i = count($this->List) - 1; $i >= 0; $i--) {
+         if ($this->List[$i]->check($method, $arguments)) {
+            return $this->List[$i];
          }
       }
 

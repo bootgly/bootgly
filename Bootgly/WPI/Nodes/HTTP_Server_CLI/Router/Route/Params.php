@@ -22,6 +22,7 @@ use Traversable;
  */
 class Params implements IteratorAggregate
 {
+   // * Data
    /** @var array<string,string|int|array<int,string>|null> */
    private array $params = [];
 

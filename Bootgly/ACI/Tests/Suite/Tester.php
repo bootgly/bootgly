@@ -54,6 +54,16 @@ use Bootgly\ACI\Tests\Suite\Test;
 
 class Tester
 {
+   // * Config
+   public Suite $Suite;
+   public Test $Test;
+   // # Assertions
+   /**
+    * The descriptions of the Assertions.
+    * @var array<string|null>
+    */
+   public array $descriptions = [];
+
    // * Data
    public Logger $Logger {
       get {
@@ -64,20 +74,6 @@ class Tester
          return $this->Logger;
       }
    }
-
-
-   public Suite $Suite;
-
-   // * Config
-   public Test $Test;
-   // # Assertions
-   /**
-    * The descriptions of the Assertions.
-    * @var array<string|null>
-    */
-   public array $descriptions = [];
-
-   // * Data
    // # Assertions
    /**
     * The results of the Assertions.

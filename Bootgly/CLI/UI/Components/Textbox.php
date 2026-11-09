@@ -59,10 +59,10 @@ use Bootgly\CLI\UI\Components\Alert;
  */
 class Textbox extends Component
 {
+   // * Config
    public Input $Input;
    public Output $Output;
 
-   // * Config
    public string $prompt;
    /** Dim helper line rendered below the prompt while editing — empty hides it */
    public string $hint;

@@ -30,14 +30,13 @@ use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response\Decoders\Decoder_;
 
 class Request
 {
-   public protected(set) Header $Header;
-   public protected(set) Body $Body;
-
-
    // * Config
    // ...
 
    // * Data
+   public protected(set) Header $Header;
+   public protected(set) Body $Body;
+
    // | HTTP Request
    public string $method;
    public string $URI;

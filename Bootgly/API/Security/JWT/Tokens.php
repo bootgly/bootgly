@@ -329,9 +329,9 @@ class Tokens
    /**
     * Write critical refresh-token state.
     */
-   private function write (string $key, string $value, int $ttl): void
+   private function write (string $key, string $value, int $TTL): void
    {
-      if ($this->Cache->write($key, $value, $ttl) === false) {
+      if ($this->Cache->write($key, $value, $TTL) === false) {
          throw new RuntimeException('JWT refresh token state could not be stored.');
       }
    }
@@ -341,10 +341,10 @@ class Tokens
     *
     * @param array<string,mixed> $claims
     */
-   private function issue (string $subject, string $family, int $ttl, array $claims): Token
+   private function issue (string $subject, string $family, int $TTL, array $claims): Token
    {
       $now = $this->time;
-      $expires = $now + $ttl;
+      $expires = $now + $TTL;
 
       for ($attempt = 0; $attempt < 3; $attempt++) {
          $refresh = $this->generate();
@@ -356,7 +356,7 @@ class Tokens
             'claims' => $claims,
             'issued' => $now,
             'expires' => $expires,
-         ]), $ttl)) {
+         ]), $TTL)) {
             return $Token;
          }
       }
@@ -547,12 +547,12 @@ class Tokens
     *
     * @param array<int|string,mixed> $claims
     */
-   private function guard (string $subject, int $ttl, array $claims): void
+   private function guard (string $subject, int $TTL, array $claims): void
    {
       if ($subject === '') {
          throw new InvalidArgumentException('JWT refresh token subject must not be empty.');
       }
-      if ($ttl < 1) {
+      if ($TTL < 1) {
          throw new InvalidArgumentException('JWT refresh token ttl must be positive.');
       }
 
@@ -584,8 +584,8 @@ class Tokens
     */
    private function limit (int $expires): int
    {
-      $ttl = $expires - $this->time;
+      $TTL = $expires - $this->time;
 
-      return $ttl > 0 ? $ttl : 1;
+      return $TTL > 0 ? $TTL : 1;
    }
 }

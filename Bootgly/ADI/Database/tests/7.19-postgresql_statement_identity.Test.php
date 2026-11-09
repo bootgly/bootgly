@@ -19,10 +19,10 @@ return new Test(
       $Database = new SQL(['driver' => 'pgsql', 'pool' => ['min' => 0, 'max' => 1]]);
       $Database->Connection->attach($client);
       $Encoder = new Encoder;
-      $sql = 'SELECT $1 AS v';
+      $SQL = 'SELECT $1 AS v';
 
       // ! Warm the statement with an in-range int — the backend confirms int4.
-      $Warm = $Database->query($sql, [7]);
+      $Warm = $Database->query($SQL, [7]);
       $Database->advance($Warm);
       fread($server, 8192);
 
@@ -44,7 +44,7 @@ return new Test(
          description: 'Warm-up caches the server-confirmed int4 parameter OID'
       );
 
-      $Big = $Database->query($sql, [9000000000]);
+      $Big = $Database->query($SQL, [9000000000]);
 
       yield assert(
          assertion: $Big->statement !== $Warm->statement,
@@ -53,7 +53,7 @@ return new Test(
 
       $parse = $Encoder->encode(Encoder::PARSE, [
          'statement' => $Big->statement,
-         'sql' => $sql,
+         'sql' => $SQL,
          'types' => [20],
       ]);
 
@@ -67,7 +67,7 @@ return new Test(
          description: 'The int4 statement entry survives the sibling identity in the cache'
       );
 
-      $Again = $Database->query($sql, [8]);
+      $Again = $Database->query($SQL, [8]);
       $bind = $Encoder->encode(Encoder::BIND, [
          'portal' => '',
          'statement' => $Again->statement,

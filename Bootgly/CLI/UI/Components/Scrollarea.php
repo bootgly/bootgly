@@ -45,9 +45,9 @@ class Scrollarea extends Component
    use Formattable;
 
 
+   // * Config
    public Output $Output;
 
-   // * Config
    /** Band top screen row (1-based) */
    public int $row;
    /** Visible rows (band height) */

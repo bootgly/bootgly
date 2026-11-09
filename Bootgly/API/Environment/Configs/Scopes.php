@@ -25,7 +25,7 @@ class Scopes
 {
    // * Data
    /** @var array<string,Config> */
-   private array $scopes = [];
+   private array $Scopes = [];
 
    // * Metadata
    // ...
@@ -36,7 +36,7 @@ class Scopes
     */
    public function add (Config $Config): void
    {
-      $this->scopes[$Config->scope] = $Config;
+      $this->Scopes[$Config->scope] = $Config;
    }
 
    /**
@@ -44,7 +44,7 @@ class Scopes
     */
    public function get (string $name): null|Config
    {
-      return $this->scopes[$name] ?? null;
+      return $this->Scopes[$name] ?? null;
    }
 
    /**
@@ -52,7 +52,7 @@ class Scopes
     */
    public function check (string $name): bool
    {
-      return array_key_exists($name, $this->scopes);
+      return array_key_exists($name, $this->Scopes);
    }
 
    /**
@@ -62,6 +62,6 @@ class Scopes
     */
    public function list (): array
    {
-      return $this->scopes;
+      return $this->Scopes;
    }
 }

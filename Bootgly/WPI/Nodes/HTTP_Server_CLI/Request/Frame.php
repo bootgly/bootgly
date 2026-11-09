@@ -128,6 +128,7 @@ final class Frame
    public int $separatorPosition = 0;
    public int $length = 0;
 
+   // * Metadata
    // # Header-block memo
    /**
     * Per-worker memo of the header-block field scan, keyed on the raw block

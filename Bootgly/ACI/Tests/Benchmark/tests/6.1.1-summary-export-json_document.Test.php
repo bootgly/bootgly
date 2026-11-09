@@ -61,7 +61,7 @@ return new Test(
       $trackedSHA = str_repeat('a', 64);
       $untrackedSHA = str_repeat('b', 64);
 
-      $json = Summary::export(
+      $JSON = Summary::export(
          caseName: 'HTTP_Server_CLI',
          metric: 'req/s',
          config: [
@@ -88,7 +88,7 @@ return new Test(
          pathBase: '/opt/bootgly',
       );
 
-      $document = json_decode($json, true);
+      $document = json_decode($JSON, true);
 
       yield new Assertion(
          description: 'Document decodes with the expected top-level keys',
@@ -197,7 +197,7 @@ return new Test(
          description: 'Document is a single line ending in a newline',
          fallback: 'Document not single-line!'
       )
-         ->expect(substr_count($json, "\n") === 1 && str_ends_with($json, "\n"), Op::Identical, true)
+         ->expect(substr_count($JSON, "\n") === 1 && str_ends_with($JSON, "\n"), Op::Identical, true)
          ->assert();
 
       yield new Assertion(

@@ -126,9 +126,9 @@ class Redis extends Driver
    // @ Number of preamble replies (AUTH/SELECT) still to discard before the command reply.
    private int $skip = 0;
    /** @var array<int,Operation> In-flight commands awaiting replies (FIFO — Redis answers in order). */
-   private array $pipeline = [];
+   private array $Pipeline = [];
    /** @var array<int,Operation> Operations resolved while another operation was advancing. */
-   private array $completed = [];
+   private array $Completed = [];
    // @ This driver tore its own transport down and the pool has moved on.
    private bool $aborted = false;
    // @ Stand-in slots owed a reply nobody waits for. Keyed by the object, not by
@@ -136,12 +136,12 @@ class Redis extends Driver
    //   a live command landing on one reads as abandoned — which drops it out of
    //   abandon()'s reader count and kills a healthy session.
    /** @var WeakMap<Operation,true> */
-   private WeakMap $abandoned;
+   private WeakMap $Abandoned;
    /**
     * Whether this session still owes replies to detached stand-ins.
     */
    public bool $detached {
-      get => count($this->abandoned) > 0;
+      get => count($this->Abandoned) > 0;
    }
    /** Operation currently holding the write stream (partial writes must not interleave). */
    private null|Operation $Writing = null;
@@ -161,7 +161,7 @@ class Redis extends Driver
 
    public function __construct (Config $Config, Connection $Connection)
    {
-      $this->abandoned = new WeakMap();
+      $this->Abandoned = new WeakMap();
 
       parent::__construct($Config, $Connection);
 
@@ -438,7 +438,7 @@ class Redis extends Driver
       $this->Decoder->reset();
 
       // ! A fresh socket orphans any commands in flight on the previous one
-      foreach ($this->pipeline as $Stale) {
+      foreach ($this->Pipeline as $Stale) {
          if ($Stale === $Operation) {
             continue;
          }
@@ -447,9 +447,9 @@ class Redis extends Driver
             $Stale->fail('Redis connection was lost before the reply arrived.');
          }
 
-         $this->completed[] = $Stale;
+         $this->Completed[] = $Stale;
       }
-      $this->pipeline = [];
+      $this->Pipeline = [];
 
       // ! The command that held the write stream owns bytes of the socket
       //   that just died. Its buffer must not be flushed onto this one.
@@ -461,7 +461,7 @@ class Redis extends Driver
 
          if ($Stale->finished === false) {
             $Stale->fail('Redis connection was lost before the command was sent.');
-            $this->completed[] = $Stale;
+            $this->Completed[] = $Stale;
          }
       }
 
@@ -545,7 +545,7 @@ class Redis extends Driver
    {
       $index = null;
 
-      foreach ($this->pipeline as $id => $Queued) {
+      foreach ($this->Pipeline as $id => $Queued) {
          if ($Queued === $Operation) {
             $index = $id;
 
@@ -573,8 +573,8 @@ class Redis extends Driver
       //   no reader — it only waits for the reply that consumes its slot.
       $readers = 0;
 
-      foreach ($this->pipeline as $Queued) {
-         if ($Queued !== $Operation && $Queued->finished === false && isset($this->abandoned[$Queued]) === false) {
+      foreach ($this->Pipeline as $Queued) {
+         if ($Queued !== $Operation && $Queued->finished === false && isset($this->Abandoned[$Queued]) === false) {
             $readers++;
          }
       }
@@ -601,8 +601,8 @@ class Redis extends Driver
       $Stand = new Operation(null, $Operation->command, $Operation->arguments);
       $Stand->state = OperationStates::Reading;
 
-      $this->pipeline[$index] = $Stand;
-      $this->abandoned[$Stand] = true;
+      $this->Pipeline[$index] = $Stand;
+      $this->Abandoned[$Stand] = true;
    }
 
    /**
@@ -627,8 +627,8 @@ class Redis extends Driver
       //    when the command that failed was answered in two reads. A stand-in
       //    is not work in flight either: nobody waits for its reply, and the
       //    next command handed this connection queues behind it and drains it.
-      foreach ($this->pipeline as $Queued) {
-         if ($Queued->finished === false && isset($this->abandoned[$Queued]) === false) {
+      foreach ($this->Pipeline as $Queued) {
+         if ($Queued->finished === false && isset($this->Abandoned[$Queued]) === false) {
             return true;
          }
       }
@@ -644,8 +644,8 @@ class Redis extends Driver
     */
    public function drain (): array
    {
-      $Completed = $this->completed;
-      $this->completed = [];
+      $Completed = $this->Completed;
+      $this->Completed = [];
 
       return $Completed;
    }
@@ -841,9 +841,9 @@ class Redis extends Driver
          }
 
          // @ Replies resolve in-flight commands FIFO (Redis answers in order)
-         $Active = $this->pipeline[0] ?? null;
+         $Active = $this->Pipeline[0] ?? null;
          if ($Active !== null) {
-            array_shift($this->pipeline);
+            array_shift($this->Pipeline);
          }
          elseif ($Operation->finished === false) {
             // ? Safety net: an unqueued operation owns the reply
@@ -869,11 +869,11 @@ class Redis extends Driver
 
          // ? A stand-in is not an operation the pool ever assigned: draining it
          //   must not hand a connection back a second time.
-         if (isset($this->abandoned[$Active])) {
+         if (isset($this->Abandoned[$Active])) {
             continue;
          }
 
-         $this->completed[] = $Active;
+         $this->Completed[] = $Active;
       }
    }
 
@@ -882,13 +882,13 @@ class Redis extends Driver
     */
    private function queue (Operation $Operation): void
    {
-      foreach ($this->pipeline as $Queued) {
+      foreach ($this->Pipeline as $Queued) {
          if ($Queued === $Operation) {
             return;
          }
       }
 
-      $this->pipeline[] = $Operation;
+      $this->Pipeline[] = $Operation;
    }
 
    /**
@@ -962,7 +962,7 @@ class Redis extends Driver
       $this->handshake = 0.0;
       $this->plaintext = false;
       $this->downgrade = '';
-      $this->abandoned = new WeakMap();
+      $this->Abandoned = new WeakMap();
 
       // ! So does the half-written command. A command joins the FIFO only once
       //   its frame is whole, so this one is nowhere else — and nulling the
@@ -980,13 +980,13 @@ class Redis extends Driver
             $Writer->fail($error);
 
             if ($Writer !== $Operation) {
-               $this->completed[] = $Writer;
+               $this->Completed[] = $Writer;
             }
          }
       }
 
-      $Pipeline = $this->pipeline;
-      $this->pipeline = [];
+      $Pipeline = $this->Pipeline;
+      $this->Pipeline = [];
 
       // @@ Pipelined commands — completed[] hands the siblings to Pool::drain()
       foreach ($Pipeline as $Queued) {
@@ -996,7 +996,7 @@ class Redis extends Driver
          }
 
          if ($Queued !== $Operation) {
-            $this->completed[] = $Queued;
+            $this->Completed[] = $Queued;
          }
       }
 

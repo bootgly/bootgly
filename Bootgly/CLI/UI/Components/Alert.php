@@ -39,8 +39,6 @@ class Alert extends Component
    //   the renderer's own order; zero columns once rendered, never cut in two
    private const string TOKEN = '/(@[#!][A-Za-z]+:\s?|@\\\\+;|@\.+;|@:[a-z]+:|@[@*~_-]:\s?|\s?@;|[*~_-]@)/';
 
-   private Output $Output;
-
    // * Config
    public Type $Type;
    public Style $Style;
@@ -49,6 +47,7 @@ class Alert extends Component
    public bool $spaced;
 
    // * Data
+   private Output $Output;
    public string $message;
 
    // * Metadata

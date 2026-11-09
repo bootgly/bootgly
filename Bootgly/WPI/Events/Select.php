@@ -50,13 +50,10 @@ class Select implements Events, Loops, Scheduler, Cancelling
     */
    public const int CAPACITY = 1000;
 
+   // * Config
    public Connections $Connections;
 
-   // * Config
    public bool $loop = true;
-   /** Reentrancy tripwire: a nested loop() shares one shutdown key and would
-    * silently kill the outer loop; stays latched if loop() exits by exception. */
-   private bool $entered = false;
 
    // * Data
    // # Sockets
@@ -68,6 +65,9 @@ class Select implements Events, Loops, Scheduler, Cancelling
    protected array $excepts = [];
 
    // * Metadata
+   /** Reentrancy tripwire: a nested loop() shares one shutdown key and would
+    * silently kill the outer loop; stays latched if loop() exits by exception. */
+   private bool $entered = false;
    // # Events
    // Client/Server
    /** @var array<int,mixed> */

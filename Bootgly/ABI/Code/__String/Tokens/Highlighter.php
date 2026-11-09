@@ -36,6 +36,7 @@ class Highlighter extends Tokens
    use Formattable;
 
 
+   // * Config
    public Theme $Theme;
    public const ACTUAL_LINE_MARK = 'actual_line_mark';
    public const LINE_NUMBER = 'line_number';
@@ -72,7 +73,6 @@ class Highlighter extends Tokens
          ]
       ]
    ];
-   // * Config
    private const ARROW_SYMBOL = '▶'; // >,➜, ▶
    private const DELIMITER = '▕'; // |,▕
    private const NO_MARK = ' ';

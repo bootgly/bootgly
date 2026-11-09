@@ -12,12 +12,12 @@ use Bootgly\ADI\Databases\SQL\Operation;
 
 
 // ! Greeting builder — with or without the server SSL capability
-$greet = static function (bool $ssl): string {
+$greet = static function (bool $SSL): string {
    $capabilities = Capabilities::PROTOCOL_41
       | Capabilities::SECURE_CONNECTION
       | Capabilities::PLUGIN_AUTH
       | Capabilities::PLUGIN_AUTH_LENENC
-      | ($ssl ? Capabilities::SSL : 0);
+      | ($SSL ? Capabilities::SSL : 0);
 
    return "\x0A"
       . "8.4.2\0"

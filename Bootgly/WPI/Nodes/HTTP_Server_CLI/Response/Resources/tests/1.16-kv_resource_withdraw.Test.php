@@ -308,7 +308,7 @@ return new Test(
        *
        * @param Fiber<mixed,mixed,mixed,mixed> $Fiber
        */
-      $drive = static function (Fiber $Fiber, mixed $value, Peer $Peer, null|Closure $until = null, float $cap = 2.0): mixed {
+      $drive = static function (Fiber $Fiber, mixed $value, Peer $Peer, null|Closure $Until = null, float $cap = 2.0): mixed {
          $deadline = microtime(true) + $cap;
 
          // @@
@@ -319,7 +319,7 @@ return new Test(
                return $value;
             }
 
-            if ($until !== null && $until()) {
+            if ($Until !== null && $Until()) {
                return $value;
             }
 

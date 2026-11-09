@@ -52,10 +52,10 @@ class Dialog extends Component implements Boxing
    use Formattable;
 
 
+   // * Config
    public Input $Input;
    public Output $Output;
 
-   // * Config
    // # Geometry (outer rectangle, 1-based screen coordinates)
    /** Top screen row (1-based) */
    public int $row;

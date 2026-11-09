@@ -13,7 +13,7 @@ namespace Bootgly\ACI\Tests\Benchmark\Configs;
 
 class Load
 {
-   // * Data
+   // * Config
    /**
     * Display label for the load.
     */
@@ -29,7 +29,6 @@ class Load
     */
    public readonly string $file;
 
-   // * Config
    /**
     * Comma-separated opponent names or "all".
     */

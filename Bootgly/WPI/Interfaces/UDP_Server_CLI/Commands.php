@@ -33,6 +33,9 @@ use Bootgly\WPI\Interfaces\UDP_Server_CLI as Server;
 
 class Commands extends CLI\Terminal
 {
+   // * Config
+   public Server $Server;
+
    // * Data
    public Logger $Logger {
       get {
@@ -44,11 +47,7 @@ class Commands extends CLI\Terminal
       }
    }
 
-
-   public Server $Server;
-
    // ! Command
-   // * Data
    /** @var array<string> */
    public static array $commands = [
       // ! Server

@@ -49,9 +49,9 @@ return new Test(
          description: 'both bodies produce multipart/alternative with the seeded boundary'
       );
       $plain = strpos($raw, 'Content-Type: text/plain');
-      $html = strpos($raw, 'Content-Type: text/html');
+      $HTML = strpos($raw, 'Content-Type: text/html');
       yield assert(
-         assertion: $plain !== false && $html !== false && $plain < $html,
+         assertion: $plain !== false && $HTML !== false && $plain < $HTML,
          description: 'the plain part comes before the html part (increasing fidelity)'
       );
       yield assert(

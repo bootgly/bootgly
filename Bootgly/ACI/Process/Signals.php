@@ -23,13 +23,11 @@ use Bootgly\ACI\Process;
 
 class Signals
 {
-   private Process $Process;
-
    // * Config
    public Closure $handler;
 
    // * Data
-   // ...
+   private Process $Process;
 
    // * Metadata
    // ...

@@ -71,7 +71,7 @@ return new Test(
       $output5 = $Differ5->diff("a\nb\nc\n", "a\nB\nc\n");
 
       $lines = explode("\n", $output5);
-      $contextLines = array_filter($lines, fn($l) => str_starts_with($l, ' '));
+      $contextLines = array_filter($lines, fn ($l) => str_starts_with($l, ' '));
       $clean = true;
       foreach ($contextLines as $cl) {
          if (str_contains($cl, "\033[")) {

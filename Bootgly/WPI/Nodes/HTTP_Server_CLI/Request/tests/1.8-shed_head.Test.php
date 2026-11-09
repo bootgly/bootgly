@@ -53,7 +53,7 @@ return new Test(
          'authUsername' => 'user',
          'authPassword' => 'secret-password',
          'authParsed' => true,
-         'authCredentials' => new Basic('user', 'secret-password'),
+         'AuthCredentials' => new Basic('user', 'secret-password'),
          'authToken' => 'secret-token',
          'authTokenParsed' => true,
          'identity' => 'identity',
@@ -87,7 +87,7 @@ return new Test(
          'exclusions' => $raw('exclusions'),
          'credentials' => [
             $raw('authUsername'), $raw('authPassword'), $raw('authParsed'),
-            $raw('authCredentials'), $raw('authToken'), $raw('authTokenParsed'),
+            $raw('AuthCredentials'), $raw('authToken'), $raw('authTokenParsed'),
             $raw('identity'), $raw('claims'), $raw('tokenHeaders'),
          ],
       ];
@@ -137,7 +137,7 @@ return new Test(
       // ! What `shed()` drops (the Header is cleared in place) …
       $drops = [
          'URI', '_URL', '_URN', '_query', '_queries', 'exclusions',
-         'authUsername', 'authPassword', 'authParsed', 'authCredentials',
+         'authUsername', 'authPassword', 'authParsed', 'AuthCredentials',
          'authToken', 'authTokenParsed', 'identity', 'claims', 'tokenHeaders',
       ];
       // ! … and what it keeps on purpose: the Header and Body objects, the

@@ -49,6 +49,7 @@ class Dumper
    use Formattable;
 
 
+   // * Config
    public Theme $Theme;
    // # Theme groups
    public const string TYPE_NULL   = 'null';
@@ -79,7 +80,6 @@ class Dumper
       ]
    ];
 
-   // * Config
    private const int INDENTATION = 3;
    /**
     * Named dump themes — theme group => SGR code(s).

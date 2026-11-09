@@ -684,7 +684,7 @@ return new Test(
       $SQL->advance($Writer);
       $Driver = $Writer->Protocol;
       $credit = $Driver instanceof PostgreSQL
-         && (new ReflectionProperty(PostgreSQL::class, 'writing'))->getValue($Driver) === $Writer
+         && (new ReflectionProperty(PostgreSQL::class, 'Writing'))->getValue($Driver) === $Writer
          && (new ReflectionProperty(PostgreSQL::class, 'wrote'))->getValue($Driver) === 0;
 
       $Pool->withdraw($Reader);

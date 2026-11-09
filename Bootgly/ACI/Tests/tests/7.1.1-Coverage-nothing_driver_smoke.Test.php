@@ -38,9 +38,9 @@ return new Test(
          ->to->be(true)
          ->assert();
 
-      $html = $Cov->report('html');
+      $HTML = $Cov->report('html');
       yield (new Assertion(description: 'html report has expected scaffold'))
-         ->expect(str_contains($html, '<table>'))
+         ->expect(str_contains($HTML, '<table>'))
          ->to->be(true)
          ->assert();
    })

@@ -195,10 +195,10 @@ return new Test(
       $inner = md5('secretapp');
       $hex = md5("{$inner}{$salt}");
       $hash = "md5{$hex}";
-      $remote = new Config(['host' => 'db.internal'] + $credentials);
+      $Remote = new Config(['host' => 'db.internal'] + $credentials);
 
       // @ Leg 1 — `N` then cleartext: the password never reaches the peer
-      $cleartext = $exchange($remote, $R(3));
+      $cleartext = $exchange($Remote, $R(3));
       $evidence = json_encode($cleartext);
       yield assert(
          assertion: $refused($cleartext),
@@ -206,7 +206,7 @@ return new Test(
       );
 
       // @ Leg 2 — `N` then MD5: the replayable hash never reaches the peer
-      $digest = $exchange($remote, $R(5, $salt));
+      $digest = $exchange($Remote, $R(5, $salt));
       $evidence = json_encode($digest);
       yield assert(
          assertion: $refused($digest),
@@ -214,7 +214,7 @@ return new Test(
       );
 
       // @ Leg 3 — `N` then SCRAM: the password is never sent, so it proceeds
-      $SCRAM = $exchange($remote, $R(10, "SCRAM-SHA-256\0\0"));
+      $SCRAM = $exchange($Remote, $R(10, "SCRAM-SHA-256\0\0"));
       $evidence = json_encode($SCRAM);
       yield assert(
          assertion: $SCRAM['error'] === ''
@@ -227,9 +227,9 @@ return new Test(
       // @ Leg 3b — after `N`, SCRAM below PostgreSQL's iteration floor is
       //   refused (its proof would be as crackable offline as MD5); at the
       //   floor it proceeds; loopback and `disable` keep any count
-      $cheap = $scram($remote, 'i=1');
-      $below = $scram($remote, 'i=4095');
-      $floor = $scram($remote, 'i=4096');
+      $cheap = $scram($Remote, 'i=1');
+      $below = $scram($Remote, 'i=4095');
+      $floor = $scram($Remote, 'i=4096');
       $local = $scram(new Config(['host' => '127.0.0.1'] + $credentials), 'i=1');
       $declared = $scram(new Config(['host' => 'db.internal', 'secure' => ['mode' => 'disable']] + $credentials), 'i=1');
       $final = static fn (array $result): bool => $result['error'] === ''
@@ -256,7 +256,7 @@ return new Test(
          'above the ceiling' => ['i=10000001', 'server'],
          'nonce lookalike' => ['i=1', 'xi=99999'],
       ] as $label => [$tail, $suffix]) {
-         $result = $scram($remote, $tail, $suffix);
+         $result = $scram($Remote, $tail, $suffix);
          // ! Only a well-formed count below the floor names the floor
          $floored = str_contains($result['error'], 'iterations (below');
          if ($stopped($result) === false || $floored !== ($label === 'nonce lookalike')) {
@@ -279,7 +279,7 @@ return new Test(
 
       // @ Leg 3d — a SASL offer without SCRAM-SHA-256 and a malformed
       //   server-final message each fail the session, without throwing
-      $mechanism = $exchange($remote, $R(10, "SCRAM-SHA-1\0\0"));
+      $mechanism = $exchange($Remote, $R(10, "SCRAM-SHA-1\0\0"));
       $signature = $scram(new Config(['host' => 'db.internal', 'secure' => ['mode' => 'disable']] + $credentials), 'i=4096', 'server', 'garbage');
       $evidence = json_encode([$mechanism, $signature]);
       yield assert(
@@ -342,10 +342,10 @@ return new Test(
 
       // @ Leg 7 — the downgrade belongs to ONE dial: a driver whose previous
       //   dial was refused, re-dialed, still refuses; a fresh dial is judged anew
-      $Connection = new Connection($remote);
-      $Driver = new PostgreSQL($remote, $Connection);
-      $first = $exchange($remote, $R(5, $salt), $Driver);
-      $second = $exchange($remote, $R(3), $Driver);
+      $Connection = new Connection($Remote);
+      $Driver = new PostgreSQL($Remote, $Connection);
+      $first = $exchange($Remote, $R(5, $salt), $Driver);
+      $second = $exchange($Remote, $R(3), $Driver);
       $evidence = json_encode([$first, $second]);
       yield assert(
          assertion: $refused($first) && $refused($second),
@@ -428,7 +428,7 @@ return new Test(
 
       // @ Leg 9 — the same driver, dialed again after its TLS session and
       //   downgraded: a finished TLS session never leaves `encrypted` behind
-      $after = $exchange($remote, $R(3), $Driver);
+      $after = $exchange($Remote, $R(3), $Driver);
 
       $evidence = json_encode($TLS);
       yield assert(
@@ -463,9 +463,9 @@ return new Test(
       $Peer = stream_socket_accept($Listener, 2.0);
       stream_set_blocking($client, false);
       stream_set_blocking($Peer, false);
-      $Connection = new Connection($remote);
+      $Connection = new Connection($Remote);
       $Connection->attach($client);
-      $Encrypted = new PostgreSQL($remote, $Connection);
+      $Encrypted = new PostgreSQL($Remote, $Connection);
       $Operation = new Operation($Connection, 'SELECT 1');
       $Operation->state = OperationStates::Connecting;
       $Encrypted->advance($Operation);

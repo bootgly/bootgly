@@ -40,7 +40,7 @@ return new Test(
       yield new Assertion(
          description: '...and the connection is closed',
       )
-         ->expect($Client->closed())
+         ->expect($Client->detect())
          ->to->be(true)
          ->assert();
       $Client->close();
@@ -53,7 +53,7 @@ return new Test(
       yield new Assertion(
          description: 'Corrupted preface tail → rejected (connection closed)',
       )
-         ->expect($Client->closed())
+         ->expect($Client->detect())
          ->to->be(true)
          ->assert();
       $Client->close();

@@ -199,7 +199,7 @@ if (
          // so the scan is by LINE, newest first: anything written AFTER the
          // document (an exception trace from a suite that threw) would hide
          // it from a scan bounded by the end of the buffer.
-         $json = '';
+         $JSON = '';
          if ($buffer !== '') {
             $clean = preg_replace('/\x1b\[[0-9;?]*[ -\/]*[@-~]/', '', $buffer) ?? $buffer;
             $lines = explode(PHP_EOL, $clean);
@@ -209,7 +209,7 @@ if (
                   continue;
                $decoded = json_decode($candidate, true);
                if (is_array($decoded) && isset($decoded['result'])) {
-                  $json = $candidate;
+                  $JSON = $candidate;
                   break;
                }
             }
@@ -220,7 +220,7 @@ if (
          //   lone PHP_EOL also DISCARDED every byte of diagnostic the child had
          //   written. Hand that output to STDERR, where a human and a CI log
          //   look, and say why the document is missing.
-         if ($json === '') {
+         if ($JSON === '') {
             fwrite(STDERR, 'Bootgly test: no JSON results document in the child output.' . PHP_EOL);
 
             // ? Bounded on purpose. A caller may hand this process a stderr pipe
@@ -245,7 +245,7 @@ if (
             exit($exit === 0 ? 1 : $exit);
          }
 
-         fwrite(STDOUT, $json . PHP_EOL);
+         fwrite(STDOUT, $JSON . PHP_EOL);
          exit($exit);
       }
    }

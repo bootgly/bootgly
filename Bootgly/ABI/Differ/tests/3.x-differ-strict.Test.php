@@ -38,8 +38,8 @@ return new Test(
       try {
          new UnifiedStrict(['fromFile' => null]);
       }
-      catch (Configuration $e) {
-         $thrown = str_contains($e->getMessage(), 'fromFile');
+      catch (Configuration $E) {
+         $thrown = str_contains($E->getMessage(), 'fromFile');
       }
       yield assert(
          assertion: $thrown,

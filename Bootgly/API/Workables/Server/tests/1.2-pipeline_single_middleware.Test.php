@@ -23,10 +23,10 @@ return new Test(
             $this->log = &$log;
          }
 
-         public function process (object $Request, object $Response, Closure $next): object
+         public function process (object $Request, object $Response, Closure $Next): object
          {
             $this->log[] = 'before';
-            $Response = $next($Request, $Response);
+            $Response = $Next($Request, $Response);
             $this->log[] = 'after';
 
             return $Response;

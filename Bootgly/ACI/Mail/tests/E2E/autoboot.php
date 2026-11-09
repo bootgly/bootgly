@@ -95,8 +95,8 @@ return new Suite(
          throw new RuntimeException('Mail E2E could not generate a self-signed certificate.');
       }
 
-      $pem = sys_get_temp_dir() . '/bootgly-mail-e2e.pem';
-      file_put_contents($pem, "{$certificate}{$private}");
+      $PEM = sys_get_temp_dir() . '/bootgly-mail-e2e.pem';
+      file_put_contents($PEM, "{$certificate}{$private}");
 
       // @ Fork a scripted mock SMTP server:
       //   9998 = plain (scenario selected by the EHLO argument)
@@ -106,7 +106,7 @@ return new Suite(
       $pid = pcntl_fork();
       if ($pid === 0) {
          $context = stream_context_create(['ssl' => [
-            'local_cert' => $pem,
+            'local_cert' => $PEM,
             'verify_peer' => false,
             'verify_peer_name' => false,
             'allow_self_signed' => true
@@ -369,7 +369,7 @@ return new Suite(
       finally {
          posix_kill($pid, SIGKILL);
          pcntl_waitpid($pid, $status);
-         @unlink($pem);
+         @unlink($PEM);
       }
 
       return true;

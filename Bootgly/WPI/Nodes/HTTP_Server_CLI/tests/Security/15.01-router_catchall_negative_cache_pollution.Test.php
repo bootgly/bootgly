@@ -15,8 +15,8 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
  * line ~605) promotes EVERY unique URL that falls through to the catch-all
  * handler into `staticCache[''][$url]`:
  *
- *   if ($this->catchAllCache !== null) {
- *      $cached = $this->catchAllCache;
+ *   if ($this->CatchAllCache !== null) {
+ *      $cached = $this->CatchAllCache;
  *      $Result = ($cached['handler'])($Request, $ResponseObj);
  *
  *      // @ Promote to static cache for O(1) lookup on repeat hits
@@ -74,11 +74,11 @@ return new Test(
          $Router = WPI->Router;
 
          // @ Reflection access to private cache state and to Request::$_URL
-         $rRouter = new ReflectionObject($Router);
-         $propStatic = $rRouter->getProperty('staticCache');
+         $RRouter = new ReflectionObject($Router);
+         $propStatic = $RRouter->getProperty('staticCache');
 
-         $rReq = new ReflectionObject($Request);
-         $propUrl = $rReq->getProperty('_URL');
+         $RReq = new ReflectionObject($Request);
+         $propUrl = $RReq->getProperty('_URL');
 
          // @ Drive the catch-all promotion path with unique synthetic URLs.
          //   Each call re-enters Router::resolve(), hits the catch-all

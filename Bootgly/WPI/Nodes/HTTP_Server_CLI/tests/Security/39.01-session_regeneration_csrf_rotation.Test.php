@@ -68,7 +68,7 @@ return new Test(
             $this->knownToken = $knownToken;
          }
 
-         public function process (object $Request, object $Response, Closure $next): object
+         public function process (object $Request, object $Response, Closure $Next): object
          {
             $mode = $Request->Header->get('X-M6-Mode') ?? 'unknown';
             $Session = $Request->Session;
@@ -86,7 +86,7 @@ return new Test(
                'tokenPreserved' => $Session->get('_csrf_token') === $this->knownToken,
             ];
 
-            return $next($Request, $Response);
+            return $Next($Request, $Response);
          }
       },
       new CSRF,

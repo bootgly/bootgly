@@ -806,11 +806,11 @@ class Logs
     */
    private function encode (array $data): string
    {
-      $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+      $JSON = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
 
       // ! json_encode() leaves DEL and C1 raw under JSON_UNESCAPED_UNICODE (the line feeds are
       //   the pretty-print's own)
-      return $json === false ? '{}' : Controls::escape($json, "\n");
+      return $JSON === false ? '{}' : Controls::escape($JSON, "\n");
    }
 
    // # Translating

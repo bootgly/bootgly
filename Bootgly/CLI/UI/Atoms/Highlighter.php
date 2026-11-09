@@ -28,8 +28,6 @@ use Bootgly\CLI\Terminal\Output;
  */
 class Highlighter extends Component
 {
-   private Output $Output;
-
    // * Config
    /** SGR decoration — null follows the TTY, false forces plain, true forces styled */
    public null|bool $decoration;
@@ -45,6 +43,7 @@ class Highlighter extends Component
    public string $theme;
 
    // * Data
+   private Output $Output;
    /** The PHP source — sources without an open tag are colorized as pure PHP */
    public string $source;
 

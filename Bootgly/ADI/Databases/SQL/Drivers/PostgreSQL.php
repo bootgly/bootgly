@@ -116,9 +116,9 @@ class PostgreSQL extends Driver
 
    // * Metadata
    /** @var array<int,Operation> */
-   private array $pipeline = [];
+   private array $Pipeline = [];
    /** @var array<int,Operation> */
-   private array $completed = [];
+   private array $Completed = [];
    // @ True when the current stream completed TLS here or arrived encrypted.
    private bool $encrypted = false;
    /**
@@ -166,7 +166,7 @@ class PostgreSQL extends Driver
    // @ Bytes read from this session so far — whether a read brought anything.
    private int $received = 0;
    // @ Operation currently holding the socket write stream (co-located pipelining).
-   private null|Operation $writing = null;
+   private null|Operation $Writing = null;
    // @ Holder bytes accepted by the stream. A positive count makes withdrawal
    //   unsafe on every transport. Zero proves no reach only on plaintext: TLS
    //   may retain an uncredited record that requires this exact buffer again.
@@ -546,7 +546,7 @@ class PostgreSQL extends Driver
       }
 
       if ($Operation->state === OperationStates::Querying) {
-         $Holder = $this->writing;
+         $Holder = $this->Writing;
 
          // ? A co-located sibling holds the write stream — wait so the
          //   pipelined wire messages are not interleaved on the socket.
@@ -580,7 +580,7 @@ class PostgreSQL extends Driver
                // ?: Still partial or held by TLS as an uncredited pending record:
                //    preserve this exact buffer, park and retry on the next pass.
                //    A hard failure routed through abort() and freed the stream.
-               if ($this->writing === $Holder) {
+               if ($this->Writing === $Holder) {
                   return $this->await($Operation, Scheduler::SCHEDULE_WRITE);
                }
             }
@@ -588,7 +588,7 @@ class PostgreSQL extends Driver
                // ! The batch is whole on the wire now — the same bookkeeping a
                //   self-completed flush performs, with the answer handed to a
                //   detached stand-in exactly as abandon() does.
-               $this->writing = null;
+               $this->Writing = null;
                $this->carrying = [];
                $this->free($Holder);
 
@@ -610,7 +610,7 @@ class PostgreSQL extends Driver
                $Stand->portal = $Holder->portal;
                $Stand->prepared = $Holder->prepared;
 
-               $this->pipeline[] = $Stand;
+               $this->Pipeline[] = $Stand;
                $this->abandoned[spl_object_id($Stand)] = true;
 
                // ! The work ran with an outcome its caller never sees —
@@ -654,7 +654,7 @@ class PostgreSQL extends Driver
                $Owner !== null
                && $Owner !== $Operation
                && $Owner->Protocol === $this
-               && $this->writing !== $Operation
+               && $this->Writing !== $Operation
             ) {
                if ($Owner->finished === false) {
                   $Owner->write = '';
@@ -684,7 +684,7 @@ class PostgreSQL extends Driver
 
          // ! Pending statement Closes ride ahead of this batch — rendered once
          //   per batch: a partial-flush re-entry keeps $writing === $Operation.
-         if ($this->closing !== [] && $this->writing !== $Operation) {
+         if ($this->closing !== [] && $this->Writing !== $Operation) {
             $closes = '';
 
             foreach ($this->closing as $name => $queued) {
@@ -715,8 +715,8 @@ class PostgreSQL extends Driver
 
          // ! A fresh claim starts the on-the-wire count at zero; a partial-flush
          //   re-entry keeps what its earlier passes already wrote.
-         if ($this->writing !== $Operation) {
-            $this->writing = $Operation;
+         if ($this->Writing !== $Operation) {
+            $this->Writing = $Operation;
             $this->wrote = 0;
          }
 
@@ -726,7 +726,7 @@ class PostgreSQL extends Driver
             //   drained — waiting to write alone holds both ends until this
             //   deadline. Absorb what is owed to them, and wait to read while
             //   one still leads; the flush resumes on the next pass.
-            if ($this->writing === $Operation && $this->abandoned !== [] && $this->absorb($Operation)) {
+            if ($this->Writing === $Operation && $this->abandoned !== [] && $this->absorb($Operation)) {
                return $this->await($Operation, Scheduler::SCHEDULE_READ);
             }
 
@@ -735,7 +735,7 @@ class PostgreSQL extends Driver
             return $Operation;
          }
 
-         $this->writing = null;
+         $this->Writing = null;
          $this->carrying = [];
          $this->free($Operation);
 
@@ -792,7 +792,7 @@ class PostgreSQL extends Driver
     */
    public function owe (DatabaseOperation $Operation): bool
    {
-      foreach ($this->pipeline as $Queued) {
+      foreach ($this->Pipeline as $Queued) {
          if ($Queued === $Operation) {
             return true;
          }
@@ -801,7 +801,7 @@ class PostgreSQL extends Driver
       // ? Partly written — credited bytes, or a TLS record that may hold
       //   some: the rest must follow, or the session drops with every caller
       //   handed it, pipelined or not yet.
-      if ($this->writing === $Operation && ($this->wrote > 0 || $this->encrypted)) {
+      if ($this->Writing === $Operation && ($this->wrote > 0 || $this->encrypted)) {
          return true;
       }
 
@@ -843,7 +843,7 @@ class PostgreSQL extends Driver
       //   streaming in would otherwise be read to its end — the very work the
       //   cancel exists to stop.
       // @@
-      for ($turn = 0; $turn < self::READS && $this->writing === null && $this->pipeline !== []; $turn++) {
+      for ($turn = 0; $turn < self::READS && $this->Writing === null && $this->Pipeline !== []; $turn++) {
          $received = $this->received;
 
          $this->read($Operation);
@@ -862,7 +862,7 @@ class PostgreSQL extends Driver
       //   the backend has moved on to the batch behind it.
       $Running = null;
 
-      foreach ($this->pipeline as $Queued) {
+      foreach ($this->Pipeline as $Queued) {
          if ($Queued->finished === false) {
             $Running = $Queued;
 
@@ -922,7 +922,7 @@ class PostgreSQL extends Driver
    {
       $index = null;
 
-      foreach ($this->pipeline as $id => $Queued) {
+      foreach ($this->Pipeline as $id => $Queued) {
          if ($Queued === $Operation) {
             $index = $id;
 
@@ -939,7 +939,7 @@ class PostgreSQL extends Driver
          //   message that terminates it, and nobody advances it again (PG-13).
          $readers = 0;
 
-         foreach ($this->pipeline as $Queued) {
+         foreach ($this->Pipeline as $Queued) {
             if (
                $Queued !== $Operation
                && $Queued->finished === false
@@ -952,7 +952,7 @@ class PostgreSQL extends Driver
          // @ The batch still being written is a reader too — it is the operation
          //   its caller is actively advancing, and it joins the pipeline behind
          //   this slot as soon as its bytes are whole on the wire.
-         $Writing = $this->writing;
+         $Writing = $this->Writing;
 
          if ($Writing !== null && $Writing !== $Operation && $Writing->finished === false) {
             $readers++;
@@ -987,7 +987,7 @@ class PostgreSQL extends Driver
    {
       $index = null;
 
-      foreach ($this->pipeline as $id => $Queued) {
+      foreach ($this->Pipeline as $id => $Queued) {
          if ($Queued === $Operation) {
             $index = $id;
 
@@ -1003,7 +1003,7 @@ class PostgreSQL extends Driver
          //   may retain an uncredited record too. Pool expiry has already
          //   destroyed the only buffer either state could use to recover.
          if (
-            $this->writing === $Operation
+            $this->Writing === $Operation
             && ($this->wrote > 0 || $this->encrypted)
          ) {
             $this->abort($Operation, 'PostgreSQL operation was abandoned while writing its batch.');
@@ -1030,7 +1030,7 @@ class PostgreSQL extends Driver
       $Stand->portal = $Operation->portal;
       $Stand->prepared = $Operation->prepared;
 
-      $this->pipeline[$index] = $Stand;
+      $this->Pipeline[$index] = $Stand;
       $this->abandoned[spl_object_id($Stand)] = true;
    }
 
@@ -1056,12 +1056,12 @@ class PostgreSQL extends Driver
       }
 
       // ? A batch holds the write stream: the reset would land inside it.
-      if ($this->writing !== null) {
+      if ($this->Writing !== null) {
          return false;
       }
 
       // ?: Already owed, with nothing written after it.
-      $Tail = $this->pipeline === [] ? null : $this->pipeline[array_key_last($this->pipeline)];
+      $Tail = $this->Pipeline === [] ? null : $this->Pipeline[array_key_last($this->Pipeline)];
 
       if ($this->Reset !== null && $Tail === $this->Reset) {
          return true;
@@ -1081,7 +1081,7 @@ class PostgreSQL extends Driver
       $Stand = new Operation(null, self::RESET);
       $Stand->state = OperationStates::Reading;
 
-      $this->pipeline[] = $Stand;
+      $this->Pipeline[] = $Stand;
       $this->abandoned[spl_object_id($Stand)] = true;
       $this->Reset = $Stand;
 
@@ -1098,7 +1098,7 @@ class PostgreSQL extends Driver
       // ? A batch mid-flush belongs to a caller still advancing it. Lending the
       //   connection now would queue the next caller's batch behind a stream
       //   another caller owns.
-      $Writing = $this->writing;
+      $Writing = $this->Writing;
 
       if ($Writing !== null && $Writing->finished === false) {
          return true;
@@ -1113,7 +1113,7 @@ class PostgreSQL extends Driver
       //    operation handed this connection queues behind it and drains it —
       //    counting it pinned the connection busy with nobody left to pump it.
       if ($this->abandoned === []) {
-         foreach ($this->pipeline as $Queued) {
+         foreach ($this->Pipeline as $Queued) {
             if ($Queued->finished === false) {
                return true;
             }
@@ -1123,7 +1123,7 @@ class PostgreSQL extends Driver
          return false;
       }
 
-      foreach ($this->pipeline as $Queued) {
+      foreach ($this->Pipeline as $Queued) {
          if ($Queued->finished === false && isset($this->abandoned[spl_object_id($Queued)]) === false) {
             return true;
          }
@@ -1140,8 +1140,8 @@ class PostgreSQL extends Driver
     */
    public function drain (): array
    {
-      $Completed = $this->completed;
-      $this->completed = [];
+      $Completed = $this->Completed;
+      $this->Completed = [];
 
       return $Completed;
    }
@@ -1193,20 +1193,20 @@ class PostgreSQL extends Driver
       //   session that no longer exists. Failing it also discards its buffer,
       //   which must never reach the next socket — the tail of a message would
       //   be read there as a message of its own.
-      $Writer = $this->writing;
-      $this->writing = null;
+      $Writer = $this->Writing;
+      $this->Writing = null;
 
       if ($Writer !== null && $Writer->finished === false) {
          $Writer->quarantine = true;
          $Writer->fail($error);
 
          if ($Writer !== $Operation) {
-            $this->completed[] = $Writer;
+            $this->Completed[] = $Writer;
          }
       }
 
-      $Pipeline = $this->pipeline;
-      $this->pipeline = [];
+      $Pipeline = $this->Pipeline;
+      $this->Pipeline = [];
 
       // @@ Pipelined operations — completed[] hands the siblings to Pool::drain()
       foreach ($Pipeline as $Queued) {
@@ -1216,7 +1216,7 @@ class PostgreSQL extends Driver
          }
 
          if ($Queued !== $Operation) {
-            $this->completed[] = $Queued;
+            $this->Completed[] = $Queued;
          }
       }
 
@@ -1241,8 +1241,8 @@ class PostgreSQL extends Driver
       // ? The callers admit only plaintext zero-credit claims. A batch with
       //   accepted bytes — or any zero-return TLS write — may need this exact
       //   remainder to complete the stream and must not be freed here.
-      if ($this->writing === $Operation && $this->wrote === 0) {
-         $this->writing = null;
+      if ($this->Writing === $Operation && $this->wrote === 0) {
+         $this->Writing = null;
 
          // @ The Closes this batch carried never went out — requeue them, or
          //   the backend keeps names the driver believes closed.
@@ -1287,7 +1287,7 @@ class PostgreSQL extends Driver
             continue;
          }
 
-         if ($Held->finished || $Held->write === '' || $this->writing === $Held) {
+         if ($Held->finished || $Held->write === '' || $this->Writing === $Held) {
             continue;
          }
 
@@ -1572,7 +1572,7 @@ class PostgreSQL extends Driver
 
       // ! Only the write-stream holder is counted — connect and authentication
       //   flushes run with no claim on the stream.
-      if ($this->writing === $Operation) {
+      if ($this->Writing === $Operation) {
          $this->wrote += $written;
       }
 
@@ -1730,7 +1730,7 @@ class PostgreSQL extends Driver
    {
       // @@
       foreach ($Messages as $Message) {
-         $Active = $this->pipeline[0] ?? ($Operation->finished ? null : $Operation);
+         $Active = $this->Pipeline[0] ?? ($Operation->finished ? null : $Operation);
 
          if ($Active === null) {
             if ($Message->type === 'K' || $Message->type === 'S' || $Message->type === 'N' || $Message->type === 'A') {
@@ -1754,7 +1754,7 @@ class PostgreSQL extends Driver
     */
    private function absorb (Operation $Operation): bool
    {
-      $Head = $this->pipeline[0] ?? null;
+      $Head = $this->Pipeline[0] ?? null;
 
       // ?
       if ($Head === null || isset($this->abandoned[spl_object_id($Head)]) === false) {
@@ -1796,7 +1796,7 @@ class PostgreSQL extends Driver
 
       // @@
       foreach ($Messages as $Message) {
-         $Active = $this->pipeline[0] ?? null;
+         $Active = $this->Pipeline[0] ?? null;
 
          if ($Active === null) {
             $this->Backlog[] = $Message;
@@ -1808,7 +1808,7 @@ class PostgreSQL extends Driver
          $this->retire($Active, $Message);
       }
 
-      $Head = $this->pipeline[0] ?? null;
+      $Head = $this->Pipeline[0] ?? null;
 
       // :
       return $Head !== null && isset($this->abandoned[spl_object_id($Head)]);
@@ -1829,7 +1829,7 @@ class PostgreSQL extends Driver
       //   down or a completion hook re-enter it, and a stand-in id left in
       //   `abandoned` is recycled by the next live operation, which check()
       //   would then skip as drained work.
-      $Retired = array_shift($this->pipeline) ?? $Active;
+      $Retired = array_shift($this->Pipeline) ?? $Active;
 
       // ? A stand-in is not an operation the pool ever assigned: draining it
       //   must not release a connection a second time.
@@ -1839,7 +1839,7 @@ class PostgreSQL extends Driver
          unset($this->abandoned[$id]);
       }
       else {
-         $this->completed[] = $Retired;
+         $this->Completed[] = $Retired;
       }
    }
 
@@ -1848,13 +1848,13 @@ class PostgreSQL extends Driver
     */
    private function queue (Operation $Operation): void
    {
-      foreach ($this->pipeline as $Queued) {
+      foreach ($this->Pipeline as $Queued) {
          if ($Queued === $Operation) {
             return;
          }
       }
 
-      $this->pipeline[] = $Operation;
+      $this->Pipeline[] = $Operation;
    }
 
    /**

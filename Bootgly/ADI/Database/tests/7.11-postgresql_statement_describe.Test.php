@@ -15,12 +15,12 @@ return new Test(
 
       $Database = new SQL;
       $Database->Connection->attach($client);
-      $sql = 'SELECT $1::int AS value';
-      $Operation = $Database->query($sql, [42]);
+      $SQL = 'SELECT $1::int AS value';
+      $Operation = $Database->query($SQL, [42]);
       $Encoder = new Encoder;
       $parse = $Encoder->encode(Encoder::PARSE, [
          'statement' => $Operation->statement,
-         'sql' => $sql,
+         'sql' => $SQL,
          'types' => [23],
       ]);
       $describe = $Encoder->encode(Encoder::DESCRIBE, [
@@ -70,7 +70,7 @@ return new Test(
          description: 'ParameterDescription and statement RowDescription are applied before BindComplete'
       );
 
-      $Again = $Database->query($sql, [43]);
+      $Again = $Database->query($SQL, [43]);
       $bind = $Encoder->encode(Encoder::BIND, [
          'portal' => '',
          'statement' => $Again->statement,

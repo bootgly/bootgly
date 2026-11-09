@@ -88,11 +88,11 @@ class XML extends Resource
          return $Response->send($body);
       }
 
-      $xml = '<?xml version="1.0" encoding="UTF-8"?>'
+      $XML = '<?xml version="1.0" encoding="UTF-8"?>'
          . '<response>' . self::encode($body) . '</response>';
 
       // :
-      return $Response->send($xml);
+      return $Response->send($XML);
    }
 
    /**
@@ -109,13 +109,13 @@ class XML extends Resource
 
       // @ Arrays — associative keys become elements, numeric keys `<item>`
       if (is_array($value)) {
-         $xml = '';
+         $XML = '';
          foreach ($value as $key => $item) {
             $tag = is_int($key) ? 'item' : self::name((string) $key);
-            $xml .= "<{$tag}>" . self::encode($item, $depth + 1) . "</{$tag}>";
+            $XML .= "<{$tag}>" . self::encode($item, $depth + 1) . "</{$tag}>";
          }
 
-         return $xml;
+         return $XML;
       }
 
       // @ Objects — only their PUBLIC properties, matching json_encode: a

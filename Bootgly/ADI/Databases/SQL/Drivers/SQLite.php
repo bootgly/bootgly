@@ -405,9 +405,9 @@ class SQLite extends Driver
    /**
     * Evict one prepared statement from the cache.
     */
-   private function evict (string $sql): void
+   private function evict (string $SQL): void
    {
-      $Statement = $this->statements[$sql] ?? null;
+      $Statement = $this->statements[$SQL] ?? null;
 
       // ?
       if ($Statement === null) {
@@ -415,6 +415,6 @@ class SQLite extends Driver
       }
 
       $Statement->close();
-      unset($this->statements[$sql]);
+      unset($this->statements[$SQL]);
    }
 }

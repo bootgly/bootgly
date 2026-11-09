@@ -636,13 +636,13 @@ class Input
       $channel = $this->channel;
       if ($channel === null) {
          // ?
-         $uri = getenv('BOOTGLY_TERMINAL_CHANNEL');
-         if ($uri === false || $uri === '') {
+         $URI = getenv('BOOTGLY_TERMINAL_CHANNEL');
+         if ($URI === false || $URI === '') {
             return;
          }
 
-         $read = fopen($uri, 'r');
-         $write = fopen($uri, 'w');
+         $read = fopen($URI, 'r');
+         $write = fopen($URI, 'w');
          // ?
          if ($read === false || $write === false) {
             return;

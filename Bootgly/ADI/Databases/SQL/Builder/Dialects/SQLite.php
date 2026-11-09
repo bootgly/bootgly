@@ -72,17 +72,17 @@ class SQLite extends Dialect
     */
    public function rebase (string $sql, int $offset): string
    {
-      $sql = preg_replace_callback(
+      $rebased = preg_replace_callback(
          '/\?(\d+)/',
          fn (array $matches): string => $this->mark($offset + (int) $matches[1]),
          $sql
       );
 
-      if ($sql === null) {
+      if ($rebased === null) {
          throw new InvalidArgumentException('SQL subquery placeholders could not be rewritten.');
       }
 
-      return $sql;
+      return $rebased;
    }
 
    /**

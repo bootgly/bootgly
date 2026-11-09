@@ -45,6 +45,11 @@ use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections\Connection\Lease;
 
 class Connections implements WPI\Connections
 {
+   // * Config
+   public Server $Server;
+
+   public null|float $timeout;
+
    // * Data
    public Logger $Logger {
       get {
@@ -55,14 +60,6 @@ class Connections implements WPI\Connections
          return $this->Logger;
       }
    }
-
-
-   public Server $Server;
-
-   // * Config
-   public null|float $timeout;
-
-   // * Data
    private int $peerCeiling = 1024;
    private int $IPCeiling = 256;
    private int $idleTimeout = 30;

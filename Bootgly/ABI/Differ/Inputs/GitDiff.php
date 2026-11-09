@@ -30,6 +30,7 @@ final class GitDiff implements InputContract
    private const string NO_NEWLINE_MARKER = '\\ No newline at end of file';
 
 
+   // * Data
    private Parser $Parser;
 
 

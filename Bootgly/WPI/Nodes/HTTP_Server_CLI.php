@@ -1017,7 +1017,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
       $name = 'http01.gate';
       if ($this->helper > 1 && $this->helperReady) {
-         if ($this->alive($this->helper) === false) {
+         if ($this->ping($this->helper) === false) {
             if ($this->reap($this->helper) === false) {
                return ['!http01.gate' => $this->Gate];
             }
@@ -1521,7 +1521,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             $this->challengeOwner,
             $this->AutoTLS->challenges
          );
-         if ($this->helper > 0 && $this->alive($this->helper) === false) {
+         if ($this->helper > 0 && $this->ping($this->helper) === false) {
             if ($this->reap($this->helper)) {
                $this->helper = 0;
                $this->helperReady = false;
@@ -1548,7 +1548,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       $keepHelper = false;
       $started = null;
       if ($preserveGate && $preserveHelper && $this->helper > 1 && $this->helperReady) {
-         if ($this->alive($this->helper)) {
+         if ($this->ping($this->helper)) {
             $started = $this->identify($this->helper);
             if (
                $started === null
@@ -2278,7 +2278,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                return;
             }
          }
-         else if ($this->helper > 0 && $this->alive($this->helper) === false) {
+         else if ($this->helper > 0 && $this->ping($this->helper) === false) {
             if ($this->reap($this->helper)) {
                $this->helper = 0;
                $this->helperReady = false;
@@ -2348,7 +2348,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
       // ? A certifier is still running (parentage-checked — a recycled PID
       //   never suppresses renewal)
-      if ($this->certifier > 0 && $this->alive($this->certifier)) {
+      if ($this->certifier > 0 && $this->ping($this->certifier)) {
          return;
       }
       if ($this->certifier > 0) {
@@ -2364,7 +2364,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
     * check) — `posix_kill($PID, 0)` alone would confuse a recycled PID
     * owned by an unrelated process with our helper/certifier.
     */
-   private function alive (int $PID): bool
+   private function ping (int $PID): bool
    {
       $status = @file_get_contents("/proc/{$PID}/status");
       if (is_string($status) === false) {
@@ -2401,7 +2401,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    /** Verify one live direct child and, when supplied, its process generation. */
    private function verify (int $PID, string $started = ''): bool
    {
-      return $this->alive($PID)
+      return $this->ping($PID)
          && ($started === '' || $this->identify($PID) === $started);
    }
 
@@ -3312,19 +3312,19 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             //   (pipelined/smuggled bytes, non-HTTP fuzz) untouched.
             $injectTestIndex = static function (string $bytes, int $testIndex): string {
                // Find the end of the request-line (first CRLF).
-               $eol = strpos($bytes, "\r\n");
-               if ($eol === false) {
+               $EOL = strpos($bytes, "\r\n");
+               if ($EOL === false) {
                   return $bytes;
                }
                // Heuristic: only inject if the request-line looks like
                //   `METHOD SP request-target SP HTTP/x.y`.
-               $requestLine = substr($bytes, 0, $eol);
+               $requestLine = substr($bytes, 0, $EOL);
                if (! preg_match('#^[A-Z]+ \S+ HTTP/\d\.\d$#', $requestLine)) {
                   return $bytes;
                }
-               return substr($bytes, 0, $eol + 2)
+               return substr($bytes, 0, $EOL + 2)
                   . "X-Bootgly-Test: {$testIndex}\r\n"
-                  . substr($bytes, $eol + 2);
+                  . substr($bytes, $EOL + 2);
             };
             // @ Complete a response whose body exceeded one socket read: when
             //   the headers advertise a Content-Length bigger than the bytes

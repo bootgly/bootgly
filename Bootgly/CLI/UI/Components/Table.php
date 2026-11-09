@@ -24,11 +24,9 @@ use Bootgly\CLI\UI\Components\Table\Rows;
 
 class Table extends Component
 {
-   public DataTable $Data;
-
+   // * Config
    public private(set) Output $Output;
 
-   // * Config
    // @ Style
    public const NO_BORDER_STYLE = [
       'top'          => '',
@@ -74,6 +72,7 @@ class Table extends Component
    public array $borders;
 
    // * Data
+   public DataTable $Data;
    // ...
 
    // * Metadata

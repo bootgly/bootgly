@@ -52,7 +52,7 @@ return new Suite(
       usleep(400000);
 
       // @ Point the shared client at the TLS server for these specs.
-      Client::$tls = true;
+      Client::$TLS = true;
       Client::$port = 8089;
 
       try {
@@ -62,7 +62,7 @@ return new Suite(
       }
       finally {
          // @ Restore the client defaults + tear the server down.
-         Client::$tls = false;
+         Client::$TLS = false;
          Client::$port = 8084;
 
          $WS_Server_CLI->Process->stopping = true;

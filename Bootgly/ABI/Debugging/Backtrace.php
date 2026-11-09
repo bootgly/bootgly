@@ -36,21 +36,21 @@ class Backtrace
 
    // * Metadata
    // @ Last
-   private Call $trace; // @phpstan-ignore-line
+   private Call $Trace; // @phpstan-ignore-line
    // @ Trace
    public string $dir {
       get {
-         return dirname($this->trace->file ?? '');
+         return dirname($this->Trace->file ?? '');
       }
    }
    public string $file {
       get {
-         return $this->trace->file ?? '';
+         return $this->Trace->file ?? '';
       }
    }
    public int $line {
       get {
-         return $this->trace->line ?? 0;
+         return $this->Trace->line ?? 0;
       }
    }
    /** @var array<string> */
@@ -72,14 +72,14 @@ class Backtrace
 
       // * Data
       $this->calls = array_map(
-         fn($call) => new Call($call),
+         fn ($call) => new Call($call),
          $calls
       );
 
       // * Metadata
       // @ Last
       foreach ($this->calls as $call) {
-         $this->trace = $call;
+         $this->Trace = $call;
          break;
       }
       // @ Trace

@@ -66,9 +66,6 @@ class Frame extends Component implements Boxing
       '/\x1B\[(?![0-9;]*m)[\x20-\x3F]*[\x40-\x7E]|\x1B\[[\x20-\x3F]*(?=\n)|\x1B\][^\x07\x1B\n]*(?:\x07|\x1B\\\\)?|\x1B(?=\n)|\x1B[^\x5B\x5D\n]/';
 
 
-   /** Host Output — the terminal surface the frame blits onto */
-   private Output $Host;
-
    // * Config
    // # Geometry (outer rectangle, 1-based screen coordinates; the border consumes 2 columns / 2 rows)
    /** Top screen row (1-based) */
@@ -93,6 +90,8 @@ class Frame extends Component implements Boxing
    public int $capacity;
 
    // * Data
+   /** Host Output — the terminal surface the frame blits onto */
+   private Output $Host;
    /** Frame title — rendered into the top border row */
    public null|string $title = null {
       get {

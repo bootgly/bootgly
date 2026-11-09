@@ -23,6 +23,7 @@ use Bootgly\ACI\Faker;
  */
 final class Email extends Faker
 {
+   // * Data
    /**
     * @var array<int, string>
     */

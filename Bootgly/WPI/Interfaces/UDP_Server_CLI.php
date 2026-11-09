@@ -190,6 +190,12 @@ class UDP_Server_CLI implements Servers
    // `pcntl_exec()` keeps — a fresh launch never carries it.
    private const string RELOAD = 'BOOTGLY_UDP_RELOAD';
 
+   // * Config
+   // # Mode
+   public Modes $Mode;
+   // # Verbosity
+
+   // * Data
    public Logger $Logger {
       get {
          if ( isSet($this->Logger) === false ) {
@@ -200,7 +206,21 @@ class UDP_Server_CLI implements Servers
       }
    }
 
+   protected null|string $domain;
+   protected null|string $host;
+   protected null|int $port;
+   protected int $workers = 0;
+   protected null|string $user = null;
+   protected null|string $group = null;
 
+   // # SAPI
+   public static null|string $Application = null;
+   public static null|Decoder $Decoder = null;
+   public static null|Encoder $Encoder = null;
+   /** @var array<string,true> */
+   protected array $Events = [];
+
+   // * Metadata
    // !
    /** @var resource */
    protected $Socket;
@@ -210,26 +230,6 @@ class UDP_Server_CLI implements Servers
    protected Commands $Commands;
    protected final Process $Process;
 
-   // * Config
-   protected null|string $domain;
-   protected null|string $host;
-   protected null|int $port;
-   protected int $workers = 0;
-   protected null|string $user = null;
-   protected null|string $group = null;
-   // # Mode
-   public Modes $Mode;
-   // # Verbosity
-
-   // * Data
-   // # SAPI
-   public static null|string $Application = null;
-   public static null|Decoder $Decoder = null;
-   public static null|Encoder $Encoder = null;
-   /** @var array<string,true> */
-   protected array $Events = [];
-
-   // * Metadata
    // # State
    protected int $started = 0;
    protected bool $daemonized = false;

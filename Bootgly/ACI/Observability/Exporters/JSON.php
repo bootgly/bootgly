@@ -41,7 +41,7 @@ class JSON implements Exporter
    {
       // @ Encode (fail loud — caller treats '' as "do not overwrite")
       try {
-         $json = json_encode([
+         $JSON = json_encode([
             'timestamp' => $Snapshot->timestamp,
             'metrics'   => (object) $Snapshot->metrics,
          ], JSON_PRESERVE_ZERO_FRACTION | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
@@ -51,6 +51,6 @@ class JSON implements Exporter
       }
 
       // :
-      return $json . PHP_EOL;
+      return $JSON . PHP_EOL;
    }
 }

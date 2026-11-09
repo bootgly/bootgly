@@ -42,6 +42,7 @@ final class Filter extends php_user_filter
     */
    public const string NAME = 'bootgly.coverage';
 
+   // * Metadata
    /**
     * Buffered PHP source read from the upstream stream buckets.
     */

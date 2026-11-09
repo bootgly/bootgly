@@ -30,15 +30,6 @@ class Process
 {
 
 
-   public private(set) Children $Children;
-
-   public Signals $Signals;
-
-   public State $State;
-
-   public User $User;
-   public Group $Group;
-
    // * Config
    // ...
 
@@ -59,6 +50,15 @@ class Process
    }
 
    // * Metadata
+   public private(set) Children $Children;
+
+   public Signals $Signals;
+
+   public State $State;
+
+   public User $User;
+   public Group $Group;
+
    public int $id {
       get => posix_getpid();
    }

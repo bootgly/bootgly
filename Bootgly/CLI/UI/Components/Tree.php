@@ -41,10 +41,10 @@ use Bootgly\CLI\UI\Components\Tree\Node;
  */
 class Tree extends Component
 {
+   // * Config
    public Input $Input;
    public Output $Output;
 
-   // * Config
    /** Header line above the tree — rendered only when non-empty */
    public string $prompt;
    /** Render `├─ └─ │` connector guides (false = plain indent) */
@@ -67,7 +67,7 @@ class Tree extends Component
    /** Node confirmed by Enter — null after Esc / cancel */
    public private(set) null|Node $selected;
    /** @var array<int,Node> Visible rows in pre-order (rebuilt per frame) */
-   private array $flattened;
+   private array $Flattened;
    /** @var array<int,string> Connector prefix per visible row */
    private array $prefixes;
    /** Interactive session active? (adds the aim column) */
@@ -97,7 +97,7 @@ class Tree extends Component
       $this->aimed = 0;
       $this->Window = new Window;
       $this->selected = null;
-      $this->flattened = [];
+      $this->Flattened = [];
       $this->prefixes = [];
       $this->navigating = false;
    }
@@ -141,7 +141,7 @@ class Tree extends Component
       // ! Viewport window
       $Window = $this->Window;
       $windowed = $this->viewport !== null;
-      $total = count($this->flattened);
+      $total = count($this->Flattened);
 
       $first = $windowed === true ? $Window->first : 0;
       $last = $windowed === true ? $Window->last : $total - 1;
@@ -185,11 +185,11 @@ class Tree extends Component
       // ! Visible rows refresh (covers direct calls outside the navigate loop)
       $this->flatten();
 
-      $total = count($this->flattened);
+      $total = count($this->Flattened);
       // ? External mutations may shrink the tree between calls — a stale aim
       //   clamps back into the visible range
       $this->aimed = max(0, min($this->aimed, $total - 1));
-      $Node = $this->flattened[$this->aimed] ?? null;
+      $Node = $this->Flattened[$this->aimed] ?? null;
 
       switch ($key) {
          // @ Aiming — clamped, no wrap (trees are spatial)
@@ -241,7 +241,7 @@ class Tree extends Component
             }
             else if ($Node->Parent !== null) {
                // ? Leaf or folded — aim jumps to the parent (always visible)
-               $parent = array_search($Node->Parent, $this->flattened, true);
+               $parent = array_search($Node->Parent, $this->Flattened, true);
                if ($parent !== false) {
                   $this->aimed = $parent;
                }
@@ -401,7 +401,7 @@ class Tree extends Component
     */
    private function flatten (): void
    {
-      $this->flattened = [];
+      $this->Flattened = [];
       $this->prefixes = [];
 
       $this->walk($this->Nodes, '');
@@ -423,8 +423,8 @@ class Tree extends Component
       foreach ($Nodes as $position => $Node) {
          $last = $position === $count - 1;
 
-         $row = count($this->flattened);
-         $this->flattened[$row] = $Node;
+         $row = count($this->Flattened);
+         $this->Flattened[$row] = $Node;
          $this->prefixes[$row] = match (true) {
             $this->guides === false => str_repeat('  ', $Node->depth),
             $Node->depth === 0 => '',
@@ -451,7 +451,7 @@ class Tree extends Component
     */
    private function compile (int $row): string
    {
-      $Node = $this->flattened[$row];
+      $Node = $this->Flattened[$row];
       $prefix = $this->prefixes[$row];
 
       // ! Marker — node override, else state glyph
@@ -501,7 +501,7 @@ class Tree extends Component
    private function slide (): void
    {
       $this->Window->size = $this->viewport ?? 0;
-      $this->Window->total = count($this->flattened);
+      $this->Window->total = count($this->Flattened);
       $this->Window->slide($this->aimed);
    }
 
@@ -514,10 +514,10 @@ class Tree extends Component
     */
    private function seek (Node $Aimed): void
    {
-      $row = array_search($Aimed, $this->flattened, true);
+      $row = array_search($Aimed, $this->Flattened, true);
 
       $this->aimed = $row !== false
          ? $row
-         : max(0, min($this->aimed, count($this->flattened) - 1));
+         : max(0, min($this->aimed, count($this->Flattened) - 1));
    }
 }

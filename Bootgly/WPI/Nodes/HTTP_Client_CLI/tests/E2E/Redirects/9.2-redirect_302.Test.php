@@ -30,9 +30,9 @@ return new Test(
          );
       },
       function (HTTP_Client_CLI $Client): Response {
-         $r = new Response;
-         $r->code = -1;
-         return $r;
+         $R = new Response;
+         $R->code = -1;
+         return $R;
       },
    ],
 

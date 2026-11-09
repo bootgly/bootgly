@@ -17,14 +17,13 @@ use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response\Raw\Header;
 
 class Response
 {
-   public protected(set) Header $Header;
-   public protected(set) Body $Body;
-
-
    // * Config
    // ...
 
    // * Data
+   public protected(set) Header $Header;
+   public protected(set) Body $Body;
+
    // | HTTP Response
    public string $protocol;
    public int $code;

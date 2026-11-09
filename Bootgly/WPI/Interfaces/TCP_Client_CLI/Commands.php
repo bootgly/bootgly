@@ -21,6 +21,10 @@ use Bootgly\WPI\Interfaces\TCP_Client_CLI as Client;
 
 class Commands extends CLI\Terminal
 {
+   // * Config
+   public Client $Client;
+
+   // * Data
    public Logger $Logger {
       get {
          if ( isSet($this->Logger) === false ) {
@@ -31,10 +35,6 @@ class Commands extends CLI\Terminal
       }
    }
 
-
-   public Client $Client;
-
-   // * Data
    // ! Command
    /** @var array<string> */
    public static array $commands = [

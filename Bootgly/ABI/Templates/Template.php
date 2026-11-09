@@ -58,8 +58,6 @@ class Template implements Templates
 {
    public const string EXTENSION = '.template.php';
 
-   private Iterators $Iterators; // @phpstan-ignore-line
-
    // * Config
    /**
     * Base directory used to resolve named templates (@extends, @include, @component).
@@ -77,6 +75,7 @@ class Template implements Templates
    public readonly string|File $raw;
 
    // * Metadata
+   private Iterators $Iterators; // @phpstan-ignore-line
    private null|string $file;
    // Cache
    /**

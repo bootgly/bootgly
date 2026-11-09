@@ -95,18 +95,18 @@ return new Test(
          description: 'attach() returns self and appends to $Attachments'
       );
 
-      $uri = $Message->embed('png-bytes', name: 'pixel.png', type: 'image/png', cid: 'fixed-cid');
+      $URI = $Message->embed('png-bytes', name: 'pixel.png', type: 'image/png', cid: 'fixed-cid');
       yield assert(
-         assertion: $uri === 'cid:fixed-cid'
+         assertion: $URI === 'cid:fixed-cid'
             && count($Message->Embeds) === 1
             && $Message->Embeds[0]->disposition === Attachment::INLINE
             && $Message->Embeds[0]->cid === 'fixed-cid',
          description: 'embed() returns the cid: URI and appends an INLINE part'
       );
 
-      $uri = $Message->embed('png-bytes', name: 'pixel2.png', type: 'image/png');
+      $URI = $Message->embed('png-bytes', name: 'pixel2.png', type: 'image/png');
       yield assert(
-         assertion: preg_match('/^cid:[0-9a-f]{32}$/', $uri) === 1,
+         assertion: preg_match('/^cid:[0-9a-f]{32}$/', $URI) === 1,
          description: 'embed() without a cid generates a 32-hex one'
       );
 

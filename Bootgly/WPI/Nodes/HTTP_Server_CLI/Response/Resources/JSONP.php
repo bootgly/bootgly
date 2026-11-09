@@ -92,8 +92,8 @@ class JSONP extends Resource
             ? $callbackSource
             : 'callback';
 
-      $json = json_encode($body);
+      $JSON = json_encode($body);
 
-      return $Response->send($callback . '(' . ($json === false ? 'null' : $json) . ')');
+      return $Response->send($callback . '(' . ($JSON === false ? 'null' : $JSON) . ')');
    }
 }

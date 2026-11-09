@@ -35,7 +35,7 @@ class Identity
    //   default, which is indistinguishable from a value the caller chose — so
    //   an UPDATE built from the whole map writes defaults over stored data.
    /** @var WeakMap<object,array<string,true>> */
-   private WeakMap $hydrated;
+   private WeakMap $Hydrated;
 
    // * Metadata
    // ...
@@ -44,7 +44,7 @@ class Identity
 
    public function __construct ()
    {
-      $this->hydrated = new WeakMap();
+      $this->Hydrated = new WeakMap();
    }
    /**
     * Fetch one already-hydrated entity by class and key.
@@ -66,7 +66,7 @@ class Identity
     */
    public function record (object $Entity, array $columns): void
    {
-      $this->hydrated[$Entity] = ($this->hydrated[$Entity] ?? []) + $columns;
+      $this->Hydrated[$Entity] = ($this->Hydrated[$Entity] ?? []) + $columns;
    }
 
    /**
@@ -80,13 +80,13 @@ class Identity
    public function carried (object $Entity): null|array
    {
       // :
-      return $this->hydrated[$Entity] ?? null;
+      return $this->Hydrated[$Entity] ?? null;
    }
 
    public function reset (): void
    {
       $this->entities = [];
-      $this->hydrated = new WeakMap();
+      $this->Hydrated = new WeakMap();
    }
 
    /**

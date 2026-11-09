@@ -10,9 +10,9 @@ use Bootgly\API\Workables\Server\Middlewares;
 
 final class MaterializedCountMiddleware implements Middleware
 {
-   public function process (object $Request, object $Response, Closure $next): object
+   public function process (object $Request, object $Response, Closure $Next): object
    {
-      return $next($Request, $Response);
+      return $Next($Request, $Response);
    }
 }
 

@@ -54,8 +54,6 @@ class Markdown extends Component
    use Formattable;
 
 
-   private Output $Output;
-
    // * Config
    /** Render width in columns — null resolves the terminal width */
    public null|int $width;
@@ -67,6 +65,7 @@ class Markdown extends Component
    public array $Highlighters;
 
    // * Data
+   private Output $Output;
    /** The markdown source */
    public string $source;
 

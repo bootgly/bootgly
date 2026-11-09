@@ -24,7 +24,7 @@ class Models
 
    // * Data
    /** @var array<class-string,Model> */
-   private array $models = [];
+   private array $Models = [];
 
    // * Metadata
    // ...
@@ -37,8 +37,8 @@ class Models
     */
    public function fetch (string $class): Model
    {
-      $this->models[$class] ??= Model::reflect($class);
+      $this->Models[$class] ??= Model::reflect($class);
 
-      return $this->models[$class];
+      return $this->Models[$class];
    }
 }

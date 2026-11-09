@@ -11,7 +11,7 @@ return new Test(
    test: function () {
       // ! A child process that runs one probe and reports its result over a socket
       //   (the probe gets the socket too, to signal the parent before it reports)
-      $spawn = static function (Closure $probe): array {
+      $spawn = static function (Closure $Probe): array {
          $Pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
          if ($Pair === false) {
             throw new RuntimeException('Could not create the probe socket.');
@@ -23,7 +23,7 @@ return new Test(
          if ($PID === 0) {
             fclose($Pair[0]);
             try {
-               $result = (string) $probe($Pair[1]);
+               $result = (string) $Probe($Pair[1]);
             }
             catch (Throwable) {
                $result = 'error';

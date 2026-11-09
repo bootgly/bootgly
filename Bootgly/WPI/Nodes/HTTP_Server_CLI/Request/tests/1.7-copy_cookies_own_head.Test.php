@@ -49,16 +49,16 @@ return new Test(
          'bound' => $Bound->get('who'),
       ];
       $Captured->clean();
-      $json = json_encode($read);
+      $JSON = json_encode($read);
 
       yield assert(
          assertion: $read['clone'] === 'first' && $read['captured'] === 'first',
-         description: "Each copy reads the cookies of its own head: {$json}",
+         description: "Each copy reads the cookies of its own head: {$JSON}",
       );
 
       yield assert(
          assertion: $read['live'] === 'second' && $read['bound'] === 'second',
-         description: "The live Request — and an object taken from it — read the next request's: {$json}",
+         description: "The live Request — and an object taken from it — read the next request's: {$JSON}",
       );
    },
 );

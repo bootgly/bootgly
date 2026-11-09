@@ -32,6 +32,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
  */
 final class Exchange implements Disconnecting
 {
+   // * Metadata
    /** @var null|WeakMap<Request,self> */
    private static null|WeakMap $Owners = null;
    /** @var null|WeakMap<object,self> */
@@ -41,7 +42,6 @@ final class Exchange implements Disconnecting
    private static null|Request $Request = null;
    private static null|self $Exchange = null;
 
-   // * Metadata
    /** @var null|WeakMap<Request,true> */
    private null|WeakMap $Aliases = null;
    private bool $finished = false;

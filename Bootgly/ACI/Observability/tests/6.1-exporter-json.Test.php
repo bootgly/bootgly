@@ -15,19 +15,19 @@ return new Test(
       ]);
       $Snapshot->timestamp = 1700000000.5;
 
-      $json = (new JSON)->export($Snapshot);
+      $JSON = (new JSON)->export($Snapshot);
 
       $expected = '{"timestamp":1700000000.5,"metrics":{"http_requests_total":'
          . '{"type":"counter","help":"Total requests.","series":[{"labels":{"method":"GET"},"value":5.5}]}}}'
          . PHP_EOL;
 
       yield assert(
-         assertion: $json === $expected,
+         assertion: $JSON === $expected,
          description: 'golden JSON output matches byte-for-byte'
       );
 
       // # Round-trip back through Snapshot::import
-      $decoded = json_decode($json, true);
+      $decoded = json_decode($JSON, true);
       $Back = Snapshot::import($decoded);
 
       yield assert(

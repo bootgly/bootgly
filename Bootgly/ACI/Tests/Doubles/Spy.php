@@ -29,15 +29,17 @@ use Bootgly\ACI\Tests\Doubles\Mock\Proxy;
  */
 class Spy implements Doubling
 {
-   /**
-    * Recorded invocations received by the generated Wrapped proxy.
-    */
-   public Calls $Calls;
+   // * Config
    /**
     * Real object delegated to by the Wrapped proxy.
     */
    public readonly object $Real;
 
+   // * Metadata
+   /**
+    * Recorded invocations received by the generated Wrapped proxy.
+    */
+   public Calls $Calls;
    /**
     * The recording proxy — typesafe `instanceof` of the real class.
     */

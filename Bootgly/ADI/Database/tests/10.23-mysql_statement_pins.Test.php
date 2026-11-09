@@ -71,8 +71,8 @@ return new Test(
 
       // @ Drive one operation from a fresh cache to a cached id, leaving the
       //   connection warm and the statement cached.
-      $warm = function (MySQL $MySQL, $server, string $sql, int $id) use ($prepared, $definition, $eof, $ok) {
-         $Operation = $MySQL->query($sql, [1]);
+      $warm = function (MySQL $MySQL, $server, string $SQL, int $id) use ($prepared, $definition, $eof, $ok) {
+         $Operation = $MySQL->query($SQL, [1]);
          $MySQL->advance($Operation);
          fwrite($server, $MySQL->Encoder->frame($prepared($id), 1));
          fwrite($server, $MySQL->Encoder->frame($definition, 2));

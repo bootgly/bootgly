@@ -56,6 +56,10 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 
 class Commands extends CLI\Terminal
 {
+   // * Config
+   public Server $Server;
+
+   // * Data
    public Logger $Logger {
       get {
          if ( isSet($this->Logger) === false ) {
@@ -66,13 +70,7 @@ class Commands extends CLI\Terminal
       }
    }
 
-
-   public Server $Server;
-   /** Last command sequence consumed by this process. */
-   private string $sequence = '';
-
    // ! Command
-   // * Data
    /** @var array<string> */
    public static array $commands = [
       // ! Server
@@ -116,6 +114,10 @@ class Commands extends CLI\Terminal
          'reset'
       ]
    ];
+
+   // * Metadata
+   /** Last command sequence consumed by this process. */
+   private string $sequence = '';
 
    // ***
 

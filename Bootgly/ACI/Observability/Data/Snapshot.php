@@ -137,10 +137,10 @@ class Snapshot
    {
       ksort($labels);
 
-      $json = json_encode($labels);
+      $JSON = json_encode($labels);
 
       // :
-      return $json === false ? '' : $json;
+      return $JSON === false ? '' : $JSON;
    }
 
    /**

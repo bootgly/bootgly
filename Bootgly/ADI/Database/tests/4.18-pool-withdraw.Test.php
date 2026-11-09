@@ -1670,7 +1670,7 @@ return new Test(
          $Driver = $Jammed->Protocol;
          $credit = $Driver instanceof PostgreSQL
             ? [
-               (new ReflectionProperty(PostgreSQL::class, 'writing'))->getValue($Driver) === $Jammed,
+               (new ReflectionProperty(PostgreSQL::class, 'Writing'))->getValue($Driver) === $Jammed,
                (new ReflectionProperty(PostgreSQL::class, 'wrote'))->getValue($Driver),
             ]
             : [false, -1];
@@ -2018,7 +2018,7 @@ return new Test(
          $Driver = $Writer->Protocol;
          $credit = $Driver instanceof PostgreSQL
             ? [
-               (new ReflectionProperty(PostgreSQL::class, 'writing'))->getValue($Driver) === $Writer,
+               (new ReflectionProperty(PostgreSQL::class, 'Writing'))->getValue($Driver) === $Writer,
                (new ReflectionProperty(PostgreSQL::class, 'wrote'))->getValue($Driver),
             ]
             : [false, -1];

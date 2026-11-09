@@ -62,9 +62,9 @@ class Toasts extends Component
    protected const int HEIGHT = 3;
 
 
+   // * Config
    public Output $Output;
 
-   // * Config
    /** Screen position anchoring the stack */
    public Positions $Positions;
    /** Default toast lifetime, in seconds */

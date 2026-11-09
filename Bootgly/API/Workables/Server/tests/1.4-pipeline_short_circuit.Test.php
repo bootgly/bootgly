@@ -15,9 +15,9 @@ return new Test(
       $handlerCalled = false;
 
       $Blocker = new class implements Middleware {
-         public function process (object $Request, object $Response, Closure $next): object
+         public function process (object $Request, object $Response, Closure $Next): object
          {
-            // ? Short-circuit: do NOT call $next
+            // ? Short-circuit: do NOT call $Next
             $Response->blocked = true; // @phpstan-ignore-line
 
             return $Response;

@@ -21,6 +21,7 @@ use Bootgly\ACI\Faker;
  */
 final class Name extends Faker
 {
+   // * Data
    /**
     * @var array<int, string>
     */

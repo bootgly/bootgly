@@ -57,14 +57,14 @@ return new Test(
          ->assert();
 
       // object
-      $object1 = new stdClass();
+      $Object1 = new stdClass();
 
       yield new Assertion(
          description: 'Equal objects',
          fallback: 'Objects not matched!'
       )
-         ->expect($object1)
-         ->to->be($object1)
+         ->expect($Object1)
+         ->to->be($Object1)
          ->assert();
    })
       ->input('test')

@@ -202,10 +202,10 @@ class RateLimit implements Middleware
       if ($key === null) {
          // @ Spoof-proof key by default: the immutable transport peer. Opt into
          //   the proxy-derived application IP only when the chain is trusted.
-         $ip = $this->trustForwarded
+         $IP = $this->trustForwarded
             ? $Request->address // @phpstan-ignore-line
             : $Request->peer;   // @phpstan-ignore-line
-         $key = self::mask((string) $ip, $this->ipv6Prefix);
+         $key = self::mask((string) $IP, $this->ipv6Prefix);
       }
       $key = $this->principalNamespace . $key;
 

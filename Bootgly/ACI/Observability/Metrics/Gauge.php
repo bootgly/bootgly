@@ -19,12 +19,13 @@ use Bootgly\ACI\Observability\Metric;
 
 class Gauge extends Metric
 {
-   public Types $Type { get => Types::Gauge; }
-
    // * Data
    public private(set) float $value = 0.0;
    // @ Optional observable callback — when set, read() pulls a live value instead of the stored one.
    protected null|Closure $observe;
+
+   // * Metadata
+   public Types $Type { get => Types::Gauge; }
 
 
    /**

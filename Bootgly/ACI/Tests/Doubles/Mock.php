@@ -34,22 +34,20 @@ use Bootgly\ACI\Tests\Doubles\Mock\Stubs;
  */
 class Mock implements Doubling
 {
-   /**
-    * Recorded invocations received by the generated Proxy.
-    */
-   public Calls $Calls;
+   // * Data
    /**
     * Stub rules applied by method name and arguments.
     */
    public Stubs $Stubs;
-
-
-   // * Data
    /**
     * The class or interface this Mock stands in for.
     */
    public readonly string $target;
    // * Metadata
+   /**
+    * Recorded invocations received by the generated Proxy.
+    */
+   public Calls $Calls;
    /**
     * Typesafe proxy instance — passes `instanceof $target`.
     */

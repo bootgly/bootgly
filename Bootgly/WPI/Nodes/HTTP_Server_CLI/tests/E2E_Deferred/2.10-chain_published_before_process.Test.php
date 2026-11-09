@@ -21,9 +21,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
  * only around the handler would leave that deferral with no boundary.
  */
 $Deferring = new class implements Middleware {
-   public function process (object $Request, object $Response, Closure $next): object
+   public function process (object $Request, object $Response, Closure $Next): object
    {
-      // ! Defers ahead of $next and never calls it
+      // ! Defers ahead of $Next and never calls it
       if ($Response instanceof Response) {
          return $Response->defer(static function (Response $Response): void {
             $Response->wait();
@@ -31,7 +31,7 @@ $Deferring = new class implements Middleware {
          });
       }
 
-      return $next($Request, $Response);
+      return $Next($Request, $Response);
    }
 };
 $Route = new Boundary('route');

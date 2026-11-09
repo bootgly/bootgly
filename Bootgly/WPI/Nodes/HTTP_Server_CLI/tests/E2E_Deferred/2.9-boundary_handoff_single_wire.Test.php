@@ -19,7 +19,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
  * settled, and the Session written before the throw is persisted at the
  * handoff.
  */
-$Sse = new Boundary('sse', mode: 'handoff');
+$SSE = new Boundary('sse', mode: 'handoff');
 $Child = new Boundary('child', mode: 'nested');
 $Probe = new class {
    public string $cookie = '';
@@ -108,7 +108,7 @@ return new Test(
 
       return "GET /deferred/ping HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
-   response: static function (Request $Request, Response $Response, Router $Router) use ($Sse, $Child): Generator {
+   response: static function (Request $Request, Response $Response, Router $Router) use ($SSE, $Child): Generator {
       yield $Router->route('/deferred/recover/handoff', static function (Request $Request, Response $Response) {
          return $Response->defer(static function (Response $Response, Request $Snapshot): void {
             $Response->wait();
@@ -119,7 +119,7 @@ return new Test(
             $Session->set('recovered', 'yes');
             throw new RuntimeException('deferred-throw');
          });
-      }, GET, [$Sse]);
+      }, GET, [$SSE]);
       yield $Router->route('/deferred/recover/nested', static function (Request $Request, Response $Response) {
          return $Response->defer(static function (Response $Response): void {
             $Response->wait();

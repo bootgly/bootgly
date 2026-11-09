@@ -21,8 +21,6 @@ use Bootgly\CLI\Terminal\Output;
 
 class Dumper extends Component
 {
-   private Output $Output;
-
    // * Config
    /** SGR decoration — null follows the TTY, false forces plain, true forces styled */
    public null|bool $decoration;
@@ -36,6 +34,7 @@ class Dumper extends Component
    public string $theme;
 
    // * Data
+   private Output $Output;
    /** The value to dump */
    public mixed $value;
 

@@ -80,10 +80,10 @@ class Normalized
    /**
     * Check whether a raw SQL string is safe to route to a replica.
     */
-   private function check (string $sql): bool
+   private function check (string $SQL): bool
    {
-      $sql = ltrim($sql);
-      $upper = strtoupper($sql);
+      $SQL = ltrim($SQL);
+      $upper = strtoupper($SQL);
       $token = substr($upper, 0, strcspn($upper, " \t\r\n("));
 
       return match ($token) {
@@ -97,8 +97,8 @@ class Normalized
    /**
     * Check whether SQL text contains write tokens.
     */
-   private function write (string $sql): bool
+   private function write (string $SQL): bool
    {
-      return preg_match('/\b(ALTER|CREATE|DELETE|DROP|INSERT|MERGE|TRUNCATE|UPDATE)\b/', $sql) === 1;
+      return preg_match('/\b(ALTER|CREATE|DELETE|DROP|INSERT|MERGE|TRUNCATE|UPDATE)\b/', $SQL) === 1;
    }
 }

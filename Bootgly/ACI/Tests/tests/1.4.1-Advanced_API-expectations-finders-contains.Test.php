@@ -32,14 +32,14 @@ return new Test(
          );
 
       // object
-      $object = new stdClass();
-      $object->property = 'Hello, World!';
+      $Object = new stdClass();
+      $Object->property = 'Hello, World!';
       yield new Assertion(
          description: 'Contains object property',
          fallback: 'Objects not matched!'
       )
          ->assert(
-            actual: $object,
+            actual: $Object,
             expected: new Contains('property'),
          );
    })

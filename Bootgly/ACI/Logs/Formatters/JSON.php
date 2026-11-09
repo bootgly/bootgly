@@ -48,7 +48,7 @@ class JSON implements Formatter
       $message = preg_replace(self::ANSI, '', $rendered) ?? $rendered;
 
       // @ Encode
-      $json = json_encode([
+      $JSON = json_encode([
          'timestamp' => $Record->timestamp,
          'level'     => $Record->Level->render(),
          'project'   => $Record->project,
@@ -62,6 +62,6 @@ class JSON implements Formatter
       // :
       // ! json_encode() leaves DEL and C1 raw under JSON_UNESCAPED_UNICODE: escaped here the
       //   document stays valid and lossless, and a file an operator tails cannot drive the terminal
-      return ($json === false ? '{}' : Controls::escape($json)) . PHP_EOL;
+      return ($JSON === false ? '{}' : Controls::escape($JSON)) . PHP_EOL;
    }
 }

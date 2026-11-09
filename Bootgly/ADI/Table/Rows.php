@@ -28,6 +28,7 @@ use Iterator;
  */
 class Rows implements ArrayAccess, Iterator
 {
+   // * Data
    /**
     * @var array<TKey,TValue>
     */

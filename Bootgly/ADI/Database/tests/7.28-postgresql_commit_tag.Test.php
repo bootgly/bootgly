@@ -19,7 +19,7 @@ return new Test(
        *
        * @return array{SQL, \Bootgly\ADI\Databases\SQL\Operation, resource}
        */
-      $answer = static function (string $sql, string $tag) use ($complete): array {
+      $answer = static function (string $SQL, string $tag) use ($complete): array {
          [$client, $server] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
          stream_set_blocking($client, false);
          stream_set_blocking($server, false);
@@ -27,7 +27,7 @@ return new Test(
          $Database = new SQL(['timeout' => 30.0, 'pool' => ['min' => 0, 'max' => 1]]);
          $Database->Connection->attach($client);
 
-         $Operation = $Database->query($sql);
+         $Operation = $Database->query($SQL);
          $Database->advance($Operation);
          fread($server, 8192);
          fwrite($server, $complete($tag));

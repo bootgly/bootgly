@@ -2318,16 +2318,16 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     * Handle retry for a failed request (sync/batch modes).
     *
     * Network-failure retries stay idempotent-only; HTTP-level retries
-    * ($http = true, opt-in via $retryOn) are server-solicited and allowed
+    * ($HTTP = true, opt-in via $retryOn) are server-solicited and allowed
     * for any method. The re-dispatch is SCHEDULED on the event loop with a
     * capped exponential backoff — never a blocking sleep.
     *
     * @param Request $Request The failed request.
-    * @param bool $http Whether this is an HTTP-level (status-based) retry.
+    * @param bool $HTTP Whether this is an HTTP-level (status-based) retry.
     *
     * @return bool True if a retry was scheduled.
     */
-   private function retry (Request $Request, bool $http = false): bool
+   private function retry (Request $Request, bool $HTTP = false): bool
    {
       // ? Retry budget
       if ($this->maxRetries <= 0 || $Request->retryCount >= $this->maxRetries) {
@@ -2351,7 +2351,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       }
 
       // ? Network-failure retries: only idempotent methods (or never-sent requests)
-      if ($http === false) {
+      if ($HTTP === false) {
          $method = strtoupper($Request->method);
          $idempotent = in_array($method, ['GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS'], true);
 
@@ -2361,7 +2361,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       }
 
       // ? Backoff delay vetoed by the campaign budget
-      $delay = $this->delay($Request, $http ? $Request->Response : null);
+      $delay = $this->delay($Request, $HTTP ? $Request->Response : null);
       if ($delay === null) {
          return false;
       }
@@ -2867,7 +2867,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          while (
             $this->retryOn !== []
             && in_array($Request->Response->code, $this->retryOn, true)
-            && $this->retry($Request, http: true)
+            && $this->retry($Request, HTTP: true)
          ) {
             $this->drain();
             $this->follow($Request, $configured);

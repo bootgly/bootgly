@@ -30,10 +30,10 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 
 class Connection extends Packages
 {
+   // * Config
    /** @var resource */
    public $Socket;
 
-   // * Config
    /** @var array<int> */
    public array $timers;
    public int $expiration;

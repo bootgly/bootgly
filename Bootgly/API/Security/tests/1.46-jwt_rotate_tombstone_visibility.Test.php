@@ -137,7 +137,7 @@ return new Test(
             $Hook();
          }
 
-         public function log (string $host, string $op, string $key, bool $ok, int $ttl = 0): void
+         public function log (string $host, string $op, string $key, bool $ok, int $TTL = 0): void
          {
             $this->operations[] = [
                'host' => $host,
@@ -145,8 +145,8 @@ return new Test(
                'key' => $key,
                'ok' => $ok,
             ];
-            if ($ok && $ttl > 0) {
-               $this->expiries[$key][] = ($this->clock ?? time()) + $ttl;
+            if ($ok && $TTL > 0) {
+               $this->expiries[$key][] = ($this->clock ?? time()) + $TTL;
             }
          }
       };
@@ -204,7 +204,7 @@ return new Test(
                return $value;
             }
 
-            public function write (string $key, string $value, int $ttl): bool
+            public function write (string $key, string $value, int $TTL): bool
             {
                $this->pause();
                $this->Recorder->trigger('write', $key);
@@ -220,13 +220,13 @@ return new Test(
                   return true;
                }
 
-               $written = $this->Vault->write($key, $value, $ttl);
-               $this->Recorder->log($this->name, 'write', $key, $written, $ttl);
+               $written = $this->Vault->write($key, $value, $TTL);
+               $this->Recorder->log($this->name, 'write', $key, $written, $TTL);
 
                return $written;
             }
 
-            public function claim (string $key, string $value, int $ttl): bool
+            public function claim (string $key, string $value, int $TTL): bool
             {
                $this->pause();
                $this->Recorder->trigger('claim', $key);
@@ -236,8 +236,8 @@ return new Test(
                   return false;
                }
 
-               $claimed = $this->Vault->claim($key, $value, $ttl);
-               $this->Recorder->log($this->name, 'claim', $key, $claimed, $ttl);
+               $claimed = $this->Vault->claim($key, $value, $TTL);
+               $this->Recorder->log($this->name, 'claim', $key, $claimed, $TTL);
 
                return $claimed;
             }

@@ -21,6 +21,7 @@ use Bootgly\ACI\Faker;
  */
 final class Text extends Faker
 {
+   // * Data
    /**
     * Number of words generated per text value.
     */

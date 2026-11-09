@@ -64,6 +64,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
     */
    public const int READ = 65_536;
 
+   // * Data
    // ? Lazy: constructed on first read only. The transport hot path logs
    //   nothing, so an eager per-connection Logger graph (Logger + Handlers +
    //   Processors + Stream) is pure allocation churn under connection churn.

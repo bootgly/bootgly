@@ -23,31 +23,31 @@ return new Test(
       );
 
       // Empty string
-      $stringEmpty = new __String('');
+      $StringEmpty = new __String('');
       yield assert(
-         assertion: $stringEmpty->length === 0,
-         description: 'Empty string length: ' . $stringEmpty->length
+         assertion: $StringEmpty->length === 0,
+         description: 'Empty string length: ' . $StringEmpty->length
       );
 
       // Special characters
-      $stringSpecialChars = new __String('Hello   World!');
+      $StringSpecialChars = new __String('Hello   World!');
       yield assert(
-         assertion: $stringSpecialChars->length === 14,
-         description: 'String with special characters length: ' . $stringSpecialChars->length
+         assertion: $StringSpecialChars->length === 14,
+         description: 'String with special characters length: ' . $StringSpecialChars->length
       );
 
       // UTF-8 encoded string
-      $stringUTF8 = new __String('Bootgly é eficiente!', 'UTF-8');
+      $StringUTF8 = new __String('Bootgly é eficiente!', 'UTF-8');
       yield assert(
-         assertion: $stringUTF8->length === 20,
-         description: 'UTF-8 encoded string length: ' . $stringUTF8->length
+         assertion: $StringUTF8->length === 20,
+         description: 'UTF-8 encoded string length: ' . $StringUTF8->length
       );
 
       // Multibyte characters string
-      $stringMultibyte = new __String('αβγδε', 'UTF-8');
+      $StringMultibyte = new __String('αβγδε', 'UTF-8');
       yield assert(
-         assertion: $stringMultibyte->length === 5,
-         description: 'Multibyte characters string length: ' . $stringMultibyte->length
+         assertion: $StringMultibyte->length === 5,
+         description: 'Multibyte characters string length: ' . $StringMultibyte->length
       );
       // @ Invalid
       // ...

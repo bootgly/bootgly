@@ -39,8 +39,6 @@ class Figlet extends Component
    private const int SPACE = 3;
 
 
-   private Output $Output;
-
    // * Config
    /**
     * Named figlet fonts — a glyph map (char => multiline art) or a PHP file
@@ -59,6 +57,7 @@ class Figlet extends Component
    public string $gap;
 
    // * Data
+   private Output $Output;
    /** The text to enlarge — lowercase maps to the uppercase glyphs */
    public string $text;
 

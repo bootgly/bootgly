@@ -598,17 +598,17 @@ return new Test(
          // ! Half the form values are one byte: PHP shares those (and,
          //   without opcache, interns every parsed key for good)
          $form = [];
-         $json = [];
+         $JSON = [];
          $nests = [];
          for ($index = 0; $index < 900; $index++) {
             $form[] = $index % 2 === 0 ? "k{$index}=v" : "k{$index}=vw";
          }
          for ($index = 0; $index < 800; $index++) {
-            $json[] = "\"key{$index}\":\"value{$index}\"";
+            $JSON[] = "\"key{$index}\":\"value{$index}\"";
             $nests[] = "\"k{$index}\":{\"a\":{\"b\":{$index}}}";
          }
          $form = implode('&', $form);
-         $map = implode(',', $json);
+         $map = implode(',', $JSON);
          $nesting = implode(',', array_slice($nests, 0, 500));
          $payloads = [
             'urlencoded' => $Post('application/x-www-form-urlencoded', $form),
@@ -661,7 +661,7 @@ return new Test(
                $wires['username'], false, $Idle,
                static fn (Request $Snapshot) => $Snapshot->username,
                static fn (Request $Snapshot): bool => $Raw($Snapshot, 'authUsername') === ''
-                  && $Raw($Snapshot, 'authCredentials') === null,
+                  && $Raw($Snapshot, 'AuthCredentials') === null,
             ],
             'urlencoded fields' => [
                $payloads['urlencoded'], true, $Idle, $Read,

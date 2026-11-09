@@ -65,10 +65,10 @@ return new Test(
          //   authority until its owner commits Configs.
          $Connections = $Server->Connections;
 
-         $tasksProperty = new ReflectionProperty(Timer::class, 'tasks');
+         $TasksProperty = new ReflectionProperty(Timer::class, 'tasks');
 
          // # Case A — first datagram from a brand-new, admitted peer
-         $timers = count($tasksProperty->getValue());
+         $timers = count($TasksProperty->getValue());
          $thrown = null;
          $Connection = null;
          try {
@@ -81,7 +81,7 @@ return new Test(
             'thrown' => $thrown,
             'connection' => $Connection instanceof Connection,
             'registered' => isSet(Connections::$Connections['127.0.0.1:45678']),
-            'timers' => count($tasksProperty->getValue()) - $timers,
+            'timers' => count($TasksProperty->getValue()) - $timers,
          ];
 
          yield new Assertion(
@@ -105,7 +105,7 @@ return new Test(
          // # Case B — a blacklisted peer must be rejected BEFORE any
          //   allocation: no Connection, no timer residue in Timer::$tasks
          Connections::$blacklist['127.0.0.2'] = true;
-         $timers = count($tasksProperty->getValue());
+         $timers = count($TasksProperty->getValue());
          $errors = Connections::$errors['connection'];
          $thrown = null;
          $Rejected = false;
@@ -119,7 +119,7 @@ return new Test(
             'thrown' => $thrown,
             'rejected' => $Rejected,
             'errors' => Connections::$errors['connection'] - $errors,
-            'timers' => count($tasksProperty->getValue()) - $timers,
+            'timers' => count($TasksProperty->getValue()) - $timers,
             'registered' => isSet(Connections::$Connections['127.0.0.2:1234']),
          ];
 

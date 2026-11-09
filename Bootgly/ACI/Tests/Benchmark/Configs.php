@@ -26,6 +26,7 @@ use Bootgly\ACI\Tests\Benchmark\Configs\Options;
 
 class Configs
 {
+   // * Config
    /** @var null|array<string> Opponent names to include (null = all). */
    public protected(set) null|array $opponents;
    /** @var null|string Runner name (lowercase). */

@@ -69,9 +69,9 @@ class KeysJWK
          throw new InvalidArgumentException('JWK key id must be a string.');
       }
 
-      $pem = self::format(self::decode($modulus), self::decode($exponent));
+      $PEM = self::format(self::decode($modulus), self::decode($exponent));
 
-      return new Key($pem, $alg, $id);
+      return new Key($PEM, $alg, $id);
    }
 
    /**

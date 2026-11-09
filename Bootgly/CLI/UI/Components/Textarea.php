@@ -42,10 +42,10 @@ class Textarea extends Component
    use Formattable;
 
 
+   // * Config
    public Input $Input;
    public Output $Output;
 
-   // * Config
    public string $prompt;
    /** Visible rows */
    public int $rows;

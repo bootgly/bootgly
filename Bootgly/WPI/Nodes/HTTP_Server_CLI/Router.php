@@ -81,7 +81,7 @@ class Router
    private array $dynamicCache = [];
    /** Fast flag — set true iff any dynamic route was registered. */
    private bool $hasDynamic = false;
-   private null|Closure $catchAllCache = null;
+   private null|Closure $CatchAllCache = null;
    // ? Whether the previous request's match wrote route params — static and
    //   catch-all dispatches then skip the per-request scrub entirely (the
    //   same mostly-false-branch shape as `Response::$scoped`).
@@ -361,8 +361,8 @@ class Router
       $Route = $this->Route;
       // ! One URL property-hook read per request — the hook memoizes _URL,
       //   but each read still pays the hook frame.
-      $url = $URI === '/' ? '' : $Request->URL;
-      $Route->path = $URI === '/' ? '/' : $url;
+      $URL = $URI === '/' ? '' : $Request->URL;
+      $Route->path = $URI === '/' ? '/' : $URL;
       // ? Scrub only after a request that actually wrote params — static
       //   traffic never pays the call frame + array write.
       if ($this->parameterized) {
@@ -401,9 +401,9 @@ class Router
          }
       }
       else {
-         $Dispatcher = $this->staticCache[$method][$url] ?? null;
+         $Dispatcher = $this->staticCache[$method][$URL] ?? null;
          if ($Dispatcher === null) {
-            $Dispatcher = $this->staticCache[''][$url] ?? null;
+            $Dispatcher = $this->staticCache[''][$URL] ?? null;
          }
 
          if ($Dispatcher !== null) {
@@ -433,12 +433,12 @@ class Router
       }
 
       // 2. Dynamic route lookup — skip entirely when no dynamic routes registered
-      //    ($url is '' when '/' had no static match — no dynamic route can match
+      //    ($URL is '' when '/' had no static match — no dynamic route can match
       //    the root, and strpos() with offset 1 would throw on an empty haystack)
-      if ($this->hasDynamic && $url !== '') {
-         $slashPos = strpos($url, '/', 1);
-         $firstSegment = $slashPos !== false ? substr($url, 1, $slashPos - 1) : substr($url, 1);
-         $segCount = substr_count($url, '/');
+      if ($this->hasDynamic && $URL !== '') {
+         $slashPos = strpos($URL, '/', 1);
+         $firstSegment = $slashPos !== false ? substr($URL, 1, $slashPos - 1) : substr($URL, 1);
+         $segCount = substr_count($URL, '/');
          /** @var array<string>|null $segments */
          $segments = null;
 
@@ -471,7 +471,7 @@ class Router
                      // @ Segment-based matching (no regex)
                      if ($entry['fixedSegments'] !== []) {
                         if ($segments === null) {
-                           $segments = explode('/', $url);
+                           $segments = explode('/', $URL);
                         }
 
                         $match = true;
@@ -489,7 +489,7 @@ class Router
 
                      // @ Direct param extraction via batch set
                      if ($segments === null) {
-                        $segments = explode('/', $url);
+                        $segments = explode('/', $URL);
                      }
 
                      /** @var array<string,string> $pv */
@@ -510,18 +510,18 @@ class Router
                      }
 
                      $Route = $this->Route;
-                     $Route->path = $url;
+                     $Route->path = $URL;
                      $Route->Params->set($pv);
                      $this->parameterized = true;
                   }
                   else {
                      // @ Complex route: regex matching
-                     if (!preg_match($entry['pattern'], $url, $matches)) {
+                     if (!preg_match($entry['pattern'], $URL, $matches)) {
                         continue;
                      }
 
                      $Route = $this->Route;
-                     $Route->path = $url;
+                     $Route->path = $URL;
                      // @ Batch param extraction — accumulate locally
                      //   (duplicates as arrays) and install with one set()
                      //   instead of magic get/set frames per capture
@@ -555,14 +555,14 @@ class Router
       }
 
       // 3. Catch-all fallback
-      if ($this->catchAllCache !== null) {
+      if ($this->CatchAllCache !== null) {
          // ! Security: DO NOT promote attacker-controlled miss URLs into
          //   `staticCache['']` — `catchAllCache` is already O(1), so
          //   promotion adds no perf benefit while allowing an
          //   unauthenticated client to grow the static cache by one
          //   entry per unique miss URL (bounded memory DoS until the
          //   worker is recycled). Serve directly from `catchAllCache`.
-         return $this->complete(($this->catchAllCache)($Request, $Response), $Response);
+         return $this->complete(($this->CatchAllCache)($Request, $Response), $Response);
       }
 
       return null;
@@ -675,7 +675,7 @@ class Router
 
       // @ Catch-all route — store dispatcher closure directly (O(1) callable)
       if ($normalizedRoute === '/*') {
-         $this->catchAllCache = $this->dispatch($boundHandler, $MergedMiddlewares);
+         $this->CatchAllCache = $this->dispatch($boundHandler, $MergedMiddlewares);
          return;
       }
 

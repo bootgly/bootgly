@@ -269,7 +269,7 @@ class Language
       // ! The source language is always servable (natural-source keys) —
       //   it participates as the first implicit offer, so `['en', 'pt-BR']`
       //   picks `en` and `*` resolves to the source
-      $offers = [self::$source, ...self::locales()];
+      $offers = [self::$source, ...self::scan()];
 
       // :
       return Locales::choose($preferred, $offers, $excluded) ?? self::$source;
@@ -312,8 +312,8 @@ class Language
 
       // @
       // ! Resolve non-canonical directory names (`pt_BR/` serves `pt-BR`);
-      //   the map is built by the lazy locales() scan — force it once
-      self::$locales === null && self::locales();
+      //   the map is built by the lazy scan() — force it once
+      self::$locales === null && self::scan();
       $directory = self::$directories["{$root}\0{$tag}"] ?? $tag;
 
       $file = "{$root}/{$directory}/{$domain}.php";
@@ -345,7 +345,7 @@ class Language
     *
     * @return array<int,string>
     */
-   private static function locales (): array
+   private static function scan (): array
    {
       // ?:
       if (self::$locales !== null) {

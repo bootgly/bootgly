@@ -111,26 +111,26 @@ $serve = function (bool $secure, callable $drive) use ($certificate, $key): arra
             $size = strlen($bytes);
 
             while ($offset < $size && $bytes[$offset] === '*') {
-               $crlf = strpos($bytes, "\r\n", $offset);
+               $CRLF = strpos($bytes, "\r\n", $offset);
 
-               if ($crlf === false) {
+               if ($CRLF === false) {
                   break;
                }
 
-               $count = (int) substr($bytes, $offset + 1, $crlf - $offset - 1);
-               $offset = $crlf + 2;
+               $count = (int) substr($bytes, $offset + 1, $CRLF - $offset - 1);
+               $offset = $CRLF + 2;
                $arguments = [];
 
                for ($i = 0; $i < $count; $i++) {
-                  $crlf = strpos($bytes, "\r\n", $offset);
+                  $CRLF = strpos($bytes, "\r\n", $offset);
 
-                  if ($crlf === false) {
+                  if ($CRLF === false) {
                      break 2;
                   }
 
-                  $length = (int) substr($bytes, $offset + 1, $crlf - $offset - 1);
-                  $arguments[] = substr($bytes, $crlf + 2, $length);
-                  $offset = $crlf + 2 + $length + 2;
+                  $length = (int) substr($bytes, $offset + 1, $CRLF - $offset - 1);
+                  $arguments[] = substr($bytes, $CRLF + 2, $length);
+                  $offset = $CRLF + 2 + $length + 2;
                }
 
                @file_put_contents(

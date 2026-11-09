@@ -46,18 +46,6 @@ class Suite
     */
    public const string UNREACHED = 'not reached';
 
-   // * Data
-   public Logger $Logger {
-      get {
-         if ( isSet($this->Logger) === false ) {
-            $this->Logger = new Logger(channel: static::class);
-         }
-
-         return $this->Logger;
-      }
-   }
-
-
    // * Config
    // auto
    public string|Closure $autoBoot;
@@ -80,6 +68,15 @@ class Suite
    public array $testables;
 
    // * Data
+   public Logger $Logger {
+      get {
+         if ( isSet($this->Logger) === false ) {
+            $this->Logger = new Logger(channel: static::class);
+         }
+
+         return $this->Logger;
+      }
+   }
    public string $name;
    /** @var array<string> */
    public array $tests;

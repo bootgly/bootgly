@@ -155,7 +155,7 @@ return new Test(
       $Owner = $PostgreSQL->query($SQL, [1]);
       $Sibling = $PostgreSQL->query($SQL, [2]);
 
-      $Writing = new ReflectionProperty(PostgreSQL::class, 'writing');
+      $Writing = new ReflectionProperty(PostgreSQL::class, 'Writing');
       $Writing->setValue($PostgreSQL, $Sibling);
 
       $PostgreSQL->advance($Sibling);

@@ -10,17 +10,17 @@ return new Test(
    test: function () {
       $Encoder = new Encoder;
 
-      $sql = 'SELECT $1';
+      $SQL = 'SELECT $1';
       $parseTypes = pack('n', 1);
       $parseType = pack('N', 23);
-      $parseBody = "s1\0{$sql}\0{$parseTypes}{$parseType}";
+      $parseBody = "s1\0{$SQL}\0{$parseTypes}{$parseType}";
       $parseLength = pack('N', strlen($parseBody) + 4);
       $parseExpected = "P{$parseLength}{$parseBody}";
 
       yield assert(
          assertion: $Encoder->encode(Encoder::PARSE, [
             'statement' => 's1',
-            'sql' => $sql,
+            'sql' => $SQL,
             'types' => [23],
          ]) === $parseExpected,
          description: 'Parse message contains statement, SQL and parameter type OIDs'

@@ -83,7 +83,7 @@ return new Test(
       $PostgreSQL->advance($Holder);
 
       yield assert(
-         assertion: $Holder->write !== '' && $peek($PostgreSQL, 'writing') === $Holder,
+         assertion: $Holder->write !== '' && $peek($PostgreSQL, 'Writing') === $Holder,
          description: 'A batch larger than the send buffer flushes partially and holds the stream'
       );
 
@@ -92,7 +92,7 @@ return new Test(
 
       yield assert(
          assertion: $Sibling->finished === false && $Holder->finished === false
-            && $peek($PostgreSQL, 'writing') === $Holder,
+            && $peek($PostgreSQL, 'Writing') === $Holder,
          description: 'A sibling waits for a live holder — the takeover never fires inside the deadline'
       );
 
@@ -194,7 +194,7 @@ return new Test(
       $PostgreSQL->advance($Holder);
 
       yield assert(
-         assertion: $peek($PostgreSQL, 'writing') === $Holder && $peek($PostgreSQL, 'wrote') === 0,
+         assertion: $peek($PostgreSQL, 'Writing') === $Holder && $peek($PostgreSQL, 'wrote') === 0,
          description: 'The first fwrite() returned zero: the holder claims the stream with nothing on the wire'
       );
 
@@ -352,7 +352,7 @@ return new Test(
       $Pool->advance($Begin);
 
       yield assert(
-         assertion: $reserved($Pool) !== [] && $peek($Driver, 'writing') === $Begin,
+         assertion: $reserved($Pool) !== [] && $peek($Driver, 'Writing') === $Begin,
          description: 'The reserving operation holds the write stream with nothing on the wire'
       );
 
@@ -401,7 +401,7 @@ return new Test(
       $PostgreSQL->abandon($Holder);
 
       yield assert(
-         assertion: $Connection->connected && $peek($PostgreSQL, 'writing') === null
+         assertion: $Connection->connected && $peek($PostgreSQL, 'Writing') === null
             && isset($peek($PostgreSQL, 'closing')['bootgly_requeued']),
          description: 'An abandoned zero-byte holder frees the stream, requeues its Closes and keeps the connection'
       );

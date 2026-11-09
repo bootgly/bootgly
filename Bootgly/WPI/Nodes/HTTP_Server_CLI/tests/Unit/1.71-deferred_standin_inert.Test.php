@@ -142,9 +142,9 @@ if (! class_exists('U171Boundary', false)) {
          $this->Answer = $Answer;
       }
 
-      public function process (object $Request, object $Response, Closure $next): object
+      public function process (object $Request, object $Response, Closure $Next): object
       {
-         return $next($Request, $Response);
+         return $Next($Request, $Response);
       }
 
       public function recover (Request $Request, Response $Response, Throwable $Throwable): null|Response

@@ -449,7 +449,7 @@ class Message
       $headers[] = 'MIME-Version: 1.0';
 
       // @ Body tree
-      [$content, $payload] = $this->body($this->boundary);
+      [$content, $payload] = $this->assemble($this->boundary);
       foreach ($content as $header) {
          $headers[] = $header;
       }
@@ -487,20 +487,20 @@ class Message
     *
     * @return array{0: array<int,string>, 1: string} content headers + payload
     */
-   private function body (string $seed): array
+   private function assemble (string $seed): array
    {
       // ! Leaves
       $plain = $this->write($this->text, 'plain');
-      $html = $this->html !== '' ? $this->write($this->html, 'html') : null;
+      $HTML = $this->html !== '' ? $this->write($this->html, 'html') : null;
 
       // ! Level 3 — alternative (only when both bodies exist)
       $node = match (true) {
-         $html !== null && $this->text !== '' => $this->join(
+         $HTML !== null && $this->text !== '' => $this->join(
             'alternative',
             "=_{$seed}.3",
-            [$this->flatten($plain), $this->flatten($html)]
+            [$this->flatten($plain), $this->flatten($HTML)]
          ),
-         $html !== null => $html,
+         $HTML !== null => $HTML,
          default => $plain
       };
 

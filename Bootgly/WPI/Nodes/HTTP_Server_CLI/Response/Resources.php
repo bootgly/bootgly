@@ -37,12 +37,11 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\XML;
  */
 class Resources
 {
-   // * Config
+   // * Data
    /** @var null|Closure(Resource):mixed */
    private null|Closure $Attach;
    private null|object $Context;
 
-   // * Data
    /** @var array<string,Resource> */
    public private(set) array $resources = [];
    // ! Factories are documented as Closure(object):Resource, but the array

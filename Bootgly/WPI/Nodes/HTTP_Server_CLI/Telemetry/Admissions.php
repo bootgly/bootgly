@@ -31,6 +31,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Exchange;
  */
 final class Admissions
 {
+   // * Metadata
    /** @var null|WeakMap<Emitter,array<int,Closure(Exchange):void>> */
    private static null|WeakMap $Emitters = null;
 

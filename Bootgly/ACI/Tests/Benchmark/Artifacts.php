@@ -61,8 +61,11 @@ use SplFileInfo;
  */
 final class Artifacts
 {
+   // * Config
    public readonly string $ID;
    public readonly string $directory;
+
+   // * Metadata
    public readonly string $relativeDirectory;
    public readonly string $pathBase;
 

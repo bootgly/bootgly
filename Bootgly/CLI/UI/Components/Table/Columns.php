@@ -21,14 +21,13 @@ use Bootgly\CLI\UI\Components\Table\Columns\Width;
 
 class Columns
 {
-   private Table $Table;
-
    // * Config
    public null|string $section;
    // @ Width
    public Autowiden $Autowiden;
 
    // * Data
+   private Table $Table;
    // ...
 
    // * Metadata

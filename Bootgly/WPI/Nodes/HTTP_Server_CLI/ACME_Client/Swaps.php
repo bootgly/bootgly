@@ -100,8 +100,11 @@ final class Swaps
    private const string MARKER = 'owner.token';
    private const string TEMPORARY = '/^\.owner-([a-f0-9]{64})\.tmp$/D';
 
+   // * Config
    public private(set) string $base;
    public private(set) string $instance;
+
+   // * Metadata
    public private(set) string $path;
    private string $lease;
    /** @var null|resource */

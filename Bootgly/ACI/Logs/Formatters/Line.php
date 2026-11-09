@@ -113,10 +113,10 @@ class Line implements Formatter
       }
 
       // @ Newline for every selection except the compact inline message
-      $eol = $segments === Display::MESSAGE ? '' : PHP_EOL;
+      $EOL = $segments === Display::MESSAGE ? '' : PHP_EOL;
 
       // :
-      return "$when$origin$message$context$eol";
+      return "$when$origin$message$context$EOL";
    }
 
    // # Translating

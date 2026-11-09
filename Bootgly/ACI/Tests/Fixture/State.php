@@ -19,6 +19,7 @@ use function array_key_exists;
  */
 class State
 {
+   // * Config
    /**
     * Current values held by the Fixture.
     *
@@ -26,6 +27,7 @@ class State
     */
    public array $bag;
 
+   // * Data
    /**
     * Initial values declared at construction; restored by reset().
     *

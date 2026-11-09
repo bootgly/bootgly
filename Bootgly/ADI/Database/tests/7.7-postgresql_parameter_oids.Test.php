@@ -8,13 +8,13 @@ use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Encoder;
 return new Test(
    description: 'Database: PostgreSQL infers parameter OIDs for NULL casts',
    test: function () {
-      $sql = 'SELECT $1::int AS value, $2::bool AS flag, $3::double precision AS ratio';
+      $SQL = 'SELECT $1::int AS value, $2::bool AS flag, $3::double precision AS ratio';
       $Database = new SQL;
-      $Operation = $Database->query($sql, [null, null, null]);
+      $Operation = $Database->query($SQL, [null, null, null]);
       $Encoder = new Encoder;
       $parse = $Encoder->encode(Encoder::PARSE, [
          'statement' => $Operation->statement,
-         'sql' => $sql,
+         'sql' => $SQL,
          'types' => [23, 16, 701],
       ]);
 

@@ -43,7 +43,7 @@ trait Predicateable
     *
     * @param array<int,mixed> $parameters
     */
-   abstract private function embed (self|Query $query, array &$parameters): string;
+   abstract private function embed (self|Query $Query, array &$parameters): string;
 
    /**
     * Spawn one nested builder.

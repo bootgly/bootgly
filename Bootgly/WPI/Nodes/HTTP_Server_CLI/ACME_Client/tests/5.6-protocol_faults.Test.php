@@ -113,8 +113,8 @@ return new Test(
          try {
             $value = $Action("https://127.0.0.1:{$port}");
          }
-         catch (Throwable $caught) {
-            $error = $caught;
+         catch (Throwable $Caught) {
+            $error = $Caught;
          }
 
          pcntl_waitpid($PID, $status);

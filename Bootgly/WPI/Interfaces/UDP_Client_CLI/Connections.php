@@ -25,6 +25,14 @@ use Bootgly\WPI\Interfaces\UDP_Client_CLI\Connections\Connection;
 
 class Connections implements WPI\Connections
 {
+   // * Config
+   public null|Client $Client;
+
+   public null|float $timeout;
+   public bool $async;
+   public bool $blocking;
+
+   // * Data
    public Logger $Logger {
       get {
          if ( isSet($this->Logger) === false ) {
@@ -34,16 +42,6 @@ class Connections implements WPI\Connections
          return $this->Logger;
       }
    }
-
-
-   public null|Client $Client;
-
-   // * Config
-   public null|float $timeout;
-   public bool $async;
-   public bool $blocking;
-
-   // * Data
    /** @var resource */
    public $Socket;
 

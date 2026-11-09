@@ -32,14 +32,17 @@ use Bootgly\ACI\Tests\Fixture\State;
  */
 abstract class Fixture
 {
-   /**
-    * Current lifecycle state of the Fixture.
-    */
-   public Lifecycles $Lifecycle = Lifecycles::Pristine;
+   // * Config
    /**
     * Mutable state bag reset from the constructor seed.
     */
    public State $State;
+
+   // * Metadata
+   /**
+    * Current lifecycle state of the Fixture.
+    */
+   public Lifecycles $Lifecycle = Lifecycles::Pristine;
 
 
    /**

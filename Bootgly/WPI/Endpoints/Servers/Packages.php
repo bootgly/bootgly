@@ -13,6 +13,10 @@ namespace Bootgly\WPI\Endpoints\Servers;
 
 abstract class Packages
 {
+   // * Config
+   public bool $cache;
+
+   // * Data
    // # Endpoints
    // @ Per-connection decoder instance (stateful).
    // When null, the shared default `Server::$Decoder` is used.
@@ -23,10 +27,6 @@ abstract class Packages
    // `$Encoder::encode(...)` on whichever instance (or class) is active.
    public null|Encoder $Encoder = null;
 
-   // * Config
-   public bool $cache;
-
-   // * Data
    public bool $changed;
    // # IO
    public string $input;

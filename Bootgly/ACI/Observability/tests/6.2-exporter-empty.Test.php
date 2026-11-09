@@ -8,14 +8,14 @@ use Bootgly\ACI\Tests\Suite\Test;
 return new Test(
    description: 'JSON exporter serializes empty metrics as an object, not an array',
    test: function () {
-      $json = (new JSON)->export(new Snapshot());
+      $JSON = (new JSON)->export(new Snapshot());
 
       yield assert(
-         assertion: str_contains($json, '"metrics":{}'),
+         assertion: str_contains($JSON, '"metrics":{}'),
          description: 'empty metrics serialize as {} (object, not [])'
       );
       yield assert(
-         assertion: str_contains($json, '"timestamp":'),
+         assertion: str_contains($JSON, '"timestamp":'),
          description: 'timestamp is always present'
       );
    }

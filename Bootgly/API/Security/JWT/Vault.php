@@ -315,9 +315,9 @@ class Vault implements Cache
    /**
     * Validate a positive TTL.
     */
-   private function guard (int $ttl): void
+   private function guard (int $TTL): void
    {
-      if ($ttl < 1) {
+      if ($TTL < 1) {
          throw new InvalidArgumentException('JWT cache ttl must be positive.');
       }
    }
@@ -380,22 +380,22 @@ class Vault implements Cache
     * is not tamper-protected) and is also handed to the storage backend so
     * expired records are evicted natively.
     */
-   private function put (string $key, string $value, int $ttl): bool
+   private function put (string $key, string $value, int $TTL): bool
    {
-      $record = $this->seal($value, $ttl);
+      $record = $this->seal($value, $TTL);
 
       return $record !== null
-         && $this->Storage->store($this->resolve($key), $record, $ttl);
+         && $this->Storage->store($this->resolve($key), $record, $TTL);
    }
 
    /**
     * Seal one value in a unique authenticated Vault envelope.
     */
-   private function seal (string $value, int $ttl): null|string
+   private function seal (string $value, int $TTL): null|string
    {
       try {
          $payload = json_encode([
-            'expires' => time() + $ttl,
+            'expires' => time() + $TTL,
             'value' => $value,
             // ! Unique per write so an old compare-and-evict cannot remove a
             //   later record recreated with the same value in the same second.

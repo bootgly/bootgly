@@ -158,8 +158,8 @@ return new Test(
             }
 
             $parts = explode("\r\n\r\n", $response, 2);
-            $json = $parts[1] ?? '';
-            $decoded = json_decode($json, true);
+            $JSON = $parts[1] ?? '';
+            $decoded = json_decode($JSON, true);
             if (! is_array($decoded)) {
                return 'Attack C (leading-dot filename): server did not return JSON payload.';
             }

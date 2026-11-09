@@ -24,9 +24,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
 $RouteSealer = new Sealer('route');
 $GlobalSealer = new Sealer('global', prefix: '/deferred/seal/ok');
 $AfterPlain = new class implements Middleware {
-   public function process (object $Request, object $Response, Closure $next): object
+   public function process (object $Request, object $Response, Closure $Next): object
    {
-      $Result = $next($Request, $Response);
+      $Result = $Next($Request, $Response);
       $Result->Header->set('X-After-Plain', '1'); // @phpstan-ignore-line
       return $Result;
    }

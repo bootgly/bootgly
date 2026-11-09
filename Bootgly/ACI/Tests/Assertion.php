@@ -96,7 +96,7 @@ class Assertion extends Expectations
       $this->asserted = false;
       $this->skipped = false;
    }
-   public function __clone(): void
+   public function __clone (): void
    {
       // * Data
       $this->actual = Argument::Undefined;

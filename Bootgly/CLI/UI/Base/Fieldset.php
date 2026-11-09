@@ -31,8 +31,6 @@ use Bootgly\CLI\Terminal\Output;
  */
 class Fieldset extends Component
 {
-   private Output $Output;
-
    // * Config
    // # Dimension
    /** Inner content columns — `null` derives from the widest content/title line */
@@ -59,6 +57,7 @@ class Fieldset extends Component
    public null|string $background;
 
    // * Data
+   private Output $Output;
    public null|string $title = null {
       get {
          return $this->title;

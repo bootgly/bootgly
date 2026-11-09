@@ -26,14 +26,14 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header\Cookies;
 
 class Header
 {
-   // ! `final`: `Request::assume()` resets this via `unset()` on every reused
-   //   request — final guarantees no subclass hook can observe that unset.
-   protected final Cookies $Cookies;
-
    // * Config
    // ... inherited
 
    // * Data
+   // ! `final`: `Request::assume()` resets this via `unset()` on every reused
+   //   request — final guarantees no subclass hook can observe that unset.
+   protected final Cookies $Cookies;
+
    /**
     * Plain protected property (was a public get-hook): internal readers on
     * the cache-hit path (`assume()`, `get()`, …) access the backing store

@@ -239,7 +239,7 @@ return new Test(
             description: 'a second server instance starts with an empty rendezvous despite the shared base'
          );
 
-         $foreign = new CertificateSnapshot(
+         $Foreign = new CertificateSnapshot(
             str_repeat('d', 32),
             '/tmp/certificate.pem',
             '/tmp/key.pem',
@@ -250,7 +250,7 @@ return new Test(
             false,
             ['other.localhost']
          );
-         $concurrent = $Other->request($foreign);
+         $concurrent = $Other->request($Foreign);
          $desired = $Swaps->fetch();
 
          yield assert(
@@ -275,7 +275,7 @@ return new Test(
          $publishedByChild = $Swaps->fetch();
 
          $Third = new Swaps($path, 'cccccccccccccccc');
-         $thirdAttempt = $Third->request($foreign);
+         $thirdAttempt = $Third->request($Foreign);
          $afterForeignPublication = $Swaps->fetch();
 
          yield assert(
@@ -295,14 +295,14 @@ return new Test(
          $RetiredPID = pcntl_fork();
          if ($RetiredPID === 0) {
             $Retired = new Swaps($path, $retiredInstance);
-            exit($Retired->request($foreign) === null ? 1 : 0);
+            exit($Retired->request($Foreign) === null ? 1 : 0);
          }
          pcntl_waitpid($RetiredPID, $retiredStatus);
          $retiredExisted = is_dir("{$path}{$retiredInstance}")
             && is_file("{$path}{$retiredInstance}.owner.lock");
 
          $Fourth = new Swaps($path, 'eeeeeeeeeeeeeeee');
-         $fourthAttempt = $Fourth->request($foreign);
+         $fourthAttempt = $Fourth->request($Foreign);
          $Fourth->sweep();
          yield assert(
             assertion: $RetiredPID > 1
@@ -319,14 +319,14 @@ return new Test(
          );
 
          $Released = new Swaps($path, 'ffffffffffffffff');
-         $releasedAttempt = $Released->request($foreign);
+         $releasedAttempt = $Released->request($Foreign);
          $Released->release();
          $Released->release();
-         $Fourth->request($foreign);
+         $Fourth->request($Foreign);
          $Fourth->sweep();
          yield assert(
             assertion: is_string($releasedAttempt)
-               && $Released->request($foreign) === null
+               && $Released->request($Foreign) === null
                && $Released->fetch() === null
                && is_dir("{$path}ffffffffffffffff") === false
                && is_file("{$path}ffffffffffffffff.owner.lock") === false,
@@ -481,9 +481,9 @@ return new Test(
          link($linkedTemporary, "{$linkedPath}/owner.token");
          $Seed("{$linkedPath}/request.json", (string) json_encode([
             'attempt' => str_repeat('c', 32),
-            'generation' => $foreign->generation,
-            'certificateHash' => $foreign->certificateHash,
-            'keyHash' => $foreign->keyHash,
+            'generation' => $Foreign->generation,
+            'certificateHash' => $Foreign->certificateHash,
+            'keyHash' => $Foreign->keyHash,
             'requested' => time(),
          ]));
          $linkedTemporaryStatus = lstat($linkedTemporary);
@@ -516,10 +516,10 @@ return new Test(
          $lockless = "{$path}1111111111111111";
          mkdir($lockless, 0700);
          file_put_contents("{$lockless}/request.json", '{}');
-         $Fourth->request($foreign);
+         $Fourth->request($Foreign);
          $Fourth->sweep();
          $Collision = new Swaps($path, '1111111111111111');
-         $collisionRejected = $Collision->request($foreign) === null;
+         $collisionRejected = $Collision->request($Foreign) === null;
          yield assert(
             assertion: $collisionRejected
                && is_dir($lockless)

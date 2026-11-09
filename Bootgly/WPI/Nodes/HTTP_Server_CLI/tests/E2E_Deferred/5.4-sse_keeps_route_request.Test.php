@@ -34,7 +34,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
  */
 $Probe = new class {
    /** @var array<string,mixed> */
-   public array $sse = [];
+   public array $SSE = [];
    public string $stream = '';
    /** @var array<int,mixed> */
    public array $events = [];
@@ -50,12 +50,12 @@ return new Test(
          $Socket = Client::open($hostPort);
          // ! An event stream has no Content-Length: `send()` returns at the
          //   head — keep reading the wire for the ticks and the terminal chunk
-         $Probe->sse = Client::send($Socket, Client::request('/deferred/sse/live?q=sse', $testIndex, [
+         $Probe->SSE = Client::send($Socket, Client::request('/deferred/sse/live?q=sse', $testIndex, [
             'X-Echo' => 'sse',
             'Cookie' => 'who=sse',
             'Authorization' => 'Bearer sse-token'
          ]), 4.0);
-         $Probe->stream = (string) ($Probe->sse['body'] ?? '');
+         $Probe->stream = (string) ($Probe->SSE['body'] ?? '');
          // @@ Two ticks one interval apart, then the stream closes the connection
          $deadline = microtime(true) + 6.0;
          while (microtime(true) < $deadline && str_contains($Probe->stream, "0\r\n\r\n") === false) {
@@ -92,7 +92,7 @@ return new Test(
    test: new Assertions(Case: function (string $response) use ($Probe): Generator {
       $evidence = json_encode([
          'error' => $Probe->error,
-         'sse' => $Probe->sse,
+         'sse' => $Probe->SSE,
          'stream' => $Probe->stream
       ]);
 
@@ -101,8 +101,8 @@ return new Test(
          fallback: "No complete event stream: {$evidence}"
       )
          ->expect([
-            $Probe->sse['code'] ?? 0,
-            stripos($Probe->sse['head'] ?? '', 'text/event-stream') !== false,
+            $Probe->SSE['code'] ?? 0,
+            stripos($Probe->SSE['head'] ?? '', 'text/event-stream') !== false,
             count($Probe->events),
             $Probe->ended
          ])

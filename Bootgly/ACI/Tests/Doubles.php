@@ -19,6 +19,7 @@ use Bootgly\ACI\Tests\Doubles\Doubling;
  */
 class Doubles
 {
+   // * Data
    /**
     * @var array<int, Doubling>
     */

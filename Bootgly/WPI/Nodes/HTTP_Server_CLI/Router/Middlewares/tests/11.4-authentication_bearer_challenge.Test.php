@@ -42,9 +42,9 @@ return new Test(
 
          return $Result->Header->get('WWW-Authenticate');
       };
-      $refuse = static function (Closure $configure): bool {
+      $refuse = static function (Closure $Configure): bool {
          try {
-            $configure();
+            $Configure();
          }
          catch (InvalidArgumentException) {
             return true;
@@ -52,9 +52,9 @@ return new Test(
 
          return false;
       };
-      $message = static function (Closure $configure): string {
+      $message = static function (Closure $Configure): string {
          try {
-            $configure();
+            $Configure();
          }
          catch (InvalidArgumentException $Exception) {
             return $Exception->getMessage();

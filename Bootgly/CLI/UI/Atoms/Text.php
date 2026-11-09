@@ -34,14 +34,13 @@ class Text extends Component
    protected const int WAVE = 4;
 
 
-   private Output $Output;
-
    // * Config
    public Effects $Effects;
    /** Microseconds per animation step */
    public int $interval;
 
    // * Data
+   private Output $Output;
    public string $content;
 
    // * Metadata

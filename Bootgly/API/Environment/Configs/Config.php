@@ -44,7 +44,7 @@ class Config
    // * Metadata
    public private(set) null|string $name = null;
    public private(set) null|self $parent = null;
-   private null|self $last = null;
+   private null|self $Last = null;
 
 
    /**
@@ -72,7 +72,7 @@ class Config
          $this->children[$name] = $Child;
       }
 
-      $this->last = $this->children[$name];
+      $this->Last = $this->children[$name];
 
       return $this->children[$name];
    }
@@ -92,7 +92,7 @@ class Config
       }
 
       $this->children = $children;
-      $this->last = null;
+      $this->Last = null;
    }
 
    /**
@@ -216,7 +216,7 @@ class Config
     */
    public function down (): self
    {
-      return $this->last ?? $this;
+      return $this->Last ?? $this;
    }
 
    // # Merging

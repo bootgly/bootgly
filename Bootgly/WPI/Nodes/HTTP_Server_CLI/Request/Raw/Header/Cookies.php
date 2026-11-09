@@ -26,12 +26,12 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 
 final class Cookies
 {
-   private Header $Header;
-
    // * Config
    // ...
 
    // * Data
+   private Header $Header;
+
    /**
     * The ledger token of the deferred request snapshot these cookies are
     * parsed for (`Request::capture()`): it is charged what the parsed

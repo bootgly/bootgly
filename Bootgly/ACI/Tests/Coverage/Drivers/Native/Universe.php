@@ -24,6 +24,7 @@ use Bootgly\ACI\Tests\Coverage\Drivers\Native;
  */
 final class Universe
 {
+   // * Metadata
    /**
     * Executable-line denominator per file.
     * Shape: [file => [line => 0]]

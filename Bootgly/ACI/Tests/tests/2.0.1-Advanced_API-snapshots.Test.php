@@ -37,28 +37,28 @@ return new Test(
 
 
       // @ Using capture(...) and restore(...) [object]
-      $object1 = new stdClass();
-      $object1->property = 'value';
+      $Object1 = new stdClass();
+      $Object1->property = 'value';
       yield new Assertion(
          description: 'Capture objects',
          fallback: 'Objects do not match!'
       )
          ->assert(
-            actual: $object1,
-            expected: $object1,
+            actual: $Object1,
+            expected: $Object1,
          )
          ->capture('objectSnapshot');
       // ---
-      $object2 = new stdClass();
-      $object2->property = 'value';
+      $Object2 = new stdClass();
+      $Object2->property = 'value';
       yield new Assertion(
          description: 'Restoring objects',
          fallback: 'Restored object does not match!'
       )
          ->restore('objectSnapshot')
          ->assert(
-            actual: $object2,
-            expected: $object1,
+            actual: $Object2,
+            expected: $Object1,
          );
 
 
@@ -102,15 +102,15 @@ return new Test(
          );
 
       // @ Using using as Snapshot [object]
-      $object1 = new stdClass();
-      $object1->property = 'value';
+      $Object1 = new stdClass();
+      $Object1->property = 'value';
       yield new Assertion(
          description: 'Capturing and restoring objects',
          fallback: 'Objects do not match!'
       )
          ->assert(
-            actual: $object1,
-            expected: $object1,
+            actual: $Object1,
+            expected: $Object1,
             using: new Snapshots\MemoryDefaultSnapshot
          );
 

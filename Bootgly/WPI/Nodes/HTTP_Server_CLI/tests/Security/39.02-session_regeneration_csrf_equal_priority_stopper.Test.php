@@ -100,7 +100,7 @@ return new Test(
             $this->tokenBytes = $tokenBytes;
          }
 
-         public function process (object $Request, object $Response, Closure $next): object
+         public function process (object $Request, object $Response, Closure $Next): object
          {
             $PreviousEmitter = Emitter::$Instance;
             $IsolatedEmitter = new Emitter;
@@ -143,7 +143,7 @@ return new Test(
             );
 
             try {
-               return $next($Request, $Response);
+               return $Next($Request, $Response);
             }
             finally {
                Emitter::$Instance = $PreviousEmitter;
@@ -193,7 +193,7 @@ return new Test(
             $this->tokenBytes = $tokenBytes;
          }
 
-         public function process (object $Request, object $Response, Closure $next): object
+         public function process (object $Request, object $Response, Closure $Next): object
          {
             $mode = $Request->Header->get('X-M6-Mode') ?? 'unknown';
             $Session = $Request->Session;
@@ -251,18 +251,18 @@ return new Test(
                (string) (2 * $this->tokenBytes)
             );
 
-            return $next($Request, $Response);
+            return $Next($Request, $Response);
          }
       },
       new class implements Middleware {
-         public function process (object $Request, object $Response, Closure $next): object
+         public function process (object $Request, object $Response, Closure $Next): object
          {
             $CSRF = $Request->attributes['m6EqualCSRF'] ?? null;
             if (($CSRF instanceof CSRF) === false) {
                return $Response(code: 500, body: 'M6 equal-priority CSRF fixture missing');
             }
 
-            return $CSRF->process($Request, $Response, $next);
+            return $CSRF->process($Request, $Response, $Next);
          }
       },
    ],

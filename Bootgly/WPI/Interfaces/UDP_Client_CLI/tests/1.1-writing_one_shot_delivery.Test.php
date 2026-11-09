@@ -72,11 +72,11 @@ return new Test(
          Connections::$stats = true;
 
          $id = (int) $Socket;
-         $writesProperty = new ReflectionProperty(Select::class, 'writes');
-         $writingProperty = new ReflectionProperty(Select::class, 'writing');
-         $armed = function () use ($Select, $writesProperty, $writingProperty, $id): bool {
-            return isSet($writesProperty->getValue($Select)[$id])
-               || isSet($writingProperty->getValue($Select)[$id]);
+         $WritesProperty = new ReflectionProperty(Select::class, 'writes');
+         $WritingProperty = new ReflectionProperty(Select::class, 'writing');
+         $armed = function () use ($Select, $WritesProperty, $WritingProperty, $id): bool {
+            return isSet($WritesProperty->getValue($Select)[$id])
+               || isSet($WritingProperty->getValue($Select)[$id]);
          };
          // ? null = nothing on the wire within the window; '' is a REAL
          //   zero-byte datagram (the peer socket selected readable)

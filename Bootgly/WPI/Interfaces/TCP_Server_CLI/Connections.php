@@ -40,6 +40,12 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 
 class Connections implements WPI\Connections
 {
+   // * Config
+   public Server $Server;
+
+   public null|float $timeout;
+
+   // * Data
    public Logger $Logger {
       get {
          if ( isSet($this->Logger) === false ) {
@@ -49,14 +55,6 @@ class Connections implements WPI\Connections
          return $this->Logger;
       }
    }
-
-
-   public Server $Server;
-
-   // * Config
-   public null|float $timeout;
-
-   // * Data
    // ...
 
    // * Metadata

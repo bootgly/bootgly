@@ -68,7 +68,7 @@ return new Test(
             $this->tokenBytes = $tokenBytes;
          }
 
-         public function process (object $Request, object $Response, Closure $next): object
+         public function process (object $Request, object $Response, Closure $Next): object
          {
             $mode = $Request->Header->get('X-M6-Mode') ?? 'unknown';
             $TargetSession = $Request->Session;
@@ -141,7 +141,7 @@ return new Test(
                'mode' => $mode,
             ];
 
-            return $next($Request, $Response);
+            return $Next($Request, $Response);
          }
       },
       new class($knownToken, $headerName, $tokenBytes) implements Middleware {
@@ -163,7 +163,7 @@ return new Test(
             $this->tokenBytes = $tokenBytes;
          }
 
-         public function process (object $Request, object $Response, Closure $next): object
+         public function process (object $Request, object $Response, Closure $Next): object
          {
             $State = $Request->attributes['m6Exception'] ?? [];
             $mode = $State['mode'] ?? 'unknown';
@@ -240,11 +240,11 @@ return new Test(
                (string) (2 * $this->tokenBytes)
             );
 
-            return $next($Request, $Response);
+            return $Next($Request, $Response);
          }
       },
       new class implements Middleware {
-         public function process (object $Request, object $Response, Closure $next): object
+         public function process (object $Request, object $Response, Closure $Next): object
          {
             $State = $Request->attributes['m6Exception'] ?? [];
             $CSRF = $State['CSRF'] ?? null;
@@ -252,7 +252,7 @@ return new Test(
                return $Response(code: 500, body: 'M6 regenerator-exception CSRF fixture missing');
             }
 
-            return $CSRF->process($Request, $Response, $next);
+            return $CSRF->process($Request, $Response, $Next);
          }
       },
    ],

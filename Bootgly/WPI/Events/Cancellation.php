@@ -32,6 +32,7 @@ final class Cancellation implements Disconnecting
    private const int FINISHED = 1;
    private const int CANCELLED = 2;
 
+   // * Metadata
    /** @var null|WeakMap<object,self> */
    private static null|WeakMap $Owners = null;
 

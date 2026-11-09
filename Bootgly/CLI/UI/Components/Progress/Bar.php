@@ -19,12 +19,11 @@ use Bootgly\CLI\UI\Components\Progress;
 
 class Bar
 {
-   private Progress $Progress;
-
    // * Config
    public int $units;
 
    // * Data
+   private Progress $Progress;
    public Symbols $Symbols;
    // # Track (multi-bar): total > 0 makes this Bar an independent track
    public float $current;
@@ -180,6 +179,7 @@ class Bar
 // * Configs
 class Symbols
 {
+   // * Config
    public string $incomplete   = ' ';
    public string $current      = '>';
    public string $complete     = '=';

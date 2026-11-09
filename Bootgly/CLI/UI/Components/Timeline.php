@@ -30,8 +30,6 @@ use Bootgly\CLI\UI\Components\Timeline\Steps;
  */
 class Timeline extends Component
 {
-   private Output $Output;
-
    // * Config
    /** @var array<string,string> State glyphs */
    public array $glyphs;
@@ -46,6 +44,7 @@ class Timeline extends Component
    public null|int $until;
 
    // * Data
+   private Output $Output;
    public Steps $Steps;
 
    // * Metadata

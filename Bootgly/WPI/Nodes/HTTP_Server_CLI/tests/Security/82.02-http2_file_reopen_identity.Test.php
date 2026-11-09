@@ -336,7 +336,7 @@ return new Test(
          $state = $Await(
             $Socket,
             $wire,
-            static fn(array $state): bool => isset($state['pings'][$openPing]),
+            static fn (array $state): bool => isset($state['pings'][$openPing]),
          );
          if (! isset($state['pings'][$openPing])) {
             @fclose($Socket);
@@ -359,7 +359,7 @@ return new Test(
          $state = $Await(
             $Socket,
             $wire,
-            static fn(array $state): bool =>
+            static fn (array $state): bool =>
                isset($state['headers'][1])
                && isset($state['pings'][$headPing]),
          );
@@ -443,7 +443,7 @@ return new Test(
             $state = $Await(
                $NormalSocket,
                $normalWire,
-               static fn(array $state): bool =>
+               static fn (array $state): bool =>
                   isset($state['pings'][$ping])
                   && (
                      strlen($state['data'][1] ?? '') >= $expectedLength
@@ -493,7 +493,7 @@ return new Test(
          $firstState = $Await(
             $ReplacementSocket,
             $replacementWire,
-            static fn(array $state): bool =>
+            static fn (array $state): bool =>
                isset($state['pings'][$firstPing])
                && (
                   strlen($state['data'][1] ?? '') >= 1
@@ -553,7 +553,7 @@ return new Test(
          $afterState = $Await(
             $ReplacementSocket,
             $replacementWire,
-            static fn(array $state): bool =>
+            static fn (array $state): bool =>
                isset($state['pings'][$resetPing])
                && isset($state['resets'][1]),
          );

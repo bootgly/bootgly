@@ -113,9 +113,9 @@ class Middlewares
       // @ Build the onion from inside out (fold right)
       $Pipeline = array_reduce(
          array: array_reverse($this->stack),
-         callback: function (Closure $next, Middleware $Middleware): Closure {
-            return function (object $Request, object $Response) use ($Middleware, $next): object {
-               return $Middleware->process($Request, $Response, $next);
+         callback: function (Closure $Next, Middleware $Middleware): Closure {
+            return function (object $Request, object $Response) use ($Middleware, $Next): object {
+               return $Middleware->process($Request, $Response, $Next);
             };
          },
          initial: $handler

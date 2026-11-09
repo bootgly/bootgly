@@ -18,7 +18,7 @@ return new Test(
       $passthrough = function (object $Request, object $Response): object {
          return $Response;
       };
-      $ip = 'test-rate-limit';
+      $IP = 'test-rate-limit';
       $Clock = new Clock(100);
 
       // ! Shared counter store driven by the same deterministic clock
@@ -41,7 +41,7 @@ return new Test(
          );
 
          // @ Test 1: First request passes with correct headers
-         [$Request, $Response] = $createMocks(requestProps: ['peer' => $ip]);
+         [$Request, $Response] = $createMocks(requestProps: ['peer' => $IP]);
          $Result = $RateLimit->process($Request, $Response, $passthrough);
          yield new Assertion(
             description: 'First request should pass',
@@ -73,10 +73,10 @@ return new Test(
 
          // @ Test 2: Exhaust the limit
          // Second request (remaining: 1)
-         [$Request, $Response] = $createMocks(requestProps: ['peer' => $ip]);
+         [$Request, $Response] = $createMocks(requestProps: ['peer' => $IP]);
          $RateLimit->process($Request, $Response, $passthrough);
          // Third request (remaining: 0)
-         [$Request, $Response] = $createMocks(requestProps: ['peer' => $ip]);
+         [$Request, $Response] = $createMocks(requestProps: ['peer' => $IP]);
          $Result = $RateLimit->process($Request, $Response, $passthrough);
          yield new Assertion(
             description: 'Remaining should be 0 at limit',
@@ -86,7 +86,7 @@ return new Test(
             ->assert();
 
          // @ Test 3: Over limit returns 429
-         [$Request, $Response] = $createMocks(requestProps: ['peer' => $ip]);
+         [$Request, $Response] = $createMocks(requestProps: ['peer' => $IP]);
          $Result = $RateLimit->process($Request, $Response, $passthrough);
          yield new Assertion(
             description: 'Request over limit should return 429',
@@ -104,7 +104,7 @@ return new Test(
 
          // @ Test 4: Window resets after deterministic time advance
          $Clock->advance(60);
-         [$Request, $Response] = $createMocks(requestProps: ['peer' => $ip]);
+         [$Request, $Response] = $createMocks(requestProps: ['peer' => $IP]);
          $Result = $RateLimit->process($Request, $Response, $passthrough);
 
          yield new Assertion(

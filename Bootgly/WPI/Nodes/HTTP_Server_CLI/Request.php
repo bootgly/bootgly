@@ -125,10 +125,6 @@ class Request
       '\u002d' => '-', '\u002D' => '-',
    ];
 
-   public protected(set) Header $Header;
-   public protected(set) Body $Body;
-
-
    // * Config
    /** @var int Maximum file size in bytes for multipart/form-data downloads (default: 500MB) */
    public static int $maxFileSize = 500 * 1024 * 1024; // @ 500 megabytes
@@ -172,6 +168,9 @@ class Request
    public string $base = '';
 
    // * Data
+   public protected(set) Header $Header;
+   public protected(set) Body $Body;
+
    // \ TCP
    // / Connection
    /**
@@ -714,7 +713,6 @@ class Request
       get => ! $this->fresh;
    }
 
-   // * Metadata
    // # Arrival timestamps — restamped per request by `reset()` / `assume()`
    //   (one `time()` call; the date strings derive lazily on first read).
    /**
@@ -777,7 +775,7 @@ class Request
    private string $authUsername = '';
    private string $authPassword = '';
    private bool $authParsed = false;
-   private null|Basic $authCredentials = null;
+   private null|Basic $AuthCredentials = null;
    /**
     * Cached Bearer token parsed from the Authorization header.
     */
@@ -858,7 +856,7 @@ class Request
       $Captured->authUsername = $this->authUsername;
       $Captured->authPassword = $this->authPassword;
       $Captured->authParsed = $this->authParsed;
-      $Captured->authCredentials = $this->authCredentials;
+      $Captured->AuthCredentials = $this->AuthCredentials;
       $Captured->authToken = $this->authToken;
       $Captured->authTokenParsed = $this->authTokenParsed;
       $Captured->identity = $this->identity;
@@ -978,7 +976,7 @@ class Request
       $this->authUsername = '';
       $this->authPassword = '';
       $this->authParsed = false;
-      $this->authCredentials = null;
+      $this->AuthCredentials = null;
       $this->authToken = '';
       $this->authTokenParsed = false;
       $this->identity = null;
@@ -1033,7 +1031,7 @@ class Request
       $this->authUsername = '';
       $this->authPassword = '';
       $this->authParsed = false;
-      $this->authCredentials = null;
+      $this->AuthCredentials = null;
       $this->authToken = '';
       $this->authTokenParsed = false;
       $this->identity = null;
@@ -1320,7 +1318,7 @@ class Request
       $this->authUsername = '';
       $this->authPassword = '';
       $this->authParsed = false;
-      $this->authCredentials = null;
+      $this->AuthCredentials = null;
       $this->authToken = '';
       $this->authTokenParsed = false;
       $this->identity = null;
@@ -1391,7 +1389,7 @@ class Request
       $this->authUsername = '';
       $this->authPassword = '';
       $this->authParsed = false;
-      $this->authCredentials = null;
+      $this->AuthCredentials = null;
       $this->authToken = '';
       $this->authTokenParsed = false;
       $this->identity = null;
@@ -2001,7 +1999,7 @@ class Request
    public function authenticate (): Basic|null
    {
       if ($this->authParsed) {
-         return $this->authCredentials;
+         return $this->AuthCredentials;
       }
 
       $this->authParsed = true;
@@ -2045,8 +2043,8 @@ class Request
          $this->username = $username;
          $this->password = $password;
 
-         $this->authCredentials = new Basic($username, $password);
-         return $this->authCredentials;
+         $this->AuthCredentials = new Basic($username, $password);
+         return $this->AuthCredentials;
       }
 
       return null;

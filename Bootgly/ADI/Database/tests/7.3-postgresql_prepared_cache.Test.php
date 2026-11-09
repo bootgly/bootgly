@@ -14,8 +14,8 @@ return new Test(
 
       $Database = new SQL;
       $Database->Connection->attach($client);
-      $sql = 'SELECT $1::int AS value';
-      $First = $Database->query($sql, [42]);
+      $SQL = 'SELECT $1::int AS value';
+      $First = $Database->query($SQL, [42]);
       $Database->advance($First);
       fread($server, 8192);
 
@@ -30,7 +30,7 @@ return new Test(
       fwrite($server, $backend);
       $Database->advance($First);
 
-      $Second = $Database->query($sql, [43]);
+      $Second = $Database->query($SQL, [43]);
 
       yield assert(
          assertion: $Second->prepared && $Second->write !== '' && $Second->write[0] === 'B',

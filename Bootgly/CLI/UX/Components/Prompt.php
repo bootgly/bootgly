@@ -78,10 +78,10 @@ class Prompt extends Component
    protected const float TIMEOUT = 2.0;
 
 
+   // * Config
    public Input $Input;
    public Output $Output;
 
-   // * Config
    /** The input line prefix */
    public string $prompt;
    /** Max history entries */

@@ -101,7 +101,7 @@ class LogsCommand extends Command
 
       // ! Options
       $follow = isSet($options['f']) || isSet($options['follow']);
-      $json = isSet($options['json']);
+      $JSON = isSet($options['json']);
 
       // ! Fresh de-dup window per run (the registered command is a singleton)
       $this->seen = [];
@@ -128,7 +128,7 @@ class LogsCommand extends Command
          if ($refused === true) {
             return false;
          }
-         if ($json === false) {
+         if ($JSON === false) {
             foreach ($notes as $note) {
                $Output->render($note);
             }
@@ -157,7 +157,7 @@ class LogsCommand extends Command
             //   (buffered since attach) must not print a second time
             $this->note($Formatter->format($Record));
          }
-         if ($follow === true && $json === false && BOOTGLY_TTY === true) {
+         if ($follow === true && $JSON === false && BOOTGLY_TTY === true) {
             // ? TTY follow: records pre-seed the viewer instead of printing —
             //   bounded to the viewer's own ring size
             $seedLines[] = $Formatter->format($Record);
@@ -166,19 +166,19 @@ class LogsCommand extends Command
             }
             continue;
          }
-         $this->print($Record, $json);
+         $this->print($Record, $JSON);
          $printed++;
       }
 
       // ?: Without -f (no follow source built), the backlog is the whole answer
       if ($Source === null) {
-         if ($printed === 0 && $json === false) {
+         if ($printed === 0 && $JSON === false) {
             $Output->render('@#black:No log records matched.@;@.;');
          }
          return true;
       }
 
-      if ($json === false && BOOTGLY_TTY === true) {
+      if ($JSON === false && BOOTGLY_TTY === true) {
          // : Same screen, filters and keys as the server Monitor
          $Tail = new Tail(CLI->Terminal->Input, $Output);
          if ($seedLines !== []) {
@@ -195,7 +195,7 @@ class LogsCommand extends Command
          if ($chunk === '') {
             continue;
          }
-         if ($json === true) {
+         if ($JSON === true) {
             $Output->write($chunk);
             continue;
          }
@@ -522,11 +522,11 @@ class LogsCommand extends Command
    /**
     * Print one record — raw JSON line, or a full terminal line.
     */
-   private function print (Record $Record, bool $json): void
+   private function print (Record $Record, bool $JSON): void
    {
       $Output = CLI->Terminal->Output;
 
-      if ($json === true) {
+      if ($JSON === true) {
          $Output->write((new JSON)->format($Record));
          return;
       }

@@ -72,7 +72,7 @@ class Transaction implements Awaiting, Querying
     */
    public function begin (): Operation
    {
-      if ($this->ready() === false) {
+      if ($this->probe() === false) {
          return $this->fail('BEGIN', [], 'SQL transaction operation is still active.');
       }
 
@@ -100,22 +100,22 @@ class Transaction implements Awaiting, Querying
    public function query (string|Builder|Query $query, array $parameters = [], null|object $Scope = null): Operation
    {
       $Normalized = new Normalized($query, $parameters);
-      $sql = $Normalized->SQL;
+      $SQL = $Normalized->SQL;
       $parameters = $Normalized->parameters;
 
-      if ($this->ready() === false) {
-         return $this->fail($sql, $parameters, 'SQL transaction operation is still active.');
+      if ($this->probe() === false) {
+         return $this->fail($SQL, $parameters, 'SQL transaction operation is still active.');
       }
 
-      if ($this->active() === false) {
-         return $this->fail($sql, $parameters, 'SQL transaction is not active.');
+      if ($this->verify() === false) {
+         return $this->fail($SQL, $parameters, 'SQL transaction is not active.');
       }
 
       if ($Normalized->reading === false) {
          $this->Database->touch($Scope);
       }
 
-      return $this->create($sql, $parameters);
+      return $this->create($SQL, $parameters);
    }
 
    /**
@@ -158,11 +158,11 @@ class Transaction implements Awaiting, Querying
     */
    public function commit (): Operation
    {
-      if ($this->ready() === false) {
+      if ($this->probe() === false) {
          return $this->fail('COMMIT', [], 'SQL transaction operation is still active.');
       }
 
-      if ($this->active() === false) {
+      if ($this->verify() === false) {
          return $this->fail('COMMIT', [], 'SQL transaction is not active.');
       }
 
@@ -193,11 +193,11 @@ class Transaction implements Awaiting, Querying
       //   savepoint rollback is an ordinary statement on the serial surface, but
       //   a transaction that refuses to roll back strands its pool reservation
       //   and leaves the server session open inside the transaction.
-      if ($savepointing && $this->ready() === false) {
+      if ($savepointing && $this->probe() === false) {
          return $this->fail('ROLLBACK', [], 'SQL transaction operation is still active.');
       }
 
-      if ($this->active() === false) {
+      if ($this->verify() === false) {
          return $this->fail('ROLLBACK', [], 'SQL transaction is not active.');
       }
 
@@ -245,7 +245,7 @@ class Transaction implements Awaiting, Querying
     */
    public function abort (): Operation
    {
-      if ($this->active() === false) {
+      if ($this->verify() === false) {
          return $this->fail('ROLLBACK', [], 'SQL transaction is not active.');
       }
 
@@ -264,11 +264,11 @@ class Transaction implements Awaiting, Querying
     */
    public function save (null|string $name = null): Operation
    {
-      if ($this->ready() === false) {
+      if ($this->probe() === false) {
          return $this->fail('SAVEPOINT', [], 'SQL transaction operation is still active.');
       }
 
-      if ($this->active() === false) {
+      if ($this->verify() === false) {
          return $this->fail('SAVEPOINT', [], 'SQL transaction is not active.');
       }
 
@@ -287,11 +287,11 @@ class Transaction implements Awaiting, Querying
     */
    public function release (null|string $name = null): Operation
    {
-      if ($this->ready() === false) {
+      if ($this->probe() === false) {
          return $this->fail('RELEASE SAVEPOINT', [], 'SQL transaction operation is still active.');
       }
 
-      if ($this->active() === false || $this->depth <= 1) {
+      if ($this->verify() === false || $this->depth <= 1) {
          return $this->fail('RELEASE SAVEPOINT', [], 'SQL transaction savepoint is not active.');
       }
 
@@ -319,11 +319,11 @@ class Transaction implements Awaiting, Querying
     *
     * @param array<int|string,mixed> $parameters
     */
-   private function create (string $sql, array $parameters = [], bool $lock = false, bool $unlock = false): Operation
+   private function create (string $SQL, array $parameters = [], bool $lock = false, bool $unlock = false): Operation
    {
       $this->attach();
 
-      $Operation = new Operation($this->Connection, $sql, $parameters, $this->Database->Config->timeout);
+      $Operation = new Operation($this->Connection, $SQL, $parameters, $this->Database->Config->timeout);
       $Operation->lock = $lock;
       $Operation->unlock = $unlock;
 
@@ -364,7 +364,7 @@ class Transaction implements Awaiting, Querying
    /**
     * Check whether the transaction is ready to accept SQL operations.
     */
-   private function active (): bool
+   private function verify (): bool
    {
       $this->attach();
 
@@ -393,7 +393,7 @@ class Transaction implements Awaiting, Querying
    /**
     * Check whether the previous transaction operation has completed.
     */
-   private function ready (): bool
+   private function probe (): bool
    {
       return $this->Operation === null || $this->Operation->finished;
    }
@@ -435,9 +435,9 @@ class Transaction implements Awaiting, Querying
     *
     * @param array<int|string,mixed> $parameters
     */
-   private function fail (string $sql, array $parameters, string $message): Operation
+   private function fail (string $SQL, array $parameters, string $message): Operation
    {
-      $Operation = new Operation($this->Connection, $sql, $parameters, $this->Database->Config->timeout);
+      $Operation = new Operation($this->Connection, $SQL, $parameters, $this->Database->Config->timeout);
       $Operation->fail($message);
 
       // ! The refused operation never becomes the tracked one: it is already

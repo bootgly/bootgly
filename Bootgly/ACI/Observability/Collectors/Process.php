@@ -94,10 +94,10 @@ class Process extends Collector
       $memoryPeak = (float) memory_get_peak_usage(true);
 
       // # CPU — user + system seconds via getrusage
-      $cpu = 0.0;
+      $CPU = 0.0;
       $usage = getrusage();
       if ( is_array($usage) ) {
-         $cpu =
+         $CPU =
               ($usage['ru_utime.tv_sec'] ?? 0) + ($usage['ru_utime.tv_usec'] ?? 0) / 1_000_000
             + ($usage['ru_stime.tv_sec'] ?? 0) + ($usage['ru_stime.tv_usec'] ?? 0) / 1_000_000;
       }
@@ -119,7 +119,7 @@ class Process extends Collector
          'process_memory_peak_bytes' =>
             $this->compose(Types::Gauge, 'Process peak memory in bytes (allocator, real).', $labels, $memoryPeak),
          'process_cpu_seconds_total' =>
-            $this->compose(Types::Counter, 'Total user + system CPU seconds consumed.', $labels, $cpu),
+            $this->compose(Types::Counter, 'Total user + system CPU seconds consumed.', $labels, $CPU),
          'process_uptime_seconds' =>
             $this->compose(Types::Gauge, 'Seconds since the process started.', $labels, $uptime),
          'process_open_fds' =>

@@ -76,9 +76,9 @@ class Repository
    public private(set) Identity $Identity;
    private null|object $Scope;
    /** @var WeakMap<Operation,array{loads:array<int,string>,lazies:array<int,string>,Scope:null|object,Entity?:object,Held?:object,Pagination?:Pagination,Count?:null|Operation,Query?:null|Query,orders?:array<int,array{column:string,order:Orders}>}> */
-   private WeakMap $contexts;
+   private WeakMap $Contexts;
    /** @var array<string,Closure> */
-   private array $scopes = [];
+   private array $Scopes = [];
    /** @var array<string,array<int,Closure>> */
    private array $listeners = [];
 
@@ -99,7 +99,7 @@ class Repository
       // * Data
       $this->Identity = new Identity;
       $this->Scope = $Scope;
-      $this->contexts = new WeakMap;
+      $this->Contexts = new WeakMap;
 
       // * Metadata
       $this->Hydrator = new Hydrator($Model, $this->Identity);
@@ -172,7 +172,7 @@ class Repository
       $Operation = $this->Querying->query($Builder, Scope: $Scope ?? $this->Scope);
 
       // ! A DELETE returns no row and names no relation.
-      $this->contexts[$Operation] = [
+      $this->Contexts[$Operation] = [
          'loads' => [],
          'lazies' => [],
          'Scope' => $Scope ?? $this->Scope,
@@ -197,7 +197,7 @@ class Repository
       $lazies = $this->detect($loads);
 
       if ($loads !== [] || $lazies !== []) {
-         $this->contexts[$Operation] = [
+         $this->Contexts[$Operation] = [
             'loads' => $loads,
             'lazies' => $lazies,
             'Scope' => $Scope,
@@ -252,8 +252,8 @@ class Repository
       $CountQuery = null;
       $orders = [];
 
-      if ($Source instanceof Operation && isset($this->contexts[$Source])) {
-         $context = $this->contexts[$Source];
+      if ($Source instanceof Operation && isset($this->Contexts[$Source])) {
+         $context = $this->Contexts[$Source];
          $loads = $context['loads'];
          $lazies = $context['lazies'];
          $Scope = $context['Scope'];
@@ -263,7 +263,7 @@ class Repository
          $Count = $context['Count'] ?? null;
          $CountQuery = $context['Query'] ?? null;
          $orders = $context['orders'] ?? [];
-         unset($this->contexts[$Source]);
+         unset($this->Contexts[$Source]);
       }
 
       // ? Lazy loading bridge.
@@ -502,7 +502,7 @@ class Repository
 
       // ! Pagination context resolved at hydrate().
       $loads = $Selection->loads;
-      $this->contexts[$Items] = [
+      $this->Contexts[$Items] = [
          'loads' => $loads,
          'lazies' => $this->detect($loads),
          'Scope' => $Scope,
@@ -566,7 +566,7 @@ class Repository
          $context['Entity'] = $Entity;
       }
 
-      $this->contexts[$Operation] = $context;
+      $this->Contexts[$Operation] = $context;
 
       $this->emit(Hooks::Saved, $Operation, $Entity);
 
@@ -587,7 +587,7 @@ class Repository
     */
    public function scope (string $name, Closure $Scope): static
    {
-      $this->scopes[$name] = $Scope;
+      $this->Scopes[$name] = $Scope;
 
       return $this;
    }
@@ -602,7 +602,7 @@ class Repository
    private function apply (Selection $Selection): void
    {
       foreach ($Selection->scopes as $name) {
-         $Scope = $this->scopes[$name] ?? null;
+         $Scope = $this->Scopes[$name] ?? null;
 
          if ($Scope === null) {
             throw new InvalidArgumentException("ORM scope is not registered: {$name}");

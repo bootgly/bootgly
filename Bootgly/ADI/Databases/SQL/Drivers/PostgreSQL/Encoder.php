@@ -236,7 +236,7 @@ class Encoder
       }
 
       $statement = $payload['statement'];
-      $sql = $payload['sql'];
+      $SQL = $payload['sql'];
       $types = is_array($payload['types'] ?? null) ? $payload['types'] : [];
       $typeCount = pack('n', count($types));
       $typeBytes = '';
@@ -246,7 +246,7 @@ class Encoder
          $typeBytes .= pack('N', $type);
       }
 
-      $body = "{$statement}\0{$sql}\0{$typeCount}{$typeBytes}";
+      $body = "{$statement}\0{$SQL}\0{$typeCount}{$typeBytes}";
       $length = pack('N', strlen($body) + 4);
 
       return "P{$length}{$body}";

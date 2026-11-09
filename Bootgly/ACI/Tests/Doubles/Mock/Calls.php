@@ -21,6 +21,7 @@ use function count;
  */
 class Calls
 {
+   // * Data
    /**
     * @var array<int, Call>
     */

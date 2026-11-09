@@ -21,7 +21,7 @@ final class WrappedStatic
     * @param array<mixed> $array
     * @return array<int|string>
     */
-   public static function keys (array $array): array
+   public static function collect (array $array): array
    {
       return array_keys($array);
    }
@@ -98,7 +98,7 @@ return new Microbenchmark(
             name: "HEAVY operation — array_keys() over {$inputs['size']} entries",
             Cases: [
                'native array_keys($a)' => static fn () => array_keys($array),
-               'static method' => static fn () => WrappedStatic::keys($array),
+               'static method' => static fn () => WrappedStatic::collect($array),
                'property hook (instance reused)' => static fn () => $Hook->keys,
                'magic __get (instance reused)' => static fn () => $Magic->keys,
                'property hook + construction' => static fn () => new WrappedHook($array)->keys,

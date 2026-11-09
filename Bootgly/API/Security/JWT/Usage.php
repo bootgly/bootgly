@@ -128,23 +128,23 @@ class Usage
          return null;
       }
 
-      $ttl = $this->limit($claims, $leeway, $timestamp);
-      if ($ttl === null) {
+      $TTL = $this->limit($claims, $leeway, $timestamp);
+      if ($TTL === null) {
          return Failures::Expired;
       }
 
-      return $this->claim($identifier, $ttl) ? null : Failures::Replay;
+      return $this->claim($identifier, $TTL) ? null : Failures::Replay;
    }
 
    /**
     * Validate identifier storage inputs.
     */
-   private function guard (string $identifier, int $ttl): void
+   private function guard (string $identifier, int $TTL): void
    {
       if ($identifier === '') {
          throw new InvalidArgumentException('JWT identifier must not be empty.');
       }
-      if ($ttl < 1) {
+      if ($TTL < 1) {
          throw new InvalidArgumentException('JWT identifier ttl must be positive.');
       }
    }
@@ -161,9 +161,9 @@ class Usage
          return null;
       }
 
-      $ttl = $expires - ($timestamp ?? $this->time) + $leeway;
+      $TTL = $expires - ($timestamp ?? $this->time) + $leeway;
 
-      return $ttl > 0 ? $ttl : null;
+      return $TTL > 0 ? $TTL : null;
    }
 
    /**

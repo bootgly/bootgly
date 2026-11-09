@@ -18,6 +18,7 @@ use function strtolower;
 
 trait Resources
 {
+   // * Metadata
    protected string $resource {
       get {
          // ?:

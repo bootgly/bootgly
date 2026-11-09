@@ -50,14 +50,9 @@ jobs:
           extensions: mbstring, pcntl
       -
         name: Run Bootgly Lint command
-        run: |
-          # The four style rules CLAUDE.md pins down, in check mode over the
-          # framework tree: every submodule runs, and any issue fails the lane.
-          status=0
-          for submodule in imports nullables promotions methods; do
-            php bootgly lint "$submodule" Bootgly/ || status=1
-          done
-          exit "$status"
+        # Every rule bootgly.Lint.php enables, in one check-only pass over the
+        # paths it configures: any unresolved issue or stale exemption fails the lane.
+        run: php bootgly lint check
       -
         # ! macOS (APFS) and Windows check out case-insensitively: colliding
         #   files are refused, a file colliding with a directory is reported.

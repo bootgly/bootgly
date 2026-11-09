@@ -20,13 +20,14 @@ use Bootgly\ACI\Observability\Metric;
 
 class Counter extends Metric
 {
-   public Types $Type { get => Types::Counter; }
-
    // * Data
    public private(set) float $value = 0.0;
    // @ Optional observable callback — when set, read() pulls a live total instead of the stored one
    //   (used to bridge externally-maintained monotonic counters, e.g. server socket stats).
    protected null|Closure $observe;
+
+   // * Metadata
+   public Types $Type { get => Types::Counter; }
 
 
    /**

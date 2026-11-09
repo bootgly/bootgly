@@ -95,7 +95,7 @@ class SetupCommand extends Command
 
       // @ Handle --capabilities
       if (isSet($options['capabilities'])) {
-         return $this->capabilities();
+         return $this->inspect();
       }
 
       // @ Install
@@ -123,12 +123,12 @@ class SetupCommand extends Command
     * slow" rather than "the runtime was misconfigured". BOOTGLY_JIT=0 opts
     * out; the native code-coverage driver needs it.
     *
-    * @param string $php Absolute PHP binary path.
+    * @param string $PHP Absolute PHP binary path.
     * @param string $script Absolute fallback launcher path.
     *
     * @return string The wrapper script content.
     */
-   private function compose (string $php, string $script): string
+   private function compose (string $PHP, string $script): string
    {
       // ! Keep the wrapper as a native Bash resource so editors and ShellCheck
       //   can parse it without PHP heredoc escaping rules.
@@ -142,7 +142,7 @@ class SetupCommand extends Command
       //   checks. They are data: strtr() substitutes both tokens in one pass, so a
       //   token-shaped substring inside either escaped path is never rescanned.
       return strtr($template, [
-         '__BOOTGLY_PHP_BINARY__' => escapeshellarg($php),
+         '__BOOTGLY_PHP_BINARY__' => escapeshellarg($PHP),
          '__BOOTGLY_FALLBACK_LAUNCHER__' => escapeshellarg($script),
       ]);
    }
@@ -358,7 +358,7 @@ class SetupCommand extends Command
       return true;
    }
 
-   private function capabilities (): bool
+   private function inspect (): bool
    {
       $Output = CLI->Terminal->Output;
       $Alert = new Alert($Output);

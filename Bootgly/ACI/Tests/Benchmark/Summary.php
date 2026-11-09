@@ -573,8 +573,8 @@ class Summary
       foreach ($results as $name => $loads) {
          $sorted[$name] = $loads[$label] ?? new Result;
       }
-      uasort($sorted, function (Result $a, Result $b) {
-         return ((float) ($a->time ?? PHP_INT_MAX)) <=> ((float) ($b->time ?? PHP_INT_MAX));
+      uasort($sorted, function (Result $A, Result $B) {
+         return ((float) ($A->time ?? PHP_INT_MAX)) <=> ((float) ($B->time ?? PHP_INT_MAX));
       });
 
       // # Rows

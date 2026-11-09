@@ -80,7 +80,7 @@ class Pool
    //   message retires it — by which point the connection belongs to somebody
    //   else, and re-running the compensation takes their reservation with it.
    /** @var WeakMap<Operation,true> */
-   private WeakMap $settled;
+   private WeakMap $Settled;
    /** @var array<int,true> */
    private array $locked = [];
    // @ Slots still held by withdrawn statements the server may be running:
@@ -131,7 +131,7 @@ class Pool
       // * Config
       $this->Config = $Config;
       $this->Connection = $Connection;
-      $this->settled = new WeakMap();
+      $this->Settled = new WeakMap();
       $this->min = $Config->pool['min'];
       $this->max = $Config->pool['max'];
       $this->drivers = $drivers;
@@ -775,11 +775,11 @@ class Pool
 
       // ? Its claim was settled when it finished. Running the compensation again
       //   now applies it to whatever holds this connection since.
-      if (isset($this->settled[$Operation])) {
+      if (isset($this->Settled[$Operation])) {
          return $this;
       }
 
-      $this->settled[$Operation] = true;
+      $this->Settled[$Operation] = true;
 
       $id = spl_object_id($Connection);
       $Protocol = $Operation->Protocol;
@@ -967,7 +967,7 @@ class Pool
       $this->forget($Operation);
 
       $Protocol = $this->create($Connection);
-      unset($this->settled[$Operation]);
+      unset($this->Settled[$Operation]);
 
       $Operation->Connection = $Connection;
       $Operation->Protocol = $Protocol;

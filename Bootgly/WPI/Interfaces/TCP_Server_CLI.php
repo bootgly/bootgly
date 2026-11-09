@@ -307,6 +307,12 @@ class TCP_Server_CLI implements Servers
       SIGIO,    // connection stats
    ];
 
+   // * Config
+   // # Mode
+   public Modes $Mode;
+   // # Verbosity
+
+   // * Data
    public Logger $Logger {
       get {
          if ( isSet($this->Logger) === false ) {
@@ -317,61 +323,6 @@ class TCP_Server_CLI implements Servers
       }
    }
 
-
-   // !
-   /** @var resource */
-   protected $Socket;
-   /** @var array<int,resource> Master-owned SO_REUSEPORT listener pool. */
-   protected array $Listeners = [];
-   /** @var array<int,int> Worker index reaped by the SIGCHLD dispatch => hrtime (ns) from which revive() may refork it. */
-   private array $casualties = [];
-   /**
-    * Worker index => master end of its current worker's beacon pair. The
-    * worker writes `!` on entering its event loop and `R` when it begins to
-    * recycle (it left the accept set and drains): the master reads both in
-    * `poll()` and wakes on them in `rest()`. The master writes `G` — the go —
-    * once the slot's previous worker, still draining when this one was
-    * forked, is gone (`permit()`): until then this one may not recycle.
-    *
-    * @var array<int,resource>
-    */
-   private array $Beacons = [];
-   /**
-    * Worker index => what its current worker said on its beacon so far
-    * (`!`, `R`), kept until its recycle is relieved or its death classified
-    * (`hear()`); `''` once its beacon closed without a word.
-    *
-    * @var array<int,string>
-    */
-   private array $words = [];
-   /**
-    * Workers the SIGCHLD dispatch reaped, `[index, PID, status, retired]`,
-    * waiting for `classify()` — the dispatch only records them: their
-    * beacons are read from loop context alone.
-    *
-    * @var array<int,array{int,int,int,bool}>
-    */
-   private array $deaths = [];
-   /**
-    * Retiree PID => hrtime (ns) past which the master kills it: `drainTimeout`
-    * plus 5 s after it began to recycle, as `reload()` bounds a drain.
-    *
-    * @var array<int,int>
-    */
-   private array $deadlines = [];
-   /** @var resource|null A worker's own end of its beacon pair, until its recycle is announced. */
-   private $Beacon = null;
-   /** @var array<int,int> Worker index => consecutive worker deaths before the event loop. */
-   private array $streaks = [];
-   /** Consecutive `pcntl_fork()` refusals in revive(); 0 once a fork succeeds. */
-   private int $refusals = 0;
-
-   public static Events & Loops & Scheduler $Event;
-
-   protected Commands $Commands;
-   protected Process $Process;
-
-   // * Config
    protected null|string $domain;
    protected null|string $host;
    protected null|int $port;
@@ -380,12 +331,7 @@ class TCP_Server_CLI implements Servers
    protected null|array $secure; // Secure SSL/TLS Stream Context
    protected null|string $user = null;
    protected null|string $group = null;
-   protected bool $demoted = false;
-   // # Mode
-   public Modes $Mode;
-   // # Verbosity
 
-   // * Data
    // # SAPI
    public static null|string $Application = null;
    public static null|Decoder $Decoder = null;
@@ -485,6 +431,60 @@ class TCP_Server_CLI implements Servers
    protected null|Closure $onServerStopped = null;
 
    // * Metadata
+   // !
+   /** @var resource */
+   protected $Socket;
+   /** @var array<int,resource> Master-owned SO_REUSEPORT listener pool. */
+   protected array $Listeners = [];
+   /** @var array<int,int> Worker index reaped by the SIGCHLD dispatch => hrtime (ns) from which revive() may refork it. */
+   private array $casualties = [];
+   /**
+    * Worker index => master end of its current worker's beacon pair. The
+    * worker writes `!` on entering its event loop and `R` when it begins to
+    * recycle (it left the accept set and drains): the master reads both in
+    * `poll()` and wakes on them in `rest()`. The master writes `G` — the go —
+    * once the slot's previous worker, still draining when this one was
+    * forked, is gone (`permit()`): until then this one may not recycle.
+    *
+    * @var array<int,resource>
+    */
+   private array $Beacons = [];
+   /**
+    * Worker index => what its current worker said on its beacon so far
+    * (`!`, `R`), kept until its recycle is relieved or its death classified
+    * (`hear()`); `''` once its beacon closed without a word.
+    *
+    * @var array<int,string>
+    */
+   private array $words = [];
+   /**
+    * Workers the SIGCHLD dispatch reaped, `[index, PID, status, retired]`,
+    * waiting for `classify()` — the dispatch only records them: their
+    * beacons are read from loop context alone.
+    *
+    * @var array<int,array{int,int,int,bool}>
+    */
+   private array $deaths = [];
+   /**
+    * Retiree PID => hrtime (ns) past which the master kills it: `drainTimeout`
+    * plus 5 s after it began to recycle, as `reload()` bounds a drain.
+    *
+    * @var array<int,int>
+    */
+   private array $deadlines = [];
+   /** @var resource|null A worker's own end of its beacon pair, until its recycle is announced. */
+   private $Beacon = null;
+   /** @var array<int,int> Worker index => consecutive worker deaths before the event loop. */
+   private array $streaks = [];
+   /** Consecutive `pcntl_fork()` refusals in revive(); 0 once a fork succeeds. */
+   private int $refusals = 0;
+
+   public static Events & Loops & Scheduler $Event;
+
+   protected Commands $Commands;
+   protected Process $Process;
+   protected bool $demoted = false;
+
    /** The first non-loopback IPv4 of the machine — null when none is resolvable */
    public null|string $network {
       get {

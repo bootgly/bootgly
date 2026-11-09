@@ -22,11 +22,11 @@ return new Test(
          {
             $this->log = &$log;
          }
-         public function process (object $Request, object $Response, Closure $next): object
+         public function process (object $Request, object $Response, Closure $Next): object
          {
             $this->log[] = 'A';
 
-            return $next($Request, $Response);
+            return $Next($Request, $Response);
          }
       };
       $MiddlewareB = new class ($log) implements Middleware {
@@ -37,11 +37,11 @@ return new Test(
          {
             $this->log = &$log;
          }
-         public function process (object $Request, object $Response, Closure $next): object
+         public function process (object $Request, object $Response, Closure $Next): object
          {
             $this->log[] = 'B';
 
-            return $next($Request, $Response);
+            return $Next($Request, $Response);
          }
       };
       $MiddlewareC = new class ($log) implements Middleware {
@@ -52,11 +52,11 @@ return new Test(
          {
             $this->log = &$log;
          }
-         public function process (object $Request, object $Response, Closure $next): object
+         public function process (object $Request, object $Response, Closure $Next): object
          {
             $this->log[] = 'C';
 
-            return $next($Request, $Response);
+            return $Next($Request, $Response);
          }
       };
 
