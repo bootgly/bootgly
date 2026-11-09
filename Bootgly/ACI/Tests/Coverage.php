@@ -1023,10 +1023,10 @@ class Coverage
          else if ($kind === T_FUNCTION) {
             $functions[$depth] = true;
          }
-         else if ($kind === T_VARIABLE && $depth === 0 && isset($declarations[$statement])) {
+         else if ($kind === T_VARIABLE && $depth === 0 && $statement !== null && isset($declarations[$statement])) {
             $property = true;
          }
-         else if ($kind === T_DOUBLE_ARROW && $hook && $depth === 0) {
+         else if ($kind === T_DOUBLE_ARROW && $hook && $depth === 0 && $statement !== null) {
             // ? A short hook (`get => …`) holds code
             unset($declarations[$statement]);
             $hook = false;

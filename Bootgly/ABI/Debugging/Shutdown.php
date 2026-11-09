@@ -16,6 +16,8 @@ use const E_CORE_ERROR;
 use const E_ERROR;
 use const E_PARSE;
 use function error_get_last;
+use function is_int;
+use function is_string;
 use ErrorException;
 
 use Bootgly\ABI\Debugging;
@@ -30,14 +32,14 @@ abstract class Shutdown implements Debugging
    public static bool $debug = true;
 
    // * Data
-   /** @var null|array<string,int|string> */
+   /** @var null|array<string,mixed> The `error_get_last()` shape (PHP 8.5 adds `trace`). */
    protected static null|array $error = null;
 
 
    /**
     * Collect the last fatal error — or an injected one, for testability.
     *
-    * @param null|array<string,int|string> $error
+    * @param null|array<string,mixed> $error
     */
    public static function collect (null|array $error = null): bool
    {
@@ -47,7 +49,8 @@ abstract class Shutdown implements Debugging
       // ? Only fatal errors reach shutdown unhandled — everything else was
       // already converted to ErrorException by Errors::collect()
       $fatal = E_ERROR | E_PARSE | E_CORE_ERROR | E_COMPILE_ERROR;
-      if ($error === null || ((int) ($error['type'] ?? 0) & $fatal) === 0) {
+      $type = $error['type'] ?? 0;
+      if ($error === null || is_int($type) === false || ($type & $fatal) === 0) {
          return false;
       }
 
@@ -66,12 +69,16 @@ abstract class Shutdown implements Debugging
 
       // @ Fatal errors bypass every handler — synthesize and report them here
       if (self::collect() === true && self::$error !== null) {
+         $message = self::$error['message'] ?? '';
+         $type = self::$error['type'] ?? E_ERROR;
+         $file = self::$error['file'] ?? '';
+         $line = self::$error['line'] ?? 0;
          $Fatal = new ErrorException(
-            message: (string) (self::$error['message'] ?? ''),
+            message: is_string($message) ? $message : '',
             code: 0,
-            severity: (int) (self::$error['type'] ?? E_ERROR),
-            filename: (string) (self::$error['file'] ?? ''),
-            line: (int) (self::$error['line'] ?? 0)
+            severity: is_int($type) ? $type : E_ERROR,
+            filename: is_string($file) ? $file : '',
+            line: is_int($line) ? $line : 0
          );
 
          Throwables::notify($Fatal, ['origin' => 'fatal']);
