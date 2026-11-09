@@ -4,22 +4,30 @@ namespace Bootgly\commands;
 
 
 use const BOOTGLY_ROOT_BASE;
+use const T_STRING;
+use const T_VARIABLE;
+use const T_WHITESPACE;
 use function array_diff;
+use function array_filter;
 use function array_values;
 use function assert;
 use function bin2hex;
 use function chmod;
 use function copy;
+use function count;
+use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
 use function fileperms;
 use function function_exists;
 use function getmypid;
+use function in_array;
 use function is_array;
 use function is_dir;
 use function is_file;
 use function is_link;
 use function json_decode;
+use function json_encode;
 use function mkdir;
 use function posix_geteuid;
 use function posix_mkfifo;
@@ -33,7 +41,11 @@ use function str_contains;
 use function stream_get_contents;
 use function symlink;
 use function sys_get_temp_dir;
+use function time;
+use function token_get_all;
+use function touch;
 use function unlink;
+use ReflectionMethod;
 
 use const Bootgly\CLI;
 use Bootgly\ABI\Syntax\Analyzers\Rules;
@@ -249,6 +261,104 @@ return new Test(
          yield assert(
             assertion: $result === false && str_contains($output, 'Could not create projects/') && is_file("{$filed}/projects"),
             description: 'a projects/ that cannot be created fails by name'
+         );
+
+         // # A link planted at the registry's path — dangling, so a check on the
+         //   file reads "missing" — is never written through: the boot fails by
+         //   name, the link stays a link and its target is never created
+         $planted = "{$base}/planted";
+         mkdir("{$planted}/projects", 0775, true);
+         symlink("{$base}/outside-registry.php", "{$planted}/projects/Bootgly.projects.php");
+         [$result, $output] = $Probe($Bind($planted), ['boot'], []);
+         $leftovers = array_values(array_diff((array) scandir("{$planted}/projects"), ['.', '..', 'Bootgly.projects.php']));
+
+         yield assert(
+            assertion: $result === false
+               && str_contains($output, 'A link holds projects/Bootgly.projects.php — remove it and boot again.')
+               && is_link("{$planted}/projects/Bootgly.projects.php")
+               && file_exists("{$base}/outside-registry.php") === false && $leftovers === [],
+            description: 'a dangling link planted at projects/Bootgly.projects.php fails the boot and is never written through — no file appears at its target, no temporary is left behind, got: ' . json_encode([$result, $output, $leftovers])
+         );
+
+         // # The creation itself: never over an entry, never through a link,
+         //   whatever stands at the path when the file is put in place
+         $Place = new ReflectionMethod(KitCommand::class, 'place');
+         $stub = BOOTGLY_ROOT_BASE . '/Bootgly/commands/stubs/bootgly.Lint.php';
+         $spot = "{$base}/spot";
+         mkdir($spot, 0775, true);
+         symlink("{$base}/outside-lint.php", "{$spot}/dangling.php");
+         file_put_contents("{$spot}/mine.php", "mine\n");
+         $placed = [
+            'free' => $Place->invoke(null, $stub, "{$spot}/free.php"),
+            'dangling' => $Place->invoke(null, $stub, "{$spot}/dangling.php"),
+            'mine' => $Place->invoke(null, $stub, "{$spot}/mine.php"),
+         ];
+         $entries = array_values(array_diff((array) scandir($spot), ['.', '..']));
+         sort($entries);
+
+         yield assert(
+            assertion: $placed === ['free' => true, 'dangling' => false, 'mine' => false]
+               && file_get_contents("{$spot}/free.php") === file_get_contents($stub)
+               && is_link("{$spot}/dangling.php") && file_exists("{$base}/outside-lint.php") === false
+               && file_get_contents("{$spot}/mine.php") === "mine\n"
+               && $entries === ['dangling.php', 'free.php', 'mine.php'],
+            description: 'place() creates a free path with the template, refuses a dangling link without creating its target, keeps an existing file and leaves no temporary, got: ' . json_encode($placed)
+         );
+
+         // # A temporary a crashed boot left in projects/ is swept once it is old
+         //   enough to be nobody's; a fresh one (another boot's, mid-write) stays
+         $swept = "{$base}/swept";
+         mkdir("{$swept}/projects", 0775, true);
+         file_put_contents("{$swept}/projects/Bootgly.projects.php", "<?php return [];\n");
+         $stale = "{$swept}/projects/.Bootgly.projects.php.0123456789abcdef.tmp";
+         $fresh = "{$swept}/projects/.bootgly.Lint.php.fedcba9876543210.tmp";
+         file_put_contents($stale, "<?php\n");
+         file_put_contents($fresh, "<?php\n");
+         touch($stale, time() - 600);
+         [$result, $output] = $Probe($Bind($swept), ['boot'], []);
+
+         yield assert(
+            assertion: $result === true && file_exists($stale) === false && is_file($fresh) === true,
+            description: 'a boot sweeps a temporary older than five minutes from projects/ and leaves a fresh one alone'
+         );
+
+         // # Both files are created through place() only — never a copy() that
+         //   would write through a link planted at their path (token-based pin)
+         $tokens = token_get_all((string) file_get_contents(BOOTGLY_ROOT_BASE . '/Bootgly/commands/KitCommand.php'));
+         $calls = ['place' => [], 'copy' => []];
+         foreach ($tokens as $index => $token) {
+            if (is_array($token) === false || $token[0] !== T_STRING || isset($calls[$token[1]]) === false) {
+               continue;
+            }
+            // # The call's arguments, up to its closing parenthesis
+            $depth = 0;
+            $arguments = [];
+            for ($next = $index + 1; isset($tokens[$next]); $next++) {
+               $piece = $tokens[$next];
+               if ($piece === '(') {
+                  $depth++;
+               }
+               else if ($piece === ')') {
+                  $depth--;
+                  if ($depth === 0) {
+                     break;
+                  }
+               }
+               else if ($depth === 0 && (is_array($piece) === false || $piece[0] !== T_WHITESPACE)) {
+                  break;
+               }
+               else if (is_array($piece) && $piece[0] === T_VARIABLE) {
+                  $arguments[] = $piece[1];
+               }
+            }
+            $calls[$token[1]][] = $arguments;
+         }
+         $Holds = static fn (array $list, string $variable): int => count(array_filter($list, static fn (array $arguments): bool => in_array($variable, $arguments, true)));
+
+         yield assert(
+            assertion: $Holds($calls['place'], '$registry') === 1 && $Holds($calls['place'], '$lint') === 1
+               && $Holds($calls['copy'], '$registry') === 0 && $Holds($calls['copy'], '$lint') === 0,
+            description: 'KitCommand creates the registry and the lint configuration through place() alone, never copy(), got: ' . json_encode($calls)
          );
 
          // # The layout is exactly the documented set, group- and other-unwritable

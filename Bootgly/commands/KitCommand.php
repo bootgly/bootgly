@@ -36,10 +36,14 @@ use function count;
 use function defined;
 use function dirname;
 use function explode;
+use function fclose;
 use function file_exists;
 use function file_get_contents;
 use function filegroup;
 use function fileowner;
+use function fopen;
+use function fstat;
+use function fwrite;
 use function getenv;
 use function getmypid;
 use function implode;
@@ -53,6 +57,7 @@ use function json_encode;
 use function ksort;
 use function lchgrp;
 use function lchown;
+use function link;
 use function lstat;
 use function mkdir;
 use function posix_geteuid;
@@ -422,14 +427,22 @@ class KitCommand extends Command
       //   so a boot that fails before it leaves the next run free to repair —
       //   and it is gated on the file it promises, never on the directory alone
       $registry = "{$kit}/projects/Bootgly.projects.php";
+      // @ What a crashed boot left in projects/ — a staging directory or a
+      //   temporary of `place()` — once it is old enough to be nobody's
+      if (is_dir("{$kit}/projects") === true && is_link("{$kit}/projects") === false) {
+         $this->sweep("{$kit}/projects");
+      }
       if ($resources === true && is_file($registry) === false) {
+         // # A registry another boot placed meanwhile counts as laid down
          $created = (is_dir("{$kit}/projects") === true || @mkdir("{$kit}/projects", 0755, true))
-            && @copy("{$templates}/Bootgly/commands/stubs/Bootgly.projects.php", $registry)
-            && is_file($registry);
-         // ?
+            && (self::place("{$templates}/Bootgly/commands/stubs/Bootgly.projects.php", $registry)
+               || (is_link($registry) === false && is_file($registry) === true));
+         // ? A link at the registry's path is never written through — said by name
          if ($created === false) {
             $Alert->Type::Failure->set();
-            $Alert->message = 'Could not create @#cyan:projects/@; in the kit.';
+            $Alert->message = is_link($registry) === true
+               ? 'A link holds @#cyan:projects/Bootgly.projects.php@; — remove it and boot again.'
+               : 'Could not create @#cyan:projects/@; in the kit.';
             $Alert->render();
 
             return false;
@@ -463,7 +476,7 @@ class KitCommand extends Command
       if ($platform === false && is_dir("{$kit}/projects") === true
          && file_exists($lint) === false && is_link($lint) === false
       ) {
-         if (@copy("{$templates}/Bootgly/commands/stubs/bootgly.Lint.php", $lint) === true) {
+         if (self::place("{$templates}/Bootgly/commands/stubs/bootgly.Lint.php", $lint) === true) {
             self::grant($lint);
             $Alert->Type::Success->set();
             $Alert->message = 'Lint configuration created: @#cyan:projects/bootgly.Lint.php@;';
@@ -873,7 +886,8 @@ class KitCommand extends Command
       // @@
       foreach ((array) @scandir($target) as $name) {
          $path = "{$target}/{$name}";
-         if (preg_match('/^\.bootgly\.\d+\.[0-9a-f]{12}$/', (string) $name) !== 1) {
+         // # A staging directory, or a temporary `place()` left behind by a crash
+         if (preg_match('/^\.bootgly\.\d+\.[0-9a-f]{12}$|^\.(?:Bootgly\.projects|bootgly\.Lint)\.php\.[0-9a-f]{16}\.tmp$/', (string) $name) !== 1) {
             continue;
          }
          $entry = @lstat($path);
@@ -992,6 +1006,62 @@ class KitCommand extends Command
    }
 
    /**
+    * Create a file from a template without ever writing through a link at
+    * its path. The content goes to an unpredictable sibling opened
+    * exclusively in one call — no link can wait there — and is then put in
+    * place: `link()` never follows and fails on any existing entry; where the
+    * filesystem has no hard links and the path is still free, `rename()`
+    * replaces the entry itself, a link planted meanwhile included, never its
+    * target. A root boot in a container writes into a `projects/` the host
+    * user owns: a check-then-copy would follow a link the user planted.
+    *
+    * @param string $source The template
+    * @param string $path The file to create
+    *
+    * @return bool Whether the file is now in place
+    */
+   private static function place (string $source, string $path): bool
+   {
+      // ! The content, read before anything is created
+      $content = @file_get_contents($source);
+      if ($content === false) {
+         return false;
+      }
+
+      // @ An unpredictable sibling, created exclusively and written through
+      //   its handle — the path is never resolved again for the write
+      $directory = dirname($path);
+      $name = basename($path);
+      $nonce = bin2hex(random_bytes(8));
+      $temporary = "{$directory}/.{$name}.{$nonce}.tmp";
+      $handle = @fopen($temporary, 'x');
+      if ($handle === false) {
+         return false;
+      }
+      $written = @fwrite($handle, $content) === strlen($content);
+      $created = @fstat($handle);
+      fclose($handle);
+
+      // @ Into place — never over an existing entry, never through a link
+      $placed = $written && @link($temporary, $path);
+      if ($written && $placed === false && is_link($path) === false && file_exists($path) === false) {
+         $placed = @rename($temporary, $path);
+      }
+      if (is_link($temporary) === true || file_exists($temporary) === true) {
+         @unlink($temporary);
+      }
+
+      // ? What stands at the path is the file this call wrote — a regular file,
+      //   its only name — never an entry swapped in for the temporary meanwhile
+      $entry = $placed ? @lstat($path) : false;
+
+      // :
+      return $created !== false && $entry !== false
+         && ($entry['mode'] & 0170000) === 0100000 && $entry['nlink'] === 1
+         && $entry['dev'] === $created['dev'] && $entry['ino'] === $created['ino'];
+   }
+
+   /**
     * Hand what root just wrote to the owner of the kit's `projects/`. Only
     * inside the kit image, only when running as root, only for an entry under
     * `projects/` — a project tree or the registry; never `storage/`, which is
@@ -1034,6 +1104,14 @@ class KitCommand extends Command
 
       if (is_dir($real)) {
          self::hand($real, $UID, $GID);
+      }
+      // ? A file with another name somewhere is not only this kit's to give:
+      //   a hard link planted in the mount could name any file the owner may link
+      else {
+         $entry = @lstat($real);
+         if ($entry === false || $entry['nlink'] !== 1) {
+            return;
+         }
       }
       @lchown($real, $UID);
       @lchgrp($real, $GID);
