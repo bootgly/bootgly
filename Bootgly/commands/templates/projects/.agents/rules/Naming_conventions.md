@@ -1,11 +1,13 @@
 # Naming conventions
 
+`bootgly lint check` flags multi-word method names and lowercase object or acronym names — the
+rules below are what it cannot judge.
+
 ## Methods
 
-- **SHOULD** — A method name is one verb in its base form: `boot()`, `render()`, `fetch()`, `check()`.
-  Never a noun or a state (`status()`, `loaded()`), never a past or participle form, never several
-  words (`getUserData()`, `renderHTML()`). `bootgly lint methods <path>` flags multi-word names. Magic
-  methods and names imposed by an interface or a framework contract are exempt.
+- **SHOULD** — A method name is one verb in its base form: `boot()`, `render()`, `fetch()`, `check()` —
+  never a noun, a state (`status()`, `loaded()`) or a past form. Magic methods and names imposed by an
+  interface or a framework contract are exempt.
 - **SHOULD** — A method that IS a loop or continuous process takes the `-ing` form: `reading()`,
   `routing()`, `monitoring()`. One discrete action keeps the base form.
 - **SHOULD** — Put the specificity in the object, not in the name: `HTML->render()`, not `renderHTML()` —
@@ -16,11 +18,9 @@
 
 ## Properties and variables
 
-- **SHOULD** — Object instances and collections of objects start uppercase: `$Request`, `$Post`,
-  `$Posts`, `public Connection $Connection`. The framework's own signatures use this casing — route
-  and controller callbacks receive `$Request`, `$Response` and `$Router`.
-- **SHOULD** — Acronyms are always uppercase, even for scalars: `$SQL`, `$URL`, `$HTML`, `$JSON` —
-  never `$sql` or `$url`.
+- **SHOULD** — Object instances and collections of objects start uppercase (`$Request`, `$Posts`);
+  acronyms are uppercase even for scalars (`$SQL`, `$URL`). The framework's own signatures use this
+  casing — route and controller callbacks receive `$Request`, `$Response` and `$Router`.
 
 ## Entities
 

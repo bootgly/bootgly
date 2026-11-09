@@ -27,10 +27,9 @@
 ## Definition of done
 
 - **SHOULD** — Before you say a change is finished, from the project directory:
-  1. `bootgly lint imports <path> --fix` and `bootgly lint nullables <path> --fix` on what you touched;
-  2. `bootgly lint promotions <path>` and `bootgly lint methods <path>` clean, or each deviation explained;
-  3. `AI_AGENT=1 bootgly test` green;
-  4. for a WPI project: `project <Name> show` first — if it is running, ask the user before touching it;
+  1. `bootgly lint check --fix`, then `bootgly lint check` clean — or each deviation recorded as an exemption with its reason;
+  2. `AI_AGENT=1 bootgly test` green;
+  3. for a WPI project: `project <Name> show` first — if it is running, ask the user before touching it;
      otherwise start a throwaway instance on a free port (`PORT=18080 bootgly project <Name> start`),
      request what you changed, and stop only that instance — the port its start banner printed
      (`project <Name> stop 18080`).

@@ -43,6 +43,7 @@ use function trim;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use ReflectionClass;
+use ReflectionClassConstant;
 
 use Bootgly\ACI\Tests\Suite\Test;
 
@@ -187,6 +188,8 @@ return new Test(
          'projects' => $Declared(ProjectsCommand::class),
          'test'     => $Declared(TestCommand::class),
       ];
+      // ! The lint rules each per-rule subcommand wraps, and whether it fixes
+      $facades = (array) (new ReflectionClassConstant(LintCommand::class, 'FACADES'))->getValue();
       $names = [];
       foreach ((array) glob(BOOTGLY_ROOT_BASE . '/Bootgly/commands/*Command.php') as $file) {
          $properties = $Declared('Bootgly\\commands\\' . basename((string) $file, '.php'));
@@ -322,9 +325,13 @@ return new Test(
                else if (isset($verb[2], $actions[$verb[1]]) && in_array($verb[2], $actions[$verb[1]], true) === false) {
                   $unknown[] = $span;
                }
-               // ? A check-only lint submodule told to --fix
+               // ? A deprecated lint subcommand — the rules teach `lint check`
+               else if ($command === 'lint' && ($Commands['lint']['arguments'][$verb[1]]['deprecated'] ?? false) === true) {
+                  $unknown[] = $span;
+               }
+               // ? A check-only lint subcommand told to --fix
                else if ($command === 'lint' && str_contains($rest, '--fix')
-                  && ($Commands['lint']['arguments'][$verb[1]]['fixable'] ?? false) === false) {
+                  && $verb[1] !== 'check' && ($facades[$verb[1]][1] ?? false) === false) {
                   $unknown[] = $span;
                }
             }
@@ -337,7 +344,7 @@ return new Test(
       }
       yield assert(
          assertion: $spans[1] !== [] && $unknown === [],
-         description: 'every command, verb and action the rules name exists (and --fix only on a fixable lint), unknown: ' . json_encode($unknown)
+         description: 'every command, verb and action the rules name exists (no deprecated lint subcommand; --fix only where it fixes), unknown: ' . json_encode($unknown)
       );
 
       // @@ Every flag the rules name is handled by a command

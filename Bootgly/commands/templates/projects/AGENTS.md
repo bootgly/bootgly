@@ -15,8 +15,8 @@ files in `.agents/rules/` — one per section:
 - `.agents/rules/Workflow_pipelines.md`
 
 Each rule carries a tier: **MUST** — the framework, its tooling or the kit break, or the user's work is
-put at risk, without it; **SHOULD** — the house style and working habits (`bootgly lint` checks part of
-the style); **RECOMMEND** — judgement. An explicit instruction from the user overrides SHOULD and
+put at risk, without it; **SHOULD** — the house style and working habits (`bootgly lint check` enforces
+most of the style); **RECOMMEND** — judgement. An explicit instruction from the user overrides SHOULD and
 RECOMMEND; before going against a MUST, tell the user what breaks. In the rules, paths starting with
 `projects/`, `Bootgly/`, `Console/` or `Web/` are relative to the kit root; project paths (`configs/`,
 `router/`, `tests/`, ...) to the project.

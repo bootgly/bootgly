@@ -136,10 +136,9 @@ return new Test(
 
 From `projects/<Name>/`, the [Definition of done](../../../.agents/rules/Testing_guidelines.md):
 
-1. `bootgly lint imports <path> --fix` and `bootgly lint nullables <path> --fix` on what you touched.
-2. `bootgly lint promotions <path>` and `bootgly lint methods <path>` clean, or each deviation explained.
-3. `AI_AGENT=1 bootgly test` green: read `result` and `failures`, not only the totals.
-4. WPI only: `bootgly project <Name> show` first; if it is running, ask the user before touching it.
+1. `bootgly lint check --fix`, then `bootgly lint check` clean — or each deviation recorded as an exemption with its reason.
+2. `AI_AGENT=1 bootgly test` green: read `result` and `failures`, not only the totals.
+3. WPI only: `bootgly project <Name> show` first; if it is running, ask the user before touching it.
    Otherwise start a throwaway instance on a free port (`PORT=18080 bootgly project <Name> start`),
    request what you changed, and stop only that instance, on the port its start banner printed
    (`bootgly project <Name> stop 18080`).

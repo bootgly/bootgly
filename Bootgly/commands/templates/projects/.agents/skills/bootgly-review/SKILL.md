@@ -100,15 +100,14 @@ named argument, enum case and config key the change uses in the pinned source un
 
 ## 3. SHOULD checks — fix or explain
 
-- **Lint-backed** (`Coding_styles.md`, `Naming_conventions.md`): imports, `null|Type`, no
-  constructor promotion, single-word method names — all from step 4.
+- **Lint-backed** (`Coding_styles.md`, `Naming_conventions.md`): everything `bootgly lint check`
+  enforces — imports, `null|Type`, no constructor promotion, declaration spacing, multi-word method
+  names, object and acronym casing, property sections — all from step 4.
 - **By eye**, on the touched lines only:
-  - a method name is one verb in base form — `lint methods` only catches multi-word names; nouns
+  - a method name is one verb in base form — lint only catches multi-word names; nouns
     (`status()`), states and past forms (`loaded()`) you flag yourself; `-ing` only for a method
     that IS a loop;
-  - objects and object collections start uppercase (`$Post`, `$Posts`), acronyms are uppercase
-    (`$SQL`, `$URL`, `$HTML`, `$JSON`): `grep -nE '\$(sql|url|html|json|uri)\b' <file>`;
-  - one space before the parentheses in declarations: `grep -nE 'function [A-Za-z_]\w*\(' <file>`;
+  - each property sits in the right section (Config, Data, Metadata) — lint checks that it has one;
   - interpolation over concatenation; Semantic Commenting markers only where a comment is useful;
   - no trivial getter wrapping a property; no package competing with a native component unless
     the user approved it; no alias or duplicate wrapper of a framework API;
@@ -120,7 +119,7 @@ named argument, enum case and config key the change uses in the pinned source un
 
 ## 4. Run the Definition of done
 
-From `projects/<Name>/`. `lint` takes one path per call — a file or a directory, relative to
+From `projects/<Name>/`. `lint check` takes one path per call — a file or a directory, relative to
 where you stand; under an agent it prints JSON (`result`, `report[].issues[].line`/`message`).
 
 ```sh
@@ -131,13 +130,12 @@ else                                                           # no commit yet: 
    files=$( { git ls-files -- '*.php'; git ls-files --others --exclude-standard -- '*.php'; } | sort -u )
 fi
 for f in $files; do
-   bootgly lint imports "$f";    bootgly lint nullables "$f"   # add --fix when finishing your own change
-   bootgly lint promotions "$f"; bootgly lint methods "$f"     # check-only
+   bootgly lint check "$f"                                     # add --fix when finishing your own change
 done
 AI_AGENT=1 bootgly test                                        # this project's suites
 ```
 
-- Lint must end `passed`; every remaining `promotions`/`methods` issue needs a stated reason.
+- Lint must end `passed`: an issue you keep needs an exemption, with its reason, in `projects/bootgly.Lint.php`.
 - Read the test JSON's `result` and `failures`, not only the totals. A new case that is missing
   from its list does not fail — confirm `cases.total` grew by the cases the change added.
 - Hunting a failure or writing a missing case: the bootgly-test skill owns that loop. Fixing a
@@ -161,10 +159,10 @@ One line per finding, blocking first, then should-fix, then suggestions:
 
 ```text
 [MUST]   Models/Item.php:3 — namespace `Demo\Shop\Models` does not match the path `Shop/Models/` — Organizational_structures.md › Project anatomy
-[SHOULD] Controllers/Items.php:41 — method `loadItems()` is multi-word (lint methods) — Naming_conventions.md › Methods
+[SHOULD] Controllers/Items.php:41 — method `loadItems()` is multi-word (lint check) — Naming_conventions.md › Methods
 ```
 
-Close with the checks you ran and their results (each lint submodule, the test `result` with
+Close with the checks you ran and their results (the lint result, the test `result` with
 case counts, the server check or why it was skipped) and a verdict: **ready** only with zero MUST
 findings, green checks and every SHOULD deviation fixed or explained. Never commit, stage or push
 as part of a review.
@@ -173,21 +171,20 @@ as part of a review.
 
 From `projects/<Name>/`, the [Definition of done](../../../.agents/rules/Testing_guidelines.md):
 
-1. `bootgly lint imports <path> --fix` and `bootgly lint nullables <path> --fix` on what you touched.
-2. `bootgly lint promotions <path>` and `bootgly lint methods <path>` clean, or each deviation explained.
-3. `AI_AGENT=1 bootgly test` green: read `result` and `failures`, not only the totals.
-4. WPI only: `bootgly project <Name> show` first; if it is running, ask the user before touching it.
+1. `bootgly lint check --fix`, then `bootgly lint check` clean — or each deviation recorded as an exemption with its reason.
+2. `AI_AGENT=1 bootgly test` green: read `result` and `failures`, not only the totals.
+3. WPI only: `bootgly project <Name> show` first; if it is running, ask the user before touching it.
    Otherwise start a throwaway instance on a free port (`PORT=18080 bootgly project <Name> start`),
    request what you changed, and stop only that instance, on the port its start banner printed
    (`bootgly project <Name> stop 18080`).
 
 Also, for this skill:
-- [ ] Reviewing someone else's change: the lints ran without `--fix`, and you reported instead of fixing.
+- [ ] Reviewing someone else's change: the lint ran without `--fix`, and you reported instead of fixing.
 - [ ] The report lists every finding as file:line + rule section, with zero open MUST findings.
 
 ## Go deeper
 
-- https://docs.bootgly.com/guide/linter/overview.md — every lint submodule, issue type and the JSON report
+- https://docs.bootgly.com/guide/linter/overview.md — the check, the config file, exemptions and the JSON report
 - https://docs.bootgly.com/testing/basic/running-tests/overview.md — scopes, targeting, agent output
 - https://docs.bootgly.com/testing/about/testing/overview.md — suites, cases and registration
 - https://docs.bootgly.com/guide/configuration/overview.md — `Config`, `bind()` and `.env` files
