@@ -4,6 +4,10 @@ parameters:
    # reports errors the CI (8.4) never sees.
    phpVersion: 80400
    level: 9
+   # One worker per core (the default) took ~6 GB+ on a 16-core host and got the
+   # desktop OOM-killed when several agents ran it at once; 4 workers peak ~1.7 GB.
+   parallel:
+      maximumNumberOfProcesses: 4
    excludePaths:
       analyse:
          - */&/*
