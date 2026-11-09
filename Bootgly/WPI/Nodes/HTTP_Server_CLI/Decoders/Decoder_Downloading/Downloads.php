@@ -395,6 +395,7 @@ final class Downloads
       //   afterward so accidental replacement fails the boot closed.
       $middle = @lstat($path);
       if (
+         // @phpstan-ignore identical.alwaysFalse (stat()/lstat() are never cached; PHPStan 2.3 remembers them until clearstatcache())
          $middle === false
          || (($middle['mode'] & 0170000) !== 0100000)
          || $openedBefore['dev'] !== $middle['dev']
@@ -410,6 +411,7 @@ final class Downloads
       $pathAfter = @lstat($path);
 
       return $openedAfter !== false
+         // @phpstan-ignore notIdentical.alwaysTrue (stat()/lstat() are never cached; PHPStan 2.3 remembers them until clearstatcache())
          && $pathAfter !== false
          && (($openedAfter['mode'] & 0170000) === 0100000)
          && (($pathAfter['mode'] & 0170000) === 0100000)

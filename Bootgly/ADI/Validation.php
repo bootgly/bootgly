@@ -134,7 +134,7 @@ class Validation
 
          // ! Concrete targets of the path
          $Path = new Path($field);
-         /** @var array<int,array{0:string,1:bool,2:mixed}> $targets */
+         /** @var list<array{0:string,1:bool,2:mixed}> $targets */
          $targets = [];
          // ! Container errors, kept until the rule key is known to fit the limit
          /** @var array<string,string> $containers */
@@ -185,7 +185,7 @@ class Validation
    /**
     * Collect the concrete targets of a path below one node.
     *
-    * @param array<int,array{0:string,1:bool,2:mixed}> $targets
+    * @param list<array{0:string,1:bool,2:mixed}> $targets
     * @param array<string,string> $containers
     *
     * @return bool `false` when the wildcards visited more than `limit` entries

@@ -405,13 +405,8 @@ final class Series
       self::guard($data['totals'], self::METRICS);
       $totals = array_fill_keys(self::METRICS, 0);
       $bucketKeys = ['second', ...self::METRICS];
-      $sent = [];
-      $responses = [];
-      $failed = [];
-      $censored = [];
-      $writeFailed = [];
-      $writeCensored = [];
-      $bytesRead = [];
+      /** @var array<string,array<int,int>> Validated per-second counts, by metric */
+      $values = array_fill_keys(self::METRICS, []);
 
       foreach ($data['buckets'] as $index => $bucket) {
          if (!is_array($bucket)) {
@@ -433,14 +428,8 @@ final class Series
                throw new OverflowException("Time-series {$metric} total overflow.");
             }
             $totals[$metric] += $count;
+            $values[$metric][] = $count;
          }
-         $sent[] = $bucket['sent'];
-         $responses[] = $bucket['responses'];
-         $failed[] = $bucket['failed'];
-         $censored[] = $bucket['censored'];
-         $writeFailed[] = $bucket['write_failed'];
-         $writeCensored[] = $bucket['write_censored'];
-         $bytesRead[] = $bucket['bytes_read'];
       }
 
       foreach (self::METRICS as $metric) {
@@ -454,13 +443,13 @@ final class Series
          }
       }
 
-      $Series->sent = $sent;
-      $Series->responses = $responses;
-      $Series->failed = $failed;
-      $Series->censored = $censored;
-      $Series->writeFailed = $writeFailed;
-      $Series->writeCensored = $writeCensored;
-      $Series->bytesRead = $bytesRead;
+      $Series->sent = $values['sent'];
+      $Series->responses = $values['responses'];
+      $Series->failed = $values['failed'];
+      $Series->censored = $values['censored'];
+      $Series->writeFailed = $values['write_failed'];
+      $Series->writeCensored = $values['write_censored'];
+      $Series->bytesRead = $values['bytes_read'];
       $Series->sentTotal = $totals['sent'];
       $Series->responsesTotal = $totals['responses'];
       $Series->failedTotal = $totals['failed'];

@@ -604,6 +604,7 @@ class State
                      $locks,
                   ) === 1
                   && (int) $locks[1] === ($parent ?? $PID)
+                  // @phpstan-ignore function.alreadyNarrowedType (stat()/lstat() are never cached; PHPStan 2.3 remembers them until clearstatcache())
                   && is_array($confirmed)
                   && $confirmed['dev'] === $before['dev']
                   && $confirmed['ino'] === $before['ino']
@@ -621,6 +622,7 @@ class State
       $after = @lstat($this->pidLockFile);
 
       return $bound
+         // @phpstan-ignore function.alreadyNarrowedType (stat()/lstat() are never cached; PHPStan 2.3 remembers them until clearstatcache())
          && is_array($after)
          && $after['dev'] === $before['dev']
          && $after['ino'] === $before['ino']
@@ -715,6 +717,7 @@ class State
          }
          $after = @lstat($file);
          if (
+            // @phpstan-ignore function.alreadyNarrowedType, identical.alwaysFalse (stat()/lstat() are never cached; PHPStan 2.3 remembers them until clearstatcache())
             is_array($after) === false
             || $before['dev'] !== $after['dev']
             || $before['ino'] !== $after['ino']
@@ -731,6 +734,7 @@ class State
       // ! The directory itself must remain the exact same inode, owner and
       //   group throughout the handoff. Only the per-instance regular files
       //   are delegated to the runtime identity.
+      // @phpstan-ignore function.alreadyNarrowedType (stat()/lstat() are never cached; PHPStan 2.3 remembers them until clearstatcache())
       return is_array($after)
          && $directory['dev'] === $after['dev']
          && $directory['ino'] === $after['ino']
@@ -1012,6 +1016,7 @@ class State
       // ? Re-check the same inode after any repair.
       $after = @lstat($pids);
       if (
+         // @phpstan-ignore function.alreadyNarrowedType, identical.alwaysFalse (stat()/lstat() are never cached; PHPStan 2.3 remembers them until clearstatcache())
          is_array($after) === false
          || $before['dev'] !== $after['dev']
          || $before['ino'] !== $after['ino']
@@ -1052,6 +1057,7 @@ class State
          // @phpstan-ignore identical.alwaysTrue (intentional final-link race recheck)
          if ($Handle === false && $before === false && is_link($file) === false) {
             // Another safe creator may have won the exclusive race.
+            // @phpstan-ignore function.impossibleType (stat()/lstat() are never cached; PHPStan 2.3 remembers them until clearstatcache())
             $before = @lstat($file);
             $Handle = @fopen($file, 'c+b');
          }

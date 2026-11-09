@@ -56,6 +56,13 @@ return new Test(
             && (new Tags(['a', 'b'], all: true))->check($Tagged) === true,
          description: 'Tags filter (all) requires every tag'
       );
+      $Numbered = new Record(Levels::Info, 'c', 'm', ['tags' => [1, ['b']]]);
+      yield assert(
+         assertion: (new Tags(['1'], all: true))->check($Numbered) === false
+            && (new Tags(['1']))->check($Numbered) === false
+            && (new Tags(['b'], all: true))->check($Numbered) === false,
+         description: 'Tags filter compares tags strictly in both modes (no string casting)'
+      );
 
       // # Filters collection — AND semantics
       $Filters = new Filters;

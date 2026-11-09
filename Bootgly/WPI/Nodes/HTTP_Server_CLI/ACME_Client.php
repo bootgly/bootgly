@@ -321,12 +321,9 @@ class ACME_Client
          }
 
          // @@ Authorizations — publish and answer one HTTP-01 challenge each
+         //    (every URL was proven a string above)
          foreach ($authorizations as $authorization) {
             $this->expire($deadline);
-
-            if (is_string($authorization) === false) {
-               throw new ProtocolException('ACME authorization URL is not a string.');
-            }
 
             $authz = $this->expect(
                $this->post($authorization, null),

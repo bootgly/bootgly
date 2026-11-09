@@ -11,7 +11,6 @@
 namespace Bootgly\CLI\UX\Components;
 
 
-use const SIG_DFL;
 use const SIGINT;
 use const SIGWINCH;
 use function function_exists;
@@ -134,9 +133,10 @@ class Tail
       finally {
          // ! Always restore the terminal — and the embedding flow's handlers
          $this->following = false;
+         // ! Saved before the loop under this same check
          if (function_exists('pcntl_signal') === true) {
-            pcntl_signal(SIGINT, $SIGINTHandler ?? SIG_DFL);
-            pcntl_signal(SIGWINCH, $SIGWINCHHandler ?? SIG_DFL);
+            pcntl_signal(SIGINT, $SIGINTHandler);
+            pcntl_signal(SIGWINCH, $SIGWINCHHandler);
          }
          $Input->configure(blocking: true, canonical: true, echo: true);
          $Output->Cursor->show();

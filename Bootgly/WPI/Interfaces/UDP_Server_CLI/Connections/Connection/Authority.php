@@ -36,6 +36,8 @@ final class Authority
     * Public status is retained as a fail-closed veto for compatibility, but
     * private lifecycle flags are the positive authority and cannot be reset by
     * application code after close().
+    *
+    * @phpstan-impure Callbacks and signals between two calls can revoke the authority.
     */
    public static function check (Connection $Connection): bool
    {

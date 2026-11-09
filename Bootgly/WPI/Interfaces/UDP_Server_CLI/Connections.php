@@ -288,9 +288,7 @@ class Connections implements WPI\Connections
       //   and cyclic GC. Re-read the actual tuples only after that boundary;
       //   restoring a pre-release snapshot would resurrect a closed peer.
       $Peers = isSet(self::$Peers) ? self::$Peers : [];
-      $Quarantines = isSet(self::$quarantineTokens)
-         ? self::$quarantineTokens
-         : [];
+      $Quarantines = self::$quarantineTokens;
       $IPConnections = [];
       $QuarantineTokens = [];
       $TimeoutCounts = [];
@@ -382,6 +380,7 @@ class Connections implements WPI\Connections
          return true;
       }
 
+      // @phpstan-ignore smaller.alwaysTrue (a released Connection's destructor or callback may refill self::$Connections)
       for ($pass = 0; $pass < 8 && self::$Connections !== []; $pass++) {
          if (self::$CurrentManager !== $ManagerIdentity) {
             return false;
@@ -420,7 +419,11 @@ class Connections implements WPI\Connections
       return self::$Connections === [];
    }
 
-   /** Check whether this is still the process's current admission manager. */
+   /**
+    * Check whether this is still the process's current admission manager.
+    *
+    * @phpstan-impure Callbacks and signals between two calls can retire the manager.
+    */
    private function authorize (): bool
    {
       return isSet(self::$CurrentManager)
@@ -882,9 +885,7 @@ class Connections implements WPI\Connections
    private static function rebuild (): void
    {
       $Peers = isSet(self::$Peers) ? self::$Peers : [];
-      $Quarantines = isSet(self::$quarantineTokens)
-         ? self::$quarantineTokens
-         : [];
+      $Quarantines = self::$quarantineTokens;
       $IPConnections = [];
       $QuarantineTokens = [];
       $TimeoutCounts = [];

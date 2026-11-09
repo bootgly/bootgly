@@ -553,12 +553,11 @@ class LintCommand extends Command
                if ($Result->notice !== null) {
                   $reason = 'the analyzer declined the file';
                }
-               if ($directory !== null) {
-                  foreach ($pins as $pinned) {
-                     if (str_starts_with("{$directory}/", $pinned)) {
-                        $reason = 'it sits in a pinned tree';
-                        break;
-                     }
+               // ! `$directory` resolved: an unresolved one was skipped above
+               foreach ($pins as $pinned) {
+                  if (str_starts_with("{$directory}/", $pinned)) {
+                     $reason = 'it sits in a pinned tree';
+                     break;
                   }
                }
                foreach ($kept as $Issue) {

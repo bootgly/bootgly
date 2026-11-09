@@ -68,6 +68,7 @@ class Rows implements ArrayAccess, Iterator
    public function offsetSet ($offset, $value): void
    {
       if ($offset === null) {
+         // @phpstan-ignore assign.propertyType (an append takes PHP's next int key, whatever TKey is)
          $this->rows[] = $value;
       }
       else {

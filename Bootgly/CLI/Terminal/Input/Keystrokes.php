@@ -232,7 +232,8 @@ enum Keystrokes : string
       return match (true) {
          $held === 1 && $code === 9  => self::SHIFT_TAB->value,
          $held === 1 && $code === 13 => self::SHIFT_ENTER->value,
-         $held === 2 && $code === 13 => self::ALT_ENTER->value,
+         // ! Alt + any key but Enter returned above
+         $held === 2 => self::ALT_ENTER->value,
          $held === 4 && $code === 13 => self::CTRL_ENTER->value,
          // ? Shift (or AltGr = Ctrl+Alt) + printable — the code is the resolved
          //   grapheme (international layouts reach punctuation through these

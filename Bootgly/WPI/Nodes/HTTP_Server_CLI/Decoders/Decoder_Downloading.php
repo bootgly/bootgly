@@ -1134,7 +1134,7 @@ class Decoder_Downloading extends Decoders implements Disconnecting
                   $fieldName = $part['name'];
                }
 
-               if ($isFile && $uploadKey !== false) {
+               if ($isFile) {
                   if ($this->filesCount >= Server\Request::$maxMultipartFiles) {
                      $reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
                      $data = '';
@@ -1203,7 +1203,7 @@ class Decoder_Downloading extends Decoders implements Disconnecting
                      //   part above — skips every filesystem step: the two
                      //   guards below already read the same condition.
                      if (
-                        ($file['error'] ?? 0) === 0
+                        $file['error'] === 0
                         && ! is_dir(BOOTGLY_UPLOADS_DIR)
                         && ! mkdir(BOOTGLY_UPLOADS_DIR, 0700, true)
                         && ! is_dir(BOOTGLY_UPLOADS_DIR)
@@ -1211,14 +1211,14 @@ class Decoder_Downloading extends Decoders implements Disconnecting
                         $file['error'] = UPLOAD_ERR_CANT_WRITE;
                      }
 
-                     if (($file['error'] ?? 0) === 0) {
+                     if ($file['error'] === 0) {
                         $freeSpace = disk_free_space(BOOTGLY_UPLOADS_DIR);
                         if ($freeSpace !== false && $freeSpace < 1048576) {
                            $file['error'] = UPLOAD_ERR_CANT_WRITE;
                         }
                      }
 
-                     if (($file['error'] ?? 0) === 0) {
+                     if ($file['error'] === 0) {
                         $tempFile = BOOTGLY_UPLOADS_DIR
                            . bin2hex(random_bytes(16));
 
@@ -1248,7 +1248,7 @@ class Decoder_Downloading extends Decoders implements Disconnecting
                   }
 
                   if (
-                     ($file['error'] ?? 0) !== 0
+                     $file['error'] !== 0
                      && $this->fileHandler !== null
                   ) {
                      try {

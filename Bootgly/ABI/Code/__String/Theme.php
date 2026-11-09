@@ -54,7 +54,7 @@ class Theme
    // ...
 
    // * Data
-   /** @var array<string,array<string,array<string,mixed>>> */
+   /** @var array<string,array<mixed>> Theme name → its specifications (`options`, `values`). */
    protected static array $themes = [];
    public private(set) null|string $active;
    // The active UI theme — read by the CLI markup renderer (TemplateEscaped).
@@ -63,7 +63,7 @@ class Theme
    public static self $Current;
 
    // * Metadata
-   /** @var array<string,array<string,mixed>> */
+   /** @var array<mixed> */
    private array $theme;
    /** @var array<string,array<string,mixed>> */
    private array $options;

@@ -717,6 +717,7 @@ class SMTP_Client
          // ! Bound the next blocking read by the remaining time (1ms floor)
          $seconds = (int) $remaining;
          $microseconds = (int) (($remaining - $seconds) * 1_000_000);
+         // @phpstan-ignore smaller.alwaysTrue (PHPStan 2.3 narrows the derived $microseconds to 0 on `$seconds === 0`; 0.5s left gives 500000)
          if ($seconds === 0 && $microseconds < 1_000) {
             $microseconds = 1_000;
          }

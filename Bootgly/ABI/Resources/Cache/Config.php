@@ -612,6 +612,7 @@ class Config
          finally {
             umask($mask);
          }
+         // @phpstan-ignore function.impossibleType (stat()/lstat() are never cached; PHPStan 2.3 remembers them until clearstatcache())
          $state = @lstat($directory);
       }
 

@@ -62,6 +62,7 @@ use const WEXITED;
 use const WNOHANG;
 use const WNOWAIT;
 use function array_diff;
+use function array_filter;
 use function array_key_exists;
 use function array_keys;
 use function array_merge;
@@ -1241,6 +1242,7 @@ class TCP_Server_CLI implements Servers
       $this->demote();
       // ! Until every worker has demoted too, the demoted master cannot signal
       //   it: a command, a stop or a test run sent in that window is refused
+      // @phpstan-ignore booleanAnd.alwaysFalse, notIdentical.alwaysFalse (demote() changes the UID; PHPStan 2.3 remembers posix_getuid())
       if ($privileged && posix_getuid() !== 0) {
          $this->wait();
       }
@@ -4190,7 +4192,7 @@ class TCP_Server_CLI implements Servers
          fclose($Client);
          return false;
       }
-      $payload = implode('', is_array($Message['iov'] ?? null) ? $Message['iov'] : []);
+      $payload = implode('', array_filter(is_array($Message['iov'] ?? null) ? $Message['iov'] : [], is_string(...)));
       $decoded = json_decode($payload, true);
       $names = is_array($decoded) ? ($decoded['resources'] ?? null) : null;
       $contract = is_array($decoded) ? ($decoded['contract'] ?? null) : null;

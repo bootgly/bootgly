@@ -144,12 +144,12 @@ abstract class Expectations
             Op::LessThanOrEqual => new Comparators\LessThanOrEqual($expected)
          });
       }
-      else if ($comparator !== null && $expected === Argument::Undefined) { // @phpstan-ignore-line
+      else if ($comparator !== null) {
          throw new AssertionError(
             'The expected value must be defined when using a comparator in `expect(...)` method.'
          );
       }
-      else if ($comparator === null && $expected !== Argument::Undefined) {
+      else if ($expected !== Argument::Undefined) {
          throw new AssertionError(
             'The comparator must be defined when using an expected value in `expect(...)` method.'
          );

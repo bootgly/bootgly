@@ -2993,7 +2993,7 @@ class TestCommand extends Command
             'exit_code' => $exitCode,
          ];
          $artifacts = isset($Document->artifacts) && is_array($Document->artifacts)
-            ? $Document->artifacts
+            ? array_filter($Document->artifacts, is_string(...))
             : [];
          $Document->artifacts = array_values(array_unique([
             ...$artifacts,

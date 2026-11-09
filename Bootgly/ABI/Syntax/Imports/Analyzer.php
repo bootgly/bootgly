@@ -788,7 +788,7 @@ class Analyzer extends Analyzers
     * a comment left next to the wrong statement misinforms worse than a missing fix does.
     * So the block is reported as un-rewritable and left for a human instead.
     *
-    * @param array<int,mixed> $tokens
+    * @param array<int,array{int,string,int}|string> $tokens
     * @param array{start:int,end:int} $range
     * @param array<int,Issue> $Issues
     */
@@ -870,7 +870,7 @@ class Analyzer extends Analyzers
     * an import that could have gone, which costs a missed cleanup rather than a
     * deletion of working code — and `--fix` writes the file.
     *
-    * @param array<int,mixed> $tokens
+    * @param array<int,array{int,string,int}|string> $tokens
     * @param array{start:int,end:int} $range
     *
     * @return array{names:array<string,bool>,exact:array<string,bool>}
@@ -995,7 +995,7 @@ class Analyzer extends Analyzers
     * Count the namespace DECLARATIONS of a file — the keyword is also a
     * legal argument label (`f(namespace: 'x')`), which names nothing.
     *
-    * @param array<int,mixed> $tokens
+    * @param array<int,array{int,string,int}|string> $tokens
     * @param int $count
     */
    private function count (array $tokens, int $count): int
@@ -1020,7 +1020,7 @@ class Analyzer extends Analyzers
     * (`Foo::namespace`); only one followed by a name — or by `{`, the global
     * block — declares.
     *
-    * @param array<int,mixed> $tokens
+    * @param array<int,array{int,string,int}|string> $tokens
     * @param int $count
     * @param int $i The position of the T_NAMESPACE token
     */
@@ -1038,7 +1038,7 @@ class Analyzer extends Analyzers
     * tokens, an earlier `NAME = value,` of a list, or nothing at all may lie
     * between the keyword and the name.
     *
-    * @param array<int,mixed> $tokens
+    * @param array<int,array{int,string,int}|string> $tokens
     * @param int $i The position of the name
     */
    private function trace (array $tokens, int $i): bool

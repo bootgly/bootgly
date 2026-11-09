@@ -251,7 +251,7 @@ class Analyzer extends Analyzers
    /**
     * Tell what declares the variable at `$i`, and with which type.
     *
-    * @param array<int,mixed> $tokens
+    * @param array<int,array{int,string,int}|string> $tokens
     * @param bool $listed Whether the variable sits in a parameter list — a
     *   type before a variable anywhere else (`FLAG | $flags`) is an operand
     *
@@ -312,7 +312,7 @@ class Analyzer extends Analyzers
    /**
     * Tell whether the variable at `$i` is assigned, and whether with `new`.
     *
-    * @param array<int,mixed> $tokens
+    * @param array<int,array{int,string,int}|string> $tokens
     *
     * @return null|bool null when it is not assigned here; whether the value is `new ...`
     */
@@ -421,7 +421,7 @@ class Analyzer extends Analyzers
    /**
     * The `@var` type of the doc comment right before a property declaration.
     *
-    * @param array<int,mixed> $tokens
+    * @param array<int,array{int,string,int}|string> $tokens
     */
    private function describe (array $tokens, int $i): null|string
    {
@@ -442,7 +442,7 @@ class Analyzer extends Analyzers
    /**
     * The `@param` types of the doc comment right before a function, by name.
     *
-    * @param array<int,mixed> $tokens
+    * @param array<int,array{int,string,int}|string> $tokens
     *
     * @return array<string,string>
     */

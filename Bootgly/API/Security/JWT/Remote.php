@@ -738,7 +738,8 @@ class Remote implements KeyResolver
                break;
             }
          }
-         if (is_string($body) === false || $answered === null) {
+         // ? A string body always broke the hop with `$answered` set
+         if (is_string($body) === false) {
             return Failures::Network;
          }
          // ! A hop answered from a public address arms the policy

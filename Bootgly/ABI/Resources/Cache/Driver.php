@@ -209,6 +209,7 @@ abstract class Driver
       try {
          $decoded = @unserialize($bytes, $this->options);
       }
+      // @phpstan-ignore catch.neverThrown (an application error handler may promote the warning, even under `@`)
       catch (ErrorException | TypeError) {
          // ! `@` hides the warning malformed or over-deep bytes raise, but not
          //   the TypeError a forged record throws when it assigns a value a

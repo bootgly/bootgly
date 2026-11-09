@@ -230,11 +230,12 @@ final class Provenance
 
       // ! A local Git checkout is authoritative. Never hide an unstable or
       //   unsupported live state behind packaged-image fallback metadata.
+      // ! Only a local checkout assigns the identity above, so it is still unset here
       if ($local === false) {
-         $SHA ??= self::normalize($SHAFallback, 'sha');
-         $dirty ??= self::normalize($dirtyFallback, 'dirty');
-         $tracked ??= self::normalize($trackedFallback, 'sha256');
-         $untracked ??= self::normalize($untrackedFallback, 'sha256');
+         $SHA = self::normalize($SHAFallback, 'sha');
+         $dirty = self::normalize($dirtyFallback, 'dirty');
+         $tracked = self::normalize($trackedFallback, 'sha256');
+         $untracked = self::normalize($untrackedFallback, 'sha256');
 
          // ! Packaged metadata is one identity tuple. Never combine a valid
          //   fragment with missing companions.
@@ -635,6 +636,7 @@ final class Provenance
 
          $after = @lstat($file);
          if (
+            // @phpstan-ignore identical.alwaysFalse (stat()/lstat() are never cached; PHPStan 2.3 remembers them until clearstatcache())
             $after === false
             || $before['dev'] !== $after['dev']
             || $before['ino'] !== $after['ino']

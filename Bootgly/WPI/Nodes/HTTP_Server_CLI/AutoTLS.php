@@ -709,6 +709,7 @@ class AutoTLS
             : @fopen($file, 'c+b');
          // @phpstan-ignore identical.alwaysTrue (intentional final-link race recheck)
          if ($Handle === false && $before === false && is_link($file) === false) {
+            // @phpstan-ignore function.impossibleType (stat()/lstat() are never cached; PHPStan 2.3 remembers them until clearstatcache())
             $before = @lstat($file);
             $Handle = @fopen($file, 'c+b');
          }
@@ -741,6 +742,7 @@ class AutoTLS
       $secured = @lstat($file);
       $opened = fstat($Handle);
       if (
+         // @phpstan-ignore function.alreadyNarrowedType, identical.alwaysFalse (stat()/lstat() are never cached; PHPStan 2.3 remembers them until clearstatcache())
          is_array($secured) === false || is_array($opened) === false
          || $secured['dev'] !== $opened['dev']
          || $secured['ino'] !== $opened['ino']

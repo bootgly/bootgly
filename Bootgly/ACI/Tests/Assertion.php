@@ -199,7 +199,7 @@ class Assertion extends Expectations
       // ?! Snapshot: reset $actual value if Snapshot was restored
       if (
          ($this->Snapshot ?? false)
-         && ($this->Snapshot->restored ?? false)
+         && $this->Snapshot->restored
          && isSet($this->actual)
       ) {
          $actual = $this->actual;

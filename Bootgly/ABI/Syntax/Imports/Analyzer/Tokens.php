@@ -20,14 +20,14 @@ class Tokens
 {
    // * Config
    // * Data
-   /** @var array<int,mixed> */
+   /** @var array<int,array{int,string,int}|string> */
    public array $items;
    // * Metadata
    public readonly int $count;
 
 
    /**
-    * @param array<int,mixed> $items
+    * @param array<int,array{int,string,int}|string> $items
     * @param int $count
     */
    public function __construct (array &$items, int $count)
@@ -42,7 +42,7 @@ class Tokens
     *
     * @param int $i Current position
     *
-    * @return mixed Token or null
+    * @return array{int,string,int}|string|null Token or null
     */
    public function rewind (int $i): mixed
    {
@@ -69,7 +69,7 @@ class Tokens
     *
     * @param int $i Current position
     *
-    * @return mixed Token or null
+    * @return array{int,string,int}|string|null Token or null
     */
    public function advance (int $i): mixed
    {

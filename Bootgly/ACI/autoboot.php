@@ -171,7 +171,10 @@ if (
 
       $self = [PHP_BINARY, ...$options, $entry];
       foreach (array_slice($arguments, 1) as $arg) {
-         $self[] = $arg;
+         // ! argv holds strings only
+         if (is_string($arg)) {
+            $self[] = $arg;
+         }
       }
 
       $proc = proc_open($self, $descriptors, $pipes, null, $env);

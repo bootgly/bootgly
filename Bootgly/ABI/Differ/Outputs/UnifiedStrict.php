@@ -264,8 +264,6 @@ final class UnifiedStrict implements Output
       $fromRange -= $sameCount;
       $toRange   -= $sameCount;
 
-      assert(isset($i));
-
       $this->write(
          $diff,
          $hunkCapture - $contextStart,

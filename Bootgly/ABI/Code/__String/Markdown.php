@@ -229,9 +229,9 @@ class Markdown
          }
 
          // # List
-         $bullet = preg_match('/^( {0,3})([-+*])(?:( {1,4})(.*))?$/', $line, $match) === 1;
+         $bullet = preg_match('/^( {0,3})([-+*])(?:( {1,4})(.*))?$/', $line, $marker) === 1;
          $number = $bullet === false
-            && preg_match('/^( {0,3})(\d{1,9})([.)])(?:( {1,4})(.*))?$/', $line, $match) === 1;
+            && preg_match('/^( {0,3})(\d{1,9})([.)])(?:( {1,4})(.*))?$/', $line, $ordinal) === 1;
 
          if ($bullet === true || $number === true) {
             $close();
@@ -239,10 +239,10 @@ class Markdown
             $List = new Node(Blocks::List);
             $List->ordered = $number === true;
             if ($number === true) {
-               $List->start = (int) $match[2];
+               $List->start = (int) $ordinal[2];
             }
             // ! Marker signature — the bullet character or the ordered delimiter
-            $signature = $number === true ? $match[3] : $match[2];
+            $signature = $number === true ? $ordinal[3] : $marker[2];
 
             // @@ Items
             while ($index < $count) {

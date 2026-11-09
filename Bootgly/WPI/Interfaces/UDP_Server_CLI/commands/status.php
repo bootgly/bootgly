@@ -37,7 +37,7 @@ return new class extends Command
    // * Metadata
    // Process
    private static int $stat = -1;
-   /** @var array<int,int> */
+   /** @var array<int,array{0:list<string>,1:list<string>}> Worker index → its previous and current /proc stat fields. */
    private static array $stats = [];
    /**
     * PID that owned each worker index when its CPU sample was taken.
@@ -184,21 +184,21 @@ return new class extends Command
                //   the first delta for a new worker is exactly zero.
                if (($owners[$i] ?? null) !== $PID) {
                   $owners[$i] = $PID;
-                  $stats[$i] = [$process_stats, $process_stats]; // @phpstan-ignore-line
+                  $stats[$i] = [$process_stats, $process_stats];
                }
 
-               $stats[$i] ??= [];
+               $stats[$i] ??= [$process_stats, $process_stats];
 
                switch ($stat) {
                   case 0:
-                     $stats[$i][0] = $process_stats; // @phpstan-ignore-line
+                     $stats[$i][0] = $process_stats;
                      break;
                   case 1:
-                     $stats[$i][1] = $process_stats; // @phpstan-ignore-line
+                     $stats[$i][1] = $process_stats;
                      break;
                   default:
-                     $stats[$i][0] = $process_stats; // @phpstan-ignore-line
-                     $stats[$i][1] = $process_stats; // @phpstan-ignore-line
+                     $stats[$i][0] = $process_stats;
+                     $stats[$i][1] = $process_stats;
                }
 
                $utime1 = (float) $stats[$i][0][13];

@@ -188,7 +188,8 @@ class Cursor
       if ($line === null && $column >= 0) {
          return $this->Output->escape($column . self::_CURSOR_LEFT_ABSOLUTE);
       }
-      if ($line === null && $column < 0) {
+      // ? Past the guard above, a lone `$column` is negative
+      if ($line === null) {
          $c = $column + Terminal::$columns;
          return $this->Output->escape($c . self::_CURSOR_LEFT_ABSOLUTE);
       }
@@ -196,7 +197,8 @@ class Cursor
       if ($column === null && $line >= 0) {
          return $this->Output->escape($line . self::_CURSOR_UP_ABSOLUTE);
       }
-      if ($column === null && $line < 0) {
+      // ? Past the guard above, a lone `$line` is negative
+      if ($column === null) {
          $l = $line + Terminal::$lines;
          return $this->Output->escape($l . self::_CURSOR_UP_ABSOLUTE);
       }

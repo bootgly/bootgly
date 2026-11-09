@@ -476,11 +476,11 @@ final class Histogram
          throw new InvalidArgumentException('Latency histogram extrema are inconsistent.');
       }
 
+      // ! Past the checks above, an empty histogram has `$sumNS === 0` and a
+      //   non-empty one has both extrema set
       if ($sumNS === null) {
          if (
             $sumOverflow !== true
-            || $count === 0
-            || $maximumNS === null
             || $maximumNS <= intdiv(PHP_INT_MAX, $count)
          ) {
             throw new InvalidArgumentException('Latency histogram sum-overflow metadata is inconsistent.');
@@ -489,8 +489,7 @@ final class Histogram
       elseif (
          $sumOverflow !== false
          || ($count > 0 && (
-            $maximumNS === null || $minimumNS === null
-            || $sumNS < $maximumNS
+            $sumNS < $maximumNS
             || intdiv($sumNS, $count) < $minimumNS
             || intdiv($sumNS, $count) > $maximumNS
          ))

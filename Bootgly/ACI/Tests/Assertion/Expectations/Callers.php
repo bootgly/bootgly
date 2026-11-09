@@ -64,8 +64,6 @@ trait Callers
          throw new AssertionError('You need to use First class callable syntax: `$Object->$method(...)`.');
       }
 
-      new Callers\CallClosure($arguments);
-
       return $this;
    }
 }

@@ -459,6 +459,7 @@ trait Demotable
          // ! Only the one directory — an ancestor root created would stay
          //   root's, unreported, and the storage root is the deployment's
          $created = @mkdir($directory, $mode);
+         // @phpstan-ignore function.impossibleType (stat()/lstat() are never cached; PHPStan 2.3 remembers them until clearstatcache())
          $entry = @lstat($directory);
       }
 
@@ -725,6 +726,7 @@ trait Demotable
       $after = @lstat($path);
 
       // :
+      // @phpstan-ignore function.alreadyNarrowedType (stat()/lstat() are never cached; PHPStan 2.3 remembers them until clearstatcache())
       return is_array($after)
          && $after['dev'] === $before['dev']
          && $after['ino'] === $before['ino']

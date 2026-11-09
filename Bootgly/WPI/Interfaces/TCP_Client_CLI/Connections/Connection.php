@@ -341,13 +341,10 @@ class Connection extends Packages
          throw $Foreign;
       }
 
-      // @ Check negotiation
+      // @ Check negotiation (the loop above only leaves on true or false)
       if ($negotiation === false) {
          $this->close();
          return false;
-      }
-      else if ($negotiation === 0) {
-         return 0;
       }
 
       $this->encrypted = true;

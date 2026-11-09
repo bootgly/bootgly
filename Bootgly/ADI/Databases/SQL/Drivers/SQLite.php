@@ -317,7 +317,9 @@ class SQLite extends Driver
 
       if ($selected > 0) {
          for ($index = 0; $index < $selected; $index++) {
-            $columns[] = $SQLite3Result->columnName($index);
+            // ! `false` only for an index past numColumns()
+            $name = $SQLite3Result->columnName($index);
+            $columns[] = $name === false ? '' : $name;
          }
 
          // @@

@@ -728,11 +728,12 @@ class Shared extends Driver implements Atomic
          return $stored;
       }
 
-      $records = $stored['r'];
-      if (array_key_exists($key, $records) === false) {
+      if (array_key_exists($key, $stored['r']) === false) {
          return $stored;
       }
 
+      // ! Neighbors are normalized like every other expand → collapse path
+      $records = $this->expand($stored);
       unset($records[$key]);
 
       return $this->collapse($records);

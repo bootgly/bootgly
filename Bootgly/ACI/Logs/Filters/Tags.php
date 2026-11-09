@@ -11,8 +11,6 @@
 namespace Bootgly\ACI\Logs\Filters;
 
 
-use function array_intersect;
-use function count;
 use function in_array;
 use function is_array;
 
@@ -62,7 +60,13 @@ class Tags extends Filter
 
       // @ Match
       if ($this->all === true) {
-         return count(array_intersect($this->tags, $tags)) === count($this->tags);
+         foreach ($this->tags as $tag) {
+            if (in_array($tag, $tags, true) === false) {
+               return false;
+            }
+         }
+
+         return true;
       }
 
       foreach ($this->tags as $tag) {

@@ -396,11 +396,8 @@ class Summary
       }
 
       if ($isServer) {
+         // ! Non-empty: a server run was detected inside the loop over the results
          $opponents = array_keys($results);
-
-         if (count($opponents) === 0) {
-            return;
-         }
 
          // @ Collect all loads
          $allLoads = [];

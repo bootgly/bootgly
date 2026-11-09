@@ -51,5 +51,19 @@ return new Test(
       )
          ->expect(str_contains($capture('vary-string.options.php'), "'vary' requires type 'int'"), Op::Identical, true)
          ->assert();
+
+      yield new Assertion(
+         description: 'A non-scalar default is rejected',
+         fallback: 'Non-scalar default not rejected!'
+      )
+         ->expect(str_contains($capture('bad-default.options.php'), "'default' must be a scalar or null"), Op::Identical, true)
+         ->assert();
+
+      yield new Assertion(
+         description: 'A non-string description is rejected',
+         fallback: 'Non-string description not rejected!'
+      )
+         ->expect(str_contains($capture('bad-description.options.php'), "'description' must be a string"), Op::Identical, true)
+         ->assert();
    })
 );

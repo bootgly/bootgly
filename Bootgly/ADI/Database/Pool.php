@@ -599,7 +599,8 @@ class Pool
          //   session goes before that answer is drained. A statement that never
          //   reached the wire — a sibling spliced out of the queue, a batch
          //   parked behind another writer — runs nowhere and is owed nothing.
-         if ($reading && $Protocol !== null && $Protocol->detached) {
+         //   (`$key` is only set when there is a Protocol)
+         if ($reading && $Protocol->detached) {
             $id = spl_object_id($Connection);
             $this->lingering[$id] = max($this->lingering[$id] ?? 0.0, $Operation->deadline);
          }

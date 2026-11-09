@@ -87,9 +87,8 @@ class Encoder
 
          $chunk .= $character;
       }
-      if ($chunk !== '') {
-         $chunks[] = $chunk;
-      }
+      // ! Non-ASCII text is never empty, so the last chunk always holds a character
+      $chunks[] = $chunk;
 
       // @ Encode each chunk as one encoded-word
       foreach ($chunks as $index => $bytes) {

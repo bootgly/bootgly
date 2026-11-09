@@ -25,6 +25,7 @@ use function intval;
 use function is_array;
 use function is_bool;
 use function is_file;
+use function is_scalar;
 use function is_string;
 use function preg_match;
 use function range;
@@ -172,11 +173,26 @@ class Options
             );
          }
 
+         // ? `default` is a scalar, or null for auto
+         $default = $entry['default'] ?? null;
+         if ($default !== null && is_scalar($default) === false) {
+            throw new RuntimeException(
+               "Benchmark option '{$name}' in {$file}: 'default' must be a scalar or null."
+            );
+         }
+         // ? `description` is help text
+         $description = $entry['description'] ?? '';
+         if (is_string($description) === false) {
+            throw new RuntimeException(
+               "Benchmark option '{$name}' in {$file}: 'description' must be a string."
+            );
+         }
+
          $normalized[$name] = [
             'type' => $type,
-            'default' => $entry['default'] ?? null,
+            'default' => $default,
             'vary' => $vary,
-            'description' => (string) ($entry['description'] ?? ''),
+            'description' => $description,
          ];
       }
 
