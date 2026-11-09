@@ -197,7 +197,7 @@ class KitCommand extends Command
    // * Metadata
    /** @var array<string,mixed> The document `--json` emits, built as the run goes. */
    private array $document = [];
-   private bool $json = false;
+   private bool $JSON = false;
    /** @var null|list<string> Files a release would replace that appeared after the guards; null when the tree could not be read. */
    private null|array $late = [];
 
@@ -213,12 +213,12 @@ class KitCommand extends Command
    public function run (array $arguments = [], array $options = []): bool
    {
       $this->kit = rtrim($this->kit, '/') ?: '/';
-      $this->json = isSet($options['json']);
+      $this->JSON = isSet($options['json']);
 
       $verb = $arguments[0] ?? null;
 
       // ?: A JSON run gets a document even when the verb is missing or unknown
-      if ($this->json === true && in_array($verb, ['upgrade', 'downgrade', 'list'], true) === false) {
+      if ($this->JSON === true && in_array($verb, ['upgrade', 'downgrade', 'list'], true) === false) {
          $this->document = ['command' => 'kit', 'verb' => $verb, 'kit' => $this->kit];
 
          return match ($verb) {
@@ -320,6 +320,9 @@ class KitCommand extends Command
     * over. Each one only where it does not exist yet: a boot never touches
     * what is already there. No kit-level `public/`: the serving APIs are
     * jailed to the project directory, so assets live per project.
+    * `projects/bootgly.Lint.php` — the style rules `lint check` enforces on
+    * the projects, every rule on — is laid down the same way: once, and the
+    * user's from then on.
     *
     * The one exception is the agent rules — `projects/AGENTS.md`,
     * `projects/.agents/rules/` and the `bootgly-*` skills (the framework's and
@@ -441,6 +444,35 @@ class KitCommand extends Command
          //   flow. Only the file this run wrote: a tree that was already there
          //   is not root's to give, and projects/ itself is the mount
          self::grant($registry);
+      }
+
+      // # projects/bootgly.Lint.php — the style rules `lint check` enforces on
+      //   the projects, every rule on. The user's once laid: created only where
+      //   nothing holds the name (a link included), never refreshed. Advisory:
+      //   a failure is said and the boot goes on. Laid by `--agents` too: the
+      //   rules it refreshes point at this file, and an upgraded kit gets them
+      //   that way. A platform checkout's projects/ are its examples, linted
+      //   by the platform's own config
+      $lint = "{$kit}/projects/bootgly.Lint.php";
+      $platform = false;
+      foreach (['CONSOLE_ROOT_BASE', 'WEB_ROOT_BASE'] as $root) {
+         if (defined($root) === true && realpath((string) constant($root)) === realpath($kit)) {
+            $platform = true;
+         }
+      }
+      if ($platform === false && is_dir("{$kit}/projects") === true
+         && file_exists($lint) === false && is_link($lint) === false
+      ) {
+         if (@copy("{$templates}/Bootgly/commands/stubs/bootgly.Lint.php", $lint) === true) {
+            self::grant($lint);
+            $Alert->Type::Success->set();
+            $Alert->message = 'Lint configuration created: @#cyan:projects/bootgly.Lint.php@;';
+         }
+         else {
+            $Alert->Type::Attention->set();
+            $Alert->message = 'Could not create @#cyan:projects/bootgly.Lint.php@; — `bootgly lint check` keeps its defaults.';
+         }
+         $Alert->render();
       }
 
       // # projects/AGENTS.md + projects/.agents/rules/ — the agent rules, refreshed
@@ -1305,7 +1337,7 @@ class KitCommand extends Command
       }
       foreach ($questions as $question) {
          // ! `--json` is a headless contract: nothing is asked, `--yes` or nothing
-         if ($yes === false && ($this->json === true || $this->confirm($question) === false)) {
+         if ($yes === false && ($this->JSON === true || $this->confirm($question) === false)) {
             return $this->fail('Not confirmed.', 'Run again with @#cyan:--yes@; to proceed.');
          }
       }
@@ -1571,7 +1603,7 @@ class KitCommand extends Command
       $this->document['mixed'] = $mixed;
 
       // ?: Machine output
-      if ($this->json === true) {
+      if ($this->JSON === true) {
          $this->emit();
 
          return true;
@@ -1628,7 +1660,7 @@ class KitCommand extends Command
 
       // ? Refuse a flag this verb does not take — as a document under `--json`,
       //   where `admit()`'s alert would break the one-document contract
-      if ($this->json === true) {
+      if ($this->JSON === true) {
          foreach ($options as $option => $value) {
             if (in_array((string) $option, [...$accepted, 'help', 'h', 'v'], true) === false) {
                $this->fail('Unknown option --' . $this->clean((string) $option) . ' for this verb.', 'Options: --json, --yes (upgrade/downgrade), -v.');
@@ -1669,7 +1701,7 @@ class KitCommand extends Command
                'source' => 'image',
             ];
             $this->document['detail'] = 'Releases are image tags here: docker pull bootgly/bootgly.kit:<version>; latest follows the stable line.';
-            if ($this->json) {
+            if ($this->JSON) {
                $this->emit();
             }
             else {
@@ -1772,7 +1804,7 @@ class KitCommand extends Command
 
       // # The releases — the remote's tags win over stale local ones
       $Output = CLI->Terminal->Output;
-      $Stream = $this->verbosity > 0 && $this->json === false
+      $Stream = $this->verbosity > 0 && $this->JSON === false
          ? function (string $line) use ($Output): void { $Output->write("   {$line}" . PHP_EOL); }
          : null;
       $fetched = $VCS->Git->fetch($remote, [], $Stream) === 0;
@@ -2362,7 +2394,7 @@ class KitCommand extends Command
 
       $Output = CLI->Terminal->Output;
       $Stream = function (string $line) use ($Output): void {
-         if ($this->json === false) {
+         if ($this->JSON === false) {
             $Output->write("   {$line}" . PHP_EOL);
          }
       };
@@ -2454,7 +2486,7 @@ class KitCommand extends Command
    private function emit (): void
    {
       // ?
-      if ($this->json === false) {
+      if ($this->JSON === false) {
          return;
       }
 
@@ -2469,7 +2501,7 @@ class KitCommand extends Command
     */
    private function render (Alert $Alert): void
    {
-      if ($this->json === false) {
+      if ($this->JSON === false) {
          $Alert->render();
       }
    }
@@ -2479,7 +2511,7 @@ class KitCommand extends Command
     */
    private function say (string $line): void
    {
-      if ($this->json === false) {
+      if ($this->JSON === false) {
          CLI->Terminal->Output->render($line . '@.;');
       }
    }

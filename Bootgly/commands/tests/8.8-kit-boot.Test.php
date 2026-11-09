@@ -36,6 +36,8 @@ use function sys_get_temp_dir;
 use function unlink;
 
 use const Bootgly\CLI;
+use Bootgly\ABI\Syntax\Analyzers\Rules;
+use Bootgly\ABI\Syntax\Lint;
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\CLI\Terminal\Output;
 
@@ -73,6 +75,7 @@ return new Test(
          $templates = "{$base}/templates";
          mkdir("{$templates}/Bootgly/commands/stubs", 0775, true);
          copy(BOOTGLY_ROOT_BASE . '/Bootgly/commands/stubs/Bootgly.projects.php', "{$templates}/Bootgly/commands/stubs/Bootgly.projects.php");
+         copy(BOOTGLY_ROOT_BASE . '/Bootgly/commands/stubs/bootgly.Lint.php', "{$templates}/Bootgly/commands/stubs/bootgly.Lint.php");
          mkdir("{$templates}/scripts", 0775, true);
          file_put_contents("{$templates}/scripts/autoboot.php", "<?php return [];\n");
 
@@ -137,16 +140,27 @@ return new Test(
             description: 'the registry is the empty stub — the framework\'s own projects are never listed in a kit'
          );
 
+         // # The lint configuration: the stub, every rule on, in a format this Bootgly reads
+         $Lint = Lint::load("{$kit}/projects/bootgly.Lint.php");
+         yield assert(
+            assertion: file_get_contents("{$kit}/projects/bootgly.Lint.php") === file_get_contents(BOOTGLY_ROOT_BASE . '/Bootgly/commands/stubs/bootgly.Lint.php')
+               && $Lint->version === 1 && $Lint->paths === ['.'] && $Lint->rules === Rules::cases()
+               && str_contains($output, 'Lint configuration created: projects/bootgly.Lint.php'),
+            description: '`kit boot` creates projects/bootgly.Lint.php from the stub — version 1, the projects tree, every rule on — and says so'
+         );
+
          // # What exists is left alone
          file_put_contents("{$kit}/projects/Bootgly.projects.php", "<?php return ['App' => []];\n");
+         file_put_contents("{$kit}/projects/bootgly.Lint.php", "<?php return 'mine';\n");
          file_put_contents("{$kit}/storage/mine.txt", "mine\n");
          [$result, $output] = $Probe($Bind($kit), ['boot'], ['resources' => true]);
 
          yield assert(
             assertion: $result === true && file_get_contents("{$kit}/projects/Bootgly.projects.php") === "<?php return ['App' => []];\n"
+               && file_get_contents("{$kit}/projects/bootgly.Lint.php") === "<?php return 'mine';\n"
                && is_file("{$kit}/storage/mine.txt")
                && str_contains($output, 'Resource dir') === false && str_contains($output, 'OK'),
-            description: 'a second boot changes nothing — the registry and the user\'s files stay as they are'
+            description: 'a second boot changes nothing — the registry, the lint configuration and the user\'s files stay as they are'
          );
 
          // # Only part missing: only that part is laid down
@@ -157,6 +171,19 @@ return new Test(
             assertion: $result === true && is_dir("{$kit}/scripts") && str_contains($output, 'scripts/')
                && str_contains($output, 'storage/') === false && str_contains($output, 'projects/') === false,
             description: 'a missing resource directory is laid down without touching the others'
+         );
+
+         // # An upgraded kit refreshes only its agent rules — and gets the lint
+         //   configuration those rules point at (the miniature checkout carries
+         //   no rule templates: only the configuration is asserted)
+         unlink("{$kit}/projects/bootgly.Lint.php");
+         [$result, $output] = $Probe($Bind($kit), ['boot'], ['agents' => true]);
+
+         yield assert(
+            assertion: is_file("{$kit}/projects/bootgly.Lint.php")
+               && file_get_contents("{$kit}/projects/bootgly.Lint.php") === file_get_contents(BOOTGLY_ROOT_BASE . '/Bootgly/commands/stubs/bootgly.Lint.php')
+               && str_contains($output, 'Lint configuration created: projects/bootgly.Lint.php'),
+            description: '`kit boot --agents` creates a missing projects/bootgly.Lint.php too — the rules it refreshes point at that file'
          );
 
          // # A template file that cannot be read fails the boot by name — no "OK" over a hole
