@@ -12,25 +12,59 @@ namespace Bootgly\ACI\Tests;
 
 
 use const BOOTGLY_WORKING_DIR;
+use const T_ABSTRACT;
 use const T_ATTRIBUTE;
 use const T_CASE;
 use const T_CATCH;
+use const T_CLASS;
 use const T_CLOSE_TAG;
 use const T_COMMENT;
+use const T_CONST;
+use const T_CONSTANT_ENCAPSED_STRING;
 use const T_CURLY_OPEN;
 use const T_DECLARE;
 use const T_DEFAULT;
+use const T_DNUMBER;
+use const T_DO;
 use const T_DOC_COMMENT;
 use const T_DOLLAR_OPEN_CURLY_BRACES;
+use const T_DOUBLE_ARROW;
+use const T_DOUBLE_COLON;
 use const T_ELSE;
 use const T_ELSEIF;
+use const T_ENDDECLARE;
+use const T_ENDFOR;
+use const T_ENDFOREACH;
+use const T_ENDIF;
+use const T_ENDSWITCH;
+use const T_ENDWHILE;
+use const T_ENUM;
+use const T_FINAL;
+use const T_FINALLY;
 use const T_FOR;
 use const T_FOREACH;
+use const T_FUNCTION;
+use const T_GLOBAL;
 use const T_IF;
+use const T_INTERFACE;
+use const T_LNUMBER;
 use const T_MATCH;
+use const T_NAME_FULLY_QUALIFIED;
+use const T_NAME_QUALIFIED;
+use const T_NAME_RELATIVE;
+use const T_NAMESPACE;
 use const T_OPEN_TAG;
+use const T_PRIVATE;
+use const T_PROTECTED;
+use const T_PUBLIC;
+use const T_READONLY;
 use const T_STRING;
 use const T_SWITCH;
+use const T_TRAIT;
+use const T_TRY;
+use const T_USE;
+use const T_VAR;
+use const T_VARIABLE;
 use const T_WHILE;
 use const T_WHITESPACE;
 use function array_intersect_key;
@@ -45,6 +79,7 @@ use function get_included_files;
 use function is_array;
 use function is_dir;
 use function is_file;
+use function is_int;
 use function is_readable;
 use function ksort;
 use function preg_replace;
@@ -173,9 +208,13 @@ class Coverage
     * PHP sources in the report's scope that the driver cannot measure
     * (paths the Native driver never instruments) — sources a test loaded
     * and sources under `$paths`; when `$changes` is set, only the changed
-    * ones whose changed lines hold code. The coverage engine
-    * itself is never listed: the runner always loads it. Filled by
-    * `stop()`. A gate must not read them as unchanged or uncovered.
+    * ones whose changed lines hold code (declarations do not), plus any
+    * source whose changed code no executable line of the driver stands for
+    * (a closure body, a `match` arm, a `case` label with no line of its own
+    * — any under Native, a non-constant one otherwise —, a property hook
+    * under PCOV). The coverage engine itself is never
+    * listed: the runner always loads it. Filled by `stop()`. A gate must
+    * not read them as unchanged or uncovered.
     *
     * The Native driver records only sources loaded after `start()`: an
     * in-scope source loaded before it (by the bootstrap) is absent from
@@ -352,7 +391,19 @@ class Coverage
             //   statement's executable line (see `locate()`)
             $rows = $changed[$file] ?? [];
             $source = $rows !== [] && is_readable($file) ? file_get_contents($file) : false;
-            $kept = array_intersect_key($lines, $source === false ? $rows : self::locate($source, $rows, $lines));
+            $touched = $rows;
+            if ($source !== false) {
+               // ? Native never probes a `case` label or arm condition: a
+               //   label with no line has nothing that stands for it
+               [$touched, $missed] = self::locate($source, $rows, $lines, $this->Driver instanceof Native === false);
+               // ? Changed code the driver records no line for (a Native
+               //   closure or arm, a body PCOV never saw, an unloaded
+               //   source's closure): unmeasured, not unchanged
+               if ($missed !== []) {
+                  $unmeasured[$file] = true;
+               }
+            }
+            $kept = array_intersect_key($lines, $touched);
             if ($kept === []) {
                unset($data[$file]);
                continue;
@@ -375,12 +426,13 @@ class Coverage
                continue;
             }
 
-            // ? A changed row holding code — any statement's row, whatever
-            //   the analyzer estimates as executable
-            [, $members] = self::parse($source);
+            // ? A changed row holding code — a row of any statement that is
+            //   not a declaration, whatever the analyzer estimates as
+            //   executable
+            [$members, , , $declarations] = self::parse($source);
             $code = false;
-            foreach ($members as $rows) {
-               if (array_intersect_key($rows, $changed[$file]) !== []) {
+            foreach ($members as $statement => $rows) {
+               if (isset($declarations[$statement]) === false && array_intersect_key($rows, $changed[$file]) !== []) {
                   $code = true;
                   break;
                }
@@ -578,109 +630,192 @@ class Coverage
     *
     * A changed executable line counts as itself. A changed line that
     * continues a statement — an argument, an array element, a heredoc
-    * body, a closing `);` — counts as that statement's first executable
-    * line, so a driver that marks only one line of a statement still sees
+    * body, a closing `);` — counts as one of that statement's executable
+    * lines, so a driver that marks only one line of a statement still sees
     * it. Lines holding only comments or whitespace, and lines that open a
     * declaration or a block, touch none.
     *
-    * A header that runs whether or not its body does (`if (…)`,
-    * `case …:`, `foreach (…)`) never stands for a statement of the body:
-    * the body's own executable line is taken first, and the line it
-    * shares with the header only when it has none (line coverage cannot
-    * tell them apart, as in a one-line `if ($a) return;`).
+    * The statement's line is chosen by what else runs on it: a line of
+    * its own first, then one it shares only with other statements, then
+    * one it shares with a header that runs whether or not its body does
+    * (`if (…)`, `case …:`, a `match` arm condition) — line coverage cannot
+    * tell those apart, as in a one-line `if ($a) return;`. A `switch` or
+    * `match` subject with no executable line of its own counts as the
+    * first executable line of its block, and — when `$chained` — a `case`
+    * label or arm condition of literals and constants with none as its
+    * subject's line (PHP may compare those in a jump table there, where
+    * PCOV and Xdebug attribute them); any other label with no line is
+    * missed.
+    *
+    * Also gives the changed lines where a statement holding code touches
+    * no executable line — code the driver has no line for —, even beside
+    * a statement that does.
     *
     * @param array<int, true> $changed
     * @param array<int, int> $lines Executable lines of the source.
+    * @param bool $chained Whether a constant label with no line counts as
+    * its subject's line (a driver that attributes lines as PHP compiles
+    * them: PCOV, Xdebug); otherwise it is missed.
     *
-    * @return array<int, true>
+    * @return array{0: array<int, true>, 1: array<int, true>} `[touched, missed]`
     */
-   private static function locate (string $source, array $changed, array $lines): array
+   private static function locate (string $source, array $changed, array $lines, bool $chained): array
    {
       // !
-      [$continued, $members, $headers] = self::parse($source);
+      [$members, $headers, $subjects, $declarations, $labels] = self::parse($source);
+      // Row => statements with a token on it
+      $owners = [];
+      foreach ($members as $statement => $rows) {
+         foreach ($rows as $row => $_) {
+            $owners[$row][$statement] = true;
+         }
+      }
 
       // @@
       $touched = [];
+      $missed = [];
       foreach ($changed as $row => $_) {
          if (isset($lines[$row])) {
             $touched[$row] = true;
             continue;
          }
 
-         // ? The statement the row continues
-         $owner = $continued[$row] ?? null;
-         if ($owner === null) {
-            continue;
-         }
+         // @@ Each statement with code on the row: its executable row that
+         //    the fewest other things share
+         foreach ($owners[$row] ?? [] as $owner => $_) {
+            $best = null;
+            // @@ The statement's line; a `case` label or an arm condition
+            //    without one is compared where its `switch`/`match` runs
+            //    (a jump table), so it takes its subject's line
+            $statement = $owner;
+            while ($best === null && $statement !== null) {
+               $rank = 3;
+               foreach ($members[$statement] as $candidate => $_) {
+                  if (isset($lines[$candidate]) === false) {
+                     continue;
+                  }
 
-         // @ Its first executable row that no other header shares, else
-         //   its first executable row
-         $shared = null;
-         foreach ($members[$owner] as $candidate => $_) {
-            if (isset($lines[$candidate]) === false) {
-               continue;
+                  $others = $owners[$candidate];
+                  unset($others[$statement]);
+                  $level = 0;
+                  if ($others !== []) {
+                     $level = array_intersect_key($others, $headers[$candidate] ?? []) === [] ? 1 : 2;
+                  }
+                  if ($level < $rank) {
+                     $best = $candidate;
+                     $rank = $level;
+                  }
+                  if ($rank === 0) {
+                     break;
+                  }
+               }
+
+               // ? A subject with no line: the first executable line of its block
+               if ($best === null && isset($subjects[$statement])) {
+                  [$open, $close] = $subjects[$statement];
+                  for ($candidate = $open; $candidate <= $close; $candidate++) {
+                     if (isset($lines[$candidate])) {
+                        $best = $candidate;
+                        break;
+                     }
+                  }
+               }
+
+               $statement = $chained ? $labels[$statement] ?? null : null;
             }
 
-            $others = $headers[$candidate] ?? [];
-            unset($others[$owner]);
-            if ($others === []) {
-               $shared = null;
-               $touched[$candidate] = true;
-               break;
+            if ($best !== null) {
+               $touched[$best] = true;
             }
-            $shared ??= $candidate;
-         }
-         if ($shared !== null) {
-            $touched[$shared] = true;
+            // ? Code on the row that no executable line stands for
+            else if (isset($declarations[$owner]) === false) {
+               $missed[$row] = true;
+            }
          }
       }
 
       // :
-      return $touched;
+      return [$touched, $missed];
    }
 
    /**
     * Split a source into statements, as `locate()` reads them.
     *
-    * Gives which statement each row's code continues (a row whose first
-    * code token starts a statement is not listed), the rows each statement
-    * spans, and the rows holding a header that runs whether or not its
-    * body does — a control statement's parenthesized header, or a `case`
-    * label. `else`, `default:` and goto labels split statements but run
-    * nothing of their own.
+    * Gives the rows each statement spans, the rows holding a header that runs whether or not its body
+    * does — a control statement's parenthesized header, a `case` label or
+    * a `match` arm condition —, the rows each `switch`/`match` block spans
+    * (by the statement holding its subject), the statements that hold
+    * no code of their own — declarations (`namespace`, `use`, `global`,
+    * classes, functions and their signatures, every statement of a
+    * class-like body or a trait adaptation, property hooks other than a
+    * short `get => …`), `else`, `do`, `try`, a bare `{`, a `default` label
+    * or arm condition and goto labels —, and the subject statement of
+    * each `case` label and arm condition made only of literals and
+    * constants.
     *
     * @return array{
-    *    0: array<int, int>,
+    *    0: array<int, array<int, true>>,
     *    1: array<int, array<int, true>>,
-    *    2: array<int, array<int, true>>
-    * } `[continued row => statement, statement => rows, row => header statements]`
+    *    2: array<int, array{0: int, 1: int}>,
+    *    3: array<int, true>,
+    *    4: array<int, int|null>
+    * } `[statement => rows, row => header statements, statement => block rows, declarations, label => subject statement]`
     */
    private static function parse (string $source): array
    {
       // !
       $ignored = [T_WHITESPACE => true, T_COMMENT => true, T_DOC_COMMENT => true, T_OPEN_TAG => true, T_CLOSE_TAG => true];
-      $boundaries = [';' => true, '{' => true, '}' => true, ':' => true];
       // Tokens that carry on the statement a `}` interrupted (a closure argument)
-      $resumers = [',' => true, ')' => true, ']' => true, ';' => true, '->' => true, '?->' => true];
+      $resumers = [',' => true, ')' => true, ']' => true, ';' => true, '->' => true, '?->' => true, 'as' => true];
       // Statements whose parenthesized header runs whether or not their body does
       $controls = [
          T_CATCH => true, T_DECLARE => true, T_ELSEIF => true, T_FOR => true,
          T_FOREACH => true, T_IF => true, T_SWITCH => true, T_WHILE => true,
       ];
+      // Statements that hold no code of their own
+      $inert = [
+         '{' => true, T_ABSTRACT => true, T_ATTRIBUTE => true, T_CLASS => true, T_CONST => true, T_DECLARE => true,
+         T_DO => true, T_ELSE => true, T_ENDDECLARE => true, T_ENDFOR => true, T_ENDFOREACH => true,
+         T_ENDIF => true, T_ENDSWITCH => true, T_ENDWHILE => true, T_ENUM => true, T_FINAL => true,
+         T_FINALLY => true, T_FUNCTION => true, T_GLOBAL => true, T_INTERFACE => true, T_NAMESPACE => true, T_PRIVATE => true,
+         T_PROTECTED => true, T_PUBLIC => true, T_READONLY => true, T_TRAIT => true, T_TRY => true,
+         T_USE => true, T_VAR => true,
+      ];
+      // Tokens after which a keyword is a member's name (`A::do()`,
+      // `function class ()`), never a keyword
+      $names = ['function' => true, '::' => true];
+      // Tokens a constant `case` or arm condition is made of
+      $constants = [
+         ',' => true, '+' => true, '-' => true, ':' => true, ';' => true,
+         T_CASE => true, T_CLASS => true, T_CONSTANT_ENCAPSED_STRING => true, T_DEFAULT => true,
+         T_DNUMBER => true, T_DOUBLE_ARROW => true, T_DOUBLE_COLON => true, T_LNUMBER => true,
+         T_NAME_FULLY_QUALIFIED => true, T_NAME_QUALIFIED => true, T_NAME_RELATIVE => true, T_STRING => true,
+      ];
+      // Tokens that declare a class-like body (every statement in it declares)
+      $classes = [T_CLASS => true, T_ENUM => true, T_INTERFACE => true, T_TRAIT => true];
       // Tokens after which a `?` starts a nullable type, never a ternary
       $types = [
-         '(' => true, ',' => true, ':' => true, '?:' => true, '|' => true,
+         '(' => true, ',' => true, ':' => true, '?:' => true, ']#' => true,
          'const' => true, 'private' => true, 'protected' => true, 'public' => true,
          'readonly' => true, 'static' => true, 'var' => true,
       ];
-      // Row => statement a code token on it continues
-      $continued = [];
       // Statement => rows its tokens span
       $members = [];
       // Row => header statements on it
       $headers = [];
+      // Statement holding a `switch`/`match` subject => [first, last] row of its block
+      $subjects = [];
+      // Statements without code of their own
+      $declarations = [];
+      // `case` label or arm condition => the statement holding its subject
+      $labels = [];
       // Open blocks: the state each interrupted (`false`: a `{$` interpolation)
+      /** @var list<false|array{0: array{0: null|int, 1: int, 2: null|int|string, 3: int, 4: bool, 5: int, 6: bool, 7: null|int, 8: bool, 9: array<int, true>}, 1: bool, 2: bool, 3: null|int, 4: int, 5: null|int, 6: bool, 7: bool}> $stack */
       $stack = [];
+      // Open alternative-syntax switches: [statement, row, enclosing `$cases`, enclosing `$within`]
+      $switches = [];
+      // Bracket depths at which an attribute opened
+      $attributes = [];
       $id = 0;
       // # Current statement
       $statement = null;
@@ -690,14 +825,42 @@ class Coverage
       // Brackets open in it (`;` and `,` inside them end nothing)
       $depth = 0;
       $ternaries = 0;
-      // A `match (…)` whose arms block comes next
+      // A `match` arm condition (its `=>` ends it)
+      $condition = false;
+      // A `match (…)` whose arms block comes next (`$pending`: until its `(`)
       $match = false;
-      // # Current block: a `match` arms block (`,` ends an arm)
+      $pending = false;
+      // Depth of the class-like keyword it declares (its block at that depth
+      // holds declarations); `$classing` until the next token (`class:` is
+      // a named argument)
+      $classy = null;
+      $classing = false;
+      // Every token is a constant (a `case` or arm condition PHP may compare
+      // in a jump table at its subject)
+      $constant = true;
+      // It declares a property (its block holds hooks)
+      $property = false;
+      // Depths of its `function` keywords whose body block has not opened
+      // (a closure as a property default holds code, not hooks)
+      $functions = [];
+      // A property hook (`get`/`set`): it declares unless a `=>` gives it code
+      $hook = false;
+      // # Current block
+      // A `match` arms block (`,` ends an arm)
       $arms = false;
+      // A `switch` block (`case …;` is a label too)
+      $cases = false;
+      // The statement holding the subject of the enclosing `switch`/`match`
+      $within = null;
+      // A class-like body or a trait adaptation: every statement declares
+      $body = false;
+      // A property's hooks
+      $hooks = false;
       // A header just closed: `{`, `:` or a braceless body follows
       $opened = false;
       $resume = null;
       $previous = ';';
+      $before = ';';
       $line = 1;
 
       // @@ Which statement each row's code belongs to
@@ -707,7 +870,6 @@ class Coverage
          $start = is_array($token) ? $token[2] : $line;
          $end = $start + substr_count($text, "\n");
          $line = $end;
-
          if (is_array($token) && isset($ignored[$token[0]])) {
             if ($token[0] === T_OPEN_TAG || $token[0] === T_CLOSE_TAG) {
                $previous = ';';
@@ -717,11 +879,19 @@ class Coverage
 
             continue;
          }
+         // ? A keyword naming a member is a name (`&` after `function`
+         //   declares by reference); `A::$x` stays a variable
+         if (
+            is_int($kind) && $kind !== T_VARIABLE
+            && (isset($names[strtolower($previous)]) || ($previous === '&' && strtolower($before) === 'function'))
+         ) {
+            $kind = T_STRING;
+         }
 
          // ! The token's role: braces of a string interpolation, a `;`
          //   inside brackets (`for (;;)`), a ternary `:` and a nullable `?`
-         //   delimit nothing; a header's or a label's `:` and an arm's `,`
-         //   end a statement
+         //   delimit nothing; a header's or a label's `:`, an arm's `,` and
+         //   an arm condition's `=>` end a statement
          $mark = $text;
          if ($kind === T_CURLY_OPEN || $kind === T_DOLLAR_OPEN_CURLY_BRACES) {
             $mark = '{$';
@@ -732,8 +902,16 @@ class Coverage
          else if ($text === ';' && $depth > 0) {
             $mark = '(;';
          }
-         else if ($text === ',' && $arms && $depth === 0) {
+         else if (
+            $text === ',' && $arms
+            && ($statement === null && $previous === '}' && is_array($resume)
+               ? $resume[1] === 0 && $resume[6] === false
+               : $depth === 0 && $condition === false)
+         ) {
             $mark = ';';
+         }
+         else if ($kind === T_DOUBLE_ARROW && $condition && $depth === 0) {
+            $mark = '=>|';
          }
          else if ($text === '?' && isset($types[strtolower($previous)])) {
             $mark = '?type';
@@ -745,19 +923,38 @@ class Coverage
             $mark = $label ? ':' : '?:';
          }
 
-         // ? A braceless body after a header is a statement of its own
+         // ? `match` not followed by `(` names something (`match: 1`)
+         if ($pending) {
+            $pending = false;
+            $match = $match && $mark === '(';
+         }
+         // ? `class`/`interface`/`trait`/`enum` followed by `:` is a named argument
+         if ($classing) {
+            $classing = false;
+            if ($text === ':') {
+               $classy = null;
+            }
+         }
+
+         // ? A braceless body after a header is a statement of its own; a
+         //   `;` alone is an empty one (`declare(strict_types=1);`)
          if ($opened && $mark !== '{' && $mark !== ':') {
             $statement = null;
             $previous = ';';
+            if ($mark === ';') {
+               $opened = false;
+               $before = ';';
+               continue;
+            }
          }
          $opened = false;
 
          // ! The statement this token belongs to
-         $resumed = false;
          if ($statement === null && $mark !== '}' && $mark !== '$}') {
             if ($previous === '}' && is_array($resume) && isset($resumers[$mark])) {
-               [$statement, $depth, $first, $count, $header, $ternaries] = $resume;
-               $resumed = true;
+               [$statement, $depth, $first, $count, $header, $ternaries, $condition, $classy, $property, $functions] = $resume;
+               // ? A statement holding a block is no constant
+               $constant = false;
             }
             else {
                $statement = ++$id;
@@ -766,34 +963,49 @@ class Coverage
                $header = isset($controls[$kind]);
                $depth = 0;
                $ternaries = 0;
+               $condition = $arms && $previous !== '=>|';
                $match = false;
+               $classy = null;
+               $property = false;
+               $constant = true;
+               $functions = [];
+               $hook = $hooks;
+               if ($body || $hook || isset($inert[$kind]) || ($kind === T_CASE && $cases === false)) {
+                  $declarations[$statement] = true;
+               }
             }
          }
 
-         if ($statement !== null) {
+         // ? A block's `}` closes it: it is no part of a last `match` arm
+         //   left without a trailing comma
+         if ($statement !== null && $mark !== '}') {
             $count++;
+            $constant = $constant && isset($constants[$kind]);
 
             for ($row = $start; $row <= $end; $row++) {
                $members[$statement][$row] = true;
                if ($header) {
                   $headers[$row][$statement] = true;
                }
-
-               if (isset($continued[$row]) === false
-                  && ($row > $start || $resumed
-                     || (isset($boundaries[$previous]) === false && isset($boundaries[$mark]) === false))) {
-                  $continued[$row] = $statement;
-               }
             }
          }
 
          // @ Transitions
-         if ($mark === '(' || $mark === '[' || $kind === T_ATTRIBUTE) {
+         if ($kind === T_ATTRIBUTE) {
+            $attributes[] = $depth;
+            $depth++;
+         }
+         else if ($mark === '(' || $mark === '[') {
             $depth++;
          }
          else if ($mark === ')' || $mark === ']') {
             if ($depth > 0) {
                $depth--;
+            }
+            // ? An attribute closed: a `?` after it starts a type
+            if ($mark === ']' && $attributes !== [] && $attributes[count($attributes) - 1] === $depth) {
+               array_pop($attributes);
+               $mark = ']#';
             }
             // ? A control statement's parenthesized header closed
             if ($mark === ')' && $depth === 0 && $header) {
@@ -802,6 +1014,22 @@ class Coverage
          }
          else if ($kind === T_MATCH) {
             $match = true;
+            $pending = true;
+         }
+         else if (isset($classes[$kind])) {
+            $classy = $depth;
+            $classing = true;
+         }
+         else if ($kind === T_FUNCTION) {
+            $functions[$depth] = true;
+         }
+         else if ($kind === T_VARIABLE && $depth === 0 && isset($declarations[$statement])) {
+            $property = true;
+         }
+         else if ($kind === T_DOUBLE_ARROW && $hook && $depth === 0) {
+            // ? A short hook (`get => …`) holds code
+            unset($declarations[$statement]);
+            $hook = false;
          }
          else if ($mark === '?') {
             $ternaries++;
@@ -809,9 +1037,15 @@ class Coverage
          else if ($mark === '?:' && $ternaries > 0) {
             $ternaries--;
          }
-         else if ($kind === T_ELSE) {
-            // ? `else` closes its header at once (`else if` starts a header)
+         // ? Inside brackets they name an argument (`f(do: 1)`)
+         else if (($kind === T_ELSE || $kind === T_DO) && $depth === 0) {
+            // ? `else` and `do` close their header at once (`else if`
+            //   starts a header)
             $opened = true;
+         }
+         else if ($kind === T_ENDSWITCH && $depth === 0 && $switches !== []) {
+            [$subject, $open, $cases, $within] = array_pop($switches);
+            $subjects[$subject] = [$open, $end];
          }
          else if ($mark === '{$') {
             $stack[] = false;
@@ -819,21 +1053,55 @@ class Coverage
          else if ($mark === '$}') {
             array_pop($stack);
          }
-         else if ($mark === ';') {
-            $statement = null;
-         }
-         else if ($mark === ':') {
-            // ? A `case` label runs its comparison: its rows hold a header
-            if ($statement !== null && $first === T_CASE) {
+         else if ($mark === ';' || $mark === ':' || $mark === '=>|') {
+            // ? A `case` label (`case …:` or `case …;` in a switch) and an
+            //   arm condition run their comparison: their rows hold a header
+            if ($statement !== null
+               && (($first === T_CASE && $cases && $mark !== '=>|')
+                  || ($mark === '=>|' && $first !== T_DEFAULT))) {
                foreach ($members[$statement] as $row => $_) {
                   $headers[$row][$statement] = true;
                }
+               // ? Only a constant one may be compared in a jump table at
+               //   the subject; any other is compared on its own
+               if ($constant) {
+                  $labels[$statement] = $within;
+               }
+            }
+            // ? A label and a `default` arm hold no code of their own
+            if ($statement !== null && ($first === T_DEFAULT || ($mark === ':' && $first === T_STRING))) {
+               $declarations[$statement] = true;
+            }
+            // ? An alternative-syntax switch opens its cases
+            if ($statement !== null && $mark === ':' && $first === T_SWITCH) {
+               $switches[] = [$statement, $end, $cases, $within];
+               $cases = true;
+               $within = $statement;
             }
             $statement = null;
          }
          else if ($mark === '{') {
-            $stack[] = [[$statement, $depth, $first, $count, $header, $ternaries], $arms];
+            $subject = $first === T_SWITCH || $match ? $statement : null;
+            // ? A class-like keyword's own block opens its body; a block
+            //   nested in its header (a closure argument) leaves it pending
+            $opening = $classy === $depth;
+            if ($opening) {
+               $classy = null;
+            }
+            // ? A `function` keyword's own block is its body
+            $closure = isset($functions[$depth]);
+            unset($functions[$depth]);
+            $stack[] = [
+               [$statement, $depth, $first, $count, $header, $ternaries, $condition, $classy, $property, $functions],
+               $arms, $cases, $subject, $end, $within, $body, $hooks,
+            ];
             $arms = $match;
+            $cases = $first === T_SWITCH && $statement !== null;
+            $within = $subject;
+            // ? A class-like or a trait adaptation block declares; a
+            //   property's block holds its hooks
+            $body = $statement !== null && ($opening || $first === T_USE);
+            $hooks = $statement !== null && $property && $closure === false;
             $match = false;
             $statement = null;
          }
@@ -841,7 +1109,10 @@ class Coverage
             $frame = array_pop($stack);
             $resume = null;
             if (is_array($frame)) {
-               [$resume, $arms] = $frame;
+               [$resume, $arms, $cases, $subject, $open, $within, $body, $hooks] = $frame;
+               if ($subject !== null) {
+                  $subjects[$subject] = [$open, $end];
+               }
                if ($resume[0] === null) {
                   $resume = null;
                }
@@ -849,11 +1120,12 @@ class Coverage
             $statement = null;
          }
 
+         $before = $previous;
          $previous = $mark;
       }
 
       // :
-      return [$continued, $members, $headers];
+      return [$members, $headers, $subjects, $declarations, $labels];
    }
 
    /**

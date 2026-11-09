@@ -16,6 +16,7 @@ use const BOOTGLY_TTY;
 use const BOOTGLY_VERSION;
 use const BOOTGLY_WORKING_DIR;
 use const DIRECTORY_SEPARATOR;
+use const FILTER_VALIDATE_BOOL;
 use const JSON_THROW_ON_ERROR;
 use const PHP_BINARY;
 use const PHP_EOL;
@@ -43,9 +44,11 @@ use function dirname;
 use function error_get_last;
 use function escapeshellarg;
 use function explode;
+use function extension_loaded;
 use function fclose;
 use function file_get_contents;
 use function file_put_contents;
+use function filter_var;
 use function fopen;
 use function function_exists;
 use function fwrite;
@@ -759,7 +762,9 @@ class TestCommand extends Command
 
       // ? The report format and its destination are known before any suite runs
       if ($coverageReport !== null) {
-         [$format, $destination] = explode(':', $coverageReport, 2) + [1 => null];
+         $parts = explode(':', $coverageReport, 2);
+         $format = $parts[0];
+         $destination = $parts[1] ?? null;
          if (isset(Coverage::REPORTS[strtolower($format)]) === false) {
             $formats = implode(', ', array_keys(Coverage::REPORTS));
             fwrite(STDERR, "[test] --coverage-report takes FORMAT[:PATH] with FORMAT one of {$formats}; got '{$format}'" . PHP_EOL);
@@ -865,6 +870,24 @@ class TestCommand extends Command
          if ($Coverage->Driver instanceof Native && ! Results::$enabled) {
             echo "Coverage (native): only files loaded after start() are instrumented." . PHP_EOL;
             echo "Coverage (native): ensure opcache.enable_cli=0 for accurate results." . PHP_EOL;
+         }
+         // ? OPcache optimizes away lines PCOV and Xdebug record (a threaded
+         //   `break;`, a folded `if`): a changed one would read as unmeasurable
+         if (
+            $coverageChanges !== null
+            && ($Coverage->Driver instanceof PCOV || $Coverage->Driver instanceof XDebug)
+            // ? Read from the ini: the status API may be restricted
+            //   (`opcache.restrict_api`)
+            && extension_loaded('Zend OPcache')
+            && filter_var(ini_get('opcache.enable'), FILTER_VALIDATE_BOOL)
+            && filter_var(ini_get('opcache.enable_cli'), FILTER_VALIDATE_BOOL)
+         ) {
+            fwrite(
+               STDERR,
+               '[test] Coverage: a coverage diff requires opcache.enable_cli=0; retry with: php -d opcache.enable_cli=0 bootgly test ...' . PHP_EOL
+            );
+
+            return false;
          }
          $Coverage->diff = $coverageDiff;
          $Coverage->paths = $coveragePaths;
@@ -1021,7 +1044,7 @@ class TestCommand extends Command
          //   unchanged: a gate cannot pass over them
          if ($gated && $Coverage->unmeasured !== []) {
             $count = count($Coverage->unmeasured);
-            $reasons = ["Coverage: {$count} source(s) in scope that the native driver cannot measure:"];
+            $reasons = ["Coverage: {$count} source(s) in scope that the coverage driver cannot measure:"];
             foreach ($Coverage->unmeasured as $file) {
                $reasons[] = "  {$file}";
             }

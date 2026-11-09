@@ -24,7 +24,9 @@ return new Test(
       mkdir("{$root}/Source/vendor/examples");
       file_put_contents("{$root}/Source/vendor/Package.php", "<?php\n\$p = max(\n   1, 2\n);\n// note\n");
       file_put_contents("{$root}/Source/vendor/examples/Demo.php", "<?php\n\$d = 1;\n");
-      file_put_contents("{$root}/Source/vendor/Zeta.php", "<?php\n\$z = 1;\n");
+      // An import (2), an alternative-syntax body (3–7) the analyzer has no
+      // line for, an enum (8) and a `default:` label (10)
+      file_put_contents("{$root}/Source/vendor/Zeta.php", "<?php\nuse Demo\\Thing;\nif (\$z ?? 0):\n   \$z = max(\n      1, 2\n   );\nendif;\nenum Zed { case A; }\nswitch (\$z ?? 0) {\n   default:\n}\n");
       file_put_contents("{$root}/Source/Upper.PHP", "<?php\n\$u = 1;\n");
       file_put_contents("{$root}/Source/examples/Sample.php", "<?php\nfinal class Sample\n{\n   public function run () { return 1; }\n}\n");
       file_put_contents("{$root}/Source/Loaded.php", "<?php\n\$a = 1;\n\$b = 2;\n\$c = 3;\n");
@@ -39,8 +41,35 @@ return new Test(
       // `case` with a nullable type (83–88), braceless `while`/`for`/
       // `elseif` and an alternative `switch` (89–107), bodies sharing a
       // row with `catch`/`declare` (108–116), a one-line `if` (117–119) and a
-      // body sharing its row with a `case` label (120–125) and a braceless
-      // `else if` body (126–130)
+      // body sharing its row with a `case` label (120–125), a braceless
+      // `else if` body (126–130), a `case` holding an attribute and a nullable
+      // type (131–136), a `default:` body sharing rows with a label and a
+      // sibling (137–140), a `match (true)` arm condition (141–147), an arm
+      // body sharing rows with its condition and a `default` arm (148–152),
+      // a row closing two statements (153–157), a `case …;` label (158–162),
+      // a `case` after a block inside its switch (163–168), a `case`
+      // holding a ternary across rows (169–175), an arm condition over two
+      // rows (176–182), a last arm without a trailing comma (183–186), closure
+      // bodies (187–191), an arrow function in an arm (192–196), a `case`
+      // sharing rows in an alternative-syntax switch (197–201) and a
+      // `foreach` over a `match` (202–207), a `match` on strings (208–217)
+      // and a `case` on a constant (218–221): PHP compares those in a jump
+      // table at the subject, so PCOV gives their rows no line —, a block
+      // after `::class` (222–225), a constant `case` in an
+      // alternative-syntax switch (226–229), a `case` on a variable
+      // (230–233), a block after a `class:` argument (234–237), one after
+      // an empty anonymous class (238–241), closures beside them (242–249),
+      // an anonymous class after a closure argument (250–252), a `case` on a
+      // closure call (253–258), closures as property defaults (259–283), a
+      // `case` on a `match` (284–289), an arm condition resuming after a
+      // block (290–296), a method named `class` (297–302), a braceless
+      // `do` body (303–305), a `static` initializer (306–311) and an arm
+      // body whose call resumes after a closure argument (312–317), and
+      // members named after keywords: `A::do(` before an arm condition
+      // (318–323), in a short hook (324–329) and `function &class` (330–335),
+      // a `case` on a static property (336–339), and arguments named after
+      // keywords: `do:` in an arm condition (340–344), `else:` in a hook
+      // body (345–353) and `endswitch:` before a `case` (354–359)
       file_put_contents("{$root}/Source/Multi.php", <<<'PHP'
       <?php
       $m = max(
@@ -152,12 +181,12 @@ return new Test(
       try {
       } catch (Exception $e) { $r = max(
          1,
-         2
-      ); }
+         2); $t = 1;
+      }
       declare(ticks=1) { $r = max(
          1,
-         2
-      ); }
+         2); $t = 1;
+      }
       if ($m) echo max(
          1, 2
       );
@@ -172,6 +201,235 @@ return new Test(
          echo max(
             1, 2
          );
+      switch ($m) {
+         case (fn (#[A] ?int $v) => $v)(1):
+            echo max(
+               1, 2
+            );
+      }
+      switch ($m) {
+         default: $r = max(
+            1,
+            2); } $k = 1;
+      $o = match (true) {
+         $m > 1 => sprintf(
+            '%s',
+            [1][0]
+         ),
+         default => 0,
+      };
+      $q = match (true) {
+         $m > 2 => max(
+            1,
+            2), default => 0,
+      };
+      $g = array_map(function ($x) { return max(
+         $x, 1
+      ); }, [
+         1,
+      ]);
+      switch ($m) {
+         case 1; $r = max(
+            1,
+            2); $s = 1;
+      }
+      switch ($m) {
+         case 1: if ($m) { $m = 1; }
+         case 2; $r = max(
+            1,
+            2); $s = 1;
+      }
+      switch ($m) {
+         case $m ? 1
+            : 2
+            : $r = max(
+               1,
+               2); $s = 1;
+      }
+      $r = match ($m) {
+         1,
+         2 => max(
+            1,
+            2),
+         default => 0,
+      };
+      $r = match ($m) {
+         1 => 1,
+         default => max(1, 2)
+      }; // closing
+      $f = array_map(function ($v) {
+         return $v;
+      }, [1]);
+      $g = array_map(function ($v) {
+         $v++; return $v; }, [1]);
+      $h = match ($m) {
+         1 => fn () => max(
+            1, 2),
+         default => 0,
+      };
+      switch ($m):
+         case 1: $s = max(
+            1,
+            2); $t = 1;
+      endswitch;
+      foreach (match ($m) {
+         1 => [1],
+         default => [],
+      } as $k => $v) {
+         $o = $v;
+      }
+      $q = match ($m) {
+         'array' => [
+            'format' => 1,
+         ],
+         'help' =>
+            max(1, 2),
+         default => [
+            'x' => 1,
+         ],
+      };
+      switch ($m) {
+         case SIGALRM:
+            $r = 1;
+      }
+      if ($m === Demo::class) {
+         $w = max(
+            1, 2);
+      }
+      switch ($m):
+         case SIGHUP:
+            $r = 1;
+      endswitch;
+      switch ($m) {
+         case $y:
+            $r = 1;
+      }
+      if (k(class: 1)) {
+         $w = max(
+            1, 2);
+      }
+      foreach ([new class {}] as $x) {
+         $w = max(
+            1, 2);
+      }
+      k(class: 1, then: function () {
+         $w = max(
+            1, 2);
+      });
+      $f = [new class {}, function () {
+         $w = max(
+            1, 2);
+      }];
+      $o = new class (function () { $a = 1; }) {
+         static $count = 0;
+      };
+      switch ($m) {
+         case k(function () {
+            1;
+         }):
+            $r = 1;
+      }
+      class Z {
+         public static $d = static function () {
+            $w = max(
+               1, 2);
+         };
+         public array $c = [static function () {
+            return 1;
+         }] {
+            get {
+               return $this->c;
+            }
+         }
+      }
+      abstract class Y {
+         public static $e = static function (#[A(static function () { return 1; })] $p) {
+            $w = max(
+               1, 2);
+         };
+         abstract function f ();
+         public int $p {
+            get {
+               return 1;
+            }
+         }
+      }
+      switch ($m) {
+         case match ($y) {
+            default => 1,
+         };
+            $r = 1;
+      }
+      $r = match ($m) {
+         match ($y) {
+            default => 1,
+         }
+         , 2
+         => 'a',
+      };
+      class W {
+         Function class ($v) {
+            $r = max(
+               $v, 3);
+         }
+      }
+      do $r = max(
+         1, 2);
+      while (false);
+      function q () {
+         static $q = match (true) {
+            default => max(
+               1, 2),
+         };
+      }
+      $r = match ($m) {
+         1 => k(function () {
+            1;
+         }, max(
+            2, 3)),
+      };
+      $r = match ($m) {
+         1 => A::do(
+            5),
+         $y
+            + 1 => 'b',
+      };
+      class Hk {
+         public int $p {
+            get => A::do(
+               7, 8);
+         }
+      }
+      class Rf {
+         Function &class ($v) {
+            $w = max(
+               $v, 3);
+         }
+      }
+      switch ($m) {
+         case A::$x:
+            $r = 1;
+      }
+      $r = match ($m) {
+         0 => 'a',
+         k(do:
+            2) => 'b',
+      };
+      class Nh {
+         public int $p {
+            get {
+               k(else:
+                  1);
+               return 1;
+            }
+         }
+      }
+      switch ($m):
+         case 1:
+            k(endswitch: 1);
+         case 2:
+            $r = 2;
+      endswitch;
 
       PHP);
       file_put_contents("{$root}/Source/notes.txt", "not php\n");
@@ -402,26 +660,126 @@ return new Test(
             41 => 1, 42 => 1, 43 => 1, 46 => 0, 50 => 1, 51 => 1, 53 => 1, 54 => 0, 58 => 1,
             59 => 1, 61 => 0, 64 => 1, 65 => 1, 66 => 0,
             70 => 1, 71 => 1, 72 => 0, 75 => 0, 76 => 0, 78 => 0, 79 => 0, 84 => 1, 85 => 0,
-            89 => 1, 90 => 0, 93 => 1, 94 => 0, 97 => 1, 98 => 1, 99 => 0, 102 => 1, 103 => 1, 104 => 0,
+            89 => 1, 90 => 0, 93 => 1, 94 => 0, 97 => 1, 98 => 1, 99 => 0, 103 => 1, 104 => 0,
             109 => 1, 111 => 0, 113 => 1, 115 => 0, 117 => 1, 121 => 1, 123 => 0, 126 => 1, 127 => 1, 128 => 0,
+            132 => 1, 133 => 0, 138 => 0, 140 => 1, 142 => 1, 144 => 0, 146 => 1,
+            149 => 1, 151 => 0, 153 => 1, 154 => 0, 156 => 1, 159 => 1, 161 => 0, 165 => 1, 167 => 0, 170 => 1, 172 => 1, 174 => 0,
+            176 => 1, 178 => 0, 181 => 1, 183 => 1, 185 => 0, 187 => 1, 190 => 1, 192 => 1, 193 => 0, 195 => 1,
+            197 => 1, 198 => 1, 200 => 0, 202 => 1, 203 => 1, 204 => 1, 206 => 0,
+            208 => 1, 210 => 1, 213 => 0, 215 => 0, 218 => 1, 220 => 1, 222 => 1, 223 => 1, 226 => 1, 228 => 1,
          ];
          $results = [];
-         foreach ([26, 30, 35, 39, 47, 52, 55, 62, 67, 74, 80, 86, 91, 95, 100, 105, 110, 114, 118, 122, 129] as $row) {
+         foreach ([26, 30, 35, 39, 47, 52, 55, 62, 67, 74, 80, 86, 91, 95, 100, 105, 110, 114, 118, 122, 129, 134, 139, 143, 141, 102, 150, 155, 160, 166, 171, 177, 179, 186, 194, 199, 205, 209, 212, 214, 219, 224, 227] as $row) {
             $Coverage = new Coverage(new (get_class($Driver))($multi, $map));
             $Coverage->changes = [$multi => [$row => true]];
             $Coverage->start();
             $Coverage->stop();
             $results[$row] = $Coverage->data[$multi] ?? [];
+            $unmeasured[$row] = $Coverage->unmeasured;
          }
-         yield (new Assertion(description: 'body rows map to their body statement (case, default, braceless, alternative syntax, else, match arm, `});`, inline HTML), preferring a row no header shares; a one-line `if` keeps its shared row'))
+         yield (new Assertion(description: 'body rows map to their body statement (case, default, braceless, alternative syntax, else, match arm, `});`, inline HTML), preferring a row of its own, then one shared with a sibling, then one shared with a header; a one-line `if` keeps its shared row; a match subject maps to its first arm; a `case` or arm condition without a line maps to its subject'))
             ->expect($results)
             ->to->be([
                26 => [25 => 0], 30 => [29 => 0], 35 => [34 => 0], 39 => [38 => 0], 47 => [46 => 0],
                52 => [50 => 1], 55 => [54 => 0], 62 => [61 => 0], 67 => [66 => 0],
-               74 => [72 => 0], 80 => [78 => 0], 86 => [85 => 0], 91 => [90 => 0], 95 => [94 => 0],
+               74 => [72 => 0], 80 => [79 => 0], 86 => [85 => 0], 91 => [90 => 0], 95 => [94 => 0],
                100 => [99 => 0], 105 => [104 => 0], 110 => [111 => 0], 114 => [115 => 0], 118 => [117 => 1],
-               122 => [123 => 0], 129 => [128 => 0],
+               122 => [123 => 0], 129 => [128 => 0], 134 => [133 => 0], 139 => [138 => 0], 143 => [144 => 0],
+               141 => [142 => 1], 102 => [103 => 1], 150 => [151 => 0], 155 => [154 => 0, 156 => 1],
+               160 => [161 => 0], 166 => [167 => 0], 171 => [170 => 1],
+               177 => [178 => 0], 179 => [178 => 0], 186 => [183 => 1], 194 => [193 => 0],
+               199 => [200 => 0], 205 => [202 => 1],
+               209 => [208 => 1, 210 => 1], 212 => [208 => 1], 214 => [215 => 0], 219 => [218 => 1],
+               224 => [223 => 1], 227 => [226 => 1],
             ])
+            ->assert();
+
+         yield (new Assertion(description: 'a changed row that an executable line stands for is never unmeasured'))
+            ->expect(array_filter($unmeasured))
+            ->to->be([])
+            ->assert();
+
+         // @ Changed code no executable line stands for, under any driver: a
+         //   closure body the driver recorded nothing for, alone (188) or
+         //   beside a statement it did record (191), a body after `::class`
+         //   (224), a `class:` argument (236) or an empty anonymous class
+         //   (240) — none opens a class-like body, nor does it for a closure
+         //   beside them (244, 248) —, a property of an anonymous class
+         //   after a closure argument (251: a declaration), a `case` label
+         //   that resumes after a closure (256), the body of a closure as a
+         //   property default (262) — but not the hooks after one (267:
+         //   a declaration) —, one after a closure in its attribute (275),
+         //   the hooks after a bodyless method (279: a declaration), a `case`
+         //   label that resumes after a block (287), an arm condition that
+         //   does (294), the body of a method named `class` (300) and a
+         //   braceless `do` body (304) or of a `static` initializer (309) —
+         //   but not an argument after a closure in an arm body (316) —, an
+         //   arm condition after an `A::do(` call (321), a short hook calling
+         //   it (327), the body of `function &class` (333), a `case` on a
+         //   static property (337: not constant), an argument named `do`
+         //   (342) or `else` (348) — while `endswitch` (357) leaves the
+         //   next `case` a label of its switch —, and a
+         //   `case` on a
+         //   variable without a line (231: compared on its own, never at
+         //   its subject)
+         $results = [];
+         foreach ([188 => [187 => 1], 191 => [190 => 1], 224 => [222 => 1], 231 => [230 => 1, 232 => 1], 236 => [234 => 1], 240 => [238 => 1], 244 => [242 => 1], 248 => [246 => 1], 251 => [250 => 1],
+            256 => [253 => 1, 255 => 1, 257 => 1], 262 => [259 => 1], 267 => [259 => 1],
+            275 => [272 => 1], 279 => [272 => 1], 287 => [284 => 1, 288 => 1],
+            294 => [290 => 1], 300 => [298 => 1], 304 => [305 => 1],
+            309 => [306 => 1], 316 => [312 => 1, 313 => 1, 314 => 1],
+            321 => [318 => 1, 319 => 1], 327 => [324 => 1], 333 => [330 => 1],
+            337 => [336 => 1, 338 => 1], 342 => [340 => 1, 341 => 1], 348 => [345 => 1],
+            357 => [354 => 1, 356 => 1, 358 => 1]] as $row => $lines) {
+            $Coverage = new Coverage(new (get_class($Driver))($multi, $lines));
+            $Coverage->changes = [$multi => [$row => true]];
+            $Coverage->start();
+            $Coverage->stop();
+            $results[$row] = [$Coverage->data, $Coverage->unmeasured];
+         }
+         yield (new Assertion(description: 'changed code that no line stands for is unmeasured under any driver, even beside a measured statement; a class-like body declares only after its own keyword'))
+            ->expect($results)
+            ->to->be([
+               188 => [[], [$multi]], 191 => [[$multi => [190 => 1]], [$multi]], 224 => [[], [$multi]],
+               231 => [[], [$multi]], 236 => [[], [$multi]], 240 => [[], [$multi]],
+               244 => [[], [$multi]], 248 => [[], [$multi]], 251 => [[], []],
+               256 => [[], [$multi]], 262 => [[], [$multi]], 267 => [[], []],
+               275 => [[], [$multi]], 279 => [[], []],
+               287 => [[], [$multi]], 294 => [[], [$multi]], 300 => [[], [$multi]], 304 => [[], [$multi]],
+               309 => [[], [$multi]], 316 => [[$multi => [313 => 1]], []],
+               321 => [[], [$multi]], 327 => [[], [$multi]], 333 => [[], [$multi]],
+               337 => [[], [$multi]], 342 => [[], [$multi]], 348 => [[], [$multi]],
+               357 => [[$multi => [354 => 1]], []],
+            ])
+            ->assert();
+
+         // @ Declarations hold no code: a source changed only in them is
+         //   neither measured nor unmeasured
+         $declared = "{$source}/Declared.php";
+         file_put_contents($declared, "<?php\ndeclare(strict_types=1);\nclass Declared {\n   use Shared {\n      fake as private faker;\n   }\n   static \$count = 0;\n   static public function make (\n      int \$a = 5\n   ) {\n      return \$a;\n   }\n   public function &match (\n      int \$a\n   ) {\n      return \$a;\n   }\n   public function run (\$n) {\n      global \$g;\n      {\n         \$n--;\n      }\n      do {\n         \$n--;\n      } while (\$n > 0);\n      return f(match: 1, then: function () {\n         \$v = fn () =>\n            2;\n         return \$v;\n      });\n   }\n   public int \$a {\n      get {\n         return 1;\n      }\n      set (int \$value) {\n         \$this->a = \$value;\n      }\n   }\n   public int \$b { get => max(\n      1, 2); }\n}\ninterface Boxed { public int \$row { get; set; } }\nuse Demo\\Thing; \$boot = max(\n   1, 2);\n");
+         try {
+            $Coverage = new Coverage(new (get_class($Driver))($declared, [11 => 0, 16 => 0, 21 => 0, 24 => 0, 25 => 0, 26 => 0, 28 => 0, 29 => 0, 34 => 0, 37 => 0, 45 => 0]));
+            $Coverage->changes = [$declared => array_fill_keys([2, 4, 5, 7, 8, 9, 13, 14, 18, 19, 20, 23, 27, 32, 33, 36, 43, 44], true)];
+            $Coverage->start();
+            $Coverage->stop();
+
+            // ! A short hook holds code no line stands for
+            $Short = new Coverage(new (get_class($Driver))($declared, [45 => 0]));
+            $Short->changes = [$declared => [41 => true]];
+            $Short->start();
+            $Short->stop();
+         }
+         finally {
+            unlink($declared);
+         }
+         yield (new Assertion(description: 'a `declare`, a class-like body (trait adaptation, `static` property and method, `&match` signature), `global`, a bare block, a `do`, a closure passed as a `match:` argument, property hook headers, an interface hook and an import beside code hold no code'))
+            ->expect([$Coverage->data, $Coverage->unmeasured])
+            ->to->be([[$declared => [28 => 0, 45 => 0]], []])
+            ->assert();
+
+         yield (new Assertion(description: 'a changed short hook (`get => …`) no line stands for is unmeasured'))
+            ->expect([$Short->data, $Short->unmeasured])
+            ->to->be([[], [$declared]])
             ->assert();
 
          $Coverage = new Coverage(new (get_class($Driver))($multi, [5 => 1]));
@@ -437,7 +795,7 @@ return new Test(
          //   — never started here, so an outer coverage run stays untouched
          $Coverage = new Coverage(new Native());
          $Coverage->includes = [$source];
-         $Coverage->changes = [$zeta => [2 => true], $package => [2 => true]];
+         $Coverage->changes = [$zeta => [3 => true], $package => [2 => true]];
          $Coverage->stop();
          yield (new Assertion(description: 'under Native, changed sources out of its reach are unmeasured (sorted), not dropped'))
             ->expect([$Coverage->unmeasured, $Coverage->data])
@@ -464,6 +822,19 @@ return new Test(
          yield (new Assertion(description: 'under Native, a change inside a statement out of its reach is unmeasured, with or without a comment change beside it'))
             ->expect($results)
             ->to->be([[$package], [$package]])
+            ->assert();
+
+         $results = [];
+         foreach ([[5 => true], [2 => true], [8 => true], [10 => true]] as $rows) {
+            $Coverage = new Coverage(new Native());
+            $Coverage->includes = [$source];
+            $Coverage->changes = [$zeta => $rows];
+            $Coverage->stop();
+            $results[] = $Coverage->unmeasured;
+         }
+         yield (new Assertion(description: 'under Native, a change in an alternative-syntax body out of its reach is unmeasured; an import, an enum case or a `default:` label is not code'))
+            ->expect($results)
+            ->to->be([[$zeta], [], [], []])
             ->assert();
 
          // @ A source a test loaded that Native never instruments
@@ -550,7 +921,20 @@ return new Test(
                $Both->changes = [$unloaded => [2 => true]];
                $Both->stop();
 
-               $reach = [$Changed, $Loaded, $Measured, $Both];
+               // ! A changed body in its reach that it has no probe for
+               $Probe = new Coverage(new Native());
+               $Probe->includes = [$source];
+               $Probe->changes = [$multi => [39 => true]];
+               $Probe->stop();
+
+               // ! A changed constant `case` label: Native has no line for it
+               //   and its subject's line runs whether or not it is compared
+               $Label = new Coverage(new Native());
+               $Label->includes = [$source];
+               $Label->changes = [$multi => [219 => true]];
+               $Label->stop();
+
+               $reach = [$Changed, $Loaded, $Measured, $Both, $Probe, $Label];
             }
          }
          finally {
@@ -561,10 +945,20 @@ return new Test(
             yield (new Assertion(description: "Native reach probes: the temporary tree stays excluded without /tmp/ ({$source})"))->skip();
          }
          else {
-            [$Changed, $Loaded, $Measured, $Both] = $reach;
+            [$Changed, $Loaded, $Measured, $Both, $Probe, $Label] = $reach;
             yield (new Assertion(description: 'under Native, a changed source in its reach joins at zero, not as unmeasured'))
                ->expect([$Changed->unmeasured, $Changed->data])
                ->to->be([[], [$unloaded => [2 => 0]]])
+               ->assert();
+
+            yield (new Assertion(description: 'under Native, a changed body in its reach that it has no line for is unmeasured, not unchanged'))
+               ->expect($Probe->unmeasured)
+               ->to->be([$multi])
+               ->assert();
+
+            yield (new Assertion(description: 'under Native, a changed constant `case` label is unmeasured, never its subject\'s line'))
+               ->expect([$Label->unmeasured, $Label->data[$multi][218] ?? null])
+               ->to->be([[$multi], null])
                ->assert();
 
             yield (new Assertion(description: 'under Native, a loaded source in its reach is not unmeasured'))

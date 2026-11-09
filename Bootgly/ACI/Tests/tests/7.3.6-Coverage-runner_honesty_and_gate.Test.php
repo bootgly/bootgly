@@ -131,6 +131,43 @@ return new Test(
             yield (new Assertion(description: 'Native with opcache on: OPcache is not loaded here'))->skip();
          }
 
+         // @ 2c. A coverage diff under PCOV with OPcache on stops: OPcache
+         //   optimizes away lines PCOV would record
+         if (extension_loaded('Zend OPcache') && extension_loaded('pcov')) {
+            [$code, $output] = $run(
+               [...$asserted, '-d', 'opcache.enable_cli=1', '-d', 'pcov.enabled=1'],
+               ['--coverage-driver=pcov', '--coverage-diff=HEAD..HEAD']
+            );
+            yield (new Assertion(description: 'a PCOV coverage diff with opcache on stops with a Coverage line'))
+               ->expect($code !== 0 && str_contains($output, '[test] Coverage: a coverage diff requires opcache.enable_cli=0'))
+               ->to->be(true)
+               ->assert();
+
+            // ! A restricted status API does not hide OPcache
+            [$restricted, $output] = $run(
+               [...$asserted, '-d', 'opcache.enable_cli=1', '-d', 'opcache.restrict_api=/nonexistent', '-d', 'pcov.enabled=1'],
+               ['--coverage-driver=pcov', '--coverage-diff=HEAD..HEAD']
+            );
+            yield (new Assertion(description: 'a PCOV coverage diff with opcache on and its status API restricted still stops'))
+               ->expect($restricted !== 0 && str_contains($output, '[test] Coverage: a coverage diff requires opcache.enable_cli=0'))
+               ->to->be(true)
+               ->assert();
+
+            // ! Without a range, or with OPcache itself off, nothing is refused
+            [, $whole] = $run([...$asserted, '-d', 'opcache.enable_cli=1', '-d', 'pcov.enabled=1'], ['--coverage-driver=pcov']);
+            [, $off] = $run(
+               [...$asserted, '-d', 'opcache.enable=0', '-d', 'opcache.enable_cli=1', '-d', 'pcov.enabled=1'],
+               ['--coverage-driver=pcov', '--coverage-diff=HEAD..HEAD']
+            );
+            yield (new Assertion(description: 'PCOV with opcache on but no range, or with opcache.enable=0, is not refused'))
+               ->expect(str_contains("{$whole}{$off}", 'a coverage diff requires opcache.enable_cli=0'))
+               ->to->be(false)
+               ->assert();
+         }
+         else {
+            yield (new Assertion(description: 'PCOV coverage diff with opcache on: OPcache or PCOV is not loaded here'))->skip();
+         }
+
          [$code, $output] = $run([...$asserted, '-d', 'opcache.enable_cli=0'], ['--coverage-driver=native', '--coverage-native-mode=bogus']);
          yield (new Assertion(description: 'an unknown Native mode stops with a Coverage line'))
             ->expect($code === 1 && str_contains($output, '[test] Coverage: Unknown native coverage mode: bogus'))
@@ -238,7 +275,9 @@ return new Test(
 
             return proc_close($process) === 0 ? trim($output) : '';
          };
-         $range = null;
+         // ! The last commits on Coverage/: one that changes only
+         //   declarations there (a property moved) holds nothing to measure
+         $ranges = [];
          foreach (explode("\n", $git(['log', '-30', '--no-merges', '--format=%H', '--', 'Bootgly/ACI/Tests/Coverage/'])) as $commit) {
             if (preg_match('/\A[0-9a-f]{40}\z/', $commit) !== 1 || $git(['rev-parse', '--verify', '--quiet', "{$commit}^1"]) === '') {
                continue;
@@ -252,11 +291,13 @@ return new Test(
                }
             }
             if ($present && preg_grep('#^Bootgly/ACI/Tests/Coverage/#', $files) !== []) {
-               $range = "{$commit}^1..{$commit}";
-               break;
+               $ranges[] = "{$commit}^1..{$commit}";
+               if (count($ranges) === 3) {
+                  break;
+               }
             }
          }
-         if ($range === null) {
+         if ($ranges === []) {
             // ? Only a clone without that history may skip: a full one must have it
             $shallow = $git(['rev-parse', '--is-shallow-repository']) !== 'false';
             $skipped = new Assertion(description: 'a commit on Coverage/ whose PHP files the work tree still holds');
@@ -265,13 +306,18 @@ return new Test(
                : $skipped->expect(false)->to->be(true)->assert();
          }
          else {
-            [$code, $output] = $run($native, ['--coverage-driver=native', "--coverage-diff={$range}", '--coverage-path=Bootgly/ACI/Tests/', '--coverage-floor=1']);
+            $failed = false;
+            foreach ($ranges as $range) {
+               [$code, $output] = $run($native, ['--coverage-driver=native', "--coverage-diff={$range}", '--coverage-path=Bootgly/ACI/Tests/', '--coverage-floor=1']);
+               $failed = $code !== 0
+                  && str_contains($output, 'that the coverage driver cannot measure')
+                  && str_contains($output, 'Bootgly/ACI/Tests/Coverage/');
+               if ($failed) {
+                  break;
+               }
+            }
             yield (new Assertion(description: 'a changed source the native driver cannot measure fails the gate'))
-               ->expect(
-                  $code !== 0
-                  && str_contains($output, 'that the native driver cannot measure')
-                  && str_contains($output, 'Bootgly/ACI/Tests/Coverage/')
-               )
+               ->expect($failed)
                ->to->be(true)
                ->assert();
          }
@@ -282,7 +328,7 @@ return new Test(
          yield (new Assertion(description: 'a measured path with sources out of the native driver\'s reach fails the gate'))
             ->expect(
                $code !== 0
-               && str_contains($output, 'source(s) in scope that the native driver cannot measure')
+               && str_contains($output, 'source(s) in scope that the coverage driver cannot measure')
                && str_contains($output, 'Bootgly/ACI/Tests/Coverage/Gate.php')
             )
             ->to->be(true)
