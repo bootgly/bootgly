@@ -277,9 +277,15 @@ class Analyzer extends Analyzers
                if ($depth === 1 && $token[1] === 'set') {
                   $set = true;
                }
-               $previous = $tokens[$this->rewind($tokens, $j)] ?? null;
-               if ($token[1] === $name && is_array($previous) && $previous[0] === T_OBJECT_OPERATOR) {
-                  $backed = true;
+               // ? Only `$this->name` reaches the backing value — `$this->Other->name`
+               //   reads another object's property
+               if ($token[1] === $name) {
+                  $arrow = $this->rewind($tokens, $j);
+                  $owner = $tokens[$this->rewind($tokens, $arrow)] ?? null;
+                  if (is_array($tokens[$arrow] ?? null) && $tokens[$arrow][0] === T_OBJECT_OPERATOR
+                     && is_array($owner) && $owner[0] === T_VARIABLE && $owner[1] === '$this') {
+                     $backed = true;
+                  }
                }
             }
          }

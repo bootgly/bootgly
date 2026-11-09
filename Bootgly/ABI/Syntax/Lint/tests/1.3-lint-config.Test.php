@@ -9,10 +9,11 @@ use Bootgly\ACI\Tests\Suite\Test;
 return new Test(
    description: 'Lint: the defaults are today\'s four rules; every malformed entry throws naming it; exclude() and select() match relative paths by glob and rule',
    test: function () {
-      // @ Defaults — only the paths are required
-      $Lint = new Lint(paths: ['Bootgly/']);
+      // @ Defaults — only the version and the paths are required
+      $Lint = new Lint(version: 1, paths: ['Bootgly/']);
       yield assert(
-         assertion: $Lint->rules === [Rules::Imports, Rules::Nullables, Rules::Promotions, Rules::Methods]
+         assertion: $Lint->version === 1 && Lint::VERSIONS === [1]
+            && $Lint->rules === [Rules::Imports, Rules::Nullables, Rules::Promotions, Rules::Methods]
             && $Lint->excludes === [] && $Lint->Exemptions === [] && $Lint->paths === ['Bootgly/'] && $Lint->file === null,
          description: 'A Lint built with paths only must enable the four rules of 1.1 and nothing else'
       );
@@ -20,21 +21,23 @@ return new Test(
       // @@ Malformed entries — each throws, naming what is wrong
       $Exemption = new Exemption(rule: Rules::Methods, path: 'a.php', reason: 'r');
       $malformed = [
-         'no paths'           => [fn () => new Lint(paths: []), 'at least one'],
-         'keyed paths'        => [fn () => new Lint(paths: ['a' => 'Bootgly/']), 'paths must be a list'],
-         'non-string path'    => [fn () => new Lint(paths: [1]), 'paths[0] must be a string'],
-         'absolute path'      => [fn () => new Lint(paths: ['/etc/']), 'is absolute'],
-         'climbing path'      => [fn () => new Lint(paths: ['../x/']), 'climbs out'],
-         'pattern as path'    => [fn () => new Lint(paths: ['Bootgly/*/']), 'plain path'],
-         'dot segment path'   => [fn () => new Lint(paths: ['src/.']), "paths[0] 'src/.' carries an empty or . segment"],
-         'bad exclude'        => [fn () => new Lint(paths: ['.'], excludes: ['/abs/']), 'is absolute'],
-         'non-string exclude' => [fn () => new Lint(paths: ['.'], excludes: [null]), 'excludes[0] must be a string'],
-         'no rules'           => [fn () => new Lint(paths: ['.'], rules: []), 'at least one rule'],
-         'rule as string'     => [fn () => new Lint(paths: ['.'], rules: ['imports']), 'rules[0] must be a Rules case'],
-         'repeated rule'      => [fn () => new Lint(paths: ['.'], rules: [Rules::Imports, Rules::Imports]), 'repeats Imports'],
-         'not an exemption'   => [fn () => new Lint(paths: ['.'], Exemptions: [['rule' => 'methods']]), 'must be an Exemption'],
-         'disabled rule'      => [fn () => new Lint(paths: ['.'], rules: [Rules::Imports], Exemptions: [$Exemption]), 'not an enabled rule'],
-         'bad exemption path' => [fn () => new Lint(paths: ['.'], Exemptions: [new Exemption(rule: Rules::Methods, path: '../a.php', reason: 'r')]), 'climbs out'],
+         'later version'      => [fn () => new Lint(version: 2, paths: ['.']), 'Lint version 2 is not supported: this Bootgly reads version 1.'],
+         'no version'         => [fn () => new Lint(version: 0, paths: ['.']), 'Lint version 0 is not supported'],
+         'no paths'           => [fn () => new Lint(version: 1, paths: []), 'at least one'],
+         'keyed paths'        => [fn () => new Lint(version: 1, paths: ['a' => 'Bootgly/']), 'paths must be a list'],
+         'non-string path'    => [fn () => new Lint(version: 1, paths: [1]), 'paths[0] must be a string'],
+         'absolute path'      => [fn () => new Lint(version: 1, paths: ['/etc/']), 'is absolute'],
+         'climbing path'      => [fn () => new Lint(version: 1, paths: ['../x/']), 'climbs out'],
+         'pattern as path'    => [fn () => new Lint(version: 1, paths: ['Bootgly/*/']), 'plain path'],
+         'dot segment path'   => [fn () => new Lint(version: 1, paths: ['src/.']), "paths[0] 'src/.' carries an empty or . segment"],
+         'bad exclude'        => [fn () => new Lint(version: 1, paths: ['.'], excludes: ['/abs/']), 'is absolute'],
+         'non-string exclude' => [fn () => new Lint(version: 1, paths: ['.'], excludes: [null]), 'excludes[0] must be a string'],
+         'no rules'           => [fn () => new Lint(version: 1, paths: ['.'], rules: []), 'at least one rule'],
+         'rule as string'     => [fn () => new Lint(version: 1, paths: ['.'], rules: ['imports']), 'rules[0] must be a Rules case'],
+         'repeated rule'      => [fn () => new Lint(version: 1, paths: ['.'], rules: [Rules::Imports, Rules::Imports]), 'repeats Imports'],
+         'not an exemption'   => [fn () => new Lint(version: 1, paths: ['.'], Exemptions: [['rule' => 'methods']]), 'must be an Exemption'],
+         'disabled rule'      => [fn () => new Lint(version: 1, paths: ['.'], rules: [Rules::Imports], Exemptions: [$Exemption]), 'not an enabled rule'],
+         'bad exemption path' => [fn () => new Lint(version: 1, paths: ['.'], Exemptions: [new Exemption(rule: Rules::Methods, path: '../a.php', reason: 'r')]), 'climbs out'],
       ];
       $wrong = [];
       foreach ($malformed as $label => [$build, $needle]) {
@@ -55,6 +58,7 @@ return new Test(
 
       // @ exclude() and select()
       $Lint = new Lint(
+         version: 1,
          paths: ['.'],
          excludes: ['vendor/', '**/tests/fixtures/**'],
          rules: [Rules::Methods, Rules::Casing],

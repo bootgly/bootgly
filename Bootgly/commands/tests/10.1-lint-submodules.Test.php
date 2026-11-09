@@ -290,10 +290,10 @@ return new Test(
          );
 
          // @ CRLF sources keep their line ending — with and without an existing import block
-         $crlf = "{$dir}/Crlf.php";
-         file_put_contents($crlf, "<?php\r\n\r\nnamespace Demo;\r\n\r\n\r\nclass Crlf { public function run (): int { return strlen('x'); } }\r\n");
-         $result = $run('imports', '--fix', '--target', $crlf);
-         $inserted = (string) file_get_contents($crlf);
+         $CRLF = "{$dir}/Crlf.php";
+         file_put_contents($CRLF, "<?php\r\n\r\nnamespace Demo;\r\n\r\n\r\nclass Crlf { public function run (): int { return strlen('x'); } }\r\n");
+         $result = $run('imports', '--fix', '--target', $CRLF);
+         $inserted = (string) file_get_contents($CRLF);
          $crlfBlock = "{$dir}/CrlfBlock.php";
          file_put_contents($crlfBlock, "<?php\r\n\r\nnamespace Demo;\r\n\r\n\r\nuse function strlen;\r\nuse const PHP_EOL;\r\n\r\n\r\nclass CrlfBlock { public function run (): string { return strlen('x') . PHP_EOL; } }\r\n");
          $resultBlock = $run('imports', '--fix', '--target', $crlfBlock);

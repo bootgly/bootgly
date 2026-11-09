@@ -34,7 +34,7 @@ return new Test(
                && str_contains($rewritten, "strlen((string) \$double(\$triple(\$a))) + \$wide() + count(\n")
                && str_contains($rewritten, "intval('1') + new Holder()->measure()")
                && str_contains($rewritten, 'set (string $value)')
-               && str_contains($rewritten, 'public function measure (): int { return isset($this->name)')
+               && str_contains($rewritten, 'public function measure (): int { return strlen($this->name)')
                && str_contains($rewritten, 'public function keep /* note */ (): int'),
             description: 'Every gap but the commented one must be rewritten into valid PHP, got: ' . $rewritten
          );

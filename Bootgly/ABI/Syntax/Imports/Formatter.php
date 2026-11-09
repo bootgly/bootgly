@@ -173,9 +173,9 @@ class Formatter
       //   break at or after the block, or after the namespace declaration
       $from = $Result->importRange['start'] !== -1 ? $Result->importRange['start'] : ($this->locate($source) ?? 0);
       $break = strpos($source, "\n", $from);
-      $eol = $break !== false && $break > 0 && $source[$break - 1] === "\r" ? "\r\n" : "\n";
-      if ($eol !== "\n") {
-         $importBlock = str_replace("\n", $eol, $importBlock);
+      $EOL = $break !== false && $break > 0 && $source[$break - 1] === "\r" ? "\r\n" : "\n";
+      if ($EOL !== "\n") {
+         $importBlock = str_replace("\n", $EOL, $importBlock);
       }
 
       // ? The block carries something a rewrite cannot place — leave it to a human
@@ -214,7 +214,7 @@ class Formatter
          }
          // @ Keep exactly at the char after namespace line's ending
          if ($start > 0) {
-            $start += strlen($eol);
+            $start += strlen($EOL);
          }
 
          // @ Walk forward past any trailing line breaks after last import
@@ -229,11 +229,11 @@ class Formatter
          // ?: Every import was unused — the file now carries none, so it takes
          //    the shape of one that never had any: 2 blank lines, then the code
          if ($importBlock === '') {
-            return $before . $eol . $eol . $after;
+            return $before . $EOL . $EOL . $after;
          }
 
          // @ 2 blank lines after namespace, 2 blank lines after imports
-         return $before . $eol . $eol . $importBlock . $eol . $eol . $eol . $after;
+         return $before . $EOL . $EOL . $importBlock . $EOL . $EOL . $EOL . $after;
       }
 
       // ? Nothing to insert — never rewrite the namespace spacing for an empty
@@ -258,7 +258,7 @@ class Formatter
          $after = substr($source, $insertPos);
 
          // @ 2 blank lines after namespace, 2 blank lines after imports
-         return $before . $eol . $eol . $eol . $importBlock . $eol . $eol . $eol . $after;
+         return $before . $EOL . $EOL . $EOL . $importBlock . $EOL . $EOL . $EOL . $after;
       }
 
       return $source;

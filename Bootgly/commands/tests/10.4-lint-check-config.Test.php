@@ -153,6 +153,7 @@ return new Test(
          // ! The configuration
          $config = "<?php\n\nuse Bootgly\\ABI\\Syntax\\Analyzers\\Rules;\nuse Bootgly\\ABI\\Syntax\\Lint;\nuse Bootgly\\ABI\\Syntax\\Lint\\Exemption;\n\n"
             . "return new Lint(\n"
+            . "   version: 1,\n"
             . "   paths: ['src/', 'vendor/'],\n"
             . "   excludes: ['vendor/', '**/tests/fixtures/**'],\n"
             . "   rules: [Rules::Nullables, Rules::Spacing, Rules::Methods],\n"
@@ -327,7 +328,7 @@ return new Test(
          mkdir("{$root}/empty");
          file_put_contents("{$root}/bootgly.Lint.php",
             "<?php\n\nuse Bootgly\\ABI\\Syntax\\Analyzers\\Rules;\nuse Bootgly\\ABI\\Syntax\\Lint;\nuse Bootgly\\ABI\\Syntax\\Lint\\Exemption;\n\n"
-            . "return new Lint(paths: ['empty/'], Exemptions: [new Exemption(rule: Rules::Methods, path: 'nowhere/*.php', reason: 'Gone')]);\n"
+            . "return new Lint(version: 1, paths: ['empty/'], Exemptions: [new Exemption(rule: Rules::Methods, path: 'nowhere/*.php', reason: 'Gone')]);\n"
          );
          $result = $Run($root, ['check']);
          $Remove("{$root}/empty");
@@ -345,7 +346,7 @@ return new Test(
          $linked = symlink("{$root}/real", "{$root}/linked");
          file_put_contents("{$root}/bootgly.Lint.php",
             "<?php\n\nuse Bootgly\\ABI\\Syntax\\Analyzers\\Rules;\nuse Bootgly\\ABI\\Syntax\\Lint;\n\n"
-            . "return new Lint(paths: ['linked/'], excludes: ['linked/gen/'], rules: [Rules::Nullables, Rules::Spacing]);\n"
+            . "return new Lint(version: 1, paths: ['linked/'], excludes: ['linked/gen/'], rules: [Rules::Nullables, Rules::Spacing]);\n"
          );
          $result = $Run($root, ['check', 'linked/gen', '--fix']);
          // ! The same through a deprecated wrapper
@@ -374,7 +375,7 @@ return new Test(
             file_put_contents("{$root}/Bootgly/ABI/Pinned.php", $probe('Pinned'));
             file_put_contents("{$root}/bootgly.Lint.php",
                "<?php\n\nuse Bootgly\\ABI\\Syntax\\Analyzers\\Rules;\nuse Bootgly\\ABI\\Syntax\\Lint;\n\n"
-               . "return new Lint(paths: ['.'], excludes: {$excludes}, rules: [Rules::Spacing]);\n"
+               . "return new Lint(version: 1, paths: ['.'], excludes: {$excludes}, rules: [Rules::Spacing]);\n"
             );
             $result = $Run($root, ['check', '--fix']);
             $pinned[$excludes] = [
@@ -406,7 +407,7 @@ return new Test(
          file_put_contents("{$root}/src/gen/Generated.php", $probe('Generated'));
          file_put_contents("{$root}/bootgly.Lint.php",
             "<?php\n\nuse Bootgly\\ABI\\Syntax\\Analyzers\\Rules;\nuse Bootgly\\ABI\\Syntax\\Lint;\n\n"
-            . "return new Lint(paths: ['src/'], excludes: ['src/gen/', 'src/tests/fixtures/'], rules: [Rules::Nullables]);\n"
+            . "return new Lint(version: 1, paths: ['src/'], excludes: ['src/gen/', 'src/tests/fixtures/'], rules: [Rules::Nullables]);\n"
          );
          $wrapped = [];
          $wrapped['..'] = $Run("{$root}/src/sub", ['nullables', '../gen', '--fix']);
@@ -473,7 +474,9 @@ return new Test(
          $broken = [
             'parse error' => "<?php\nreturn new ;\n",
             'not a Lint'  => "<?php\nreturn ['paths' => ['src/']];\n",
-            'bad entry'   => "<?php\nreturn new Bootgly\\ABI\\Syntax\\Lint(paths: ['/etc/']);\n",
+            'bad entry'   => "<?php\nreturn new Bootgly\\ABI\\Syntax\\Lint(version: 1, paths: ['/etc/']);\n",
+            'no version'  => "<?php\nreturn new Bootgly\\ABI\\Syntax\\Lint(paths: ['src/']);\n",
+            'later version' => "<?php\nreturn new Bootgly\\ABI\\Syntax\\Lint(version: 2, paths: ['src/']);\n",
          ];
          $wrong = [];
          foreach ($broken as $label => $content) {

@@ -269,7 +269,12 @@ class LintCommand extends Command
             ? "{$cwd}/{$path}"
             : BOOTGLY_WORKING_DIR . $path;
       }
-      $narrowed = ($arguments[0] ?? null) !== null;
+      // # In a kit the resolved path narrows too: no path inside projects/ is
+      //   the project the caller stands in, never every project the
+      //   configuration holds — unless it stands where the configuration
+      //   lies, which is the full run (dead exemptions included)
+      $narrowed = ($arguments[0] ?? null) !== null
+         || ($kit === true && $path !== null && realpath($path) !== realpath((string) $base));
 
       // ! Targets — the configured paths (narrowed by the path given) for
       //   `check` under a bootgly.Lint.php; the path itself otherwise

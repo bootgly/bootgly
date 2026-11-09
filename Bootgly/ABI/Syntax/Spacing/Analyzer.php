@@ -12,22 +12,16 @@ namespace Bootgly\ABI\Syntax\Spacing;
 
 
 use const T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG;
-use const T_ARRAY;
 use const T_COMMENT;
 use const T_DOC_COMMENT;
-use const T_EMPTY;
-use const T_EVAL;
 use const T_FINAL;
 use const T_FN;
 use const T_FUNCTION;
-use const T_ISSET;
-use const T_LIST;
 use const T_MATCH;
 use const T_NAME_FULLY_QUALIFIED;
 use const T_NAME_QUALIFIED;
 use const T_NAME_RELATIVE;
 use const T_STRING;
-use const T_UNSET;
 use const T_VARIABLE;
 use const T_WHITESPACE;
 use function count;
@@ -48,9 +42,11 @@ use Bootgly\ABI\Syntax\Analyzers\Result;
  * and `(`; a call takes none.
  *
  * Declarations: named functions and methods, closures and arrow functions.
- * Calls: names, qualified names and variables called, `new X (`, and the
- * function-like constructs `isset`, `empty`, `unset`, `array`, `list` and
- * `eval`. Control structures (`if (`, `foreach (`, `match (`) are neither.
+ * Calls: functions and methods — names, qualified names and variables
+ * called, and `new X (`. Language constructs are neither: control structures
+ * (`if (`, `foreach (`, `match (`) and the function-like ones (`array (`,
+ * `list (`, `isset (`, `empty (`, `unset (`, `eval (`) keep whatever spacing
+ * they are written with.
  *
  * Each issue carries the byte offset where the gap starts (the `(` itself
  * when there is none); a gap holding a comment is reported with offset -1
@@ -135,7 +131,6 @@ class Analyzer extends Analyzers
          // # Calls — a callee directly followed by a gap and `(`
          if (isset($declared[$i]) || in_array($token[0], [
             T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE, T_VARIABLE,
-            T_ISSET, T_EMPTY, T_UNSET, T_ARRAY, T_LIST, T_EVAL,
          ], true) === false) {
             continue;
          }

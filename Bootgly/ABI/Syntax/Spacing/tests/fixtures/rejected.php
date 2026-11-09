@@ -27,6 +27,6 @@ class Holder
       }
    }
 
-   public function measure(): int { return isset ($this->name) ? 1 : 0; }
+   public function measure(): int { return strlen ($this->name); }
    public function keep /* note */ (): int { return 0; }
 }

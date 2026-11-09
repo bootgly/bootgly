@@ -22,11 +22,15 @@ class Server
    // * Metadata
    public private(set) int $started = 0;
    protected int $connections = 0;
+   protected Server $Peer;
    public bool $running {
       get => $this->started > 0;
    }
    public static int $instances {
       get => 1;
+   }
+   public int $port_ {
+      get => $this->Peer->port_;
    }
 
    private const array DEFAULTS = [];

@@ -40,7 +40,7 @@ return new Test(
          [19, 'call_spacing', 'Holder', 'call'],
          [25, 'declaration_spacing', 'set', 'declaration'],
          [30, 'declaration_spacing', 'measure', 'declaration'],
-         [30, 'call_spacing', 'isset', 'call'],
+         [30, 'call_spacing', 'strlen', 'call'],
          [31, 'declaration_spacing', 'keep', 'declaration'],
       ];
       yield assert(

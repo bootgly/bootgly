@@ -790,7 +790,7 @@ class Analyzer extends Analyzers
     *
     * @param array<int,mixed> $tokens
     * @param array{start:int,end:int} $range
-    * @param array<int,Issue> $issues
+    * @param array<int,Issue> $Issues
     */
    private function survey (
       Tokens $Tokens,
@@ -798,7 +798,7 @@ class Analyzer extends Analyzers
       int $count,
       string $source,
       array $range,
-      array &$issues
+      array &$Issues
    ): void
    {
       // ?
@@ -840,7 +840,7 @@ class Analyzer extends Analyzers
          /** @var int $line */
          $line = $token[2];
 
-         $issues[] = new Issue(
+         $Issues[] = new Issue(
             type: 'comment_in_imports',
             symbol: '',
             kind: 'comment',
@@ -959,9 +959,9 @@ class Analyzer extends Analyzers
     *
     * @param array<int,array{symbol:string,kind:string,global:bool,line:int,alias:string}> $imports
     * @param array{names:array<string,bool>,exact:array<string,bool>} $references
-    * @param array<int,Issue> $issues
+    * @param array<int,Issue> $Issues
     */
-   private function prune (array $imports, array $references, array &$issues): void
+   private function prune (array $imports, array $references, array &$Issues): void
    {
       foreach ($imports as $import) {
          $alias = $import['alias'];
@@ -981,7 +981,7 @@ class Analyzer extends Analyzers
             default    => "use {$import['symbol']};",
          };
 
-         $issues[] = new Issue(
+         $Issues[] = new Issue(
             type: 'unused_import',
             symbol: $import['symbol'],
             kind: $import['kind'],
@@ -1071,9 +1071,9 @@ class Analyzer extends Analyzers
     * Validate import ordering and generate issues.
     *
     * @param array<int,array{symbol:string,kind:string,global:bool,line:int,alias:string}> $imports
-    * @param array<int,Issue> $issues
+    * @param array<int,Issue> $Issues
     */
-   private function validate (array &$imports, array &$issues): void
+   private function validate (array &$imports, array &$Issues): void
    {
       if (count($imports) < 2) {
          return;
@@ -1096,7 +1096,7 @@ class Analyzer extends Analyzers
          // @ The global block comes first, whole: a global import after any
          //   namespaced one is out of place whatever its kind
          if ($isGlobal && $namespaced) {
-            $issues[] = new Issue(
+            $Issues[] = new Issue(
                type: 'global_not_first',
                symbol: $import['symbol'],
                kind: $import['kind'],
@@ -1117,7 +1117,7 @@ class Analyzer extends Analyzers
 
          // @ Check kind ordering (const before function before class), within same group
          if ($kindIndex < $prevKindIndex) {
-            $issues[] = new Issue(
+            $Issues[] = new Issue(
                type: 'wrong_order',
                symbol: $import['symbol'],
                kind: $import['kind'],
@@ -1129,7 +1129,7 @@ class Analyzer extends Analyzers
          // @ Within same kind and same global/namespaced group: alphabetical
          if ($kindIndex === $prevKindIndex && $isGlobal === $prevGlobal && $prevSymbol !== '') {
             if (strcasecmp($import['symbol'], $prevSymbol) < 0) {
-               $issues[] = new Issue(
+               $Issues[] = new Issue(
                   type: 'not_alphabetical',
                   symbol: $import['symbol'],
                   kind: $import['kind'],

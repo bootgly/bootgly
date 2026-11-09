@@ -14,6 +14,7 @@ namespace Bootgly\ABI\Syntax;
 use function array_is_list;
 use function dirname;
 use function get_debug_type;
+use function implode;
 use function in_array;
 use function is_dir;
 use function is_file;
@@ -37,6 +38,7 @@ use Bootgly\ABI\Syntax\Lint\Glob;
  *
  * ```php
  * return new Lint(
+ *    version: 1,
  *    paths: ['Bootgly/'],
  *    excludes: ['vendor/', '**\/tests/fixtures/**'],
  *    rules: [Rules::Imports, Rules::Nullables, Rules::Methods],
@@ -51,13 +53,22 @@ use Bootgly\ABI\Syntax\Lint\Glob;
  * );
  * ```
  *
+ * `version` is the format of the file, not of the framework: a Bootgly
+ * reads only the versions it knows (`VERSIONS`) and refuses any other, so a
+ * file written for a later format is never read with this one's meaning.
+ *
  * Every path and pattern is relative to the directory of the file. The
  * configuration is checked when it is built: anything malformed throws, and
  * the command fails loud instead of falling back to its defaults.
  */
 class Lint
 {
+   /** The file format versions this Bootgly reads */
+   public const array VERSIONS = [1];
+
    // * Config
+   /** The format version the file is written in — one of `VERSIONS` */
+   public readonly int $version;
    /** @var array<int,string> The trees checked — relative files or directories (`.` for the file's own directory) */
    public readonly array $paths;
    /** @var array<int,string> Glob patterns of the paths never checked */
@@ -79,6 +90,7 @@ class Lint
    /**
     * Every entry is checked at runtime — a `bootgly.Lint.php` is user input.
     *
+    * @param int $version The format version of the file — one of `VERSIONS`
     * @param array<mixed> $paths The trees to check (strings), relative to the file's directory
     * @param array<mixed> $excludes Glob patterns (strings) of paths never checked
     * @param array<mixed> $rules The rules to enforce (`Rules` cases) — at least one, no repeats
@@ -87,12 +99,19 @@ class Lint
     * @throws InvalidArgumentException When any entry is malformed
     */
    public function __construct (
+      int $version,
       array $paths,
       array $excludes = [],
       array $rules = [Rules::Imports, Rules::Nullables, Rules::Promotions, Rules::Methods],
       array $Exemptions = []
    )
    {
+      // ? A format this Bootgly knows — never a later one read with this one's meaning
+      if (in_array($version, self::VERSIONS, true) === false) {
+         $known = implode(', ', self::VERSIONS);
+         throw new InvalidArgumentException("Lint version {$version} is not supported: this Bootgly reads version {$known}.");
+      }
+
       // ? Lists only — a keyed array hides what was meant
       foreach (['paths' => $paths, 'excludes' => $excludes, 'rules' => $rules, 'Exemptions' => $Exemptions] as $key => $list) {
          if (array_is_list($list) === false) {
@@ -172,6 +191,7 @@ class Lint
       }
 
       // * Config
+      $this->version = $version;
       $this->paths = $plains;
       $this->excludes = $patterns;
       $this->rules = $seen;

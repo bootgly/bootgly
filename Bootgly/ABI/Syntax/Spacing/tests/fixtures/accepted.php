@@ -26,6 +26,10 @@ function main (int $a): int
    $isset = isset($value) && empty($value) === false;
    [$first] = [1];
    list($second) = [2];
+   // # Language constructs are not calls: any spacing is accepted
+   $constructs = array ('a' => isset ($value), 'b' => empty ($value));
+   list ($third) = array (3);
+   unset ($constructs['a']);
 
    return strlen((string) $double($triple($a))) + $static() + count($ref([$first, $second, $isset]));
 }

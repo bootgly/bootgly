@@ -5,6 +5,7 @@ namespace Bootgly\commands;
 
 use const BOOTGLY_ROOT_BASE;
 use const PHP_BINARY;
+use function array_column;
 use function assert;
 use function fclose;
 use function file_get_contents;
@@ -19,6 +20,7 @@ use function json_encode;
 use function mkdir;
 use function proc_close;
 use function proc_open;
+use function sort;
 use function str_contains;
 use function stream_get_contents;
 use function symlink;
@@ -178,6 +180,42 @@ return new Test(
             && str_contains((string) file_get_contents("{$project}/Models/Probe.php"), 'run (null|array $a)')
             && $Untouched() === true,
          description: 'from projects/Alpha, `lint nullables Models --fix` fixes the project file and leaves the pinned trees alone, got: '
+            . json_encode($result)
+      );
+
+      // ! The kit's bootgly.Lint.php (as `kit boot` lays it: every project)
+      //   and a second project — both projects carry a violation
+      mkdir("{$kit}/projects/Beta", 0775, true);
+      $violation = "<?php\n\nnamespace Alpha\\Models;\n\n\nclass Other\n{\n   public null|int \$id = null;\n"
+         . "   public function run (?int \$a): int { return 0; }\n}\n";
+      file_put_contents("{$project}/Models/Other.php", $violation);
+      file_put_contents("{$kit}/projects/Beta/Other.php", $violation);
+      file_put_contents(
+         "{$kit}/projects/bootgly.Lint.php",
+         "<?php\n\nuse Bootgly\\ABI\\Syntax\\Analyzers\\Rules;\nuse Bootgly\\ABI\\Syntax\\Lint;\nuse Bootgly\\ABI\\Syntax\\Lint\\Exemption;\n\n"
+            . "return new Lint(version: 1, paths: ['.'], excludes: ['Alpha/Vendored/**'], rules: [Rules::Nullables], Exemptions: ["
+            . "new Exemption(rule: Rules::Nullables, path: 'Gone/**', reason: 'A deleted project')]);\n"
+      );
+
+      // @ `check` with no path inside a project: that project only
+      $result = $Run($project, 'check');
+      $files = array_column((array) ($result['report']['report'] ?? []), 'file');
+      yield assert(
+         assertion: $result['status'] !== 0
+            && $files === ['projects/Alpha/Models/Other.php'],
+         description: 'from projects/Alpha, a bare `lint check` under the kit configuration scans that project only, got: '
+            . json_encode($result)
+      );
+
+      // @ `check` from projects/ itself: every project
+      $result = $Run("{$kit}/projects", 'check');
+      $files = array_column((array) ($result['report']['report'] ?? []), 'file');
+      sort($files);
+      yield assert(
+         assertion: $result['status'] !== 0
+            && $files === ['projects/Alpha/Models/Other.php', 'projects/Beta/Other.php']
+            && array_column((array) ($result['report']['exemptions']['stale'] ?? []), 'path') === ['Gone/**'],
+         description: 'from projects/, a bare `lint check` scans every project and reports the exemption that waives nothing, got: '
             . json_encode($result)
       );
    }
