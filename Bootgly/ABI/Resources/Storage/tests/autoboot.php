@@ -39,5 +39,15 @@ return new Suite(
       '1.8-local-symlink-mkdir',
       '1.9-local-nul-path',
       '1.10-local-concurrent-mkdir',
+      '6.2-s3-signature-pin',
+      '7.1-s3-fake-objects',
+      '7.2-s3-fake-multipart-write',
+      '7.3-s3-fake-ranged-read',
+      '7.4-s3-fake-presign',
+      '7.5-s3-fake-uploads',
+      '7.6-s3-fake-uploads-refusals',
+      '8.1-s3-signer-vectors',
+      '8.2-s3-signer-refusals',
+      '8.3-s3-offline-handles',
    ]
 );
