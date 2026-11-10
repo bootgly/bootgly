@@ -26,7 +26,8 @@ use function str_ends_with;
 use function str_starts_with;
 use function stream_select;
 use function time_nanosleep;
-use Throwable;
+use ErrorException;
+use TypeError;
 use ValueError;
 
 use Bootgly\ABI\Clock;
@@ -231,6 +232,10 @@ final class Selector
     *
     * With nothing watched, a deadline makes it a plain interruptible sleep.
     *
+    * An exception thrown by an asynchronous signal handler
+    * (`pcntl_async_signals(true)`) during the wait is not caught: it reaches
+    * the caller.
+    *
     * @param null|int $deadline When to give up, on the monotonic clock
     *    (`$Selector->Clock->tick`, nanoseconds). `null` waits indefinitely; a
     *    deadline that is not in the future — `0`, for one — polls without
@@ -320,8 +325,10 @@ final class Selector
          try {
             $selected = @stream_select($read, $write, $except, $seconds, $microseconds);
          }
-         catch (Throwable) {
-            // ...a poll finds its closed streams below
+         catch (TypeError | ValueError | ErrorException) {
+            // ...a poll finds its closed streams below. Only what the call
+            //    itself raises is caught: an exception thrown by an
+            //    asynchronous signal handler belongs to the caller.
          }
       }
 
@@ -352,7 +359,7 @@ final class Selector
          try {
             $selected = @stream_select($read, $write, $except, 0, 0);
          }
-         catch (Throwable $Throwable) {
+         catch (TypeError | ValueError | ErrorException $Throwable) {
             $selected = false;
             $error = $Throwable->getMessage();
          }
@@ -444,7 +451,7 @@ final class Selector
                [$id]
             );
          }
-         catch (Throwable $Throwable) {
+         catch (TypeError | ErrorException $Throwable) {
             $selected = false;
             $error = $Throwable->getMessage();
          }

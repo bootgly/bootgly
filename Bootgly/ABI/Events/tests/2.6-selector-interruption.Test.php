@@ -90,6 +90,33 @@ return new Test(
          );
          proc_close($Process);
 
+         // # An exception thrown by an asynchronous handler is the caller's
+         $counting = pcntl_signal_get_handler(SIGUSR1);
+         $asynchronous = pcntl_async_signals(true);
+         pcntl_signal(SIGUSR1, function () {
+            throw new RuntimeException('raised by the handler');
+         });
+
+         $Process = $signal(150_000);
+         $raised = '';
+         $ready = null;
+         try {
+            $ready = $Selector->wait($Selector->Clock->tick + 2_000_000_000);
+         }
+         catch (RuntimeException $Exception) {
+            $raised = $Exception->getMessage();
+         }
+         finally {
+            pcntl_async_signals($asynchronous);
+            pcntl_signal(SIGUSR1, $counting);
+         }
+         proc_close($Process);
+
+         yield assert(
+            assertion: $raised === 'raised by the handler' && $ready === null,
+            description: 'An exception thrown by an asynchronous signal handler during the wait reaches the caller'
+         );
+
          fclose($near);
          fclose($far);
       }

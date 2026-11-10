@@ -48,6 +48,23 @@ return new Test(
          description: 'Only the remaining interest is reported'
       );
 
+      // # ...and the other way around
+      $Selector->watch($near, Interests::Write);
+
+      yield assert(
+         assertion: $Selector->forget($near, Interests::Read) === true
+            && $Selector->reads === []
+            && isSet($Selector->writes[$id]),
+         description: 'Forgetting the read interest keeps the write interest'
+      );
+
+      $ready = $Selector->wait(0);
+      yield assert(
+         assertion: $ready === 1 && $Selector->readable === [] && isSet($Selector->writable[$id]),
+         description: 'Only the write interest is reported, even with data pending to read'
+      );
+      $Selector->watch($near, Interests::Read);
+
       // # Both interests
       $Selector->watch($near, Interests::Write);
       $Selector->watch($other, Interests::Read);

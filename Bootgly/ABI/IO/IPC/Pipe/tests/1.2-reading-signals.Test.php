@@ -51,6 +51,23 @@ return new Test(
             description: "The interrupted wait lasts one timeout, not more (took {$elapsed} ns for 1 s)"
          );
 
+         // # A signal already pending is dispatched before the wait, even
+         //   when the pipe is readable and no wait is ever interrupted
+         $Pipe->write('ready');
+         posix_kill(getmypid(), SIGUSR1);
+
+         $yielded = [];
+         foreach ($Pipe->reading(1024, 1_000_000) as $chunk) {
+            $yielded[] = $chunk;
+
+            break;
+         }
+
+         yield assert(
+            assertion: $yielded === ['ready'] && $handled === 2,
+            description: 'A pending signal is dispatched by the loop before it waits'
+         );
+
          $Pipe->close();
       }
       finally {

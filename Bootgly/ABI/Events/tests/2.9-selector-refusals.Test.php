@@ -1,6 +1,7 @@
 <?php
 
 use Bootgly\ABI\Events\Selector;
+use Bootgly\ABI\Events\Selector\Interests;
 use Bootgly\ABI\Events\Selector\Reasons;
 use Bootgly\ABI\Events\Selector\Refusal;
 use Bootgly\ACI\Tests\Suite\Test;
@@ -102,6 +103,47 @@ return new Test(
          description: 'A blocking wait on a set with a closed stream is refused at once'
       );
 
+      // # ...and a stream watched only for write is found the same way
+      [$mute, $mutePeer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+      $Selector->watch($mute, Interests::Write);
+      $muteID = (int) $mute;
+      fclose($mute);
+
+      $started = hrtime(true);
+      $Refusal = $refuse(fn () => $Selector->wait($Selector->Clock->tick + 2_000_000_000));
+      $elapsed = hrtime(true) - $started;
+      yield assert(
+         assertion: $Refusal?->Reason === Reasons::Closed
+            && $Refusal->streams === [$muteID]
+            && $Selector->writes === []
+            && $elapsed < 500_000_000,
+         description: 'A closed stream watched only for write is refused as Closed at once, and dropped'
+      );
+
+      // # wait(): a watched set the system refuses — a filter appended after
+      //   watch() leaves the stream with no descriptor to wait on
+      $Lone = new Selector();
+      [$broken, $brokenPeer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+      $Lone->watch($broken);
+      stream_filter_append($broken, 'string.toupper', STREAM_FILTER_READ);
+
+      $started = hrtime(true);
+      $Refusal = $refuse(fn () => $Lone->wait($Lone->Clock->tick + 2_000_000_000));
+      $elapsed = hrtime(true) - $started;
+      yield assert(
+         assertion: $Refusal?->Reason === Reasons::Failure && $elapsed < 500_000_000,
+         description: 'A set the system refuses is a Failure at once — never reported as an interruption'
+      );
+
+      $Refusal = $refuse(fn () => $Lone->wait(0));
+      yield assert(
+         assertion: $Refusal?->Reason === Reasons::Failure,
+         description: 'The refused set is refused again on the next wait, not spun on'
+      );
+
+      foreach ([$mutePeer, $broken, $brokenPeer] as $stream) {
+         fclose($stream);
+      }
       foreach ([$near, $far, $closedPeer, $stalePeer, $latePeer, $memory] as $stream) {
          fclose($stream);
       }

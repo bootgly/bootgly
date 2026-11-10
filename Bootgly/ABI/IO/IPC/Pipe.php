@@ -101,6 +101,10 @@ class Pipe
     * dispatched between waits, and a signal that interrupts a wait resumes
     * it without extending the timeout.
     *
+    * A timeout never ends the loop: the consumer leaves it (`break`) when it
+    * has waited enough. Without a timeout the loop polls, so the consumer
+    * paces it or leaves it at the first `null`.
+    *
     * @param int $length The most bytes to read per chunk.
     * @param null|int $timeout How long each wait lasts, in microseconds; `null` polls without waiting.
     *

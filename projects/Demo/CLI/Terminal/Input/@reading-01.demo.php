@@ -132,8 +132,13 @@ $Input->reading(
          // @ Write user data to Terminal Output (Server => Client)
          if ($data === null) {
             $Output->write(data: "Server: `No data received from Client. Timeout reached?`\n");
+
+            // The loop goes on after a timeout: leave it to end the Server
+            break;
          } else if ($data === false) {
             $Output->write(data: "Server: `Unexpected data! Client is dead?`\n");
+
+            break;
          } else {
             $Output->render(data: "\nServer: `You entered: @#cyan:" . json_encode($data) . " @;`\n\n");
          }
