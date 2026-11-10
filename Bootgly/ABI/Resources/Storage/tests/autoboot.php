@@ -49,5 +49,10 @@ return new Suite(
       '8.1-s3-signer-vectors',
       '8.2-s3-signer-refusals',
       '8.3-s3-offline-handles',
+      '7.7-s3-fake-list-pages',
+      '8.4-s3-endpoint-port',
+      '8.5-storage-trace-options',
+      '7.8-s3-fake-presign-headers',
+      '8.6-s3-signer-headers',
    ]
 );

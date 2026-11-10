@@ -13,6 +13,7 @@ namespace Bootgly\ABI\Resources;
 
 use function is_string;
 use InvalidArgumentException;
+use SensitiveParameter;
 
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\ABI\Resources\Storage\Config;
@@ -46,7 +47,7 @@ class Storage
     *
     * @param array<string,mixed>|Config $config
     */
-   public function __construct (array|Config $config = [])
+   public function __construct (#[SensitiveParameter] array|Config $config = [])
    {
       // * Config
       $this->Config = $config instanceof Config

@@ -123,7 +123,7 @@ return new Test(
          // # Expiry is enforced by the store, from the date in the URL
          $Signer = new Signer(Fake::KEY, Fake::SECRET, Fake::REGION);
          $path = '/test-bucket/media/library/docs/other.txt';
-         $expired = "{$origin}{$path}?" . $Signer->presign('GET', "127.0.0.1:{$Fake->port}", $path, [], 60, time() - 3600);
+         $expired = "{$origin}{$path}?" . $Signer->presign('GET', "127.0.0.1:{$Fake->port}", $path, [], 60, time: time() - 3600);
          $valid = "{$origin}{$path}?" . $Signer->presign('GET', "127.0.0.1:{$Fake->port}", $path, [], 60);
          [$status, , $body] = fake_send('GET', $expired);
          [$accepted, , $bytes] = fake_send('GET', $valid);

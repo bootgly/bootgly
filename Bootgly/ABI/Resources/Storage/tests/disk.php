@@ -112,6 +112,29 @@ function fake_send (string $method, string $URL, string $body = '', array $heade
 }
 
 /**
+ * Whether any argument of any frame of a stack trace holds `$needle` — strings at any depth
+ * of the argument arrays; objects are not opened (test helper). `json_encode()` of a trace
+ * cannot answer this: inside a run the trace holds objects it refuses, and it returns false.
+ *
+ * @param array<int|string,mixed> $values A trace (`getTrace()`), or one level of it.
+ */
+function trace_holds (array $values, string $needle): bool
+{
+   // @@
+   foreach ($values as $value) {
+      if (is_string($value) === true && str_contains($value, $needle) === true) {
+         return true;
+      }
+      if (is_array($value) === true && trace_holds($value, $needle) === true) {
+         return true;
+      }
+   }
+
+   // :
+   return false;
+}
+
+/**
  * Open a readable in-memory stream seeded with the given contents (test helper).
  *
  * @return resource

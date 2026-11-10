@@ -15,15 +15,18 @@ use function assert;
 use function fopen;
 use function ini_get;
 use function ini_set;
-use function json_encode;
 use function print_r;
 use function str_contains;
+use function trace_holds;
 use InvalidArgumentException;
 
 use Bootgly\ABI\Resources\Storage\Drivers\S3;
 use Bootgly\ABI\Resources\Storage\Drivers\S3\Signer;
 use Bootgly\ABI\Resources\Storage\Drivers\S3\Uploads;
 use Bootgly\ACI\Tests\Suite\Test;
+
+
+require_once __DIR__ . '/disk.php';
 
 
 /**
@@ -66,7 +69,7 @@ return new Test(
                $refused = $refused && $Exception->getMessage() === $message;
                $leaked = $leaked
                   || str_contains($Exception->getTraceAsString(), $secret) === true
-                  || str_contains((string) json_encode($Exception->getTrace()), 'bPxRfiCYEXAMPLEKEY') === true;
+                  || trace_holds($Exception->getTrace(), 'bPxRfiCYEXAMPLEKEY') === true;
             }
          }
       }

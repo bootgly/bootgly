@@ -34,7 +34,7 @@ final class Uploads
    // * Data
    /** @var Closure(string, array<string,mixed>): (string|false) */
    private Closure $Create;
-   /** @var Closure(string, string, int, int): (string|false) */
+   /** @var Closure(string, string, int, int, array<array-key,mixed>): (string|false) */
    private Closure $Sign;
    /** @var Closure(string, string): (array<int,array{etag:string,size:int}>|false) */
    private Closure $List;
@@ -49,7 +49,7 @@ final class Uploads
     * reads it from `$S3->Uploads`).
     *
     * @param Closure(string, array<string,mixed>): (string|false) $Create
-    * @param Closure(string, string, int, int): (string|false) $Sign
+    * @param Closure(string, string, int, int, array<array-key,mixed>): (string|false) $Sign
     * @param Closure(string, string): (array<int,array{etag:string,size:int}>|false) $List
     * @param Closure(string, string, array<int,array{etag:string,size?:int}>): bool $Complete
     * @param Closure(string, string): bool $Abort
@@ -95,16 +95,21 @@ final class Uploads
     * number or the lifetime is refused.
     *
     * Whoever holds the URL can upload that one part of that one upload until it expires,
-    * with no credentials — and chooses its bytes and its size. Never log the URL.
+    * with no credentials — and, with no `$headers`, chooses its bytes and its size.
+    * `$headers` binds them: the upload must then carry each header with exactly that value,
+    * or the store refuses it. Never log the URL.
     *
     * @param string $id The upload id `create()` returned.
     * @param int $part The part number, 1..`Uploads::PARTS`.
     * @param int $expires Lifetime of the URL in seconds, 1..604800.
+    * @param array<array-key,mixed> $headers What the `PUT` must send, each once, as a string
+    *    (or an integer): `Content-Length` (the size of the part, in bytes) and `Content-MD5`
+    *    (the base64 of its MD5). Anything else refuses the request.
     */
-   public function sign (string $path, string $id, int $part, int $expires): string|false
+   public function sign (string $path, string $id, int $part, int $expires, array $headers = []): string|false
    {
       // :
-      return ($this->Sign)($path, $id, $part, $expires);
+      return ($this->Sign)($path, $id, $part, $expires, $headers);
    }
 
    /**

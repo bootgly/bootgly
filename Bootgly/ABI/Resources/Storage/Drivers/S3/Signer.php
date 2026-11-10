@@ -40,7 +40,8 @@ use SensitiveParameter;
  *   travels in the `Authorization` header and covers the payload hash;
  * - **query auth** (`presign()`), for a request someone else sends with no credentials — a
  *   browser uploading a part, a player reading an object. The signature travels in the query
- *   string, expires, and covers only the method, the path, the query and the `Host`.
+ *   string, expires, and covers the method, the path, the query, the `Host` and any header
+ *   the request is required to send — never the payload.
  *
  * Inputs are canonical already: `$path` is the percent-encoded request path (each segment
  * `rawurlencode`d, `/` kept — S3 neither re-encodes nor normalizes it), `$host` is the wire
@@ -167,23 +168,8 @@ final class Signer
       $date = gmdate('Ymd\THis\Z', $time);
       $day = substr($date, 0, 8);
 
-      // ! Canonical headers: lowercase names, values trimmed with inner runs of white space
-      //   folded, sorted by name
-      $signed = [];
-      foreach ($headers as $name => $value) {
-         $name = strtolower(trim((string) $name));
-         // ? A name or value that could break out of its header line is never signed
-         if (
-            preg_match('/^[a-z0-9!#$%&\'*+.^_`|~-]+$/D', $name) !== 1
-            || preg_match('/[\x00-\x08\x0a-\x1f\x7f]/', $value) === 1
-         ) {
-            throw new InvalidArgumentException('S3 Signer: a signed header has an illegal name or a control character in its value.');
-         }
-         if ($name === 'host' || $name === 'authorization') {
-            continue;
-         }
-         $signed[$name] = (string) preg_replace('/\s+/', ' ', trim($value));
-      }
+      // ! Canonical headers, sorted by name
+      $signed = $this->normalize($headers);
       $signed['host'] = $host;
       $signed['x-amz-content-sha256'] = $payload;
       $signed['x-amz-date'] = $date;
@@ -220,12 +206,15 @@ final class Signer
    /**
     * Query auth (a presigned URL): the full query string — the caller's parameters plus
     * `X-Amz-Algorithm`, `X-Amz-Credential`, `X-Amz-Date`, `X-Amz-Expires`,
-    * `X-Amz-SignedHeaders=host` (and `X-Amz-Security-Token` with a session token),
-    * canonically encoded and sorted, ending in `X-Amz-Signature`.
+    * `X-Amz-SignedHeaders` (and `X-Amz-Security-Token` with a session token), canonically
+    * encoded and sorted, ending in `X-Amz-Signature`.
     *
     * Whoever holds the resulting URL can send that one request — this method, path and
-    * query, on this host — until it expires, with no credentials. Only `Host` is signed and
-    * the payload is `UNSIGNED-PAYLOAD`: the holder chooses the body and every other header.
+    * query, on this host — until it expires, with no credentials. The payload is
+    * `UNSIGNED-PAYLOAD` and, with no `$headers`, only `Host` is signed: the holder chooses
+    * the body and every other header. Each header in `$headers` is signed too, so the
+    * request must carry it with that value (`Content-Length` fixes the size of the body,
+    * `Content-MD5` its bytes, `Content-Type` its type) — the store refuses any other.
     * Treat the result as a secret until it expires: never log it.
     *
     * @param string $method The HTTP method, uppercase.
@@ -233,6 +222,7 @@ final class Signer
     * @param string $path The percent-encoded request path, starting with `/`.
     * @param array<int|string,int|string> $query Raw query parameters (`['partNumber' => 3, 'uploadId' => '…']`).
     * @param int $expires Lifetime in seconds, 1..`Signer::LIFETIME`.
+    * @param array<string,string> $headers The headers the request must send, besides `Host`.
     * @param null|int $time Unix time of the signature (now when null).
     *
     * @throws InvalidArgumentException When an input is not canonical, the lifetime is out of bounds or a query parameter is one of the `X-Amz-*` authentication parameters.
@@ -245,6 +235,7 @@ final class Signer
       string $path,
       array $query,
       int $expires,
+      array $headers = [],
       null|int $time = null
    ): string
    {
@@ -260,6 +251,16 @@ final class Signer
          }
       }
 
+      // ! Canonical headers, sorted by name: `Host`, plus the ones the holder must send
+      $signed = $this->normalize($headers);
+      $signed['host'] = $host;
+      ksort($signed, SORT_STRING);
+      $lines = '';
+      foreach ($signed as $name => $value) {
+         $lines .= "{$name}:{$value}\n";
+      }
+      $names = implode(';', array_keys($signed));
+
       $time ??= time();
       $date = gmdate('Ymd\THis\Z', $time);
       $day = substr($date, 0, 8);
@@ -270,14 +271,14 @@ final class Signer
       $query['X-Amz-Credential'] = "{$this->key}/{$scope}";
       $query['X-Amz-Date'] = $date;
       $query['X-Amz-Expires'] = $expires;
-      $query['X-Amz-SignedHeaders'] = 'host';
+      $query['X-Amz-SignedHeaders'] = $names;
       if ($this->token !== '') {
          $query['X-Amz-Security-Token'] = $this->token;
       }
       $canonical = self::encode($query);
 
       // @ Canonical request → string to sign → signature
-      $request = "{$method}\n{$path}\n{$canonical}\nhost:{$host}\n\nhost\n" . self::UNSIGNED;
+      $request = "{$method}\n{$path}\n{$canonical}\n{$lines}\n{$names}\n" . self::UNSIGNED;
       $signature = $this->calculate($day, "{$date}\n{$scope}\n" . hash('sha256', $request));
 
       // :
@@ -322,6 +323,39 @@ final class Signer
 
       // :
       return implode('&', $encoded);
+   }
+
+   /**
+    * The headers to sign, as the canonical request wants them: lowercase names, values
+    * trimmed with inner runs of white space folded. `Host` and `Authorization` are left
+    * out — the signer sets the first and the second is the signature itself.
+    *
+    * @param array<string,string> $headers
+    *
+    * @throws InvalidArgumentException When a name is not a header token or a value holds a control character.
+    *
+    * @return array<string,string>
+    */
+   private function normalize (array $headers): array
+   {
+      $signed = [];
+      foreach ($headers as $name => $value) {
+         $name = strtolower(trim((string) $name));
+         // ? A name or value that could break out of its header line is never signed
+         if (
+            preg_match('/^[a-z0-9!#$%&\'*+.^_`|~-]+$/D', $name) !== 1
+            || preg_match('/[\x00-\x08\x0a-\x1f\x7f]/', $value) === 1
+         ) {
+            throw new InvalidArgumentException('S3 Signer: a signed header has an illegal name or a control character in its value.');
+         }
+         if ($name === 'host' || $name === 'authorization') {
+            continue;
+         }
+         $signed[$name] = (string) preg_replace('/\s+/', ' ', trim($value));
+      }
+
+      // :
+      return $signed;
    }
 
    /**

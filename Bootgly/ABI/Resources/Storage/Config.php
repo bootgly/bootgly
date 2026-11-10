@@ -17,6 +17,7 @@ use function is_array;
 use function is_string;
 use function rtrim;
 use function sys_get_temp_dir;
+use SensitiveParameter;
 
 
 /**
@@ -48,7 +49,7 @@ class Config
     *
     * @param array<string,mixed> $config
     */
-   public function __construct (array $config = [])
+   public function __construct (#[SensitiveParameter] array $config = [])
    {
       $default = $config['default'] ?? self::DEFAULT_DISK;
       /** @var array<string,array<string,mixed>> $disks */

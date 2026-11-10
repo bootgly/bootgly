@@ -12,6 +12,7 @@ namespace Bootgly\ABI\Resources\Storage;
 
 
 use InvalidArgumentException;
+use SensitiveParameter;
 
 use Bootgly\ABI\Data\Registry;
 use Bootgly\ABI\Resources\Storage\Driver;
@@ -69,7 +70,7 @@ class Drivers extends Registry
     *
     * @param array<string,mixed> $options
     */
-   public function build (string $type, string $root, array $options = []): Driver
+   public function build (string $type, string $root, #[SensitiveParameter] array $options = []): Driver
    {
       // ? Unknown driver
       if (isset($this->map[$type]) === false) {

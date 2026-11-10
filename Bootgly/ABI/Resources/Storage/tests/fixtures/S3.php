@@ -144,8 +144,9 @@ use Throwable;
  * query auth. The signature is recomputed here from the request as it arrived, with a
  * verifier written from the specification and independent of the framework's signer, so a
  * canonicalization defect in the code under test shows up as a 403. As on AWS: every
- * `x-amz-*` header sent must be signed, the body must match `x-amz-content-sha256`, an
- * expired presigned URL and a clock skew over 15 minutes answer 403.
+ * `x-amz-*` header sent must be signed, the body must match `x-amz-content-sha256`, the
+ * credential's day is the day of the request, an expired presigned URL and a clock skew
+ * over 15 minutes answer 403, and an upload that declares a `Content-MD5` must match it.
  *
  * `inject()` scripts failures for the next calls of one operation: an S3 `<Error>` under any
  * status (200 keeps the status: "200 with an Error body"), a dropped connection (status 0),
@@ -580,6 +581,14 @@ final class S3
       }
 
       $headers = $request['headers'];
+      // ? An upload that declares its MD5 must match it
+      if (
+         ($operation === 'PutObject' || $operation === 'UploadPart')
+         && isset($headers['content-md5']) === true
+         && $headers['content-md5'] !== base64_encode(md5($request['body'], true))
+      ) {
+         return self::fail(400, 'BadDigest', 'The Content-MD5 you specified did not match what we received.');
+      }
       $type = $headers['content-type'] ?? 'binary/octet-stream';
       $meta = [];
       foreach ($headers as $name => $value) {
@@ -641,6 +650,9 @@ final class S3
          ) {
             return ['query', [400, 'AuthorizationQueryParametersError', 'Malformed query authentication parameters.']];
          }
+         if ($credential[1] !== substr($query['X-Amz-Date'] ?? '', 0, 8)) {
+            return ['query', [403, 'AuthorizationQueryParametersError', 'Invalid credential date. Date is not the same as X-Amz-Date.']];
+         }
          if ($time + (int) $expires < time()) {
             return ['query', [403, 'AccessDenied', 'Request has expired']];
          }
@@ -684,6 +696,9 @@ final class S3
       $time = self::convert($headers['x-amz-date'] ?? '');
       if ($time === null || abs(time() - $time) > self::SKEW) {
          return ['header', [403, 'RequestTimeTooSkewed', 'The difference between the request time and the current time is too large.']];
+      }
+      if ($credential[1] !== substr($headers['x-amz-date'] ?? '', 0, 8)) {
+         return ['header', [400, 'AuthorizationHeaderMalformed', 'Invalid credential date. Date is not the same as x-amz-date.']];
       }
       $payload = $headers['x-amz-content-sha256'] ?? '';
       if ($payload !== 'UNSIGNED-PAYLOAD' && hash_equals(hash('sha256', $request['body']), $payload) === false) {

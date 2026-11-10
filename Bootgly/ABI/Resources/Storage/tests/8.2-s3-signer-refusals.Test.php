@@ -55,14 +55,14 @@ return new Test(
       // # presign(): the lifetime is bounded
       $lifetime = 'S3 Signer: a presigned URL expires in 1..604800 seconds.';
       yield assert(
-         assertion: $refuse(static fn () => $Signer->presign('GET', $host, '/k', [], 0, $time)) === $lifetime
-            && $refuse(static fn () => $Signer->presign('GET', $host, '/k', [], -1, $time)) === $lifetime
-            && $refuse(static fn () => $Signer->presign('GET', $host, '/k', [], 604801, $time)) === $lifetime,
+         assertion: $refuse(static fn () => $Signer->presign('GET', $host, '/k', [], 0, time: $time)) === $lifetime
+            && $refuse(static fn () => $Signer->presign('GET', $host, '/k', [], -1, time: $time)) === $lifetime
+            && $refuse(static fn () => $Signer->presign('GET', $host, '/k', [], 604801, time: $time)) === $lifetime,
          description: 'presign() refuses a lifetime of 0, a negative one and one over 7 days'
       );
       yield assert(
-         assertion: $refuse(static fn () => $Signer->presign('GET', $host, '/k', [], 1, $time)) === ''
-            && $refuse(static fn () => $Signer->presign('GET', $host, '/k', [], Signer::LIFETIME, $time)) === '',
+         assertion: $refuse(static fn () => $Signer->presign('GET', $host, '/k', [], 1, time: $time)) === ''
+            && $refuse(static fn () => $Signer->presign('GET', $host, '/k', [], Signer::LIFETIME, time: $time)) === '',
          description: 'presign() accepts both ends of the range: 1 second and 604800'
       );
 
@@ -73,7 +73,7 @@ return new Test(
          'X-Amz-Expires', 'x-amz-expires', 'X-AMZ-EXPIRES', 'X-Amz-Date', 'X-Amz-Credential', 'X-Amz-Algorithm',
          'X-Amz-SignedHeaders', 'x-amz-signedheaders', 'X-Amz-Signature', 'X-Amz-Security-Token',
       ] as $name) {
-         $refused = $refused && $refuse(static fn () => $Signer->presign('GET', $host, '/k', [$name => '1'], 60, $time)) === $reserved;
+         $refused = $refused && $refuse(static fn () => $Signer->presign('GET', $host, '/k', [$name => '1'], 60, time: $time)) === $reserved;
       }
       yield assert(
          assertion: $refused,
@@ -83,28 +83,28 @@ return new Test(
       // # The request line
       $method = 'S3 Signer: the method is an uppercase HTTP method.';
       yield assert(
-         assertion: $refuse(static fn () => $Signer->presign('get', $host, '/k', [], 60, $time)) === $method
-            && $refuse(static fn () => $Signer->presign('', $host, '/k', [], 60, $time)) === $method
-            && $refuse(static fn () => $Signer->presign("GET\n/other", $host, '/k', [], 60, $time)) === $method
+         assertion: $refuse(static fn () => $Signer->presign('get', $host, '/k', [], 60, time: $time)) === $method
+            && $refuse(static fn () => $Signer->presign('', $host, '/k', [], 60, time: $time)) === $method
+            && $refuse(static fn () => $Signer->presign("GET\n/other", $host, '/k', [], 60, time: $time)) === $method
             && $refuse(static fn () => $Signer->sign("PUT\n", $host, '/k', [], [], $payload, $time)) === $method,
          description: 'a method that is not uppercase letters — lowercase, empty, carrying a line break — is refused'
       );
       $wire = 'S3 Signer: the host is the wire Host, without spaces or control characters.';
       yield assert(
-         assertion: $refuse(static fn () => $Signer->presign('GET', '', '/k', [], 60, $time)) === $wire
-            && $refuse(static fn () => $Signer->presign('GET', "a.example\nx-amz-acl:public-read", '/k', [], 60, $time)) === $wire
+         assertion: $refuse(static fn () => $Signer->presign('GET', '', '/k', [], 60, time: $time)) === $wire
+            && $refuse(static fn () => $Signer->presign('GET', "a.example\nx-amz-acl:public-read", '/k', [], 60, time: $time)) === $wire
             && $refuse(static fn () => $Signer->sign('GET', 'a.example evil.example', '/k', [], [], $payload, $time)) === $wire
             && $refuse(static fn () => $Signer->sign('GET', "a.example\r", '/k', [], [], $payload, $time)) === $wire,
          description: 'a host that is empty or holds a space, a CR or a line break is refused'
       );
       $encoded = 'S3 Signer: the path is percent-encoded and starts with "/".';
       yield assert(
-         assertion: $refuse(static fn () => $Signer->presign('GET', $host, '', [], 60, $time)) === $encoded
-            && $refuse(static fn () => $Signer->presign('GET', $host, 'k', [], 60, $time)) === $encoded
-            && $refuse(static fn () => $Signer->presign('GET', $host, '/k?acl', [], 60, $time)) === $encoded
-            && $refuse(static fn () => $Signer->presign('GET', $host, '/k#fragment', [], 60, $time)) === $encoded
-            && $refuse(static fn () => $Signer->presign('GET', $host, '/a b', [], 60, $time)) === $encoded
-            && $refuse(static fn () => $Signer->presign('GET', $host, "/k\n", [], 60, $time)) === $encoded
+         assertion: $refuse(static fn () => $Signer->presign('GET', $host, '', [], 60, time: $time)) === $encoded
+            && $refuse(static fn () => $Signer->presign('GET', $host, 'k', [], 60, time: $time)) === $encoded
+            && $refuse(static fn () => $Signer->presign('GET', $host, '/k?acl', [], 60, time: $time)) === $encoded
+            && $refuse(static fn () => $Signer->presign('GET', $host, '/k#fragment', [], 60, time: $time)) === $encoded
+            && $refuse(static fn () => $Signer->presign('GET', $host, '/a b', [], 60, time: $time)) === $encoded
+            && $refuse(static fn () => $Signer->presign('GET', $host, "/k\n", [], 60, time: $time)) === $encoded
             && $refuse(static fn () => $Signer->sign('DELETE', $host, "/k\n/other", [], [], $payload, $time)) === $encoded
             && $refuse(static fn () => $Signer->sign('GET', $host, '/é', [], [], $payload, $time)) === $encoded,
          description: 'a path that is relative, carries a query, a fragment, a raw space, a line break or a raw non-ASCII byte is refused'
@@ -140,8 +140,8 @@ return new Test(
       yield assert(
          assertion: $refuse(static fn () => new Signer('', '')) === ''
             && $refuse(static fn () => new Signer('AKIA', "any \n bytes \x00 at all")) === ''
-            && (new Signer('AKIA', 'one'))->presign('GET', $host, '/k', [], 60, $time)
-               !== (new Signer('AKIA', 'two'))->presign('GET', $host, '/k', [], 60, $time),
+            && (new Signer('AKIA', 'one'))->presign('GET', $host, '/k', [], 60, time: $time)
+               !== (new Signer('AKIA', 'two'))->presign('GET', $host, '/k', [], 60, time: $time),
          description: 'credentials are opaque: empty ones and any secret bytes are accepted, and the secret decides the signature'
       );
 
@@ -152,8 +152,8 @@ return new Test(
       try {
          foreach ([
             static fn () => new Signer('AKIA EXAMPLE', $secret, 'us-east-1', 's3', "session-{$secret}"),
-            static fn () => $Signer->presign('GET', $host, '/k', [], 0, $time),
-            static fn () => $Signer->presign('GET', $host, '/k?x', ['X-Amz-Date' => '1'], 60, $time),
+            static fn () => $Signer->presign('GET', $host, '/k', [], 0, time: $time),
+            static fn () => $Signer->presign('GET', $host, '/k?x', ['X-Amz-Date' => '1'], 60, time: $time),
             static fn () => $Signer->sign('GET', $host, '/k', [], ['a' => "b\n"], $payload, $time),
          ] as $Call) {
             try {
@@ -171,7 +171,7 @@ return new Test(
          ini_set('zend.exception_ignore_args', (string) $ignored);
       }
       $signed = $Signer->sign('GET', $host, '/k', [], [], $payload, $time);
-      $URL = $Signer->presign('GET', $host, '/k', [], 60, $time);
+      $URL = $Signer->presign('GET', $host, '/k', [], 60, time: $time);
       yield assert(
          assertion: $leaked === false
             && str_contains(json_encode($signed) . $URL, $secret) === false
@@ -182,7 +182,7 @@ return new Test(
       // # A long query value is signed, not truncated
       $long = str_repeat('a', 4096);
       yield assert(
-         assertion: str_contains($Signer->presign('GET', $host, '/k', ['response-content-disposition' => $long], 60, $time), "&response-content-disposition={$long}&X-Amz-Signature=") === true,
+         assertion: str_contains($Signer->presign('GET', $host, '/k', ['response-content-disposition' => $long], 60, time: $time), "&response-content-disposition={$long}&X-Amz-Signature=") === true,
          description: 'a long query value is carried whole'
       );
    }

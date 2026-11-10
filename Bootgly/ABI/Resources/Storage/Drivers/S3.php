@@ -96,6 +96,12 @@ class S3 extends Driver
       'response-content-type',
       'response-expires',
    ];
+   /** The headers a presigned `PUT` may bind, besides `x-amz-meta-*`, and the form of their value. */
+   private const array BINDINGS = [
+      'content-length' => '/^(0|[1-9]\d{0,17})$/D',
+      'content-md5' => '/^[A-Za-z0-9+\/]{22}==$/D',
+      'content-type' => '/^[\x20-\x7e]{1,255}$/D',
+   ];
 
    // * Metadata
    /** The Multipart Upload handle: `create`, `sign`, `list`, `complete`, `abort`. */
@@ -160,9 +166,11 @@ class S3 extends Driver
             : "{$this->bucket}.s3.{$this->region}.amazonaws.com";
       }
 
-      // # The `Host` value (includes a non-default port)
-      $this->authority = $this->host
-         . ($this->port !== 443 && $this->port !== 80 ? ":{$this->port}" : '');
+      // # The `Host` value: the port is implicit only when it is the scheme's own default
+      //   (`http` on 443 keeps it — a presigned URL must point where the disk connects)
+      $this->authority = $this->port === ($this->scheme === 'https' ? 443 : 80)
+         ? $this->host
+         : "{$this->host}:{$this->port}";
 
       // ? Fail closed on insecure transport unless explicitly opted in (prevents prod copying
       //   local MinIO settings and leaking keys over http / accepting a MITM cert)
@@ -300,10 +308,13 @@ class S3 extends Driver
     * is refused (the reason is on `$error`).
     *
     * Whoever holds the URL can send that request — this method on this object — until it
-    * expires, with no credentials: treat it as a secret and never log it. Only the `Host`
-    * is signed and the payload is not, so on a `PUT` the holder chooses the body, its size
-    * and its Content-Type; to let someone upload, prefer the `$Uploads` handle, which sets
-    * the type on the server and lets you check the sizes before completing.
+    * expires, with no credentials: treat it as a secret and never log it. The payload is
+    * never signed and, with no `$headers`, neither is anything but the `Host`: on a `PUT`
+    * the holder chooses the body, its size and its Content-Type. `$headers` binds them —
+    * the upload must then carry each header with exactly that value, or the store refuses
+    * it: `Content-Length` fixes the size, `Content-MD5` the bytes, `Content-Type` the type
+    * and `x-amz-meta-*` the metadata. For a large or resumable upload, use the `$Uploads`
+    * handle.
     *
     * The path goes through the same root prefix as every other operation, and the root
     * itself is never presigned. Deleting, listing and the multipart steps are not offered
@@ -315,8 +326,12 @@ class S3 extends Driver
     *    `response-content-disposition`, `response-content-type`, `response-cache-control`,
     *    `response-content-encoding`, `response-content-language`, `response-expires`.
     *    Anything else — another name, a value that is not a string — refuses the request.
+    * @param array<array-key,mixed> $headers What a `PUT` must send, each once, as a string (or
+    *    an integer): `Content-Type`, `Content-Length` (bytes), `Content-MD5` (the base64 of
+    *    the body's MD5) and `x-amz-meta-*`. Anything else — another header, a `GET` or a
+    *    `HEAD`, an empty value — refuses the request.
     */
-   public function presign (string $method, string $path, int $expires, array $query = []): string|false
+   public function presign (string $method, string $path, int $expires, array $query = [], array $headers = []): string|false
    {
       $this->error = '';
       // ? A presigned URL authorizes reading or writing one object, nothing else
@@ -338,9 +353,15 @@ class S3 extends Driver
 
          $overrides[(string) $name] = $value;
       }
+      // ? Only an upload is bound; any other header could turn it into another operation
+      //   (`x-amz-acl`, `x-amz-copy-source`)
+      $bound = $method === 'PUT' || $headers === [] ? $this->bind($headers, false) : null;
+      if ($bound === null) {
+         return $this->fail('S3 presign: a PUT binds Content-Type, Content-Length, Content-MD5 and x-amz-meta-* only, each once, as a string');
+      }
 
       // :
-      return $this->endorse($method, $path, $expires, $overrides);
+      return $this->endorse($method, $path, $expires, $overrides, $bound);
    }
 
    /**
@@ -369,7 +390,11 @@ class S3 extends Driver
    }
 
    /**
-    * List keys under a prefix (ListObjectsV2), returned disk-relative.
+    * List keys under a prefix (ListObjectsV2, all pages), returned disk-relative.
+    *
+    * A page that fails, is not a listing or does not advance ends the listing with the
+    * reason on `$error`: the keys returned are then the ones read so far, never the whole
+    * prefix — check `$error` before treating the result as complete.
     *
     * @return array<int,string>
     */
@@ -384,9 +409,10 @@ class S3 extends Driver
       $base = $this->pathStyle ? "/{$this->bucket}" : '/';
       $keys = [];
       $token = '';
+      $followed = [];
 
-      // @ Page through ListObjectsV2 until the bucket stops truncating
-      do {
+      // @@ Page through ListObjectsV2 until the bucket stops truncating
+      while (true) {
          $query = ['list-type' => '2', 'prefix' => $prefix];
          if ($recursive === false) {
             $query['delimiter'] = '/';
@@ -400,14 +426,10 @@ class S3 extends Driver
          if ($code !== 200) {
             $this->error = "S3 list {$prefix}: HTTP {$code}";
 
-            return $keys;
+            break;
          }
-
-         // ? Drop the default (and any prefixed) xmlns so element access works
-         //   uniformly across S3 and S3-compatible providers
-         $clean = preg_replace('/\sxmlns(:\w+)?="[^"]*"/', '', $body) ?? $body;
-         $XML = simplexml_load_string($clean);
-         if ($XML === false) {
+         $XML = $this->decode($body);
+         if ($XML === null || $XML->getName() !== 'ListBucketResult') {
             $this->error = "S3 list {$prefix}: malformed XML response";
 
             break;
@@ -417,11 +439,20 @@ class S3 extends Driver
             $keys[] = $this->relativize((string) $Content->Key);
          }
 
-         $token = ((string) $XML->IsTruncated) === 'true'
-            ? (string) $XML->NextContinuationToken
-            : '';
+         // ?: The last page
+         if (strtolower(trim((string) $XML->IsTruncated)) !== 'true') {
+            break;
+         }
+         $token = (string) $XML->NextContinuationToken;
+         // ? A truncated page names the next one: no token, or one already followed, would
+         //   ask for the same pages forever
+         if ($token === '' || isset($followed[$token]) === true) {
+            $this->error = "S3 list {$prefix}: the listing does not advance";
+
+            break;
+         }
+         $followed[$token] = true;
       }
-      while ($token !== '');
 
       // :
       return $keys;
@@ -620,13 +651,49 @@ class S3 extends Driver
    }
 
    /**
+    * The headers a presigned `PUT` binds, by lowercase name; null when one is refused — a
+    * header that is not offered, twice the same one, a value that is not of its form.
+    *
+    * @param array<array-key,mixed> $headers
+    * @param bool $part Whether the `PUT` uploads a part: only its size and its bytes are bound.
+    *
+    * @return null|array<string,string>
+    */
+   private function bind (array $headers, bool $part): null|array
+   {
+      $bound = [];
+      foreach ($headers as $name => $value) {
+         $name = strtolower((string) $name);
+         // ? Each header once, as a string or an integer
+         if (isset($bound[$name]) === true || (is_string($value) === false && is_int($value) === false)) {
+            return null;
+         }
+         $value = (string) $value;
+
+         $form = $part === true && $name === 'content-type' ? null : (self::BINDINGS[$name] ?? null);
+         // ? Metadata belongs to the object, never to one of its parts
+         if ($form === null && $part === false && preg_match('/^x-amz-meta-[a-z0-9!#$%&\'*+.^_`|~-]+$/D', $name) === 1) {
+            $form = '/^[^\x00-\x1f\x7f]+$/D';
+         }
+         if ($form === null || preg_match($form, $value) !== 1 || trim($value) === '') {
+            return null;
+         }
+         $bound[$name] = $value;
+      }
+
+      // :
+      return $bound;
+   }
+
+   /**
     * Presign one request on an object (query auth) and return its absolute URL; false with
-    * the reason on `$error`. `$query` is trusted here: `presign()` and `stamp()` decide
-    * what may go in it.
+    * the reason on `$error`. `$query` and `$headers` are trusted here: `presign()` and
+    * `stamp()` decide what may go in them.
     *
     * @param array<string,string> $query
+    * @param array<string,string> $headers The headers the request is bound to send.
     */
-   private function endorse (string $method, string $path, int $expires, array $query): string|false
+   private function endorse (string $method, string $path, int $expires, array $query, array $headers = []): string|false
    {
       // ?
       if ($expires < 1 || $expires > Signer::LIFETIME) {
@@ -645,7 +712,7 @@ class S3 extends Driver
       }
 
       try {
-         $signed = $this->Signer->presign($method, $this->authority, $located, $query, $expires);
+         $signed = $this->Signer->presign($method, $this->authority, $located, $query, $expires, $headers);
       }
       catch (InvalidArgumentException) {
          // ? The disk's own bucket or endpoint cannot be put in a canonical request
@@ -1108,17 +1175,23 @@ class S3 extends Driver
 
    /**
     * `Uploads::sign()` — presign the `PUT` of one part.
+    *
+    * @param array<array-key,mixed> $headers `Content-Length` and `Content-MD5`, to bind the part.
     */
-   private function stamp (string $path, string $id, int $part, int $expires): string|false
+   private function stamp (string $path, string $id, int $part, int $expires, array $headers = []): string|false
    {
       $this->error = '';
       // ?
       if ($this->validate('sign part', $id, $part) === false) {
          return false;
       }
+      $bound = $this->bind($headers, true);
+      if ($bound === null) {
+         return $this->fail('S3 sign part: a part binds Content-Length and Content-MD5 only, each once, as a string');
+      }
 
       // :
-      return $this->endorse('PUT', $path, $expires, ['partNumber' => (string) $part, 'uploadId' => $id]);
+      return $this->endorse('PUT', $path, $expires, ['partNumber' => (string) $part, 'uploadId' => $id], $bound);
    }
 
    /**
@@ -1265,25 +1338,28 @@ class S3 extends Driver
     */
    private function decode (string $body): null|SimpleXMLElement
    {
+      // ! Drop the default (and any prefixed) xmlns so element access works uniformly
+      //   across S3 and S3-compatible providers. Everything below judges `$clean` — the
+      //   string that is parsed — never `$body`: the removal itself can join a keyword
+      //   (`<!DOC xmlns=""TYPE`)
+      $clean = preg_replace('/\sxmlns(:\w+)?="[^"]*"/', '', $body) ?? $body;
+
       // ? An S3 answer is UTF-8. Another encoding — NUL bytes (UTF-16/32), a declared
       //   charset, a first byte that is not `<` — could hide a DOCTYPE from the check below
-      $head = ltrim(str_starts_with($body, "\xEF\xBB\xBF") === true ? substr($body, 3) : $body);
+      $head = ltrim(str_starts_with($clean, "\xEF\xBB\xBF") === true ? substr($clean, 3) : $clean);
       if (
          $head === ''
          || $head[0] !== '<'
-         || strpos($body, "\x00") !== false
+         || strpos($clean, "\x00") !== false
          || preg_match('/^<\?xml[^>]*\bencoding\s*=\s*["\'](?!utf-8["\'])/i', $head) === 1
       ) {
          return null;
       }
       // ?
-      if (stripos($body, '<!DOCTYPE') !== false || stripos($body, '<!ENTITY') !== false) {
+      if (stripos($clean, '<!DOCTYPE') !== false || stripos($clean, '<!ENTITY') !== false) {
          return null;
       }
 
-      // ? Drop the default (and any prefixed) xmlns so element access works
-      //   uniformly across S3 and S3-compatible providers
-      $clean = preg_replace('/\sxmlns(:\w+)?="[^"]*"/', '', $body) ?? $body;
       $previous = libxml_use_internal_errors(true);
       $XML = simplexml_load_string($clean, SimpleXMLElement::class, LIBXML_NONET);
       libxml_clear_errors();

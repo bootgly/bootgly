@@ -79,7 +79,7 @@ return new Test(
 
       // # Query auth — the documented presigned GET (86400 s)
       yield assert(
-         assertion: $AWS->presign('GET', $host, '/test.txt', [], 86400, $time) === 'X-Amz-Algorithm=AWS4-HMAC-SHA256'
+         assertion: $AWS->presign('GET', $host, '/test.txt', [], 86400, time: $time) === 'X-Amz-Algorithm=AWS4-HMAC-SHA256'
             . '&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20130524%2Fus-east-1%2Fs3%2Faws4_request'
             . '&X-Amz-Date=20130524T000000Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=host'
             . '&X-Amz-Signature=aeeed9bbccd4d02ee5c0109b86d86835f995330da4c265957d157751f604d404',
@@ -95,7 +95,7 @@ return new Test(
       $part = $Compatible->presign('PUT', $account, '/videos/media/7/a%20b%2Bc.mp4', [
          'partNumber' => 2,
          'uploadId' => 'AbC~1/2+3==',
-      ], 3600, $now);
+      ], 3600, time: $now);
 
       // ! The HMAC chain written out, independent of the class
       $canonical = 'X-Amz-Algorithm=AWS4-HMAC-SHA256'
@@ -122,7 +122,7 @@ return new Test(
       $Session = new Signer($key, $secret, 'auto', 's3', 'FQoGZXIvYXdzEXAMPLETOKEN');
       $download = $Session->presign('GET', $account, '/videos/media/7/a%20b%2Bc.mp4', [
          'response-content-disposition' => 'attachment; filename="clip one.mp4"',
-      ], 900, $now);
+      ], 900, time: $now);
       yield assert(
          assertion: $download === 'X-Amz-Algorithm=AWS4-HMAC-SHA256'
             . '&X-Amz-Credential=R2TESTACCESSKEYEXAMPLE%2F20261108%2Fauto%2Fs3%2Faws4_request'
