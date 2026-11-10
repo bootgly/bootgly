@@ -21,5 +21,16 @@ return new Suite(
       '1.5-listener-object',
       '1.6-event-isolation',
       '1.7-listener-isolation',
+
+      '2.1-selector-read',
+      '2.2-selector-write',
+      '2.3-selector-deadline',
+      '2.4-selector-poll',
+      '2.5-selector-indefinite',
+      '2.6-selector-interruption',
+      '2.7-selector-forget',
+      '2.8-selector-payloads',
+      '2.9-selector-refusals',
+      '2.10-selector-bound',
    ]
 );

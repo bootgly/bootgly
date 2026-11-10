@@ -11,6 +11,7 @@
 namespace Bootgly\ABI\IO\IPC;
 
 
+use const PHP_INT_MAX;
 use const STREAM_IPPROTO_IP;
 use const STREAM_PF_UNIX;
 use const STREAM_SOCK_DGRAM;
@@ -18,13 +19,16 @@ use const STREAM_SOCK_STREAM;
 use function fclose;
 use function fread;
 use function fwrite;
+use function intdiv;
 use function pcntl_signal_dispatch;
-use function stream_select;
 use function stream_set_blocking;
 use function stream_set_chunk_size;
 use function stream_socket_pair;
 use Generator;
 use Throwable;
+
+use Bootgly\ABI\Events\Selector;
+use Bootgly\ABI\Events\Selector\Refusal;
 
 
 class Pipe
@@ -88,33 +92,77 @@ class Pipe
       return $this->paired;
    }
 
+   /**
+    * Read the pipe as it becomes readable — a loop that yields once per
+    * wait: the chunk read (or `false` when that read failed — the loop goes
+    * on), `null` when the timeout passed with nothing to read, or `false`
+    * as the last value when the read end cannot be waited on (closed, or a
+    * negative timeout) — only then the loop ends. Pending signals are
+    * dispatched between waits, and a signal that interrupts a wait resumes
+    * it without extending the timeout.
+    *
+    * @param int $length The most bytes to read per chunk.
+    * @param null|int $timeout How long each wait lasts, in microseconds; `null` polls without waiting.
+    *
+    * @return Generator<int,string|false|null>
+    */
    public function reading (int $length = 1024, null|int $timeout = null): Generator
    {
-      // * Config
-      // ...
       // * Data
-      $read = [$this->pair[0]];
-      $write = null;
-      $except = null;
+      $Stream = $this->pair[0];
 
-      // @
+      // ?
+      if ($timeout !== null && $timeout < 0) {
+         yield false;
+
+         return;
+      }
+
+      // !
+      $Selector = new Selector;
+      try {
+         $Selector->watch($Stream);
+      }
+      catch (Refusal) {
+         yield false;
+
+         return;
+      }
+
+      // @@
       while (true) {
          pcntl_signal_dispatch();
 
-         try {
-            $streams = stream_select($read, $write, $except, 0, $timeout);
-         }
-         catch (Throwable $Throwable) {
-            $streams = false;
+         // ! The deadline of this wait is fixed before it, so resuming after
+         //   a signal never extends it.
+         $deadline = 0;
+         if ($timeout !== null) {
+            $tick = $Selector->Clock->tick;
+
+            // ? A timeout too long to count in nanoseconds waits as long as
+            //   the clock goes.
+            $deadline = $timeout > intdiv(PHP_INT_MAX - $tick, 1_000)
+               ? PHP_INT_MAX
+               : $tick + $timeout * 1_000;
          }
 
-         // :
-         if ($streams === false) {
+         try {
+            $ready = $Selector->wait($deadline);
+
+            while ($ready === 0 && $Selector->interrupted) {
+               pcntl_signal_dispatch();
+
+               $ready = $Selector->wait($deadline);
+            }
+         }
+         catch (Refusal) {
             yield false;
 
             break;
          }
-         else if ($streams === 0) {
+
+         // :
+         if ($ready === 0) {
             yield null;
 
             continue;

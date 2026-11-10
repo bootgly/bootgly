@@ -15,5 +15,7 @@ return new Suite(
    suiteName: __NAMESPACE__,
    tests: [
       '1.0-construct-',
+      '1.1-reading',
+      '1.2-reading-signals',
    ]
 );
