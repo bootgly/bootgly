@@ -119,5 +119,9 @@ return new Suite(
       '1.73-root_launch_session_storage',
       // # 1.1.x (v1.1.0 worker recycling): a refused or reset HTTP/2 stream id is used, never idle; no GOAWAY names more than the graceful one
       '1.74-http2_refused_stream_ids',
+      // # 1.3.x (recurring reactor timers): the whole-second SSE Tick contract, pinned before fractions
+      '1.75-sse_tick_whole_seconds',
+      // # 1.3.x (recurring reactor timers): Repeating on the Select reactor
+      '1.76-select_repeat',
    ]
 );

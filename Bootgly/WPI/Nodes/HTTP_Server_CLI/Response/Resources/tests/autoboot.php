@@ -39,5 +39,7 @@ return new Suite(
       '1.17-http_resource_redirect_pin',
       // # 1.1.x (PERF-DEFER): fetch() after release() cleans exactly the built-ins that let their response go
       '1.18-releasable_builtins',
+      // # 1.3.x (recurring reactor timers): the SSE Tick interval on a loop with recurring timers and on one without
+      '1.19-sse_tick_interval',
    ]
 );

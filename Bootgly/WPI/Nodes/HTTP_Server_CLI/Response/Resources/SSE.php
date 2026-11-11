@@ -14,9 +14,11 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources;
 use const PHP_INT_MAX;
 use function array_search;
 use function array_splice;
+use function ceil;
 use function dechex;
 use function explode;
 use function feof;
+use function is_finite;
 use function is_string;
 use function json_encode;
 use function max;
@@ -27,10 +29,12 @@ use function time;
 use function trim;
 use Closure;
 use Fiber;
+use InvalidArgumentException;
 use Throwable;
 use WeakReference;
 
 use Bootgly\ABI\Debugging\Data\Throwables;
+use Bootgly\ACI\Events\Repeating;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\WPI\Endpoints\Servers\Disconnecting;
 use Bootgly\WPI\Events\Cancellation;
@@ -59,8 +63,14 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
  * `open()` writes the `text/event-stream` head out-of-band, marks the
  * Response deferred (releasing it from the normal encode pipeline) and
  * keeps the transport open for push: events go out via `send()`/`ping()`,
- * a Timer supervisor drives the heartbeat/tick cadence, and the stream
- * ends with `close()` — or `disconnect()` teardown on any transport loss.
+ * a supervisor drives the heartbeat/tick cadence, and the stream ends with
+ * `close()` — or `disconnect()` teardown on any transport loss.
+ *
+ * When the worker's event loop offers recurring timers
+ * (`Bootgly\ACI\Events\Repeating`) the `Tick` runs on a loop timer of its
+ * own, at exactly its interval — which may be a fraction of a second — and
+ * the supervisor on another one. On a loop without them both share one
+ * static `Timer`, in whole seconds — a fractional interval is rounded up.
  *
  * HTTP/1.1 hijacks the dedicated connection (chunked framing, guarded by
  * `Decoder_Streaming`); HTTP/2 sustains its stream (DATA frames bounded by
@@ -109,7 +119,13 @@ class SSE extends Resource implements Disconnecting
    private int $stream = 0;
    // # Supervisor
    private int $timer = 0;
-   private int $interval = 0;
+   // @ The loop that owns the timers; null while the static Timer does
+   private null|Repeating $Loop = null;
+   // @ The Tick's own loop timer; zero under the static Timer, where the
+   //   Tick shares the supervisor's and `$ticked` (wall-clock second of its
+   //   last run) tells when it is due
+   private int $ticker = 0;
+   private float $interval = 0.0;
    private int $ticked = 0;
    private int $wrote = 0;
    private null|Closure $Tick = null;
@@ -210,10 +226,25 @@ class SSE extends Resource implements Disconnecting
     * the supervisor. `$Tick` runs every `$interval` seconds until the
     * stream ends; `$Close` runs exactly once on teardown.
     *
+    * `$interval` may be a fraction of a second (`0.1` is 100 ms) when the
+    * worker's event loop owns recurring timers, as the built-in one does:
+    * the `Tick` then runs on the loop's fixed grid, on the monotonic clock,
+    * never more often than the loop's resolution. On a loop without them the
+    * interval is rounded up to whole seconds and the `Tick` runs on the
+    * first supervisor run after it elapsed. A non-positive or non-finite
+    * interval means one second; one beyond what the loop can schedule never
+    * comes due, so the stream opens and stays open without its `Tick`.
+    *
+    * A `Tick` runs once per elapsed interval, never twice to make up for a
+    * late one: `send()` accepts an event into the bounded transport buffers
+    * or refuses it, so a producer faster than its peer is refused, not queued
+    * without limit.
+    *
     * @param null|Closure(self):void $Tick
+    * @param int|float $interval Seconds between two `Tick` runs.
     * @param null|Closure(self):void $Close
     */
-   public function open (null|Closure $Tick = null, int $interval = 1, null|Closure $Close = null): self
+   public function open (null|Closure $Tick = null, int|float $interval = 1, null|Closure $Close = null): self
    {
       // ? Already streaming, torn down or detached from a live request
       if ($this->opened || $this->closed) {
@@ -378,7 +409,16 @@ class SSE extends Resource implements Disconnecting
       //   disconnect()), so the Close hook and supervisor state must
       //   already be in place for that teardown.
       $this->opened = true;
-      $this->interval = $interval > 0 ? $interval : 1;
+      $Loop = isSet(TCP_Server_CLI::$Event) && TCP_Server_CLI::$Event instanceof Repeating
+         ? TCP_Server_CLI::$Event
+         : null;
+      $interval = (float) $interval;
+      if (is_finite($interval) === false || $interval <= 0.0) {
+         $interval = 1.0;
+      }
+      $this->Loop = $Loop;
+      // ? The static Timer counts whole seconds: round a fraction up
+      $this->interval = $Loop === null ? ceil($interval) : $interval;
       $this->ticked = time();
       $this->wrote = time();
       $this->Tick = $Tick;
@@ -453,24 +493,53 @@ class SSE extends Resource implements Disconnecting
       }
 
       // @ Install the supervisor at the tightest due cadence
-      $cadence = 10;
+      $cadence = 10.0;
+      if ($this->heartbeat > 0 && $this->heartbeat < $cadence) {
+         $cadence = (float) $this->heartbeat;
+      }
+      // ? The Tick bounds the cadence too: under the static Timer it shares
+      //   the supervisor's timer, and on a loop a supervisor no faster than
+      //   the Tick is not needed at all
       if ($Tick !== null && $this->interval < $cadence) {
          $cadence = $this->interval;
       }
-      if ($this->heartbeat > 0 && $this->heartbeat < $cadence) {
-         $cadence = $this->heartbeat;
-      }
       // ? The lease renewal must outpace the transport idle reaper: a
       //   supervisor slower than the connection's own expiration would let
-      //   a live stream be reaped as idle
+      //   a live stream be reaped as idle. The reaper counts whole seconds,
+      //   so the renewal keeps a full second of margin — a fractional
+      //   cadence between `expiration - 1` and `expiration` is too slow too
       $expiration = $Connection->expiration;
-      if ($expiration > 0 && $cadence >= $expiration) {
-         $cadence = max(1, $expiration - 1);
+      if ($expiration > 0 && $cadence > $expiration - 1) {
+         $cadence = (float) max(1, $expiration - 1);
       }
-      $timer = Timer::add(interval: $cadence, handler: [$this, 'supervise']);
-      if ($timer !== false) {
-         $this->timer = $timer;
-         $Connection->timers[] = $timer;
+      if ($Loop !== null) {
+         // @ Owned by the loop: its ids live in the loop's id space, so they
+         //   never join `Connection::$timers` (static Timer ids). Teardown
+         //   reaches them through disconnect() on every close path.
+         //   The Tick runs on a timer of its own, at exactly its interval:
+         //   the loop's grid is the Tick's grid. Each of its runs supervises
+         //   too, so the supervisor only joins when it must outpace the Tick
+         //   (heartbeat, lease renewal) or there is no Tick.
+         if ($Tick !== null) {
+            try {
+               $this->ticker = $Loop->repeat($this->interval, $this->tick(...));
+            }
+            catch (InvalidArgumentException) {
+               // ? An interval beyond what the loop can schedule never
+               //   comes due: the stream stays open without its Tick
+            }
+         }
+         if ($this->ticker === 0 || $cadence < $this->interval) {
+            $this->timer = $Loop->repeat($cadence, $this->supervise(...));
+         }
+      }
+      else {
+         // ! Whole seconds by construction on this path
+         $timer = Timer::add(interval: (int) $cadence, handler: [$this, 'supervise']);
+         if ($timer !== false) {
+            $this->timer = $timer;
+            $Connection->timers[] = $timer;
+         }
       }
 
       // @ Reconnection delay field (field-only frame — never dispatched)
@@ -523,11 +592,35 @@ class SSE extends Resource implements Disconnecting
    }
 
    /**
-    * Heartbeat / tick supervisor (Timer callback). Tears the stream down on
+    * Heartbeat / tick supervisor (timer callback). Tears the stream down on
     * transport loss, exempts the connection from idle reaping, runs the
     * user tick when due and pings on write silence.
+    *
+    * Under the static `Timer` the `Tick` shares this timer and is due once
+    * its interval elapsed, in whole seconds. On a loop with recurring timers
+    * the `Tick` has a timer of its own and this one never runs it.
     */
    public function supervise (): void
+   {
+      $this->watch(
+         $this->Loop === null
+         && $this->Tick !== null
+         && time() - $this->ticked >= $this->interval
+      );
+   }
+
+   /**
+    * Run the `Tick` (callback of its own loop timer): every run is due.
+    */
+   private function tick (): void
+   {
+      $this->watch(true);
+   }
+
+   /**
+    * Supervise the stream once and, when `$due`, run the user tick.
+    */
+   private function watch (bool $due): void
    {
       // ? Torn down
       if ($this->closed) {
@@ -578,10 +671,10 @@ class SSE extends Resource implements Disconnecting
          return;
       }
 
-      // @ User tick — contained: the Timer loop only reports a failure and
-      //   reschedules this persistent supervisor, which would leave a broken
-      //   producer as a zombie stream (no heartbeat, reaper-exempt)
-      if ($this->Tick !== null && (time() - $this->ticked) >= $this->interval) {
+      // @ User tick — contained: the timer backend only reports a failure
+      //   and reschedules this persistent supervisor, which would leave a
+      //   broken producer as a zombie stream (no heartbeat, reaper-exempt)
+      if ($due && $this->Tick !== null) {
          $this->ticked = time();
          try {
             ($this->Tick)($this);
@@ -694,11 +787,19 @@ class SSE extends Resource implements Disconnecting
       }
       $this->closed = true;
 
-      // @ Stop the supervisor
-      if ($this->timer !== 0) {
-         $timer = $this->timer;
-         $this->timer = 0;
-
+      // @ Stop the supervisor and the Tick
+      $Loop = $this->Loop;
+      $this->Loop = null;
+      $timer = $this->timer;
+      $this->timer = 0;
+      $ticker = $this->ticker;
+      $this->ticker = 0;
+      if ($Loop !== null) {
+         // ! An id never issued (zero) is refused by the loop
+         $Loop->cancel($timer);
+         $Loop->cancel($ticker);
+      }
+      else if ($timer !== 0) {
          // @ Release the connection-side ownership too. HTTP/2 keeps the
          //   transport alive after this stream ends, so leaving the dead ID
          //   here retains one array entry per completed SSE stream until the

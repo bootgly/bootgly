@@ -533,6 +533,9 @@ return new Suite(
          //   indices of the specs above stable)
          '1.2.2-end_preserves_status_and_headers',
          '1.z.2.3.7-upload_file_with_malformed_range',
+         // @ SSE sub-second Tick on the loop's recurring timers (appended last)
+         '3.11-sse_tick_subsecond',
+         '3.12-sse_tick_stops_on_peer_close',
       ],
       'Router/' => [
          '1.1-route_callback-closure',

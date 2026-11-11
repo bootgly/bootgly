@@ -11,11 +11,14 @@
 namespace Bootgly\WPI\Events;
 
 
+use const PHP_INT_MAX;
 use function array_key_last;
 use function array_shift;
 use function count;
 use function get_debug_type;
 use function hrtime;
+use function intdiv;
+use function is_finite;
 use function is_int;
 use function is_resource;
 use function max;
@@ -26,29 +29,46 @@ use function sleep;
 use function spl_object_id;
 use function stream_select;
 use function usleep;
+use function var_export;
 use Closure;
 use Fiber;
+use InvalidArgumentException;
 use LogicException;
 use RuntimeException;
+use SplMinHeap;
 use Throwable;
 use WeakMap;
 use WeakReference;
 
+use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ACI\Events\Cancelling;
 use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Readiness;
+use Bootgly\ACI\Events\Repeating;
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\WPI\Connections;
 use Bootgly\WPI\Events;
 
 
-class Select implements Events, Loops, Scheduler, Cancelling
+class Select implements Events, Loops, Scheduler, Cancelling, Repeating
 {
    /**
     * Entries each descriptor table admits (reads, writes, excepts) — shared by
     * client sockets and the Fibers awaiting their dependencies.
     */
    public const int CAPACITY = 1000;
+   /**
+    * Shortest recurring interval, in seconds: `repeat()` raises a shorter one
+    * up to it, so no interval can turn the reactor into a busy loop.
+    */
+   public const float RESOLUTION = 0.001;
+   /**
+    * Longest recurring interval, in seconds (about 31 years): `repeat()`
+    * refuses a longer one — its nanosecond deadline must stay an integer.
+    */
+   public const float HORIZON = 1_000_000_000.0;
+   // ! Leftover heap entries tolerated before a rebuild is worth its walk
+   private const int SLACK = 64;
 
    // * Config
    public Connections $Connections;
@@ -127,6 +147,18 @@ class Select implements Events, Loops, Scheduler, Cancelling
    private array $Timers = [];
    /** @var array<int,array{deadline:int,Callback:Closure}> */
    private array $MonotonicTimers = [];
+   // # Recurring callbacks (monotonic nanoseconds). Each one keeps the next
+   //   point of its own grid; `$Schedule` orders those points as a min-heap
+   //   of `[deadline, id]`, so a pass pops what is due instead of walking the
+   //   set — its cost follows the timers that run, never the ones that wait.
+   //   A stopped timer leaves its entry behind, dropped when it surfaces;
+   //   `$stale` counts those, and the heap is rebuilt once they outnumber
+   //   the timers alive.
+   /** @var array<int,array{deadline:int,interval:int,Callback:Closure}> */
+   private array $Repeaters = [];
+   /** @var SplMinHeap<array{int,int}> */
+   private SplMinHeap $Schedule;
+   private int $stale = 0;
    private int $timer = 0;
    // # Backend
    // @ Consecutive false selector returns. A timeout is not a failure.
@@ -146,6 +178,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
    public function __construct (Connections &$Connections)
    {
       $this->Connections = $Connections;
+      $this->Schedule = new SplMinHeap;
    }
 
    /**
@@ -371,17 +404,84 @@ class Select implements Events, Loops, Scheduler, Cancelling
       return $ID;
    }
 
-   /** Cancel a one-shot callback before it fires. */
+   /**
+    * Register a callback that runs every `$interval` seconds until cancelled.
+    *
+    * The schedule is a fixed grid on the monotonic clock, anchored here: run
+    * `k` is due at `registration + k × interval`. A run reached late still
+    * runs once — the grid points that passed meanwhile are skipped, never
+    * replayed as a burst. The nearest recurring deadline bounds the selector
+    * wait, so an idle reactor wakes for it on time. The deadlines are kept in
+    * a heap: a pass costs what is due, however many timers are waiting.
+    *
+    * The id shares the id space of `defer()` and is cancelled with `cancel()`,
+    * also from inside a callback (its own or another one's). A callback that
+    * throws is reported through `Throwables::notify()` with
+    * `['origin' => 'loop.repeat', 'id' => $ID]` and keeps its schedule.
+    *
+    * @param float $interval Seconds between runs; below `RESOLUTION` it is
+    *    raised up to it.
+    * @param Closure():void $Callback Runs on the loop, outside any Fiber.
+    *
+    * @throws InvalidArgumentException When the interval is zero, negative,
+    *    not a number, infinite or longer than `HORIZON`.
+    *
+    * @return int The timer id, for `cancel()`.
+    */
+   public function repeat (float $interval, Closure $Callback): int
+   {
+      // ? `is_finite()` refuses NAN and both infinities
+      if (is_finite($interval) === false || $interval <= 0.0 || $interval > self::HORIZON) {
+         // ! `var_export()`: PHP 8.5 warns when NAN is coerced to a string
+         $given = var_export($interval, true);
+
+         throw new InvalidArgumentException(
+            "A recurring interval must be a positive, finite number of seconds up to the horizon: {$given} given."
+         );
+      }
+
+      // ! Whole nanoseconds from here on: the grid is integer arithmetic
+      $interval = (int) (max(self::RESOLUTION, $interval) * 1_000_000_000);
+      $deadline = (int) hrtime(true) + $interval;
+
+      $ID = ++$this->timer;
+      $this->Repeaters[$ID] = [
+         'deadline' => $deadline,
+         'interval' => $interval,
+         'Callback' => $Callback
+      ];
+      $this->Schedule->insert([$deadline, $ID]);
+
+      return $ID;
+   }
+
+   /** Cancel a one-shot callback before it fires, or stop a recurring one. */
    public function cancel (int $ID): bool
    {
       if (
          isset($this->Timers[$ID]) === false
          && isset($this->MonotonicTimers[$ID]) === false
+         && isset($this->Repeaters[$ID]) === false
       ) {
          return false;
       }
       unset($this->Timers[$ID]);
       unset($this->MonotonicTimers[$ID]);
+      // ? A recurring timer leaves its heap entry behind: `peek()` and
+      //   `pulse()` drop it when it surfaces, so the reactor never wakes for
+      //   it. The leftovers are bounded — gone with the last timer, rebuilt
+      //   away once they outnumber the timers alive.
+      if (isset($this->Repeaters[$ID])) {
+         unset($this->Repeaters[$ID]);
+
+         if ($this->Repeaters === []) {
+            $this->Schedule = new SplMinHeap;
+            $this->stale = 0;
+         }
+         else if (++$this->stale > self::SLACK && $this->stale > count($this->Repeaters)) {
+            $this->compact();
+         }
+      }
 
       return true;
    }
@@ -700,7 +800,6 @@ class Select implements Events, Loops, Scheduler, Cancelling
             }
          }
 
-         // TODO add timer ticks?
          // if ($except) {}
       }
 
@@ -1191,17 +1290,18 @@ class Select implements Events, Loops, Scheduler, Cancelling
    }
 
    /**
-    * Tick timed I/O Fibers and return the next deadline.
+    * Tick the timers and the timed I/O Fibers, and return the next deadline.
     */
    private function tick (): null|float
    {
-      // ? Empty-set fast return — an ordinary HTTP worker has no one-shot
-      //   timers or timed Fiber waits, yet tick() runs on every reactor
-      //   iteration: skip the four clock reads and six map traversals.
+      // ? Empty-set fast return — an ordinary HTTP worker has no timers or
+      //   timed Fiber waits, yet tick() runs on every reactor iteration:
+      //   skip the four clock reads and seven map traversals.
       //   `null` means "no deadline" (indefinite select block) — never
       //   return 0.0 here, which would busy-poll.
       if (
          $this->Timers === [] && $this->MonotonicTimers === []
+         && $this->Repeaters === []
          && $this->awaitingReadDeadlines === [] && $this->awaitingWriteDeadlines === []
       ) {
          return null;
@@ -1209,13 +1309,16 @@ class Select implements Events, Loops, Scheduler, Cancelling
 
       // ! Read each clock only for its consumers: the wall clock serves the
       //   Timers set plus the awaiting-I/O deadlines, the monotonic clock
-      //   serves MonotonicTimers. A lone monotonic deadline (the common
-      //   benchmark-worker shape) then costs one clock read per wakeup.
+      //   serves MonotonicTimers and the recurring ones. A lone monotonic
+      //   deadline (the common benchmark-worker shape) then costs one clock
+      //   read per wakeup.
       $wall = $this->Timers !== []
          || $this->awaitingReadDeadlines !== []
          || $this->awaitingWriteDeadlines !== [];
       $now = $wall ? microtime(true) : 0.0;
-      $nowMonotonic = $this->MonotonicTimers !== [] ? (int) hrtime(true) : 0;
+      $nowMonotonic = $this->MonotonicTimers !== [] || $this->Repeaters !== []
+         ? (int) hrtime(true)
+         : 0;
       $wait = null;
       $fired = false;
 
@@ -1249,6 +1352,11 @@ class Select implements Events, Loops, Scheduler, Cancelling
          }
       }
 
+      // @ Recurring callbacks — only the due ones are visited
+      if ($this->Repeaters !== []) {
+         $fired = $this->pulse($nowMonotonic) || $fired;
+      }
+
       // @ Callbacks may cancel or register timers. Compute the next wait from
       //   the post-callback sets so a newly-nearest timer is never overslept.
       //   Without a fired callback the sets are unchanged and the elapsed time
@@ -1259,7 +1367,7 @@ class Select implements Events, Loops, Scheduler, Cancelling
             || $this->awaitingWriteDeadlines !== []
             ? microtime(true)
             : $now;
-         $nowMonotonic = $this->MonotonicTimers !== []
+         $nowMonotonic = $this->MonotonicTimers !== [] || $this->Repeaters !== []
             ? (int) hrtime(true)
             : $nowMonotonic;
       }
@@ -1269,6 +1377,12 @@ class Select implements Events, Loops, Scheduler, Cancelling
       foreach ($this->MonotonicTimers as $Timer) {
          $this->bound(
             max(0.0, ($Timer['deadline'] - $nowMonotonic) / 1_000_000_000),
+            $wait
+         );
+      }
+      if ($this->Repeaters !== []) {
+         $this->bound(
+            max(0.0, ($this->peek() - $nowMonotonic) / 1_000_000_000),
             $wait
          );
       }
@@ -1291,6 +1405,96 @@ class Select implements Events, Loops, Scheduler, Cancelling
       $this->limit($this->awaitingWriteDeadlines, $now, $wait);
 
       return $wait;
+   }
+
+   /**
+    * Run every recurring callback due at `$now` once and move it to the first
+    * point of its grid after `$now`. Only the due timers are visited.
+    *
+    * @return bool True when at least one callback ran.
+    */
+   private function pulse (int $now): bool
+   {
+      $fired = false;
+
+      // @@ Read the heap from the property on every turn: a callback may
+      //    replace it (`destroy()`, a `cancel()` that empties or compacts it)
+      while ($this->Schedule->isEmpty() === false) {
+         [$deadline, $ID] = $this->Schedule->top();
+         // ? Nothing else is due. A timer moved or registered by this pass
+         //   sits after `$now`: one run per timer per pass.
+         if ($deadline > $now) {
+            break;
+         }
+         $this->Schedule->extract();
+
+         // ? Stopped before its turn — by `cancel()` earlier, or by a
+         //   callback of this very pass
+         $Repeater = $this->Repeaters[$ID] ?? null;
+         if ($Repeater === null) {
+            $this->stale--;
+            continue;
+         }
+
+         // @ Next grid point — committed before the callback runs, so a
+         //   callback that throws or re-enters keeps its schedule
+         $interval = $Repeater['interval'];
+         $deadline += $interval;
+         // ? Missed periods are skipped, never replayed as a burst
+         if ($deadline <= $now) {
+            $deadline += $interval * (intdiv($now - $deadline, $interval) + 1);
+         }
+         $this->Repeaters[$ID]['deadline'] = $deadline;
+         $this->Schedule->insert([$deadline, $ID]);
+
+         $fired = true;
+         try {
+            ($Repeater['Callback'])();
+         }
+         catch (Throwable $Throwable) {
+            // @ Reported, and the schedule is kept: one failing callback
+            //   must not tear down the event loop (`notify()` contains
+            //   its own reporters)
+            Throwables::notify($Throwable, ['origin' => 'loop.repeat', 'id' => $ID]);
+         }
+      }
+
+      return $fired;
+   }
+
+   /**
+    * Read the nearest recurring deadline, dropping the entries of stopped
+    * timers that surfaced. `PHP_INT_MAX` when no timer is scheduled.
+    */
+   private function peek (): int
+   {
+      // @@
+      while ($this->Schedule->isEmpty() === false) {
+         [$deadline, $ID] = $this->Schedule->top();
+         // ?:
+         if (isset($this->Repeaters[$ID])) {
+            return $deadline;
+         }
+
+         $this->Schedule->extract();
+         $this->stale--;
+      }
+
+      // :
+      return PHP_INT_MAX;
+   }
+
+   /**
+    * Rebuild the heap from the timers alive, shedding every leftover entry.
+    */
+   private function compact (): void
+   {
+      $this->Schedule = new SplMinHeap;
+      $this->stale = 0;
+      // @@
+      foreach ($this->Repeaters as $ID => $Repeater) {
+         $this->Schedule->insert([$Repeater['deadline'], $ID]);
+      }
    }
 
    /**
@@ -1732,6 +1936,9 @@ class Select implements Events, Loops, Scheduler, Cancelling
       $Bindings = [];
       $this->Timers = [];
       $this->MonotonicTimers = [];
+      $this->Repeaters = [];
+      $this->Schedule = new SplMinHeap;
+      $this->stale = 0;
 
       // # Loop
       $this->loop = false;
