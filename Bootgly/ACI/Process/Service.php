@@ -67,6 +67,8 @@ class Service
    public private(set) array $after;
    /** The `ExecReload=` line, rendered verbatim — `''` for a service that cannot reload. */
    public private(set) string $reload;
+   /** @var array<string,string> Environment variables the command starts with, by name. */
+   public private(set) array $environment;
 
    // * Metadata
    public string $unit {
@@ -127,6 +129,7 @@ class Service
     * @param string $user Account the command runs as.
     * @param array<string> $after Units this one starts after, when they exist.
     * @param string $reload The `ExecReload=` line, verbatim — `''` when the service cannot reload.
+    * @param array<string,string> $environment Environment variables the command starts with, by name.
     */
    public function __construct (
       string $name,
@@ -136,7 +139,8 @@ class Service
       array $command,
       string $user,
       array $after = [],
-      string $reload = ''
+      string $reload = '',
+      array $environment = []
    )
    {
       $this->name = $name;
@@ -147,6 +151,7 @@ class Service
       $this->user = $user;
       $this->after = $after;
       $this->reload = $reload;
+      $this->environment = $environment;
    }
 
    /**
@@ -176,6 +181,10 @@ class Service
 
    /**
     * Render the unit.
+    *
+    * @throws InvalidArgumentException When the command does not begin with an
+    *    absolute path, or an environment variable has a name systemd does not
+    *    take or a value holding a line break or bytes that are not UTF-8.
     */
    public function render (): string
    {
@@ -208,8 +217,25 @@ class Service
          'User=' . self::escape($this->user),
          // ! A path setting takes the rest of its line verbatim: never quoted
          'WorkingDirectory=' . self::escape($this->kit),
-         "ExecStart={$exec}",
       ];
+      // @@ One `Environment=` per variable, before the command it is for
+      foreach ($this->environment as $name => $value) {
+         // ? A unit line carries no line break and an altered value would name
+         //   something else; systemd drops an assignment that is not UTF-8
+         if (
+            preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', (string) $name) !== 1
+            || preg_match('/[\r\n]/', $value) === 1
+            || preg_match('//u', $value) !== 1
+         ) {
+            throw new InvalidArgumentException("The service environment variable {$name} cannot be written to a unit: a name systemd does not take, or a value with a line break or bytes that are not UTF-8.");
+         }
+
+         // ! Quoted whole: `%` doubles so no specifier expands, `\` and `"` are
+         //   escaped inside the quotes — systemd expands no `$` here
+         $assignment = str_replace(['%', '\\', '"'], ['%%', '\\\\', '\\"'], "{$name}={$value}");
+         $lines[] = "Environment=\"{$assignment}\"";
+      }
+      $lines[] = "ExecStart={$exec}";
       if ($this->reload !== '') {
          $lines[] = "ExecReload={$this->reload}";
       }

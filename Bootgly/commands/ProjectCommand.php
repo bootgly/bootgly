@@ -13,6 +13,7 @@ namespace Bootgly\commands;
 
 use const ARRAY_FILTER_USE_KEY;
 use const BOOTGLY_ROOT_DIR;
+use const BOOTGLY_STORAGE_BASE;
 use const BOOTGLY_STORAGE_DIR;
 use const BOOTGLY_WORKING_DIR;
 use const INI_SCANNER_RAW;
@@ -86,6 +87,7 @@ use function substr;
 use function time;
 use function trim;
 use function usleep;
+use InvalidArgumentException;
 use Throwable;
 
 use const Bootgly\CLI;
@@ -1557,6 +1559,23 @@ class ProjectCommand extends Command
          return false;
       }
 
+      // ? A unit that cannot be written as given — a storage directory from the
+      //   environment whose path a unit line cannot carry — is refused by name,
+      //   before anything is staged or written
+      try {
+         foreach ($Services as $Service) {
+            $Service->render();
+         }
+      }
+      catch (InvalidArgumentException $Unwritable) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = $Unwritable->getMessage();
+         $Alert->render();
+
+         return false;
+      }
+
       // ! What is already running — a rewritten unit reaches it only through a
       //   restart, and an instance started by hand holds the port and the state
       //   record the unit would claim (per unit: a server state against the
@@ -1596,7 +1615,7 @@ class ProjectCommand extends Command
          ) {
             $Alert = new Alert($Output);
             $Alert->Type::Failure->set();
-            $Alert->message = 'Refusing to stage into @#cyan:storage/systemd@;.';
+            $Alert->message = "Refusing to stage into @#cyan:{$staging}@;.";
             $Alert->render();
             $Output->render('It must be a directory of this account that nobody else can enter, under a @#cyan:storage@; that is not a link — root installs out of it.@.;');
 
@@ -1617,7 +1636,7 @@ class ProjectCommand extends Command
             // ! The staged unit is the caller's alone until root installs it
             @chmod($file, 0600);
             $files[] = escapeshellarg($file);
-            $Output->render("@#green:Generated@; @#cyan:storage/systemd/{$Service->unit}@;@.;");
+            $Output->render("@#green:Generated@; @#cyan:{$file}@;@.;");
          }
 
          $Output->render('@#yellow:Warning:@; installing under @#cyan:/etc/systemd/system@; needs root — the units were staged instead.@.;');
@@ -2024,6 +2043,13 @@ class ProjectCommand extends Command
       $after = is_dir("{$projectDir}configs/database") === true
          ? ['postgresql.service', 'mysql.service', 'mysqld.service', 'mariadb.service']
          : [];
+      // ! A storage directory this boot took from the environment goes into the
+      //   units: a service starts with none of the caller's variables, and would
+      //   keep its state in the default directory instead
+      $storage = getenv('BOOTGLY_STORAGE_DIR');
+      $environment = $storage !== false && rtrim($storage, '/') === BOOTGLY_STORAGE_BASE
+         ? ['BOOTGLY_STORAGE_DIR' => BOOTGLY_STORAGE_BASE]
+         : [];
 
       $Services = [];
 
@@ -2038,7 +2064,8 @@ class ProjectCommand extends Command
             user: $user,
             after: $after,
             // ! The master re-execs on SIGUSR2 — `systemctl reload` is a hot reload
-            reload: '/bin/kill -USR2 $MAINPID'
+            reload: '/bin/kill -USR2 $MAINPID',
+            environment: $environment
          );
       }
       if ($every === true || is_file("{$projectDir}schedule.php") === true) {
@@ -2049,7 +2076,8 @@ class ProjectCommand extends Command
             description: "Bootgly project {$projectName} — schedule worker",
             command: [PHP_BINARY, $launcher, 'project', $projectName, 'schedule', 'run'],
             user: $user,
-            after: $after
+            after: $after,
+            environment: $environment
          );
       }
 

@@ -4,7 +4,9 @@ namespace Bootgly\commands;
 
 
 use const BOOTGLY_STORAGE_DIR;
+use const BOOTGLY_WORKING_DIR;
 use const PHP_BINARY;
+use function array_map;
 use function assert;
 use function chmod;
 use function escapeshellarg;
@@ -16,15 +18,18 @@ use function is_link;
 use function mkdir;
 use function posix_geteuid;
 use function posix_getpwuid;
+use function preg_match;
 use function putenv;
 use function rewind;
 use function rmdir;
+use function rtrim;
 use function str_contains;
 use function stream_get_contents;
 use function symlink;
 use function sys_get_temp_dir;
 use function uniqid;
 use function unlink;
+use ReflectionMethod;
 use ReflectionProperty;
 
 use const Bootgly\CLI;
@@ -72,6 +77,9 @@ return new Test(
       // ! The invoking shell's sudo trail must not leak into the staged account
       $sudo = getenv('SUDO_USER');
       putenv('SUDO_USER');
+      // ! …nor a storage directory of the invoking shell into the staged unit
+      $inherited = getenv('BOOTGLY_STORAGE_DIR');
+      putenv('BOOTGLY_STORAGE_DIR');
 
       try {
          // # A bad account is refused before anything is written
@@ -89,6 +97,34 @@ return new Test(
             description: 'a bare --user is refused, not ignored'
          );
 
+         // # A storage directory the boot took from the environment travels in both
+         //   units — server and schedule worker: a service starts with none of the
+         //   caller's variables — with or without its trailing separator; one the
+         //   boot did not take (a pre-defined constant won) does not
+         $base = rtrim(BOOTGLY_STORAGE_DIR, '/');
+         $Compose = new ReflectionMethod(ProjectCommand::class, 'compose');
+         $compose = static function (string $value) use ($Command, $Compose, $project): array {
+            putenv("BOOTGLY_STORAGE_DIR={$value}");
+            try {
+               $Services = $Compose->invoke($Command, $project, BOOTGLY_WORKING_DIR . "projects/{$project}/", 'deploy', true);
+            }
+            finally {
+               putenv('BOOTGLY_STORAGE_DIR');
+            }
+
+            return array_map(static fn (Service $Service): array => $Service->environment, $Services);
+         };
+         $carried = ['BOOTGLY_STORAGE_DIR' => $base];
+
+         yield assert(
+            assertion: $compose($base) === [$carried, $carried]
+               && $compose("{$base}/") === [$carried, $carried]
+               && $compose('/somewhere/else') === [[], []]
+               && $compose('') === [[], []]
+               && $Compose->invoke($Command, $project, BOOTGLY_WORKING_DIR . "projects/{$project}/", 'deploy', true)[1]->environment === [],
+            description: 'the server and the schedule units carry the storage directory the boot took from the environment, and nothing otherwise'
+         );
+
          // # The platform decides the rest
          [$result, $output] = $probe(['startup', $project]);
 
@@ -103,6 +139,7 @@ return new Test(
                   && str_contains($rendered, 'ExecStart=' . PHP_BINARY . ' ')
                   && str_contains($rendered, " project {$project} start -f\n")
                   && str_contains($rendered, 'After=network-online.target postgresql.service')
+                  && str_contains($rendered, 'Environment=') === false
                   && str_contains($output, 'needs root')
                   && str_contains($output, 'sudo install -m 0644 -o root -g root ')
                   && str_contains($output, "sudo systemctl enable {$unit}")
@@ -118,6 +155,26 @@ return new Test(
                assertion: str_contains($nowOutput, "sudo systemctl enable --now {$unit}")
                   && $valueResult === false && str_contains($valueOutput, 'Invalid --now value'),
                description: '--now is printed only when asked, and a valued --now is refused'
+            );
+
+            // # …and the staged unit has the line, right before the command; the
+            //   staging path printed is the real one
+            putenv("BOOTGLY_STORAGE_DIR={$base}");
+            @unlink($staged);
+            [, $movedOutput] = $probe(['startup', $project]);
+            $moved = is_file($staged) ? (string) file_get_contents($staged) : '';
+            putenv('BOOTGLY_STORAGE_DIR=/somewhere/else');
+            @unlink($staged);
+            $probe(['startup', $project]);
+            $ignored = is_file($staged) ? (string) file_get_contents($staged) : '';
+            putenv('BOOTGLY_STORAGE_DIR');
+
+            yield assert(
+               assertion: str_contains($moved, "Environment=\"BOOTGLY_STORAGE_DIR={$base}\"\nExecStart=" . PHP_BINARY . ' ')
+                  && str_contains($movedOutput, $staged)
+                  && preg_match('#(?<!/)storage/systemd/#', $movedOutput) === 0
+                  && $ignored !== '' && str_contains($ignored, 'Environment=') === false,
+               description: 'the storage directory from the environment is written into the staged unit, and only when the boot took it'
             );
 
             // # A caller's SUDO_USER means nothing below root — the staged account stays the caller's
@@ -266,6 +323,7 @@ return new Test(
          if ($sudo !== false) {
             putenv("SUDO_USER={$sudo}");
          }
+         putenv($inherited !== false ? "BOOTGLY_STORAGE_DIR={$inherited}" : 'BOOTGLY_STORAGE_DIR');
          @unlink($staged);
          @unlink("{$staging}/bootgly-Demo-HTTP_Server_CLI.schedule.service");
          if (is_link($staging)) {

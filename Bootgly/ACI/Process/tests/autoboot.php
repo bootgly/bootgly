@@ -37,5 +37,9 @@ return new Suite(
       '1.19-signals-send-retirees',
       // # 1.1.1: an unsafe state directory names the refusing check
       '1.20-state-protect-reasons',
+      // # 1.3.0: the storage directory from the environment, and the Docker entrypoint that prepares it
+      '1.21-storage-environment',
+      '1.22-storage-entrypoint',
+      '1.23-storage-owners',
    ]
 );

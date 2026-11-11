@@ -20,6 +20,118 @@ if (defined('BOOTGLY_WORKING_BASE') === false) {
    define('BOOTGLY_WORKING_BASE', BOOTGLY_ROOT_BASE);
    define('BOOTGLY_WORKING_DIR', BOOTGLY_ROOT_DIR);
 }
+// ? `BOOTGLY_STORAGE_DIR` in the process environment moves the storage directory when neither
+//   constant was pre-defined (a pre-defined constant wins and the variable is not read).
+//   A privileged launch writes its process state there and loads compiled templates from it, so
+//   the directory is validated here and an unsafe one stops the boot — it never falls back to
+//   the default directory: an absolute, canonical path to an existing real directory (no link),
+//   owned by the effective user or root and not writable by its group or by others, under
+//   ancestors that only the effective user or root can rename it in.
+if (
+   defined('BOOTGLY_STORAGE_BASE') === false
+   && defined('BOOTGLY_STORAGE_DIR') === false
+   && getenv('BOOTGLY_STORAGE_DIR') !== false
+) {
+   (static function (string $value): void {
+      // ! One trailing separator is accepted: the constant it names ends with one
+      $base = strlen($value) > 1 && str_ends_with($value, '/')
+         ? substr($value, 0, -1)
+         : $value;
+
+      // @ The first check that fails names itself and the path
+      $refusal = (static function () use ($value, $base): null|string {
+         // ? Absolute and lexically canonical
+         if ($value === '') {
+            return 'empty value';
+         }
+         if ($base[0] !== '/') {
+            return "not an absolute path: {$value}";
+         }
+         if ($base === '/') {
+            return "the filesystem root: {$value}";
+         }
+         foreach (explode('/', substr($base, 1)) as $segment) {
+            if ($segment === '' || $segment === '.' || $segment === '..') {
+               return "not canonical (an empty, `.` or `..` segment): {$value}";
+            }
+         }
+         if (function_exists('posix_geteuid') === false) {
+            return "its owner cannot be verified (the posix extension is missing): {$base}";
+         }
+
+         // ? An existing real directory, reached through no link
+         $state = @lstat($base);
+         if (is_array($state) === false) {
+            return "does not exist or cannot be inspected: {$base}";
+         }
+         if (((int) $state['mode'] & 0170000) === 0120000) {
+            return "symbolic link: {$base}";
+         }
+         if (((int) $state['mode'] & 0170000) !== 0040000) {
+            return "not a directory: {$base}";
+         }
+         $real = realpath($base);
+         if ($real !== $base) {
+            $target = $real === false ? 'nothing' : $real;
+            return "not canonical (resolves to {$target}): {$base}";
+         }
+
+         // ? Owned by the effective user or root, writable by its owner only
+         $EUID = posix_geteuid();
+         if ((int) $state['uid'] !== 0 && (int) $state['uid'] !== $EUID) {
+            return "owner {$state['uid']} is neither the effective user ({$EUID}) nor root: {$base}";
+         }
+         if (((int) $state['mode'] & 0022) !== 0) {
+            $mode = decoct((int) $state['mode'] & 07777);
+            return "group/world-writable (0{$mode}): {$base}";
+         }
+
+         // ? No ancestor lets another user rename the checked directory away afterwards:
+         //   each is owned by the effective user or root, and writable by its owner only
+         //   unless it is sticky (there, only the owner of an entry renames it). Root is
+         //   uid 0 alone: the owner of `/` in a user namespace is the overflow uid, and so
+         //   is every other account the namespace does not map
+         $ancestor = $base;
+         do {
+            $ancestor = dirname($ancestor);
+            $state = @lstat($ancestor);
+            if (is_array($state) === false) {
+               return "ancestor cannot be inspected: {$ancestor}";
+            }
+            if ((int) $state['uid'] !== 0 && (int) $state['uid'] !== $EUID) {
+               return "ancestor owner {$state['uid']} is neither the effective user ({$EUID}) nor root: {$ancestor}";
+            }
+            if (((int) $state['mode'] & 0022) !== 0 && ((int) $state['mode'] & 01000) === 0) {
+               $mode = decoct((int) $state['mode'] & 07777);
+               return "ancestor group/world-writable without the sticky bit (0{$mode}): {$ancestor}";
+            }
+         }
+         while ($ancestor !== '/');
+
+         // :
+         return null;
+      })();
+
+      // ?: One message, then no boot
+      if ($refusal !== null) {
+         // ! The value is quoted as given: its control bytes are written escaped
+         $refusal = addcslashes($refusal, "\0..\37\177");
+         $message = "Bootgly: BOOTGLY_STORAGE_DIR from the environment is refused: {$refusal}";
+         if (defined('STDERR') === true) {
+            fwrite(STDERR, $message . PHP_EOL);
+         }
+         else {
+            error_log($message);
+         }
+
+         exit(1);
+      }
+
+      // @
+      define('BOOTGLY_STORAGE_BASE', $base);
+      define('BOOTGLY_STORAGE_DIR', $base . DIRECTORY_SEPARATOR);
+   })(getenv('BOOTGLY_STORAGE_DIR'));
+}
 if (defined('BOOTGLY_STORAGE_BASE') === false) {
    define('BOOTGLY_STORAGE_BASE', BOOTGLY_WORKING_DIR . 'storage');
 }

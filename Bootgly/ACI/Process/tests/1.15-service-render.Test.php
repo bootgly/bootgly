@@ -92,6 +92,39 @@ return new Test(
          description: 'a service without a reload command renders no ExecReload= line'
       );
 
+      // # Environment — one quoted line per variable before the command, none when there is none
+      $Moved = new Service('x', 'App', '/srv/kit', 'x', ['/usr/bin/php', 'start'], 'deploy', environment: [
+         'BOOTGLY_STORAGE_DIR' => '/data/my "100%" $torage\\',
+         'TZ' => 'UTC',
+      ]);
+
+      yield assert(
+         assertion: str_contains($unit, 'Environment=') === false
+            && str_contains(
+               $Moved->render(),
+               "WorkingDirectory=/srv/kit\n"
+               . 'Environment="BOOTGLY_STORAGE_DIR=/data/my \"100%%\" $torage\\\\"' . "\n"
+               . "Environment=\"TZ=UTC\"\nExecStart=/usr/bin/php start\n"
+            ),
+         description: 'each environment variable is one quoted Environment= line before ExecStart — % doubled, " and \\ escaped, $ as given'
+      );
+
+      // # …and a variable a unit line cannot carry is refused, never altered
+      $unwritable = 0;
+      foreach ([['BAD NAME', 'x'], ['A=B', 'x'], ['', 'x'], ['PATH', "/bin\nExecStart=/bin/sh"], ['PATH', "/bin\r"], ['PATH', "/caf\xE9"]] as [$name, $value]) {
+         try {
+            new Service('x', 'App', '/srv/kit', 'x', ['/bin/true'], 'deploy', environment: [$name => $value])->render();
+         }
+         catch (InvalidArgumentException $Unwritable) {
+            $unwritable += str_contains($Unwritable->getMessage(), 'cannot be written to a unit') ? 1 : 0;
+         }
+      }
+
+      yield assert(
+         assertion: $unwritable === 6,
+         description: "an environment name systemd does not take, or a value with a line break or bytes that are not UTF-8, is refused: {$unwritable}/6"
+      );
+
       // # What systemd expands is neutralized — `%` specifiers everywhere, `$` variables in ExecStart
       $Expanding = new Service(
          name: 'x',
