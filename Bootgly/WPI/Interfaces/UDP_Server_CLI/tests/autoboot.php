@@ -75,5 +75,7 @@ return new Suite(
       // # 1.0.x (UDP-22): another account can neither take a running UDP port nor have a launch start on top of it
       '1.27-port_cross_uid',
       '1.28-connections_diagnostic_inert',
+      // # 1.3.x: a UDP worker takes the master's signals over on its loop, before it unmasks, and reads the server's handler at dispatch
+      '1.29-worker_signal_owner',
    ]
 );

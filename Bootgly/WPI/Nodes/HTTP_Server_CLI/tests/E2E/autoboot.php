@@ -698,6 +698,8 @@ return new Suite(
          '1.16-scheduled_resource_interleaved',
          '1.17-scheduled_resource_tls',
          '1.18-scheduled_resource_tls_failures',
+         // # 1.3.x (loop signal sources): an application's static Timer still fires in a worker whose loop owns SIGALRM
+         '1.19-scheduled_static_timer',
       ],
       'Queues/' => [
          '1.1-http-enqueue',

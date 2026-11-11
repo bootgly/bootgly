@@ -141,6 +141,7 @@ use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ABI\Debugging\Shutdown;
 use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Scheduler;
+use Bootgly\ACI\Events\Signalling;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Data\Record;
@@ -1704,6 +1705,25 @@ class UDP_Server_CLI implements Servers
 
       if ($Publish !== null) {
          $Publish();
+      }
+
+      // @ Signals — a loop that dispatches signals takes over, in this
+      //   worker, every signal the master installed: each one keeps reaching
+      //   `handle()`, now as a handler of the loop. Trapped before the mask
+      //   below is restored and before anything dispatches, so a signal sent
+      //   since the fork is handled once, by the loop. A loop without the
+      //   capability keeps the handlers this worker inherited, untouched.
+      $Loop = self::$Event;
+      if ($Loop instanceof Signalling) {
+         $Signals = $this->Process->Signals;
+         // ! The handler is read when the signal is dispatched, as the
+         //   inherited one does: one assigned later still takes effect
+         $Handler = static function (int $signal) use ($Signals): void {
+            ($Signals->handler)($signal);
+         };
+         foreach ($Signals->installed as $signal) {
+            $Loop->trap($signal, $Handler);
+         }
       }
 
       // ! Serve under the launcher's mask — the start transaction blocked

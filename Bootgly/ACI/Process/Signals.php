@@ -12,6 +12,7 @@ namespace Bootgly\ACI\Process;
 
 
 use function array_keys;
+use function in_array;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
 use function posix_kill;
@@ -30,7 +31,14 @@ class Signals
    private Process $Process;
 
    // * Metadata
-   // ...
+   /**
+    * Every signal `install()` routed to the handler, in the order it first
+    * installed them — what a process forked from this one inherits, so a
+    * worker can take the same signals over on its own event loop.
+    *
+    * @var array<int>
+    */
+   public private(set) array $installed = [];
 
 
    public function __construct (Process &$Process)
@@ -39,6 +47,10 @@ class Signals
    }
 
    /**
+    * Route each signal to the handler (`$handler`), for this process and the
+    * ones forked from it. System calls are not restarted: a signal wakes a
+    * blocked wait. The signals are recorded in `$installed`.
+    *
     * @param array<int> $signals
     */
    public function install (array $signals): void
@@ -49,6 +61,10 @@ class Signals
 
       foreach ($signals as $signal) {
          pcntl_signal($signal, $callback, false);
+
+         if (in_array($signal, $this->installed, true) === false) {
+            $this->installed[] = $signal;
+         }
       }
    }
    /**

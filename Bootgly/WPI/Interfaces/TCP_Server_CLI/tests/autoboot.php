@@ -69,5 +69,7 @@ return new Suite(
       '1.32-recycle-beaconless',
       // # 1.3.x: the worker tickers (watchdog, recycle gate, drain poll) ride the loop's recurring timers — one timer owner
       '1.33-worker-timer-owner',
+      // # 1.3.x: a worker takes the master's signals over on a loop that dispatches signals; a loop without the capability keeps the inherited handlers; a stop survives a throwing shutdown listener
+      '1.34-worker-signal-owner',
    ]
 );

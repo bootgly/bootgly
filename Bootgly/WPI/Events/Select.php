@@ -12,9 +12,15 @@ namespace Bootgly\WPI\Events;
 
 
 use const PHP_INT_MAX;
+use const SIG_DFL;
+use const SIGKILL;
+use const SIGSTOP;
 use function array_key_last;
+use function array_keys;
 use function array_shift;
+use function constant;
 use function count;
+use function defined;
 use function get_debug_type;
 use function hrtime;
 use function intdiv;
@@ -24,7 +30,9 @@ use function is_resource;
 use function max;
 use function microtime;
 use function min;
+use function pcntl_signal;
 use function pcntl_signal_dispatch;
+use function pcntl_signal_get_handler;
 use function sleep;
 use function spl_object_id;
 use function stream_select;
@@ -34,9 +42,11 @@ use Closure;
 use Fiber;
 use InvalidArgumentException;
 use LogicException;
+use ReflectionFunction;
 use RuntimeException;
 use SplMinHeap;
 use Throwable;
+use TypeError;
 use WeakMap;
 use WeakReference;
 
@@ -46,11 +56,12 @@ use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Events\Repeating;
 use Bootgly\ACI\Events\Scheduler;
+use Bootgly\ACI\Events\Signalling;
 use Bootgly\WPI\Connections;
 use Bootgly\WPI\Events;
 
 
-class Select implements Events, Loops, Scheduler, Cancelling, Repeating
+class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signalling
 {
    /**
     * Entries each descriptor table admits (reads, writes, excepts) — shared by
@@ -160,6 +171,16 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating
    private SplMinHeap $Schedule;
    private int $stale = 0;
    private int $timer = 0;
+   // # Signals trapped on this loop. One trampoline, created by the first
+   //   `trap()`, is what the process holds for each of them: it looks the
+   //   handler up when the signal is dispatched, so a handler replaced or
+   //   released meanwhile is never run. `$dispositions` keeps what each
+   //   signal did before this loop trapped it, for `untrap()` to put back.
+   /** @var array<int,Closure> */
+   private array $Handlers = [];
+   /** @var array<int,callable|int> */
+   private array $dispositions = [];
+   private null|Closure $Trampoline = null;
    // # Backend
    // @ Consecutive false selector returns. A timeout is not a failure.
    private int $failures = 0;
@@ -226,9 +247,11 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating
             return true;
          }
 
-         // ? A signal can race even a zero-time probe. Dispatch it once and
-         //   retry with fresh arrays before rejecting a valid descriptor.
-         pcntl_signal_dispatch();
+         // ? A signal can race even a zero-time probe: retry once with
+         //   fresh arrays before rejecting a valid descriptor. Nothing is
+         //   dispatched from inside an admission — the signal stays queued
+         //   for the dispatch point of the pass (`loop()`), so no handler
+         //   runs in the middle of the callback that is adding a socket.
       }
 
       return false;
@@ -487,6 +510,174 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating
    }
 
    /**
+    * Run a handler on the loop each time the process receives a signal.
+    *
+    * The loop dispatches signals at two points, both between callbacks: the
+    * top of each pass, before the timers, and right after a wait that a
+    * signal interrupted. Dispatch is PHP's own (`pcntl_signal_dispatch()`),
+    * process-wide: handlers installed outside the loop — `pcntl_signal()`,
+    * `Process\Signals`, the static `Timer` — run at the same points, trapped
+    * signal or not. The loop cannot defer what PHP delivers elsewhere: with
+    * asynchronous signals on (`pcntl_async_signals(true)`), or when a
+    * callback calls `pcntl_signal_dispatch()` itself, a handler runs there.
+    *
+    * One handler per signal: trapping a signal again replaces its handler.
+    * The first trap of a signal installs this loop's trampoline for it
+    * (system calls are not restarted, so a signal wakes a blocked wait) and
+    * records what the signal did before; `untrap()` and `destroy()` put that
+    * back. Nothing is installed, changed or restored for a signal this loop
+    * never trapped. A trap made before a fork is copied into the child, with
+    * the loop and the process disposition alike.
+    *
+    * What the signal did before is what PHP reports, and PHP knows only the
+    * handlers it installed itself: a signal the process inherited as
+    * ignored (`nohup`, a launcher's `trap ''`) reads as the default action,
+    * so it takes its default action once released — ignore it again with
+    * `pcntl_signal($signal, SIG_IGN)` after `untrap()` when that matters.
+    *
+    * A handler that throws is reported through `Throwables::notify()` with
+    * `['origin' => 'loop.signal', 'signal' => $signal]` and the loop goes on:
+    * the other signals pending in the same dispatch still run.
+    *
+    * @param int $signal The signal number.
+    * @param Closure(int):void $Handler Receives the signal number. Runs on
+    *    the loop, outside any Fiber.
+    *
+    * @throws InvalidArgumentException When the signal is `SIGKILL`,
+    *    `SIGSTOP` or not a signal a process may catch.
+    * @throws LogicException When another loop of this process holds the
+    *    signal, or when the handler installed for it is one this loop could
+    *    not put back (a callable only its own class may call).
+    */
+   public function trap (int $signal, Closure $Handler): void
+   {
+      // ? Only a signal a process may catch — PHP dies on the others
+      if (
+         $signal < 1 || $signal === SIGKILL || $signal === SIGSTOP
+         || (
+            $signal > 31
+            && (
+               defined('SIGRTMIN') === false
+               || $signal < constant('SIGRTMIN')
+               || $signal > constant('SIGRTMAX')
+            )
+         )
+      ) {
+         throw new InvalidArgumentException("Signal {$signal} cannot be trapped.");
+      }
+
+      $Trampoline = $this->Trampoline ??= $this->relay(...);
+
+      // @ Install — once per signal, and again if something replaced it
+      $current = pcntl_signal_get_handler($signal);
+      if ($current !== $Trampoline) {
+         // ? Signals belong to the process: one loop holds each at a time
+         if ($current instanceof Closure) {
+            $Holder = (new ReflectionFunction($current))->getClosureThis();
+            if (
+               $Holder instanceof self && $Holder !== $this
+               && $Holder->Trampoline === $current
+            ) {
+               if (isset($Holder->Handlers[$signal])) {
+                  throw new LogicException(
+                     "Signal {$signal} is trapped by another loop of this process."
+                  );
+               }
+
+               // ? That loop released the signal and other code put its
+               //   trampoline back: nothing older is known
+               $current = SIG_DFL;
+            }
+         }
+         // ? What is installed must be something this loop can put back — a
+         //   callable only its own class may call is not
+         if (is_int($current) === false) {
+            try {
+               Closure::fromCallable($current);
+            }
+            catch (TypeError) {
+               throw new LogicException(
+                  "Signal {$signal} has a handler this loop could not put back."
+               );
+            }
+         }
+
+         // ! The handler before the trampoline: under asynchronous delivery
+         //   a signal may arrive between the two
+         $this->dispositions[$signal] = $current;
+         $this->Handlers[$signal] = $Handler;
+         pcntl_signal($signal, $Trampoline, false);
+
+         return;
+      }
+
+      // ? The trampoline is installed and this loop holds no handler for the
+      //   signal: other code put it back after this loop released the signal
+      //   (a save and restore around the release) — nothing older is known
+      $this->dispositions[$signal] ??= SIG_DFL;
+      $this->Handlers[$signal] = $Handler;
+   }
+   /**
+    * Release a signal this loop trapped.
+    *
+    * The signal goes back to what it did when this loop trapped it — the
+    * handler installed then (system calls not restarted), or the default
+    * action — unless something replaced this loop's trampoline since: that
+    * newer handler is left alone. A signal still pending reaches whatever
+    * handles it after the release; when that is the default action or an
+    * ignore, PHP drops it.
+    *
+    * @param int $signal The signal number.
+    *
+    * @return bool Whether this loop held the signal.
+    */
+   public function untrap (int $signal): bool
+   {
+      if (isset($this->Handlers[$signal]) === false) {
+         return false;
+      }
+
+      // ? Only while this loop's trampoline is still the one installed —
+      //   and before the handler goes: under asynchronous delivery a signal
+      //   may arrive between the two
+      if (pcntl_signal_get_handler($signal) === $this->Trampoline) {
+         pcntl_signal($signal, $this->dispositions[$signal], false);
+      }
+      unset($this->Handlers[$signal], $this->dispositions[$signal]);
+
+      return true;
+   }
+   /**
+    * The trampoline the process holds for every signal trapped on this loop.
+    */
+   private function relay (int $signal): void
+   {
+      $Handler = $this->Handlers[$signal] ?? null;
+      // ? No handler: other code put this trampoline back after the loop
+      //   released the signal. The signal goes back to its default action
+      //   instead of being swallowed from now on, and the process stops
+      //   holding this loop
+      if ($Handler === null) {
+         if (pcntl_signal_get_handler($signal) === $this->Trampoline) {
+            pcntl_signal($signal, SIG_DFL);
+         }
+
+         return;
+      }
+
+      try {
+         $Handler($signal);
+      }
+      catch (Throwable $Throwable) {
+         // @ Reported, and the dispatch goes on: PHP stops draining its
+         //   signal queue at a handler that throws, so one failing handler
+         //   would otherwise hold back every other pending signal
+         //   (`notify()` contains its own reporters)
+         Throwables::notify($Throwable, ['origin' => 'loop.signal', 'signal' => $signal]);
+      }
+   }
+
+   /**
     * Start the event loop (Fiber-scheduled).
     *
     * @return void
@@ -508,9 +699,12 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating
             break;
          }
 
+         // @ Signals — one process-wide dispatch per pass, never skipped:
+         //   the handlers trapped on this loop (`trap()`) and the ones
+         //   installed outside it run here alike, between callbacks
          pcntl_signal_dispatch();
          $wait = $this->tick();
-         // ? A timer callback dispatched by tick() may have stopped the loop
+         // ? A signal handler or a timer callback may have stopped the loop
          if ($this->loop === false) { // @phpstan-ignore identical.alwaysFalse
             break;
          }
@@ -556,7 +750,7 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating
                   // @ Convert to I/O-awaiting if Fiber suspended with readiness
                   if (!$Fiber->isTerminated()) {
                      $queued = $this->queue($Fiber, $value);
-                     // ? Selector signal callbacks may settle the token.
+                     // ? A handler delivered inside the admission may settle the token.
                      if ($Token?->check() === true) { // @phpstan-ignore identical.alwaysFalse
                         $this->evict($Fiber, $Token);
 
@@ -850,7 +1044,7 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating
 
       // @ I/O-bound: register socket in stream_select + map to Fiber
       $queued = $this->queue($Fiber, $value, $flag);
-      // ? Selector signal callbacks may settle the captured token.
+      // ? A handler delivered inside the admission may settle the captured token.
       if ($Token?->check() === true) { // @phpstan-ignore identical.alwaysFalse
          $this->evict($Fiber, $Token);
 
@@ -1706,7 +1900,7 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating
       }
 
       $queued = $this->queue($Fiber, $value);
-      // ? Selector signal callbacks may settle the captured token.
+      // ? A handler delivered inside the admission may settle the captured token.
       if ($Token?->check() === true) { // @phpstan-ignore identical.alwaysFalse
          $this->evict($Fiber, $Token);
 
@@ -1801,7 +1995,7 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating
       }
 
       $queued = $this->queue($Fiber, $value);
-      // ? Selector signal callbacks may settle the captured token.
+      // ? A handler delivered inside the admission may settle the captured token.
       if ($Token?->check() === true) { // @phpstan-ignore identical.alwaysFalse
          $this->evict($Fiber, $Token);
 
@@ -1954,6 +2148,12 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating
       $this->Repeaters = [];
       $this->Schedule = new SplMinHeap;
       $this->stale = 0;
+
+      // # Signals — each one back to what it did before this loop trapped
+      //   it; a loop that trapped none touches no disposition
+      foreach (array_keys($this->Handlers) as $signal) {
+         $this->untrap($signal);
+      }
 
       // # Loop
       $this->loop = false;

@@ -195,6 +195,7 @@ use Throwable;
 
 use const Bootgly\CLI;
 use Bootgly\ABI\Configs as Configuring;
+use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ABI\Debugging\Shutdown;
 use Bootgly\ABI\Events\Emitter;
@@ -202,6 +203,7 @@ use Bootgly\ABI\IO\IPC\Pipe as IPCPipe;
 use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Repeating;
 use Bootgly\ACI\Events\Scheduler;
+use Bootgly\ACI\Events\Signalling;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Data\Record;
@@ -1434,6 +1436,25 @@ class TCP_Server_CLI implements Servers
     */
    protected function work (Process $Process, int $index): void
    {
+      // @ Signals — a loop that dispatches signals takes over, in this
+      //   worker, every signal the master installed: each one keeps reaching
+      //   `handle()`, now as a handler of the loop. Trapped before the mask
+      //   below is lifted and before anything dispatches, so a signal sent
+      //   since the fork is handled once, by the loop. A loop without the
+      //   capability keeps the handlers this worker inherited, untouched.
+      $Loop = self::$Event;
+      if ($Loop instanceof Signalling) {
+         $Signals = $this->Process->Signals;
+         // ! The handler is read when the signal is dispatched, as the
+         //   inherited one does: one assigned later still takes effect
+         $Handler = static function (int $signal) use ($Signals): void {
+            ($Signals->handler)($signal);
+         };
+         foreach ($Signals->installed as $signal) {
+            $Loop->trap($signal, $Handler);
+         }
+      }
+
       // ! A worker inherits the master's signal block mask across
       //   pcntl_fork(); a serving worker must field its own SIGQUIT/SIGTERM
       //   lifecycle signals.
@@ -1517,8 +1538,8 @@ class TCP_Server_CLI implements Servers
 
       // @ Adopt this worker's pre-bound SO_REUSEPORT listener.
       $this->instance();
-      // ! Paused before the listener's admission below can dispatch a
-      //   signal: a resume landing there finds this worker paused, and wins
+      // ! Paused before the listener's admission below: a resume delivered
+      //   there (asynchronous delivery) finds this worker paused, and wins
       if ($paused) {
          $this->Status = Status::Paused;
       }
@@ -1536,7 +1557,7 @@ class TCP_Server_CLI implements Servers
          );
          exit(1);
       }
-      // ? Paused — booted so, or by a pause that landed in that admission —
+      // ? Paused — booted so, or by a pause delivered in that admission —
       //   and not resumed since: admitted above, then out of the accept set
       //   until the master resumes it (`resume()`)
       if ($this->Status === Status::Paused) {
@@ -3593,8 +3614,15 @@ class TCP_Server_CLI implements Servers
       }
 
       // @ Events — process shutting down (guarded: zero-alloc when no listeners)
+      // ! A listener that throws must not keep the process from stopping:
+      //   the failure is reported and the stop goes on
       $Emitter = Emitter::$Instance;
-      $Emitter->check(Worker::Shutdown) && $Emitter->emit(Worker::Shutdown, $this->Process->level);
+      try {
+         $Emitter->check(Worker::Shutdown) && $Emitter->emit(Worker::Shutdown, $this->Process->level);
+      }
+      catch (Throwable $Throwable) {
+         Throwables::notify($Throwable, ['origin' => 'server.stop']);
+      }
 
       $this->Status = Status::Stopping;
       $this->Process->stopping = true;
