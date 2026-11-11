@@ -73,7 +73,13 @@ class Transaction implements Awaiting, Querying
    public function begin (): Operation
    {
       if ($this->probe() === false) {
-         return $this->fail('BEGIN', [], 'SQL transaction operation is still active.');
+         // ? Told by identity: the operation in flight IS the BEGIN this
+         //   transaction was opened with — nobody awaited it yet.
+         $message = $this->Operation === $this->Begin
+            ? 'SQL transaction BEGIN is still in flight: await it before the next operation.'
+            : 'SQL transaction operation is still active.';
+
+         return $this->fail('BEGIN', [], $message);
       }
 
       // @ Events — transaction begin (guarded: zero-alloc when no listeners)
