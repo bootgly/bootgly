@@ -10,6 +10,7 @@ use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Suite\Test\Separator;
 use Bootgly\API\Environments;
 use Bootgly\CLI\UI\Components\Logs as LogsViewer;
+use Bootgly\WPI\Endpoints\Servers\Reporter;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as TCPServer;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Catcher;
@@ -45,9 +46,9 @@ if (! class_exists('HTTPServerCLIMonitorDrainProbe', false)) {
  * The request body is the attacker-influenced Throwable message. Each isolated
  * child runs the real Logger Tap, JSON formatter and nonblocking IPC Pipe; the
  * parent drains the same chunks through Logs::feed(), matching the Monitor
- * master. A small record is the positive control. The exact production HTTP
- * exception reporter installed by HTTP_Server_CLI::boot(Production) caps the
- * message it logs (4 KiB, M9), so it is probed once for that bound; the
+ * master. A small record is the positive control. The exact production
+ * exception reporter — the shared one every server's start() registers — caps
+ * the message it logs (4 KiB, M9), so it is probed once for that bound; the
  * oversized records come from an application logging the request value itself
  * — the transport must still drop them as whole frames.
  */
@@ -123,10 +124,13 @@ return new Test(
                   exit(0);
                }
 
-               // Exact production reporter registration. This runs in the
-               // disposable child so its function-local registration latch
-               // cannot alter the Security suite worker.
+               // Exact production boot — the encoder whose Catcher reports
+               // the request's Throwable — and the reporter registration
+               // every server's start() runs. Both run in the disposable
+               // child, so neither the encoder swap nor the registration
+               // latch can alter the Security suite worker.
                HTTP_Server_CLI::boot(Environments::Production);
+               Reporter::register();
                Catcher::respond(
                   null,
                   new Response,

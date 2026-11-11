@@ -74,6 +74,14 @@ class Encoder_ extends Encoders
                $reply = (SAPI::$Handler)($Session, $Message);
             }
             catch (Throwable $Throwable) {
+               // @ Report — the session goes on, so the failure must leave
+               //   a trace of its own (the `exceptions` channel)
+               Throwables::notify($Throwable, [
+                  'interface' => 'WPI',
+                  'phase' => 'Message',
+                  'peer' => $Session->Connection->ip,
+               ]);
+
                Throwables::debug($Throwable);
             }
          }

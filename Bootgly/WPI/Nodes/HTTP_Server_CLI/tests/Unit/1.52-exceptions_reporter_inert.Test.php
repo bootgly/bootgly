@@ -8,19 +8,20 @@ use Bootgly\ACI\Logs\Formatters\Line;
 use Bootgly\ACI\Logs\Handler;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Suite\Test;
-use Bootgly\API\Environments;
+use Bootgly\WPI\Endpoints\Servers\Reporter;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
+use Bootgly\WPI\Nodes\WS_Server_CLI;
 
 
 /**
- * M9 — the default `exceptions` reporter (registered by a Production boot) logs the message of
- * every Throwable a request raises, and PHP exceptions quote the client's bytes (a query string
- * `DateTimeImmutable` rejects, a value `BackedEnum::from()` refuses). That message must reach
- * the operator inert: no control sequence for the terminal, no line feed and no markup to forge
- * a record — shown, not dropped.
+ * M9 — the default `exceptions` reporter (`Servers\Reporter`, registered by every server's
+ * `start()` outside Test mode) logs the message of every Throwable a server reports, and PHP
+ * exceptions quote the client's bytes (a query string `DateTimeImmutable` rejects, a value
+ * `BackedEnum::from()` refuses). That message must reach the operator inert: no control
+ * sequence for the terminal, no line feed and no markup to forge a record — shown, not dropped.
  *
- * The real Production boot runs in a forked child, so the runner keeps its statics (the
- * reporter registration latch included); the child is unconditionally terminal.
+ * The registration runs in a forked child, so the runner keeps its statics (the reporter
+ * registration latch included); the child is unconditionally terminal.
  */
 return new Test(
    description: 'The default exceptions reporter logs a hostile exception message inert',
@@ -32,7 +33,7 @@ return new Test(
 
       $pid = pcntl_fork();
       if ($pid === 0) {
-         // # Child — a Production boot on a private copy of the statics
+         // # Child — the registration on a private copy of the statics
          try {
             // ! The live tap captures what the reporter logs: the record's message as the
             //   reporter built it, and the line a terminal would receive
@@ -54,8 +55,10 @@ return new Test(
             Logger::$Sinks = null;
             Logger::$Tap = $Capture;
 
-            HTTP_Server_CLI::boot(Environments::Production);
-            Throwables::notify(new RuntimeException($payload));
+            // ! Twice: a process that starts two servers still logs each failure once
+            Reporter::register();
+            Reporter::register();
+            Throwables::notify(new RuntimeException($payload), ['origin' => 'probe']);
             // ! An anonymous class — its `get_class()` name embeds a NUL and a path
             Throwables::notify(new class ('anonymous') extends RuntimeException {});
             // ! A message quoting a whole request body
@@ -109,8 +112,9 @@ return new Test(
       [$message, $line] = $records[0] ?? [null, ''];
 
       yield assert(
-         assertion: $message !== null,
-         description: 'a Production boot registers the reporter and it logs the exception'
+         assertion: $message !== null && count($records) === 3,
+         description: 'the registered reporter logs each reported exception once, however many times it is registered — records: '
+            . count($records)
       );
 
       yield assert(
@@ -127,6 +131,11 @@ return new Test(
       );
 
       yield assert(
+         assertion: str_contains($line, '"origin":"probe"'),
+         description: 'the record carries the context the failure was reported with'
+      );
+
+      yield assert(
          assertion: str_contains($records[1][1] ?? '', '"class":"RuntimeException@anonymous"'),
          description: 'an anonymous exception is named in the context without the NUL and path get_class() embeds'
       );
@@ -137,61 +146,92 @@ return new Test(
          description: 'a message quoting a whole request body is capped before it is escaped (and still defused)'
       );
 
-      // # Pin: every exception message the server logs goes through defuse() — the Auto-TLS
+      // # Pin: every exception message a server logs goes through defuse() — the Auto-TLS
       //   failure is logged by the certifier child only, out of reach of a live probe.
       //   Token-based: each `->getMessage()` outside the E2E harness (`test()`) must be the
-      //   direct argument of `self::defuse(`.
-      $tokens = array_values(array_filter(
-         token_get_all((string) file_get_contents((string) (new ReflectionClass(HTTP_Server_CLI::class))->getFileName())),
-         static fn (array|string $token): bool => is_array($token) === false
-            || in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true) === false
-      ));
+      //   direct argument of `Reporter::defuse(` in the HTTP server and of `self::defuse(` in
+      //   the reporter itself. The HTTP server registers no reporter of its own.
       $text = static fn (array|string $token): string => is_array($token) ? $token[1] : $token;
-      $method = '';
-      $depth = 0;
-      $opened = -1;
-      $calls = 0;
-      $bare = [];
-      foreach ($tokens as $index => $token) {
-         // @ Track the named method the token sits in (closures inherit it)
-         if (is_array($token) && $token[0] === T_FUNCTION && is_array($tokens[$index + 1]) && $tokens[$index + 1][0] === T_STRING) {
-            $method = $tokens[$index + 1][1];
-            $opened = -1;
-         }
-         $value = $text($token);
-         if ($value === '{' || (is_array($token) && in_array($token[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true))) {
-            $depth++;
-            if ($opened === -1 && $method !== '') {
-               $opened = $depth;
-            }
-         }
-         else if ($value === '}') {
-            if ($depth === $opened) {
-               $method = '';
+      $scan = static function (string $class, string $qualifier) use ($text): array {
+         $tokens = array_values(array_filter(
+            token_get_all((string) file_get_contents((string) (new ReflectionClass($class))->getFileName())),
+            static fn (array|string $token): bool => is_array($token) === false
+               || in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true) === false
+         ));
+         $method = '';
+         $depth = 0;
+         $opened = -1;
+         $calls = 0;
+         $bare = [];
+         $registrations = 0;
+         $registers = 0;
+         foreach ($tokens as $index => $token) {
+            // @ Track the named method the token sits in (closures inherit it)
+            if (is_array($token) && $token[0] === T_FUNCTION && is_array($tokens[$index + 1]) && $tokens[$index + 1][0] === T_STRING) {
+               $method = $tokens[$index + 1][1];
                $opened = -1;
             }
-            $depth--;
+            $value = $text($token);
+            if ($value === '{' || (is_array($token) && in_array($token[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true))) {
+               $depth++;
+               if ($opened === -1 && $method !== '') {
+                  $opened = $depth;
+               }
+            }
+            else if ($value === '}') {
+               if ($depth === $opened) {
+                  $method = '';
+                  $opened = -1;
+               }
+               $depth--;
+            }
+
+            // @ A write to the reporters list
+            if (is_array($token) && $token[0] === T_VARIABLE && $token[1] === '$reporters') {
+               $registrations++;
+            }
+            // @ A `Reporter::register()` call, however the class is named
+            if (
+               is_array($token) && $token[0] === T_STRING && $token[1] === 'register'
+               && $text($tokens[$index - 1]) === '::' && str_ends_with($text($tokens[$index - 2]), 'Reporter')
+            ) {
+               $registers++;
+            }
+            // @ A `getMessage()` call
+            if (is_array($token) && $token[0] === T_STRING && $token[1] === 'getMessage' && $text($tokens[$index - 1]) === '->') {
+               if ($method === 'test') {
+                  continue;
+               }
+               $calls++;
+               $wrapped = $text($tokens[$index - 3] ?? '') === '('
+                  && $text($tokens[$index - 4] ?? '') === 'defuse'
+                  && $text($tokens[$index - 5] ?? '') === '::'
+                  && $text($tokens[$index - 6] ?? '') === $qualifier;
+               if ($wrapped === false) {
+                  $bare[] = $token[2];
+               }
+            }
          }
 
-         // @ A `getMessage()` call
-         if (is_array($token) && $token[0] === T_STRING && $token[1] === 'getMessage' && $text($tokens[$index - 1]) === '->') {
-            if ($method === 'test') {
-               continue;
-            }
-            $calls++;
-            $wrapped = $text($tokens[$index - 3] ?? '') === '('
-               && $text($tokens[$index - 4] ?? '') === 'defuse'
-               && $text($tokens[$index - 5] ?? '') === '::'
-               && $text($tokens[$index - 6] ?? '') === 'self';
-            if ($wrapped === false) {
-               $bare[] = $token[2];
-            }
-         }
-      }
+         return ['calls' => $calls, 'bare' => $bare, 'registrations' => $registrations, 'registers' => $registers];
+      };
+      $Server = $scan(HTTP_Server_CLI::class, 'Reporter');
+      $Shared = $scan(Reporter::class, 'self');
       yield assert(
-         assertion: $calls >= 2 && $bare === [],
-         description: 'every exception message the server logs (reporter, Auto-TLS) goes through defuse(); bare at lines: '
-            . json_encode($bare)
+         assertion: $Server['calls'] >= 1 && $Server['bare'] === [] && $Server['registrations'] === 0
+            && $Shared['calls'] === 1 && $Shared['bare'] === [] && $Shared['registrations'] === 1,
+         description: 'every exception message a server logs (reporter, Auto-TLS) goes through defuse(), and the reporter is registered in one place — observed: '
+            . json_encode([$Server, $Shared])
+      );
+
+      // # Pin: the HTTP and WebSocket servers register nothing themselves — the registration
+      //   they inherit is the one that skips Test mode, where a worker prints what it logs
+      $Socket = $scan(WS_Server_CLI::class, 'Reporter');
+      yield assert(
+         assertion: $Server['registers'] === 0
+            && $Socket['registers'] === 0 && $Socket['registrations'] === 0,
+         description: 'neither the HTTP nor the WebSocket server registers the reporter on its own — observed: '
+            . json_encode([$Server['registers'], $Socket['registers'], $Socket['registrations']])
       );
    }
 );

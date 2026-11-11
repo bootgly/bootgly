@@ -55,7 +55,6 @@ use function fread;
 use function fstat;
 use function function_exists;
 use function fwrite;
-use function get_debug_type;
 use function glob;
 use function hash;
 use function hash_equals;
@@ -76,8 +75,6 @@ use function lchgrp;
 use function lchown;
 use function lstat;
 use function max;
-use function mb_scrub;
-use function mb_strcut;
 use function microtime;
 use function mkdir;
 use function opcache_invalidate;
@@ -142,12 +139,9 @@ use Throwable;
 
 use const Bootgly\ABI\BOOTSTRAP_FILENAME;
 use const Bootgly\WPI;
-use Bootgly\ABI\Code\__String\Controls;
 use Bootgly\ABI\Configs as Configuring;
-use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
 use Bootgly\ABI\IO\FS\File;
-use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Fixture;
@@ -159,6 +153,7 @@ use Bootgly\API\Environments;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\API\Workables\Server\Middlewares;
 use Bootgly\WPI\Endpoints\Servers\Ownership;
+use Bootgly\WPI\Endpoints\Servers\Reporter;
 use Bootgly\WPI\Event;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Events as TCP_Client_Events;
@@ -2560,7 +2555,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          // ! Backoff already recorded by renew(); the server keeps serving
          //   the current certificate — zero availability impact
          // ! A CA's problem document or resource URL reaches this message — made inert
-         $message = self::defuse($Throwable->getMessage());
+         $message = Reporter::defuse($Throwable->getMessage());
          $this->Logger->log(
             error: "@\\;Auto-TLS: issuance failed — {$message}@\\;"
          );
@@ -3127,48 +3122,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             break;
          default:
             self::$Encoder = new Encoder_;
-
-            // @ Exception reporting — `exceptions` log channel (registered once,
-            //   pre-fork, so every worker inherits it; Test env skips it to keep
-            //   E2E output byte-stable)
-            static $reporting = false;
-            if ($reporting === false) {
-               $reporting = true;
-
-               Throwables::$reporters[] = static function (Throwable $Throwable, array $context): void {
-                  static $Logger = null;
-                  $Logger ??= new Logger(channel: 'exceptions', global: true);
-
-                  // ! The message may echo a client's bytes (a query string a PHP
-                  //   exception quotes): made inert before it reaches the log
-                  $Logger->log(error: self::defuse($Throwable->getMessage()), context: [
-                     'class' => get_debug_type($Throwable),
-                     'file' => $Throwable->getFile(),
-                     'line' => $Throwable->getLine(),
-                     ...$context
-                  ]);
-               };
-            }
       }
-   }
-
-   /**
-    * Make a message the server did not author inert for a log line: capped (an exception may
-    * quote a whole request body), bytes that are not UTF-8 become `?` (a raw 0x9B is a CSI on a
-    * non-UTF-8 terminal), control characters — line feeds included — are escaped visibly and
-    * the Bootgly markup is defused, so the text can neither drive the operator's terminal nor
-    * forge a record.
-    */
-   private static function defuse (string $message): string
-   {
-      // ? A log line needs far less than a request body — capped first, on a character
-      //   boundary, so the scrub still sees every `@` next to the cut
-      if (strlen($message) > 4096) {
-         $message = mb_strcut($message, 0, 4096, 'UTF-8') . '...';
-      }
-
-      // :
-      return TemplateEscaped::scrub(Controls::escape(mb_scrub($message, 'UTF-8')));
    }
 
    /**

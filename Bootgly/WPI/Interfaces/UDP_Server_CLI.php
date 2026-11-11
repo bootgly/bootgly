@@ -160,6 +160,7 @@ use Bootgly\WPI\Endpoints\Demotable;
 use Bootgly\WPI\Endpoints\Servers;
 use Bootgly\WPI\Endpoints\Servers\Decoder;
 use Bootgly\WPI\Endpoints\Servers\Encoder;
+use Bootgly\WPI\Endpoints\Servers\Reporter;
 use Bootgly\WPI\Event;
 use Bootgly\WPI\Events;
 use Bootgly\WPI\Events\Select;
@@ -1154,6 +1155,13 @@ class UDP_Server_CLI implements Servers
       $this->Logger->log(notice: '@\;Starting Server...');
       if ($this->launch($Starting) === false) { // @phpstan-ignore identical.alwaysFalse
          return false;
+      }
+
+      // @ Log what the server catches and survives — the `exceptions` channel.
+      //   Before the fork, so every worker inherits it; Test mode skips it to
+      //   keep spec output byte-stable
+      if ($this->Mode !== Modes::Test) {
+         Reporter::register();
       }
 
       // @ Boot Server API

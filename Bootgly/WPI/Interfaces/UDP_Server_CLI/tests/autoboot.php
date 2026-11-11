@@ -77,5 +77,7 @@ return new Suite(
       '1.28-connections_diagnostic_inert',
       // # 1.3.x: a UDP worker takes the master's signals over on its loop, before it unmasks, and reads the server's handler at dispatch
       '1.29-worker_signal_owner',
+      // # 1.3.x: a UDP server logs to the exceptions channel what it catches and survives
+      '1.30-exceptions_reporter',
    ]
 );

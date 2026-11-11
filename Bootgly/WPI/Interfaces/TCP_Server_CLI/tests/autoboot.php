@@ -71,5 +71,7 @@ return new Suite(
       '1.33-worker-timer-owner',
       // # 1.3.x: a worker takes the master's signals over on a loop that dispatches signals; a loop without the capability keeps the inherited handlers; a stop survives a throwing shutdown listener
       '1.34-worker-signal-owner',
+      // # 1.3.x: every server logs to the exceptions channel what it catches and survives — the registration is the transport's, not the HTTP node's
+      '1.35-exceptions-reporter',
    ]
 );

@@ -34,6 +34,8 @@ return new Suite(
       // # H-WS-1 — compressed sessions hold no zlib context of their own
       '4.2-compression_contexts',
       // # 1.3.x: the heartbeat supervisor rides the worker loop's recurring timers — one timer owner
-      '5.6-session_timer_owner'
+      '5.6-session_timer_owner',
+      // # A message handler failure the server survives is reported (the `exceptions` channel)
+      '6.1-message_failure_report'
    ]
 );
