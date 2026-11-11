@@ -20,11 +20,13 @@ use function implode;
 use function in_array;
 use function is_array;
 use function is_int;
+use function is_object;
 use function is_string;
 use function ltrim;
 use function preg_match;
 use function preg_quote;
 use function rtrim;
+use function serialize;
 use function str_ends_with;
 use function strpos;
 use function substr;
@@ -39,6 +41,8 @@ use const Bootgly\WPI;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\API\Workables\Server\Middleware;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Registration;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Registration\Kinds;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Route;
 
 
@@ -91,6 +95,20 @@ class Router
    private null|string $groupPrefix = null;
    /** @var null|array<string> Active group methods; an empty list is method-agnostic. */
    private null|array $groupMethods = null;
+   // # Route list
+   /**
+    * Equal method lists of the route list, stored once and shared by the rows
+    * that carry them — a warm-up table, released when the warm-up ends.
+    *
+    * @var array<string,array<int,string>>
+    */
+   private array $methodLists = [];
+   /**
+    * Equal parameter lists of the route list, shared the same way.
+    *
+    * @var array<string,array<int,array{name:string,constraint:null|string,pattern:string}>>
+    */
+   private array $parameterLists = [];
 
    /**
     * Whether the route cache has been warmed (all routes registered).
@@ -102,6 +120,26 @@ class Router
 
    // * Metadata
    public Route $Route;
+   /**
+    * The routes this Router stored, one row per registration, in registration
+    * order — a registration log, complete once `$cached` is true.
+    *
+    * A group, a registration made while the Router is paused or after the
+    * warm-up, and one that threw leave no row. A path registered twice keeps
+    * both rows: the later static or catch-all registration is the one
+    * dispatched, the earlier dynamic one.
+    *
+    * The log follows the registrations: a route set that runs more than once
+    * before the Router is warm — a handler that registers by direct calls and
+    * then answers or throws by itself — is logged each time it runs. Only a
+    * throw inside `warm()` empties the list, and the dispatch tables keep what
+    * that attempt stored.
+    *
+    * Written where a route is stored and read nowhere on the request path.
+    *
+    * @var array<int,Registration>
+    */
+   public private(set) array $Routes = [];
 
 
    public function __construct ()
@@ -643,6 +681,7 @@ class Router
       //   middleware makes the route ineligible: those admission and response
       //   policies must execute on every request. Middleware-free routes keep
       //   the wrapper-only fast path.
+      $cacheOptions = null;
       if ($cacheConfig !== null) {
          // ? Fail loud at registration time — runtime pays nothing for it
          foreach ($cacheConfig as $option => $_) {
@@ -661,6 +700,11 @@ class Router
             );
          }
 
+         // ! Validated above: exactly ['TTL' => positive int] — the route
+         //   list records the caller's own array.
+         /** @var array{TTL:int} $cacheConfig */
+         $cacheOptions = $cacheConfig;
+
          if ($MergedMiddlewares === []) {
             $Inner = $boundHandler;
             $boundHandler = static function (object $Request, object $Response) use ($Inner, $cacheTTL): mixed {
@@ -673,9 +717,29 @@ class Router
          }
       }
 
+      // ! What the route list records as the handler: the callable as it was
+      //   registered — serve() has none, its row carries the body instead.
+      //   (PHP has no callable property type: a callable is a Closure or an
+      //   invokable object, a [target, method] pair or a function name.)
+      $registered = null;
+      if ($directBody === null && (is_object($handler) || is_array($handler) || is_string($handler))) {
+         $registered = $handler;
+      }
+
       // @ Catch-all route — store dispatcher closure directly (O(1) callable)
       if ($normalizedRoute === '/*') {
          $this->CatchAllCache = $this->dispatch($boundHandler, $MergedMiddlewares);
+         // @ Route list row — the single slot is tested against no method
+         $this->Routes[] = new Registration(
+            path: $normalizedRoute,
+            methods: null,
+            handler: $registered,
+            body: $directBody,
+            Middlewares: $MergedMiddlewares,
+            parameters: [],
+            cache: $cacheOptions,
+            Kind: Kinds::CatchAll
+         );
          return;
       }
 
@@ -702,6 +766,8 @@ class Router
          $paramNames = [];
          /** @var array<string,int> $paramCounts Track duplicate param names */
          $paramCounts = [];
+         /** @var array<int,array{name:string,constraint:null|string,pattern:string}> $parameters Route list: one entry per param */
+         $parameters = [];
          // ! Classification input: literal segments never require regex — only
          //   catch-alls, constraints, inline regexes and pre-set Params regexes
          //   do. (The old classifier re-scanned $regexParts for '([^\/]+)'
@@ -712,6 +778,8 @@ class Router
          foreach ($parts as $index => $part) {
             if (isset($part[0]) && $part[0] === ':') {
                $paramName = trim($part, ':');
+
+               $constraint = null;
 
                // @ Check for catch-all modifier: :paramName* → capture rest of URL
                $isCatchAll = false;
@@ -727,6 +795,7 @@ class Router
                }
 
                if ($isCatchAll) {
+                  $paramPattern = '.+';
                   $regexParts[] = '(.+)';
                   $needsRegex = true;
                }
@@ -741,6 +810,8 @@ class Router
                      );
                   }
                   $constraintRegex = self::PARAM_CONSTRAINTS[$typeName];
+                  $constraint = $typeName;
+                  $paramPattern = $constraintRegex;
                   $regexParts[] = "({$constraintRegex})";
                   $needsRegex = true;
                }
@@ -748,6 +819,7 @@ class Router
                else if (str_ends_with($paramName, ')') && ($parenPos = strpos($paramName, '(')) !== false) {
                   $inlineRegex = substr($paramName, $parenPos + 1, -1);
                   $paramName = substr($paramName, 0, $parenPos);
+                  $paramPattern = $inlineRegex;
                   $regexParts[] = "({$inlineRegex})";
                   $needsRegex = true;
                }
@@ -755,14 +827,21 @@ class Router
                else {
                   $paramRegex = $this->Route->Params->$paramName;
                   if ($paramRegex !== null && is_string($paramRegex)) {
+                     $paramPattern = $paramRegex;
                      $regexParts[] = "({$paramRegex})";
                      $needsRegex = true;
                   } else {
+                     $paramPattern = '[^\\/]+';
                      $regexParts[] = '([^\\/]+)';
                   }
                }
 
                $paramNames[] = $paramName;
+               $parameters[] = [
+                  'name' => $paramName,
+                  'constraint' => $constraint,
+                  'pattern' => $paramPattern,
+               ];
 
                // @ Track duplicate param names
                $paramCounts[$paramName] = ($paramCounts[$paramName] ?? 0) + 1;
@@ -825,6 +904,18 @@ class Router
             'dispatcher' => $this->dispatch($boundHandler, $MergedMiddlewares),
          ];
          $this->hasDynamic = true;
+         // @ Route list row — an empty method list matches every method;
+         //   equal parameter lists are stored once
+         $this->Routes[] = new Registration(
+            path: $normalizedRoute,
+            methods: $methodsList === [] ? null : $methodsList,
+            handler: $registered,
+            body: $directBody,
+            Middlewares: $MergedMiddlewares,
+            parameters: $this->parameterLists[serialize($parameters)] ??= $parameters,
+            cache: $cacheOptions,
+            Kind: Kinds::Dynamic
+         );
          return;
       }
 
@@ -848,6 +939,25 @@ class Router
             $this->hasAgnosticStatic = true;
          }
       }
+      // ? Nothing was stored (an empty, non-agnostic method list) — no row
+      if ($methodsList === []) {
+         return;
+      }
+      // @ Route list row — equal method lists are stored once (a dynamic
+      //   row shares its list with the cache entry instead). An empty method
+      //   name is the agnostic slot: the route answers every method.
+      $this->Routes[] = new Registration(
+         path: $normalizedRoute === '' ? '/' : $normalizedRoute,
+         methods: in_array('', $methodsList, true)
+            ? null
+            : $this->methodLists[serialize($methodsList)] ??= $methodsList,
+         handler: $registered,
+         body: $directBody,
+         Middlewares: $MergedMiddlewares,
+         parameters: [],
+         cache: $cacheOptions,
+         Kind: is_string($Dispatcher) ? Kinds::Body : Kinds::Static
+      );
    }
 
    // # Routing
@@ -918,6 +1028,55 @@ class Router
       return false;
    }
    /**
+    * Warm the route cache without a request: drain the route Generator, then
+    * flatten the route groups. `$cached` is true and `$Routes` is complete
+    * when it returns; a warm Router ignores the call.
+    *
+    * `routing()` runs it on the worker's first request. Call it directly to
+    * read the route list in a test, a command or a tool:
+    * `$Router->warm($Handler($Request, $Response, $Router))`.
+    *
+    * `$Routes` may be null when the routes were registered through direct
+    * `$Router->route(...)` calls (no yield): only the groups remain.
+    *
+    * A warm-up that throws leaves the Router cold and its route list empty:
+    * the next attempt registers every route again, over the dispatch tables
+    * the failed one left.
+    *
+    * @throws Throwable What a route set or a registration threw.
+    */
+   public function warm (null|Generator $Routes = null): void
+   {
+      // ? Already warm
+      if ($this->cached) {
+         return;
+      }
+
+      try {
+         $this->Middlewares = [];
+         if ($Routes !== null) {
+            foreach ($Routes as $_) {
+               // @ Intentional drain: route() registers via cache(), yields false
+            }
+         }
+         $this->flatten();
+      }
+      catch (Throwable $Throwable) {
+         // ! The retry registers again from the first route: rows of the
+         //   failed attempt would otherwise pile up with every request.
+         $this->Routes = [];
+         $this->methodLists = [];
+         $this->parameterLists = [];
+
+         throw $Throwable;
+      }
+
+      // @ The rows keep what they share; the warm-up tables are done
+      $this->methodLists = [];
+      $this->parameterLists = [];
+      $this->cached = true;
+   }
+   /**
     * Drain the route Generator once to populate the cache (first request only),
     * then resolve the current request from the cache.
     *
@@ -930,14 +1089,7 @@ class Router
    {
       // ! First request: register every route, then flatten group routes
       if ($this->cached === false) {
-         $this->Middlewares = [];
-         if ($Routes !== null) {
-            foreach ($Routes as $_) {
-               // @ Intentional drain: route() registers via cache(), yields false
-            }
-         }
-         $this->flatten();
-         $this->cached = true;
+         $this->warm($Routes);
       }
 
       // @ Resolve current request from the cache

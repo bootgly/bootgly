@@ -125,5 +125,9 @@ return new Suite(
       '1.76-select_repeat',
       // # 1.3.x (recurring reactor timers): a TCP connection's idle expiration has one timer owner
       '1.77-connection_idle_loop_timer',
+      // # 1.3.x (route list): each row of Router::$Routes against what resolve() dispatches
+      '1.78-router_routes_equivalence',
+      // # 1.3.x (route list): a registration log, complete once the Router is warm
+      '1.79-router_routes_log',
    ]
 );

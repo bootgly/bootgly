@@ -593,6 +593,8 @@ return new Suite(
          '7.8-route_cache-global_lifecycle_guard',
          '7.9-route_cache-received_lifecycle_guard',
          '7.10-route_cache-forwarding_header',
+         // Route list (the registration log, read on a cold worker)
+         '8.1-route_list-cold_worker',
       ],
       'Router/Middleware/' => [
          // CORS
