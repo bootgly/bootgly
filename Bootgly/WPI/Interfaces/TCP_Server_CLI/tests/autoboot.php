@@ -67,5 +67,7 @@ return new Suite(
       '1.31-recycle-gate',
       // # 1.1.x (v1.1.0 worker recycling): a worker forked without its beacon pair never recycles
       '1.32-recycle-beaconless',
+      // # 1.3.x: the worker tickers (watchdog, recycle gate, drain poll) ride the loop's recurring timers — one timer owner
+      '1.33-worker-timer-owner',
    ]
 );

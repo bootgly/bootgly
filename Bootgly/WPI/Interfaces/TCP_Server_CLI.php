@@ -200,6 +200,7 @@ use Bootgly\ABI\Debugging\Shutdown;
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\ABI\IO\IPC\Pipe as IPCPipe;
 use Bootgly\ACI\Events\Loops;
+use Bootgly\ACI\Events\Repeating;
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Data\Display;
@@ -395,8 +396,11 @@ class TCP_Server_CLI implements Servers
    //   Seconds an established connection may stay silent — no completed write
    //   since the previous supervisor tick and no pending work retained on it
    //   (see Ownership) — before the worker closes it. Whole seconds: the
-   //   supervisor runs on the one-second SIGALRM timer wheel, so a reap lands
-   //   between N and N+1 seconds after the last activity tick. 0 disables it.
+   //   supervisor runs once a second — the worker's sweep on the event loop's
+   //   recurring timers, or the static Timer's SIGALRM wheel on a loop
+   //   without them — and checks each connection every N seconds, so a reap
+   //   lands between N and N+1 seconds after the check that last saw
+   //   activity. 0 disables it.
    public static int $connectionIdleTimeout = 15;
    // # TLS admission
    //   Absolute wall-time budget for a nonblocking TLS handshake. The
@@ -1465,15 +1469,20 @@ class TCP_Server_CLI implements Servers
       //   reparenting and stop locally so stale workers never outlive their
       //   supervisor or retain its inherited process-state lock forever.
       $master = $this->Process->master;
-      Timer::add(
-         interval: 1,
-         handler: function () use ($master): void {
-            if (posix_getppid() !== $master) {
-               $this->stop();
-            }
-         },
-         persistent: true
-      );
+      $this->repeat(1, function () use ($master): void {
+         if (posix_getppid() !== $master) {
+            $this->stop();
+
+            return;
+         }
+
+         // @ The connections' periodic checks ride this ticker: one wakeup
+         //   a second per worker, whatever the number of connections
+         Connections::sweep();
+      });
+      // ! Own the sweep before the first connection is accepted: none arms
+      //   a timer of its own beside this ticker
+      Connections::sweep();
 
       // @ Process title (node-specific prefix).
       $Process->title = $this->process . ': child process (Worker #' . Process::$index . ')';
@@ -1576,7 +1585,7 @@ class TCP_Server_CLI implements Servers
       }
       if (self::$gated && $this->Beacon !== null) {
          stream_set_blocking($this->Beacon, false);
-         Timer::add(interval: 1, handler: $this->await(...), persistent: true);
+         $this->repeat(1, $this->await(...));
       }
 
       // @ Booted: tell the master through the beacon, so a later death of
@@ -3840,24 +3849,41 @@ class TCP_Server_CLI implements Servers
          return;
       }
 
-      // @@ Otherwise poll once a second (SIGALRM-driven Timer): break the loop once
-      //    the in-flight connections have drained or the budget expires. Breaking
-      //    the loop returns from work() → stop() → the forked child exits.
+      // @@ Otherwise poll once a second (the worker's timer owner): break the loop
+      //    once the in-flight connections have drained or the budget expires.
+      //    Breaking the loop returns from work() → stop() → the forked child exits.
       $deadline = time() + self::$drainTimeout;
-      Timer::add(
-         interval: 1,
-         handler: function () use ($deadline): void {
-            // @ A connection whose work ended since is handed back too
-            if (self::$recycling) {
-               $this->shed();
-            }
+      $this->repeat(1, function () use ($deadline): void {
+         // @ A connection whose work ended since is handed back too
+         if (self::$recycling) {
+            $this->shed();
+         }
 
-            if (count(Connections::$Connections) === 0 || time() >= $deadline) {
-               self::$Event->loop = false; // @phpstan-ignore-line (property on the Select impl)
-            }
-         },
-         persistent: true
-      );
+         if (count(Connections::$Connections) === 0 || time() >= $deadline) {
+            self::$Event->loop = false; // @phpstan-ignore-line (property on the Select impl)
+         }
+      });
+   }
+   /**
+    * Run a worker-side task every `$interval` seconds, for the rest of the
+    * worker's life, on the worker's one timer owner: the event loop when it
+    * offers recurring timers (`Repeating`), the static `Timer` — the
+    * one-second SIGALRM wheel — otherwise. Never both: with the loop as the
+    * owner, the framework arms no alarm in the worker.
+    *
+    * @param int $interval Whole seconds between runs.
+    * @param Closure():void $Task
+    */
+   private function repeat (int $interval, Closure $Task): void
+   {
+      $Loop = self::$Event;
+      if ($Loop instanceof Repeating) {
+         $Loop->repeat((float) $interval, $Task);
+
+         return;
+      }
+
+      Timer::add(interval: $interval, handler: $Task, persistent: true);
    }
    /**
     * Close, on a recycling worker's drain, the connections that carry no

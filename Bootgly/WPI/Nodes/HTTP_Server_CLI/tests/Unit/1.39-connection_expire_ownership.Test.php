@@ -30,7 +30,6 @@ return new Test(
       $oldIdle = TCP_Server_CLI::$connectionIdleTimeout;
       $Scopes = new ReflectionProperty(Ownership::class, 'Scopes');
       $registry = $Scopes->getValue();
-      $Tasks = new ReflectionProperty(Timer::class, 'tasks');
 
       $Owner = static fn (): object => new class implements Disconnecting {
          public int $disconnects = 0;
@@ -82,30 +81,17 @@ return new Test(
 
             return $Connection;
          };
-         $bucket = static function (Connection $Connection) use ($Tasks): null|int {
-            $id = $Connection->timers[0] ?? null;
-            if ($id === null) {
-               return null;
-            }
-            foreach ($Tasks->getValue() as $runtime => $tasks) {
-               if (array_key_exists($id, $tasks)) {
-                  return $runtime;
-               }
-            }
-
-            return null;
-         };
-
-         // @@ A) The knob seeds the window and the timer wheel
+         // @@ A) The knob seeds the window and the periodic check: the reactor
+         //       here offers recurring timers, so the worker's sweep owns it
          TCP_Server_CLI::$connectionIdleTimeout = 7;
          $Seeded = $accept();
-         $runtime = $bucket($Seeded);
-         $ahead = $runtime === null ? null : $runtime - time();
+         $ahead = $Seeded->due - time();
 
          yield assert(
-            assertion: $Seeded->expiration === 7 && $ahead !== null && $ahead >= 6 && $ahead <= 8,
-            description: 'connectionIdleTimeout seeds the connection window and its timer bucket — expiration: '
-               . $Seeded->expiration . ', bucket ahead: ' . var_export($ahead, true)
+            assertion: $Seeded->expiration === 7 && $Seeded->timers === []
+               && $ahead >= 6 && $ahead <= 7,
+            description: 'connectionIdleTimeout seeds the connection window and its periodic check on the sweep — expiration: '
+               . $Seeded->expiration . ', seconds ahead: ' . var_export($ahead, true)
          );
 
          TCP_Server_CLI::$connectionIdleTimeout = 0;

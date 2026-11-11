@@ -18,11 +18,13 @@ use function stream_get_meta_data;
 use function stream_set_blocking;
 use function stream_socket_enable_crypto;
 use function time;
+use Closure;
 use Throwable;
 
 use Bootgly\ACI\Events\Timer;
 use Bootgly\WPI\Endpoints\Servers\Disconnecting;
 use Bootgly\WPI\Endpoints\Servers\Ownership;
+use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
@@ -34,7 +36,11 @@ class Connection extends Packages
    /** @var resource */
    public $Socket;
 
-   /** @var array<int> */
+   /**
+    * Static `Timer` ids this connection owns, deleted on close.
+    *
+    * @var array<int>
+    */
    public array $timers;
    public int $expiration;
 
@@ -57,6 +63,16 @@ class Connection extends Packages
    public int $writes;
    // Last `writes` value observed by `expire()` (activity detection)
    protected int $expiredWrites;
+   // @ Supervision
+   /**
+    * Wall second of this connection's next periodic check on the worker's
+    * supervision sweep (see `watch()`); 0 while it has none there.
+    */
+   public private(set) int $due = 0;
+   // Seconds between two periodic checks on the sweep
+   private int $cadence = 0;
+   // The check a protocol installed in place of the idle expiration
+   private null|Closure $Watcher = null;
 
 
    /**
@@ -131,6 +147,13 @@ class Connection extends Packages
       //   flag: reaping idle connections is a resource-protection concern
       //   and must work with stats collection disabled (the default).
       if ($this->expiration > 0) {
+         // ? One timer owner per worker: on a loop with recurring timers
+         //   the expiration rides the worker's supervision sweep, and the
+         //   static Timer holds no task for this connection
+         if ($this->watch($this->expiration)) {
+            return;
+         }
+
          $timer = Timer::add(
             interval: $this->expiration,
             handler: [$this, 'expire'],
@@ -224,6 +247,94 @@ class Connection extends Packages
 
       return true;
    }
+   /**
+    * Run a periodic check for this connection on the worker's supervision
+    * sweep: every `$interval` whole seconds, the first one `$interval`
+    * seconds from now, in place of the check in force. Without `$Check` it
+    * is the idle expiration (`expire()`); a protocol with a liveness rule of
+    * its own — a WebSocket session's ping/pong supervisor — passes it. A
+    * non-positive `$interval` stops the periodic check.
+    *
+    * The sweep runs once a second on the worker's event loop (see
+    * `Connections::sweep()`), so a check lands between `$interval` and
+    * `$interval + 1` seconds after the previous one.
+    *
+    * @param int $interval Whole seconds between two checks.
+    * @param null|Closure():void $Check The check to run; null for the idle expiration.
+    *
+    * @return bool False when the worker's loop offers no recurring timers:
+    *              nothing was installed, and the caller keeps the static `Timer`.
+    */
+   public function watch (int $interval, null|Closure $Check = null): bool
+   {
+      // ? Stopped — also what a closed connection gets
+      if ($interval <= 0 || $this->status > Connections::STATUS_ESTABLISHED) {
+         $this->due = 0;
+         $this->Watcher = null;
+         Connections::release($this);
+
+         return true;
+      }
+
+      // ?: No sweep on this worker's loop
+      if (Connections::supervise($this) === false) {
+         return false;
+      }
+
+      // ? An interval beyond what a loop can schedule never comes due
+      if ($interval > Select::HORIZON) {
+         $this->due = 0;
+         $this->Watcher = null;
+         Connections::release($this);
+
+         return true;
+      }
+
+      $this->cadence = $interval;
+      $this->Watcher = $Check;
+      $this->due = time() + $interval;
+
+      // :
+      return true;
+   }
+   /**
+    * Run this connection's periodic check when it is due — the worker's
+    * supervision sweep calls it, once a second.
+    *
+    * @param int $now The current wall second.
+    */
+   public function inspect (int $now): void
+   {
+      // ?
+      if ($this->due === 0 || $now < $this->due) {
+         return;
+      }
+
+      // ! Moved on before the check runs: a sweep entered again from inside
+      //   the check does not run it twice
+      $this->due = $now + $this->cadence;
+
+      // @
+      try {
+         $Watcher = $this->Watcher;
+         if ($Watcher !== null) {
+            $Watcher();
+         }
+         else {
+            $this->expire($this->cadence);
+         }
+      }
+      finally {
+         // ! Re-armed from the clock once the check ran, as a timer would be:
+         //   the sweep read `$now` once, and the wall second may have moved
+         //   on since — earlier checks of the walk, or this one, took time.
+         //   A check that stopped itself (closed, `watch(0)`) stays stopped
+         if ($this->due !== 0) {
+            $this->due = time() + $this->cadence;
+         }
+      }
+   }
+
    public function expire (int $timeout): bool
    {
       if ($this->status > Connections::STATUS_ESTABLISHED) {
@@ -331,6 +442,12 @@ class Connection extends Packages
             // Continue closing even if a timer backend rejects cancellation.
          }
       }
+      // ! The worker's sweep holds this connection — and its check may hold
+      //   the protocol unit — until it is released: same retention, same
+      //   remedy
+      $this->due = 0;
+      $this->Watcher = null;
+      Connections::release($this);
 
       // @ Protocol-independent pending work (for example, an HTTP deferred
       //   exchange waiting on a database socket) must terminate even though it

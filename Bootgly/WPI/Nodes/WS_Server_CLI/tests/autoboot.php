@@ -32,6 +32,8 @@ return new Suite(
       '5.4-message_deadline_live',
       '5.5-inbound_share_eviction',
       // # H-WS-1 — compressed sessions hold no zlib context of their own
-      '4.2-compression_contexts'
+      '4.2-compression_contexts',
+      // # 1.3.x: the heartbeat supervisor rides the worker loop's recurring timers — one timer owner
+      '5.6-session_timer_owner'
    ]
 );

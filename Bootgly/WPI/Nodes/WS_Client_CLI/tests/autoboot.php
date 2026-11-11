@@ -34,6 +34,8 @@ return new Suite(
       '6.4-deflater',
       // # Server PINGs never grow a backpressured queue; the pre-101 head is capped
       '5.6-pong_coalescing',
-      '5.7-handshake_head_cap'
+      '5.7-handshake_head_cap',
+      // # 1.3.x: the supervisor and the one-shot deadlines ride the client loop — one timer owner
+      '5.8-session_timer_owner'
    ]
 );

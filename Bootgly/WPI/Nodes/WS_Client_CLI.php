@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Nodes;
 
 
+use function hrtime;
 use function implode;
 use function max;
 use function min;
@@ -23,6 +24,7 @@ use Closure;
 use InvalidArgumentException;
 
 use Bootgly\ABI\Configs as Configuring;
+use Bootgly\ACI\Events\Repeating;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI\Event;
@@ -378,19 +380,15 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
       //   handshake reject (graceful close), so it never triggers a reconnect.
       if ($Socket !== false && $this->handshakeTimeout > 0) {
          $Session = $this->Session;
-         Timer::add(
-            interval: $this->handshakeTimeout,
-            handler: function () use ($Session) {
-               if ($Session === null || $Session->established || $Session->disconnected) {
-                  return;
-               }
+         $this->defer($this->handshakeTimeout, function () use ($Session): void {
+            if ($Session === null || $Session->established || $Session->disconnected) {
+               return;
+            }
 
-               $Session->closing = true;
-               $Session->disconnect();
-               $Session->Connection->close();
-            },
-            persistent: false
-         );
+            $Session->closing = true;
+            $Session->disconnect();
+            $Session->Connection->close();
+         });
       }
 
       // :
@@ -424,8 +422,8 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
          return;
       }
 
-      // @ Capped exponential backoff, scheduled on the event loop (>= 1s, the
-      //   SIGALRM granularity).
+      // @ Capped exponential backoff, in whole seconds (>= 1s, the SIGALRM
+      //   granularity of the static Timer), on the client's timer owner.
       $delay = (int) min(
          $this->reconnectMaxDelay,
          $this->reconnectDelay * (2 ** min($this->attempt, 16))
@@ -436,15 +434,35 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
       $this->attempt++;
       $this->Logger->log(debug: "Reconnecting (attempt {$this->attempt}) in {$delay}s...@\\;");
 
-      Timer::add(
-         interval: $delay,
-         handler: function () {
-            if ($this->dial() === false) {
-               $this->retry();
-            }
-         },
-         persistent: false
-      );
+      $this->defer($delay, function (): void {
+         if ($this->dial() === false) {
+            $this->retry();
+         }
+      });
+   }
+
+   /**
+    * Run a task once, `$seconds` from now, on the client's one timer owner:
+    * its event loop when the loop offers recurring timers (`Repeating` — the
+    * session supervisor rides it too), the static `Timer` otherwise.
+    *
+    * @param int $seconds Whole seconds to wait.
+    * @param Closure():void $Task
+    */
+   private function defer (int $seconds, Closure $Task): void
+   {
+      $Loop = $this->Event;
+      if ($Loop instanceof Repeating) {
+         // ! Monotonic nanoseconds; capped so the deadline stays an integer
+         $Loop->defer(
+            (int) hrtime(true) + min($seconds, 1_000_000_000) * 1_000_000_000,
+            $Task
+         );
+
+         return;
+      }
+
+      Timer::add(interval: $seconds, handler: $Task, persistent: false);
    }
 
    /**

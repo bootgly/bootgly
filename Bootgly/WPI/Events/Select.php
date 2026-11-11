@@ -1307,6 +1307,21 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating
          return null;
       }
 
+      // ? Recurring timers only, none due — the shape of every worker whose
+      //   watchdog and idle reapers ride the loop: one clock read and the
+      //   heap's top bound the wait, with no set walked. A due timer, or a
+      //   stopped one on top, takes the full pass below.
+      if (
+         $this->Timers === [] && $this->MonotonicTimers === []
+         && $this->awaitingReadDeadlines === [] && $this->awaitingWriteDeadlines === []
+      ) {
+         [$deadline, $ID] = $this->Schedule->top();
+         $nowMonotonic = (int) hrtime(true);
+         if ($deadline > $nowMonotonic && isset($this->Repeaters[$ID])) {
+            return ($deadline - $nowMonotonic) / 1_000_000_000;
+         }
+      }
+
       // ! Read each clock only for its consumers: the wall clock serves the
       //   Timers set plus the awaiting-I/O deadlines, the monotonic clock
       //   serves MonotonicTimers and the recurring ones. A lone monotonic

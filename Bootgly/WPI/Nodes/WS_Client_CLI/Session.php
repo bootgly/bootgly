@@ -24,7 +24,9 @@ use function substr;
 use function time;
 use DeflateContext;
 use InflateContext;
+use InvalidArgumentException;
 
+use Bootgly\ACI\Events\Repeating;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
 use Bootgly\WPI\Modules\WS;
@@ -82,7 +84,13 @@ class Session
    // @ Liveness
    public int $lastActivity = 0;
    public bool $awaitingPong = false;
+   /**
+    * The supervisor's timer id (0 = none): a recurring timer of the client's
+    * event loop when it offers them, a static `Timer` task otherwise.
+    */
    public int $timer = 0;
+   /** The loop that owns `$timer`; null while the static `Timer` does. */
+   private null|Repeating $Loop = null;
    public null|string $pong = null;                 // latest server PING payload parked while output is backpressured
 
 
@@ -117,10 +125,26 @@ class Session
       $interval = $this->Client->heartbeatInterval > 0
          ? $this->Client->heartbeatInterval
          : 1;
-      $timer = Timer::add(interval: $interval, handler: [$this, 'supervise']);
-      if ($timer !== false) {
-         $this->timer = $timer;
-         $this->Connection->timers[] = $timer;
+      // ? One timer owner: a loop with recurring timers runs the supervisor
+      //   itself — its id never joins `Connection::$timers` (static `Timer`
+      //   ids), and disconnect() reaches it on every close path
+      $Loop = $this->Client->Event;
+      if ($Loop instanceof Repeating) {
+         try {
+            $this->timer = $Loop->repeat((float) $interval, $this->supervise(...));
+            $this->Loop = $Loop;
+         }
+         catch (InvalidArgumentException) {
+            // ? An interval beyond what the loop can schedule never comes
+            //   due: the session runs unsupervised
+         }
+      }
+      else {
+         $timer = Timer::add(interval: $interval, handler: [$this, 'supervise']);
+         if ($timer !== false) {
+            $this->timer = $timer;
+            $this->Connection->timers[] = $timer;
+         }
       }
 
       // # Hook
@@ -145,10 +169,18 @@ class Session
       $this->disconnected = true;
       $this->pong = null;
 
-      // @ Stop the heartbeat supervisor.
-      if ($this->timer !== 0) {
-         Timer::del($this->timer);
-         $this->timer = 0;
+      // @ Stop the heartbeat supervisor, on the owner that runs it.
+      $Loop = $this->Loop;
+      $this->Loop = null;
+      $timer = $this->timer;
+      $this->timer = 0;
+      if ($timer !== 0) {
+         if ($Loop !== null) {
+            $Loop->cancel($timer);
+         }
+         else {
+            Timer::del($timer);
+         }
       }
 
       // # Hook

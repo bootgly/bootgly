@@ -19,6 +19,7 @@ use function fclose;
 use function is_resource;
 use function max;
 use function min;
+use function spl_object_id;
 use function str_starts_with;
 use function stream_set_blocking;
 use function stream_set_read_buffer;
@@ -26,9 +27,12 @@ use function stream_set_timeout;
 use function stream_socket_accept;
 use function stream_socket_get_name;
 use function substr;
+use function time;
 use Throwable;
 
 use const Bootgly\CLI;
+use Bootgly\ABI\Debugging\Data\Throwables;
+use Bootgly\ACI\Events\Repeating;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI;
 use Bootgly\WPI\Connections\Packages;
@@ -88,6 +92,17 @@ class Connections implements WPI\Connections
    public static int $writes = 0;
    public static int $read = 0;
    public static int $written = 0;
+   // @ Supervision
+   //   The periodic checks of a worker's connections — the idle expiration,
+   //   a WebSocket session's supervisor — ride one sweep, run once a second
+   //   on the worker's event loop when it offers recurring timers: one
+   //   wakeup for the whole worker, whatever the number of connections.
+   /** @var array<int,Connection> Connections with a periodic check, by object id. */
+   private static array $Supervised = [];
+   /** The loop the sweep runs on; null while none runs in this process. */
+   private static null|Repeating $Sweeper = null;
+   // The sweep's own timer on that loop; 0 while the worker's ticker runs it
+   private static int $sweep = 0;
    // @ Status
    public const int STATUS_INITIAL = 0;
    public const int STATUS_CONNECTING = 1;
@@ -111,6 +126,10 @@ class Connections implements WPI\Connections
       // * Metadata
       // @ Remote
       self::$Connections = []; // Connections peers
+      // @ Supervision
+      self::$Supervised = [];
+      self::$Sweeper = null;
+      self::$sweep = 0;
       // @ Limiter
       self::$blacklist = [];   // Connections blacklist defined by limit methods
       self::$ipConnections = []; // Live admitted-connection count per peer IP
@@ -195,6 +214,82 @@ class Connections implements WPI\Connections
    }
 
    // Accept connection from client / Open connection with client / Connect with client
+   /**
+    * Put a connection under the worker's supervision sweep: once a second,
+    * `sweep()` runs `Connection::inspect()` on every connection whose
+    * periodic check is due.
+    *
+    * @return bool False when the worker's loop offers no recurring timers —
+    *              the connection is not supervised here.
+    */
+   public static function supervise (Connection $Connection): bool
+   {
+      $Loop = Server::$Event ?? null;
+      // ?:
+      if ($Loop instanceof Repeating === false) {
+         return false;
+      }
+
+      // ? A loop nobody sweeps yet — one driven without the worker's ticker —
+      //   gets a timer of its own, armed once
+      if (self::$Sweeper !== $Loop) {
+         // ! Connections supervised on another loop are not this one's
+         self::$Supervised = [];
+         self::$sweep = $Loop->repeat(1.0, self::sweep(...));
+         self::$Sweeper = $Loop;
+      }
+
+      self::$Supervised[spl_object_id($Connection)] = $Connection;
+
+      // :
+      return true;
+   }
+   /**
+    * Take a connection off the worker's supervision sweep.
+    */
+   public static function release (Connection $Connection): void
+   {
+      unset(self::$Supervised[spl_object_id($Connection)]);
+   }
+   /**
+    * Run the periodic check of every supervised connection that is due.
+    *
+    * Called once a second by whoever keeps that cadence on the worker's
+    * loop: the worker's own ticker — which thereby owns the sweep, so no
+    * second timer wakes the loop — or the timer `supervise()` arms on a loop
+    * driven without one.
+    */
+   public static function sweep (): void
+   {
+      // ? Whoever runs the sweep on a loop owns it there: a connection
+      //   supervised from now on joins it instead of arming a timer
+      $Loop = Server::$Event ?? null;
+      if ($Loop instanceof Repeating && self::$Sweeper !== $Loop) {
+         self::$Supervised = [];
+         self::$Sweeper = $Loop;
+         self::$sweep = 0;
+      }
+
+      $now = time();
+
+      // @@ A check may close its connection, or another one: the walk is over
+      //    the set as it stood, and a released connection reads `due` 0
+      foreach (self::$Supervised as $Connection) {
+         // ?
+         if ($Connection->due === 0 || $now < $Connection->due) {
+            continue;
+         }
+
+         try {
+            $Connection->inspect($now);
+         }
+         catch (Throwable $Throwable) {
+            // @ Reported; one failing check must not starve the others
+            Throwables::notify($Throwable, ['origin' => 'loop.repeat', 'id' => self::$sweep]);
+         }
+      }
+   }
+
    public function connect (): bool
    {
       $Socket = false;

@@ -123,5 +123,7 @@ return new Suite(
       '1.75-sse_tick_whole_seconds',
       // # 1.3.x (recurring reactor timers): Repeating on the Select reactor
       '1.76-select_repeat',
+      // # 1.3.x (recurring reactor timers): a TCP connection's idle expiration has one timer owner
+      '1.77-connection_idle_loop_timer',
    ]
 );

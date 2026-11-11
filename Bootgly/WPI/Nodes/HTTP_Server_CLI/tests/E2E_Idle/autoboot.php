@@ -46,7 +46,7 @@ return new Suite(
             health: '/health',
             // ! The idle reaper under test, shortened so a parked deferral
             //   outlives it within a spec: a reap lands in [N, N+1) s after the
-            //   last activity tick on the one-second timer wheel
+            //   last activity tick, on the worker's one-second supervision sweep
             connectionIdleTimeout: 2
          ));
 
@@ -78,6 +78,8 @@ return new Suite(
       '1.6-deferred_timeout_per_call_catch',
       '1.7-deferred_timeout_own_answer',
       '1.8-client_leaves_mid_park',
-      '1.9-deferred_timeout_disarmed'
+      '1.9-deferred_timeout_disarmed',
+      // # 1.3.x: the worker loop owns the one-second ticker (watchdog + supervision sweep) — no static Timer task
+      '1.10-worker_timer_owner'
    ]
 );

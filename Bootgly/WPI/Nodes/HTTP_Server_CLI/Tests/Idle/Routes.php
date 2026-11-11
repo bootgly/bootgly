@@ -28,8 +28,11 @@ use RuntimeException;
 use Throwable;
 
 use Bootgly\ACI\Events\Readiness;
+use Bootgly\ACI\Events\Repeating;
+use Bootgly\ACI\Events\Timer\Registry;
 use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Timeout;
@@ -204,6 +207,35 @@ final class Routes
                'fibers' => self::$leaves
             ],
             'quick' => ['fibers' => self::$quicks]
+         ]);
+
+         return $Response;
+      }, GET);
+
+      // @ Who owns the worker's timers: the static Timer's tasks, the loop's
+      //   recurring timers, and the connections with a periodic check on the
+      //   worker's supervision sweep
+      yield $Router->route('/idle/owners', static function (Request $Request, Response $Response) {
+         $Loop = TCP_Server_CLI::$Event;
+         $timers = 0;
+         $watched = 0;
+         foreach (Connections::$Connections as $Connection) {
+            $timers += count($Connection->timers);
+            if ($Connection->due !== 0) {
+               $watched++;
+            }
+         }
+
+         $Response->JSON->send([
+            'static' => count(Registry::snapshot()),
+            'loop' => $Loop instanceof Select
+               ? count((array) (new ReflectionProperty(Select::class, 'Repeaters'))->getValue($Loop))
+               : null,
+            'repeating' => $Loop instanceof Repeating,
+            'connections' => count(Connections::$Connections),
+            'timers' => $timers,
+            'watched' => $watched,
+            'supervised' => count((array) (new ReflectionProperty(Connections::class, 'Supervised'))->getValue())
          ]);
 
          return $Response;

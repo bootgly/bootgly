@@ -1,19 +1,21 @@
 <?php
 
 
+use Bootgly\ACI\Events\Loops;
+use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\WPI\Connections\Peer;
-use Bootgly\WPI\Events\Select;
+use Bootgly\WPI\Events;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 
 
 return new Test(
-   description: 'It should cancel the expiration timer and release the Connection on close()',
+   description: 'It should cancel the static expiration timer and release the Connection on close()',
    test: new Assertions(Case: function (): Generator {
       $Connection = null;
       $Client = null;
@@ -35,10 +37,21 @@ return new Test(
          //   and close before registering its timer
          TCP_Server_CLI::$context = [];
 
-         // ! Boot the statics Connection->close() needs (no event loop run)
+         // ! Boot the statics Connection->close() needs (no event loop run).
+         //   A loop with no recurring timers: the expiration stays on the
+         //   static Timer, the owner this spec pins (1.77 pins the loop's)
          $Server = new TCP_Server_CLI;
          $Connections = new Connections($Server);
-         TCP_Server_CLI::$Event = new Select($Connections);
+         TCP_Server_CLI::$Event = new class implements Events, Loops, Scheduler {
+            public function add ($Socket, int $flag, $payload): bool { return true; }
+            public function del ($Socket, int $flag): bool { return true; }
+            public function loop (): void {}
+            public function destroy (): void {}
+            public function schedule (Fiber $Fiber, mixed $value = null, int $flag = self::SCHEDULE_READ): bool { return false; }
+            public function defer (float|int $deadline, Closure $Callback): int { return 0; }
+            public function cancel (int $ID): bool { return false; }
+            public function interrupt (Fiber $Fiber, Throwable $Throwable): bool { return false; }
+         };
 
          // ! A real established loopback pair — Connection requires a socket
          //   with a peer name (unix socketpairs have none and self-close on

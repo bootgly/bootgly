@@ -122,7 +122,13 @@ class Session implements Disconnecting
    // @ Liveness
    public int $lastActivity = 0;
    public bool $awaitingPong = false;
+   /**
+    * The supervisor's static `Timer` task id; 0 when there is none — the
+    * supervisor then rides the worker's supervision sweep (`$watched`).
+    */
    public int $timer = 0;
+   /** Whether the supervisor runs as the connection's periodic check on the worker's sweep. */
+   public private(set) bool $watched = false;
 
 
    public function __construct (Connection $Connection)
@@ -160,10 +166,6 @@ class Session implements Disconnecting
       // @ Replace the transport's short idle reaper with the WS supervisor:
       //   the inherited connection timer assumes request/response traffic; a
       //   long-lived socket is governed by ping/pong + idle-timeout instead.
-      // ! Install the supervisor BEFORE cancelling the inherited timer so the
-      //   timer status set never empties — otherwise Timer::del() would disarm
-      //   the worker's SIGALRM and Timer::add() would not re-arm it (a stale
-      //   empty runtime bucket keeps `$tasks` non-empty).
       //   Without a heartbeat the tick also bounds how late an unfinished
       //   message's deadline is enforced (`maxMessageWallTime`).
       $interval = self::$heartbeatInterval > 0
@@ -173,19 +175,31 @@ class Session implements Disconnecting
          $interval = 1;
       }
 
-      $inherited = $this->Connection->timers;
-
-      $timer = Timer::add(interval: $interval, handler: [$this, 'supervise']);
-      if ($timer !== false) {
-         $this->timer = $timer;
-         $this->Connection->timers = [$timer];
+      // ? One timer owner per worker: on a loop with recurring timers the
+      //   supervisor takes the place of the transport's idle expiration as
+      //   the connection's periodic check on the worker's sweep
+      if ($this->Connection->watch($interval, $this->supervise(...))) {
+         $this->watched = true;
       }
       else {
-         $this->Connection->timers = [];
-      }
+         // ! Install the supervisor BEFORE cancelling the inherited timer so
+         //   the timer status set never empties — otherwise Timer::del() would
+         //   disarm the worker's SIGALRM and Timer::add() would not re-arm it
+         //   (a stale empty runtime bucket keeps `$tasks` non-empty).
+         $inherited = $this->Connection->timers;
 
-      foreach ($inherited as $id) {
-         Timer::del($id);
+         $timer = Timer::add(interval: $interval, handler: [$this, 'supervise']);
+         if ($timer !== false) {
+            $this->timer = $timer;
+            $this->Connection->timers = [$timer];
+         }
+         else {
+            $this->Connection->timers = [];
+         }
+
+         foreach ($inherited as $id) {
+            Timer::del($id);
+         }
       }
 
       // # Hook
@@ -212,10 +226,15 @@ class Session implements Disconnecting
       $this->reassemblyOpcode = 0;
       $this->release();
 
-      // @ Stop the heartbeat supervisor.
-      if ($this->timer !== 0) {
-         Timer::del($this->timer);
-         $this->timer = 0;
+      // @ Stop the heartbeat supervisor, on the owner that runs it.
+      if ($this->watched) {
+         $this->watched = false;
+         $this->Connection->watch(0);
+      }
+      $timer = $this->timer;
+      $this->timer = 0;
+      if ($timer !== 0) {
+         Timer::del($timer);
       }
 
       // @ Leave every joined channel (also breaks the Channel->Session cycle).
