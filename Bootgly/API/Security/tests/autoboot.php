@@ -76,5 +76,14 @@ return new Suite(
       '1.51-security_clock_seams',
       // # 1.2.0: account rows and refresh records keep their scalar shapes
       '1.52-security_row_casts',
+      // # 1.3.0: crypt-family hashes from other stacks keep verifying natively, with or without verifiers
+      '1.53-password_crypt_family_pins',
+      // # 1.3.0: Password legacy verifiers — the gate, the upgrade, the shipped PBKDF2, a verifier that throws, the sign-in, the surface
+      '1.54-password_verifiers_gate',
+      '1.55-password_verifiers_legacy',
+      '1.56-password_verifier_pbkdf2',
+      '1.57-password_verifier_throwing',
+      '1.58-users_legacy_upgrade',
+      '1.59-password_verifiers_surface',
    ]
 );
