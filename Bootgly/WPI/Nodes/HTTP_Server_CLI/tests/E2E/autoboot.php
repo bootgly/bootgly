@@ -595,6 +595,8 @@ return new Suite(
          '7.10-route_cache-forwarding_header',
          // Route list (the registration log, read on a cold worker)
          '8.1-route_list-cold_worker',
+         // Cold Router (the server rewinds it before each run of the handler)
+         '8.2-cold_router-rewind',
       ],
       'Router/Middleware/' => [
          // CORS

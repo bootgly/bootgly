@@ -131,5 +131,7 @@ return new Suite(
       '1.79-router_routes_log',
       // # 1.3.x (loop signal sources): Signalling on the Select reactor
       '1.80-select_trap',
+      // # 1.3.x (route list): a route set that runs before the Router warms registers once
+      '1.81-router_rewind',
    ]
 );

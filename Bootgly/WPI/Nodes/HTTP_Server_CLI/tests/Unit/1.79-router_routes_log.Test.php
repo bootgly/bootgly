@@ -296,8 +296,8 @@ return new Test(
             ->assert();
 
          // ---
-         // @ A warm-up that throws: the Router stays cold, its list is
-         //   emptied, and the retry lists each route once
+         // @ A warm-up that throws: the Router stays cold, its list is back
+         //   to what the attempt found, and the retry lists each route once
          $Router = new Router;
          $attempts = 0;
          $Failing = static function (bool $fail) use ($Router, $Tag, &$attempts): Generator {
@@ -338,7 +338,8 @@ return new Test(
             ->to->be([4, true, ['/one', '/two/:id', '/three']])
             ->assert();
 
-         // @ The same when the failure is a group child, found by the flatten
+         // @ The same when the failure is a group child, found by the flatten:
+         //   the route registered before warm() keeps its row
          $Router = new Router;
          $Router->route('/top', $Tag('top'), 'GET');
          $Router->route('/broken/:*', function () use ($Router, $Tag): Generator {
@@ -353,9 +354,9 @@ return new Test(
             $flattened = $Exception->getMessage();
          }
 
-         yield new Assertion(description: 'a group child that is refused fails the warm-up the same way')
-            ->expect([$flattened, $Router->cached, $Router->Routes])
-            ->to->be(['Nested route path must be relative!', false, []])
+         yield new Assertion(description: 'a group child that is refused fails the warm-up: the list is back to what warm() found')
+            ->expect([$flattened, $Router->cached, $Paths($Router->Routes)])
+            ->to->be(['Nested route path must be relative!', false, ['/top']])
             ->assert();
 
          // ---

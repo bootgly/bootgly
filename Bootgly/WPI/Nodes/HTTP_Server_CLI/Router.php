@@ -109,6 +109,17 @@ class Router
     * @var array<string,array<int,array{name:string,constraint:null|string,pattern:string}>>
     */
    private array $parameterLists = [];
+   // # Attempt
+   /**
+    * What the Router held before its first registration attempt — a copy
+    * `rewind()` takes, dropped when the warm-up ends.
+    */
+   private null|self $Baseline = null;
+   /**
+    * Whether a new attempt began and has registered nothing yet: its first
+    * registration puts `$Baseline` back before it is stored.
+    */
+   private bool $stale = false;
 
    /**
     * Whether the route cache has been warmed (all routes registered).
@@ -129,11 +140,10 @@ class Router
     * both rows: the later static or catch-all registration is the one
     * dispatched, the earlier dynamic one.
     *
-    * The log follows the registrations: a route set that runs more than once
-    * before the Router is warm — a handler that registers by direct calls and
-    * then answers or throws by itself — is logged each time it runs. Only a
-    * throw inside `warm()` empties the list, and the dispatch tables keep what
-    * that attempt stored.
+    * The log holds one attempt: the server rewinds a cold Router before each
+    * run of the request handler, so a route set that runs again registers
+    * from the start, and a warm-up that throws puts the list and the dispatch
+    * tables back as it found them — see `rewind()`.
     *
     * Written where a route is stored and read nowhere on the request path.
     *
@@ -230,9 +240,17 @@ class Router
    // # Middleware
    /**
     * Register Middlewares for the current route group.
+    *
+    * A warm Router ignores the call, as it ignores `route()`: no route is
+    * registered after the warm-up for them to apply to.
     */
    public function intercept (Middleware ...$Middlewares): void
    {
+      // ? Cache already warmed — a handler that runs again registers nothing
+      if ($this->cached) {
+         return;
+      }
+
       foreach ($Middlewares as $Middleware) {
          $this->Middlewares[] = $Middleware;
       }
@@ -622,6 +640,13 @@ class Router
       null|array $cacheConfig = null,
       null|string $directBody = null
    ): void {
+      // ? First registration of a new attempt: it starts from what the Router
+      //   held before the first one, not on top of the last
+      if ($this->stale && $this->Baseline !== null) {
+         $this->stale = false;
+         $this->restore($this->Baseline);
+      }
+
       $normalizedRoute = ($route === '/' ? '' : rtrim($route, '/'));
 
       // @ Prepend group prefix when flattening nested routes
@@ -1039,9 +1064,8 @@ class Router
     * `$Routes` may be null when the routes were registered through direct
     * `$Router->route(...)` calls (no yield): only the groups remain.
     *
-    * A warm-up that throws leaves the Router cold and its route list empty:
-    * the next attempt registers every route again, over the dispatch tables
-    * the failed one left.
+    * A warm-up that throws leaves the Router cold and as this call found it:
+    * the routes registered before the call stay, their groups pending again.
     *
     * @throws Throwable What a route set or a registration threw.
     */
@@ -1052,6 +1076,9 @@ class Router
          return;
       }
 
+      // ! Where a failed warm-up goes back to
+      $Found = clone $this;
+
       try {
          $this->Middlewares = [];
          if ($Routes !== null) {
@@ -1059,14 +1086,21 @@ class Router
                // @ Intentional drain: route() registers via cache(), yields false
             }
          }
+         // ! An attempt that registered nothing keeps what the last one
+         //   left: its groups are flattened as they stand
+         $this->stale = false;
          $this->flatten();
       }
       catch (Throwable $Throwable) {
-         // ! The retry registers again from the first route: rows of the
-         //   failed attempt would otherwise pile up with every request.
-         $this->Routes = [];
-         $this->methodLists = [];
-         $this->parameterLists = [];
+         // ! What the failed attempt stored would otherwise pile up with
+         //   every retry, and a route only it registered would go on
+         //   answering.
+         // ? Unless a route set warmed the Router by itself before it threw
+         if ($this->cached === false) {
+            $this->restore($Found);
+            $this->Middlewares = $Found->Middlewares;
+            $this->stale = $Found->stale;
+         }
 
          throw $Throwable;
       }
@@ -1074,7 +1108,64 @@ class Router
       // @ The rows keep what they share; the warm-up tables are done
       $this->methodLists = [];
       $this->parameterLists = [];
+      $this->Baseline = null;
       $this->cached = true;
+   }
+   /**
+    * Mark the start of a registration attempt on a cold Router. The first
+    * call records what the Router holds. After every later one the
+    * intercepted Middlewares are the recorded ones again, and the first
+    * registration puts the rest back before it is stored — the dispatch
+    * tables, the pending groups and the route list. A warm Router ignores
+    * the call.
+    *
+    * The server calls it before each run of the request handler while the
+    * Router is cold, so a route set that runs more than once — its handler
+    * answered by itself or threw before the warm-up ended — registers once.
+    * Routes registered before the first call are part of the mark and stay,
+    * and so does everything when an attempt registers nothing: a handler
+    * that registers on its first run only keeps its routes.
+    *
+    * An attempt is whole or nothing: once it registers a route, the routes
+    * and the Middlewares an earlier attempt registered and this one does not
+    * repeat are gone. A handler must not guard part of its registrations —
+    * an `intercept()` least of all — to run once while the rest runs again.
+    */
+   public function rewind (): void
+   {
+      // ? Already warm
+      if ($this->cached) {
+         return;
+      }
+
+      // ?: First attempt: nothing to put back yet
+      if ($this->Baseline === null) {
+         $this->Baseline = clone $this;
+
+         return;
+      }
+
+      $this->stale = true;
+      $this->Middlewares = $this->Baseline->Middlewares;
+   }
+   /**
+    * Put the dispatch tables, the pending groups and the route list of
+    * `$Baseline` back on this Router.
+    */
+   private function restore (self $Baseline): void
+   {
+      // # Cache
+      $this->staticCache = $Baseline->staticCache;
+      $this->RootCache = $Baseline->RootCache;
+      $this->hasAgnosticStatic = $Baseline->hasAgnosticStatic;
+      $this->dynamicCache = $Baseline->dynamicCache;
+      $this->hasDynamic = $Baseline->hasDynamic;
+      $this->CatchAllCache = $Baseline->CatchAllCache;
+      $this->pendingGroups = $Baseline->pendingGroups;
+      // # Route list
+      $this->methodLists = $Baseline->methodLists;
+      $this->parameterLists = $Baseline->parameterLists;
+      $this->Routes = $Baseline->Routes;
    }
    /**
     * Drain the route Generator once to populate the cache (first request only),

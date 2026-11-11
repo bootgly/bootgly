@@ -648,6 +648,12 @@ class Encoder_ extends Encoders
                         return $Result;
                      }
                   }
+                  // ! Cold Router: the handler is about to register the routes
+                  //   again. A run that answered by itself or threw never
+                  //   warmed it — put back what it held before the first one.
+                  else {
+                     $Router->rewind();
+                  }
 
                   $Result = (SAPI::$Handler)($Request, $Res, $Router);
 
