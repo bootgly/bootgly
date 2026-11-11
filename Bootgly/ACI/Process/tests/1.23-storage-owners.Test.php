@@ -17,31 +17,84 @@ use Bootgly\ACI\Tests\Temporaries;
 //   away. So does the root of a user namespace that maps a range of uids. A
 //   namespace of one uid only sees what root owns outside it as the overflow
 //   uid — enough for the directory itself, not for an ancestor of a fixture.
-//   Without root and without a namespace nothing here can run: skipped whole,
-//   so the missing proof shows in the report.
-$namespace = [];
-$range = true;
-if (function_exists('posix_geteuid') && posix_geteuid() !== 0) {
-   $namespace = null;
-   $range = false;
-   if (function_exists('exec')) {
-      exec('unshare --user --map-root-user --map-auto true 2>/dev/null', $lines, $status);
-      if ($status === 0) {
-         $namespace = ['unshare', '--user', '--map-root-user', '--map-auto'];
+//   What decides is the operation itself, tried on a directory of its own: a
+//   namespace that starts is not one that may `chown` (AppArmor's
+//   `unprivileged_userns` gives it no capability, a container may drop
+//   CAP_CHOWN from root). Where nothing can run the case is skipped whole and
+//   says why on stderr, so the missing proof shows in the report.
+// ! A probe has nothing to wait on but its own process, and a deadline: where
+//   unshare(2) is denied, `unshare --map-auto` leaves a helper behind that
+//   keeps an inherited pipe open for good.
+$probe = function (array $command): bool {
+   if (function_exists('proc_open') === false) {
+      return false;
+   }
+   $Process = @proc_open(
+      $command,
+      [0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
+      $pipes
+   );
+   if (is_resource($Process) === false) {
+      return false;
+   }
+   $deadline = microtime(true) + 10;
+   do {
+      $status = proc_get_status($Process);
+      if ($status['running'] === false) {
+         proc_close($Process);
+
+         return $status['exitcode'] === 0;
+      }
+      usleep(10000);
+   }
+   while (microtime(true) < $deadline);
+   proc_terminate($Process, 9);
+   proc_close($Process);
+
+   return false;
+};
+$namespace = null;
+$range = false;
+$reason = 'proc_open() or posix_geteuid() is not available';
+if (function_exists('proc_open') && function_exists('posix_geteuid')) {
+   $given = Temporaries::reserve('storage-owners-probe');
+   $giving = ['sh', '-c', 'chown 1 "$0" && chown 0 "$0"', $given];
+
+   if (posix_geteuid() === 0) {
+      if ($probe($giving)) {
+         $namespace = [];
          $range = true;
       }
       else {
-         exec('unshare --user --map-root-user true 2>/dev/null', $lines, $status);
-         $namespace = $status === 0 ? ['unshare', '--user', '--map-root-user'] : null;
+         $reason = 'root cannot give a directory to another user here (no CAP_CHOWN)';
       }
    }
+   else if ($probe(['unshare', '--user', 'true']) === false) {
+      $reason = 'not root, and a user namespace cannot be created here';
+   }
+   else if ($probe(['unshare', '--user', '--map-root-user', '--map-auto', ...$giving])) {
+      $namespace = ['unshare', '--user', '--map-root-user', '--map-auto'];
+      $range = true;
+   }
+   else if ($probe(['unshare', '--user', '--map-root-user', 'sh', '-c', '[ "$(id -u)" = 0 ]'])) {
+      $namespace = ['unshare', '--user', '--map-root-user'];
+      $reason = 'the user namespace maps no second uid, or may not chown';
+   }
+   else {
+      $reason = 'not root, and the user namespace gives neither uid 0 nor the right to chown';
+   }
+   @rmdir($given);
+}
+if ($namespace === null) {
+   fwrite(STDERR, "1.23-storage-owners: skipped — {$reason}.\n");
+}
+else if ($range === false) {
+   fwrite(STDERR, "1.23-storage-owners: the legs that give a directory to a second user do not run — {$reason}.\n");
 }
 
 return new Test(
    description: 'Storage directory from the environment: a directory or an ancestor another user owns is refused',
-   skip: function_exists('proc_open') === false
-      || function_exists('posix_geteuid') === false
-      || $namespace === null,
+   skip: $namespace === null,
    test: function () use ($namespace, $range) {
       // ! Each case boots Bootgly in a child process, as root (itself, or of a
       //   user namespace). No child reaches the real storage/: its storage is a

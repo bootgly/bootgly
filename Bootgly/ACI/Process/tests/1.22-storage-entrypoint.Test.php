@@ -14,11 +14,39 @@ use Bootgly\ACI\Tests\Temporaries;
 use Bootgly\commands\KitCommand;
 
 
-// ! The preparation runs as root only: as root itself, or as the root of a user namespace
+// ! The preparation runs as root only: as root itself, or as the root of a
+//   user namespace — probed by what it needs there, being uid 0, not by a
+//   namespace that merely starts. The probe waits on its own process, with a
+//   deadline, and on no pipe. Where neither is to be had the case is skipped
+//   whole and says why on stderr.
 $namespace = [];
-if (function_exists('posix_geteuid') && posix_geteuid() !== 0 && function_exists('exec')) {
-   exec('unshare --user --map-root-user true 2>/dev/null', $lines, $status);
-   $namespace = $status === 0 ? ['unshare', '--user', '--map-root-user'] : null;
+if (function_exists('proc_open') && function_exists('posix_geteuid') && posix_geteuid() !== 0) {
+   $namespace = null;
+   $Process = @proc_open(
+      ['unshare', '--user', '--map-root-user', 'sh', '-c', '[ "$(id -u)" = 0 ]'],
+      [0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
+      $pipes
+   );
+   if (is_resource($Process)) {
+      $deadline = microtime(true) + 10;
+      do {
+         $status = proc_get_status($Process);
+         if ($status['running'] === false) {
+            $namespace = $status['exitcode'] === 0 ? ['unshare', '--user', '--map-root-user'] : null;
+
+            break;
+         }
+         usleep(10000);
+      }
+      while (microtime(true) < $deadline);
+      if ($status['running']) {
+         proc_terminate($Process, 9);
+      }
+      proc_close($Process);
+   }
+   if ($namespace === null) {
+      fwrite(STDERR, "1.22-storage-entrypoint: skipped — not root, and a user namespace that maps uid 0 cannot be created here.\n");
+   }
 }
 
 return new Test(
@@ -392,13 +420,25 @@ return new Test(
          // @ A storage root that is not root's.
          if ($root) {
             $foreign = $make("{$base}/foreign");
-            chown($foreign, 65534);
-            [$code, $output, $errors] = $start($foreign);
-            yield assert(
-               assertion: $code === 0 && $errors === '' && $output === 'bootgly status'
-                  && $list($foreign) === [] && $read() === [],
-               description: "a storage root another user owns is not prepared: [{$code}] {$output} {$errors}"
-            );
+            // ! Root that may not chown (a container without CAP_CHOWN) cannot
+            //   make this fixture: the leg does not run there, and says so
+            try {
+               $given = @chown($foreign, 65534);
+            }
+            catch (Throwable) {
+               $given = false;
+            }
+            if ($given === false) {
+               fwrite(STDERR, "1.22-storage-entrypoint: the leg \"a storage root another user owns\" does not run — root cannot give a directory to another user here (no CAP_CHOWN).\n");
+            }
+            else {
+               [$code, $output, $errors] = $start($foreign);
+               yield assert(
+                  assertion: $code === 0 && $errors === '' && $output === 'bootgly status'
+                     && $list($foreign) === [] && $read() === [],
+                  description: "a storage root another user owns is not prepared: [{$code}] {$output} {$errors}"
+               );
+            }
          }
          else {
             // ! What root owns outside a user namespace belongs to an unmapped owner inside
