@@ -21,6 +21,13 @@ return new Suite(
       '1.5-listener-object',
       '1.6-event-isolation',
       '1.7-listener-isolation',
+      '1.8-dispatch-snapshot',
+      '1.9-one-shot',
+      '1.10-forget',
+      '1.11-forget-dispatch',
+      '1.12-one-shot-throw',
+      '1.13-check-removal',
+      '1.14-listeners-collection',
 
       '2.1-selector-read',
       '2.2-selector-write',

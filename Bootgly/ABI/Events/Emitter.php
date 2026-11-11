@@ -39,6 +39,8 @@ final class Emitter
    // * Metadata
    // Readable directly by hot emit sites — isSet($Emitter->Listeners[$id])
    // skips the check() call frame + intersection-type check per request.
+   // An event is a key only while it has a listener: removing the last one
+   // (forget(), or a one-shot delivered) removes the key.
    /** @var array<int,Listeners> */
    public protected(set) array $Listeners = [];
 
@@ -46,14 +48,61 @@ final class Emitter
    /**
     * Register one listener for an event.
     *
+    * Higher `$priority` runs first; registration order breaks ties. With
+    * `$once` the listener is one-shot: it is removed right before its first
+    * delivery, so it runs at most once — also when it throws, or emits the
+    * same event again. A one-shot listener that an emission never reaches
+    * (propagation stopped above it) stays registered.
+    *
     * @param Event&UnitEnum $Event
     */
-   public function listen (Event&UnitEnum $Event, Listener|Closure $Listener, int $priority = 0): self
+   public function listen (
+      Event&UnitEnum $Event,
+      Listener|Closure $Listener,
+      int $priority = 0,
+      bool $once = false
+   ): self
    {
-      ($this->Listeners[spl_object_id($Event)] ??= new Listeners)->add($Listener, $priority);
+      ($this->Listeners[spl_object_id($Event)] ??= new Listeners)->add($Listener, $priority, $once);
 
       // :
       return $this;
+   }
+
+   /**
+    * Remove a listener from an event — every registration of it.
+    *
+    * A `Listener` object matches by identity; a `Closure` by identity or by
+    * equality (two first-class callables of one method on one object). Once
+    * it returns, the listener is not delivered to again, not even by an
+    * emission already in flight; the other listeners of that emission run
+    * as if it had never been registered. Removing the last listener of an
+    * event makes `check()` answer false again.
+    *
+    * @param Event&UnitEnum $Event
+    *
+    * @return bool Whether a registration was removed.
+    */
+   public function forget (Event&UnitEnum $Event, Listener|Closure $Listener): bool
+   {
+      $id = spl_object_id($Event);
+
+      // ? Nobody listens to the event
+      if (isSet($this->Listeners[$id]) === false) {
+         return false;
+      }
+
+      // @
+      $Listeners = $this->Listeners[$id];
+      $removed = $Listeners->remove($Listener);
+
+      // ? Last listener gone: the event is unobserved again
+      if ($Listeners->entries === []) {
+         unset($this->Listeners[$id]);
+      }
+
+      // :
+      return $removed;
    }
 
    /**
@@ -75,6 +124,9 @@ final class Emitter
     * Emit an event synchronously to its listeners in priority order.
     *
     * Returns null when the event has no listeners (zero-allocation path).
+    * The emission delivers to the listeners registered when it starts, minus
+    * the ones removed since: a listener registered by a handler waits for
+    * the next emission, one removed by a handler is not delivered to.
     *
     * @param Event&UnitEnum $Event
     */
@@ -100,7 +152,33 @@ final class Emitter
       //   before routing, a bounded error boundary after it.
       $observing = $Event instanceof Observing;
 
-      foreach ($this->Listeners[$id] as $Listener) {
+      // ! The registrations as they are now: listen() and forget() inside a
+      //   handler write another array, never the one being iterated
+      $Listeners = $this->Listeners[$id];
+
+      foreach ($Listeners->entries as $key => $entry) {
+         // ? Removed since this emission started — by forget(), or a
+         //   one-shot listener a nested emission already delivered to.
+         //   (Static analysis cannot see a handler of an earlier pass
+         //   writing the collection.)
+         if (isSet($Listeners->entries[$key]) === false) { // @phpstan-ignore isset.offset
+            continue;
+         }
+
+         // ? One-shot: removed BEFORE it runs, so it runs at most once even
+         //   when it throws or emits this event again. A collection emptied
+         //   here leaves the map and never fills again (listen() starts a
+         //   new one), so the key removed is always its own.
+         if ($entry[2]) {
+            $Listeners->drop($key);
+
+            if ($Listeners->entries === []) {
+               unset($this->Listeners[$id]);
+            }
+         }
+
+         $Listener = $entry[1];
+
          if ($observing) {
             try {
                $Listener instanceof Listener
