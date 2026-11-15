@@ -110,8 +110,7 @@ return new Test(
       $Inspect = static function (array $State): null|string {
          $types = array_merge(
             $State['streams']['reads'] ?? [],
-            $State['streams']['writes'] ?? [],
-            $State['streams']['excepts'] ?? []
+            $State['streams']['writes'] ?? []
          );
          $invalid = array_values(array_filter(
             $types,

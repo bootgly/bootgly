@@ -64,8 +64,8 @@ use Bootgly\WPI\Events;
 class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signalling
 {
    /**
-    * Entries each descriptor table admits (reads, writes, excepts) — shared by
-    * client sockets and the Fibers awaiting their dependencies.
+    * Entries each descriptor table admits (reads, writes) — shared by client
+    * sockets and the Fibers awaiting their dependencies.
     */
    public const int CAPACITY = 1000;
    /**
@@ -92,8 +92,6 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
    protected array $reads = [];
    /** @var array<int,resource> */
    protected array $writes = [];
-   /** @var array<int,resource> */
-   protected array $excepts = [];
 
    // * Metadata
    /** Reentrancy tripwire: a nested loop() shares one shutdown key and would
@@ -108,8 +106,6 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
    private array $reading = [];
    /** @var array<int,mixed> */
    private array $writing = [];
-   /** @var array<int,mixed> */
-   private array $excepting = [];
    // # Async
    // Tick-based (resumed every iteration)
    /** @var array<int,Fiber<mixed,mixed,mixed,mixed>> */
@@ -210,15 +206,27 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
     * resource once before persistent admission. Resources already present in
     * any selector set were validated on their first admission.
     *
+    * A flag this loop does not dispatch — `EVENT_EXCEPT` among them — is
+    * never representable.
+    *
     * @param resource $Socket
     */
    protected function check ($Socket, int $flag): bool
    {
+      // ? Nothing here dispatches this flag: admitting it would only make
+      //   the wait return for a condition no callback consumes
+      if (
+         $flag !== self::EVENT_CONNECT
+         && $flag !== self::EVENT_READ
+         && $flag !== self::EVENT_WRITE
+      ) {
+         return false;
+      }
+
       $id = (int) $Socket;
       if (
          isset($this->reads[$id])
          || isset($this->writes[$id])
-         || isset($this->excepts[$id])
       ) {
          return true;
       }
@@ -226,15 +234,12 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
       for ($attempt = 0; $attempt < 2; $attempt++) {
          $read = [];
          $write = [];
-         $except = [];
-         match ($flag) {
-            self::EVENT_CONNECT, self::EVENT_READ => $read[] = $Socket,
-            self::EVENT_WRITE => $write[] = $Socket,
-            self::EVENT_EXCEPT => $except[] = $Socket,
-            default => null,
-         };
-         if ($read === [] && $write === [] && $except === []) {
-            return false;
+         $except = null;
+         if ($flag === self::EVENT_WRITE) {
+            $write[] = $Socket;
+         }
+         else {
+            $read[] = $Socket;
          }
 
          try {
@@ -259,12 +264,15 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
 
    /**
     * Add a socket to the event loop.
-    * 
+    *
     * @param resource $Socket
-    * @param int $flag
+    * @param int $flag `EVENT_CONNECT`, `EVENT_READ` or `EVENT_WRITE`.
     * @param mixed $payload
     *
-    * @return bool
+    * @return bool Whether the socket is now watched. False when its table is
+    *    full, when the descriptor cannot be selected, and for any other
+    *    flag — `EVENT_EXCEPT` among them: this loop dispatches no exceptional
+    *    condition, and waiting on one nobody consumes would wake it forever.
     */
    public function add ($Socket, int $flag, mixed $payload): bool
    {
@@ -328,36 +336,19 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
             $this->writing[$id] = $payload;
 
             return true;
-         case self::EVENT_EXCEPT:
-            $id = (int) $Socket;
-
-            // System call select exceeded the maximum number of connections 1024.
-            if (
-               isset($this->excepts[$id]) === false
-               && (
-                  count($this->excepts) >= self::CAPACITY
-                  || $this->check($Socket, $flag) === false
-               )
-            ) {
-               return false;
-            }
-
-            $this->excepts[$id] = $Socket;
-
-            $this->excepting[$id] = $payload;
-
-            return true;
       }
 
       return false;
    }
    /**
     * Remove a socket from the event loop.
-    * 
-    * @param resource $Socket
-    * @param int $flag
     *
-    * @return bool
+    * @param resource $Socket
+    * @param int $flag `EVENT_CONNECT`, `EVENT_READ` or `EVENT_WRITE`.
+    *
+    * @return bool True for `EVENT_CONNECT`, `EVENT_READ` and `EVENT_WRITE`,
+    *    whether or not the socket was watched. False for any other flag —
+    *    `EVENT_EXCEPT` among them — which `add()` never admits.
     */
    public function del ($Socket, int $flag): bool
    {
@@ -386,13 +377,6 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
             unset($this->writing[$id]);
             unset($this->writes[$id]);
             $this->release($this->awaitingWrites, $this->awaitingWriteDeadlines, $id);
-
-            return true;
-         case self::EVENT_EXCEPT:
-            $id = (int) $Socket;
-
-            unset($this->excepting[$id]);
-            unset($this->excepts[$id]);
 
             return true;
       }
@@ -797,14 +781,15 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
 
          // ! `stream_select()` takes each set by reference and rewrites it with
          //   the ready subset, so every non-null set is separated and rebuilt
-         //   on every wakeup. An HTTP worker registers writes/excepts only
-         //   under backpressure: passing null for an empty set skips its copy
-         //   and its fd_set marshalling entirely (the parameters are `?array`).
+         //   on every wakeup. An HTTP worker registers writes only under
+         //   backpressure: passing null for an empty set skips its copy and
+         //   its fd_set marshalling entirely (the parameters are `?array`).
+         //   No exceptional condition is ever waited on (`add()` refuses it).
          $read = $this->reads;
          $write = $this->writes ?: null;
-         $except = $this->excepts ?: null;
+         $except = null;
 
-         if ($read || $write || $except) {
+         if ($read || $write) {
             try {
                // @ Non-blocking poll if Fibers are suspended, otherwise block
                $timeout = $this->Fibers ? 0 : null;
@@ -816,7 +801,7 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
                   $microseconds = (int) (($remaining - $timeout) * 1_000_000);
                }
 
-               // Waits for read / write / excepts events.
+               // Waits for read / write events.
                $streams = $microseconds === null
                   ? @stream_select($read, $write, $except, $timeout)
                   : @stream_select($read, $write, $except, $timeout, $microseconds);
@@ -861,8 +846,8 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
             //   paths hand the dispatch below identically-typed sets.
             $read = $this->reads;
             $write = $this->writes ?: null;
-            $except = $this->excepts ?: null;
-            if ($read || $write || $except) {
+            $except = null;
+            if ($read || $write) {
                try {
                   $streams = @stream_select($read, $write, $except, 0, 0);
                }
@@ -993,8 +978,6 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
                }
             }
          }
-
-         // if ($except) {}
       }
 
       // @ Whatever the last dispatch evicted is released before the caller
@@ -1781,15 +1764,6 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
          unset($this->writing[$id]);
          $this->release($this->awaitingWrites, $this->awaitingWriteDeadlines, $id);
       }
-
-      foreach ($this->excepts as $id => $Socket) {
-         if (is_resource($Socket)) {
-            continue;
-         }
-
-         unset($this->excepts[$id]);
-         unset($this->excepting[$id]);
-      }
    }
 
    /**
@@ -2102,14 +2076,12 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
 
       $this->reads = [];
       $this->writes = [];
-      $this->excepts = [];
 
       // # Events (payload maps — a persistent reactor must not retain
       //   stale Connection references between drains)
       $this->connecting = [];
       $this->reading = [];
       $this->writing = [];
-      $this->excepting = [];
 
       // # Async
       $this->awaitingReads = [];

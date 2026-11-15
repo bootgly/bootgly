@@ -18,6 +18,7 @@ interface Events
    // @ Package
    public const EVENT_READ = 2;
    public const EVENT_WRITE = 3;
+   // ! Declared, not dispatched: `Events\Select` refuses its registration
    public const EVENT_EXCEPT = 4;
 
 

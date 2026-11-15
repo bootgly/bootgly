@@ -133,5 +133,7 @@ return new Suite(
       '1.80-select_trap',
       // # 1.3.x (route list): a route set that runs before the Router warms registers once
       '1.81-router_rewind',
+      // # 1.3.x (reactor): an exceptional-condition registration is refused, not waited on
+      '1.82-select_except_refusal',
    ]
 );

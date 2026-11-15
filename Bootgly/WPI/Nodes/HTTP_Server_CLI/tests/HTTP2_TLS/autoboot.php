@@ -67,7 +67,7 @@ return new Suite(
                $Reflection = new ReflectionObject(HTTP_Server_CLI::$Event);
                $streams = [];
 
-               foreach (['reads', 'writes', 'excepts'] as $name) {
+               foreach (['reads', 'writes'] as $name) {
                   $Property = $Reflection->getProperty($name);
                   /** @var array<int,mixed> $Sockets */
                   $Sockets = $Property->getValue(HTTP_Server_CLI::$Event);
