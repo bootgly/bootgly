@@ -27,6 +27,7 @@ use function str_starts_with;
 use function stream_select;
 use function time_nanosleep;
 use ErrorException;
+use Throwable;
 use TypeError;
 use ValueError;
 
@@ -145,8 +146,10 @@ final class Selector
     * interest replaces its payload; call it once per interest to watch a
     * stream for both.
     *
-    * The stream is checked once, when first watched, so a stream the system
-    * cannot wait on is refused here and never at `wait()`.
+    * The stream is checked once, when first watched: a stream the system
+    * cannot wait on is refused here. One that stops being waitable later — a
+    * filter attached after `watch()`, for one — is refused at `wait()`
+    * (`Reasons::Failure`).
     *
     * @param resource $Stream An open stream with a descriptor (socket, pipe, file, terminal).
     * @param Interests $Interest What to watch the stream for.
@@ -233,8 +236,12 @@ final class Selector
     * With nothing watched, a deadline makes it a plain interruptible sleep.
     *
     * An exception thrown by an asynchronous signal handler
-    * (`pcntl_async_signals(true)`) during the wait is not caught: it reaches
-    * the caller.
+    * (`pcntl_async_signals(true)`) during the wait is not caught, whatever
+    * its class: it reaches the caller.
+    *
+    * One wait lasts at most 100,000,000 seconds (about 3.17 years): with a
+    * deadline further away than that the answer is zero, `$interrupted`
+    * unset, before the deadline — wait again with the same deadline.
     *
     * @param null|int $deadline When to give up, on the monotonic clock
     *    (`$Selector->Clock->tick`, nanoseconds). `null` waits indefinitely; a
@@ -325,10 +332,14 @@ final class Selector
          try {
             $selected = @stream_select($read, $write, $except, $seconds, $microseconds);
          }
-         catch (TypeError | ValueError | ErrorException) {
-            // ...a poll finds its closed streams below. Only what the call
-            //    itself raises is caught: an exception thrown by an
-            //    asynchronous signal handler belongs to the caller.
+         catch (TypeError | ValueError | ErrorException $Throwable) {
+            // ? Only what the call itself raises is caught: an exception an
+            //   asynchronous signal handler threw belongs to the caller,
+            //   whatever its class
+            if ($this->attribute($Throwable) === false) {
+               throw $Throwable;
+            }
+            // ...a poll finds its closed streams below.
          }
       }
 
@@ -360,6 +371,11 @@ final class Selector
             $selected = @stream_select($read, $write, $except, 0, 0);
          }
          catch (TypeError | ValueError | ErrorException $Throwable) {
+            // ? A signal handler's own exception, not the call's
+            if ($this->attribute($Throwable) === false) {
+               throw $Throwable;
+            }
+
             $selected = false;
             $error = $Throwable->getMessage();
          }
@@ -444,14 +460,19 @@ final class Selector
          try {
             $selected = @stream_select($read, $write, $except, 0, 0);
          }
-         catch (ValueError) {
-            throw new Refusal(
-               Reasons::Unselectable,
-               "Selector cannot watch stream #$id: it has no descriptor the system can wait on.",
-               [$id]
-            );
-         }
-         catch (TypeError | ErrorException $Throwable) {
+         catch (TypeError | ValueError | ErrorException $Throwable) {
+            // ? A signal handler's own exception, not the call's
+            if ($this->attribute($Throwable) === false) {
+               throw $Throwable;
+            }
+            if ($Throwable instanceof ValueError) {
+               throw new Refusal(
+                  Reasons::Unselectable,
+                  "Selector cannot watch stream #$id: it has no descriptor the system can wait on.",
+                  [$id]
+               );
+            }
+
             $selected = false;
             $error = $Throwable->getMessage();
          }
@@ -485,6 +506,30 @@ final class Selector
       );
    }
 
+   /**
+    * Tell whether `$Throwable` was raised by this class's own
+    * `stream_select()` call — by the function itself, or by an error
+    * handler that turned one of its warnings into an exception — and not by
+    * an asynchronous signal handler that ran during the wait. Both run with
+    * the call still on the stack, so its presence there tells nothing.
+    */
+   private function attribute (Throwable $Throwable): bool
+   {
+      // ?: Thrown by the function: it is the innermost frame, called here
+      $frame = $Throwable->getTrace()[0] ?? null;
+      if (
+         $frame !== null
+         && $frame['function'] === 'stream_select'
+         && isSet($frame['class']) === false
+         && ($frame['file'] ?? '') === __FILE__
+      ) {
+         return true;
+      }
+
+      // : A warning of the call, as an error handler reports it
+      return $Throwable instanceof ErrorException
+         && str_starts_with($Throwable->getMessage(), 'stream_select()');
+   }
    /**
     * Drop every watched stream that was closed.
     *
