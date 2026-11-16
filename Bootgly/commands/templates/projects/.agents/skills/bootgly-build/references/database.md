@@ -157,7 +157,7 @@ $page = $Response->Database->paginate(Note::class); // reads ?page/?limit, sets 
   ->select(…)->filter(new Identifier('id'), Operators::Equal, $id)`, plus `order()`, `join()`, `aggregate()`, `lock(Locks::Update)`; `update()`/`delete()` require a `filter()`.
 - `->output(new Identifier('id'))` (`RETURNING`) is **PostgreSQL only**; MySQL/SQLite throw, so read `->inserted`.
 - Relations: `$Notes->select()->filter(…)->load('Items')`. Outside a route (a command, a CLI project), build `$Database`
-  as in §2 and follow the DBAL guide.
+  as in §2 and follow the DBAL guide; a transaction there takes the blocking form below.
 ```php
 // ! Use the callback's $Database (the transaction) for every statement; returning commits, throwing rolls back
 $id = $Response->Database->transact(function (Transaction $Transaction, Database $Database) use ($title): int {
@@ -166,6 +166,19 @@ $id = $Response->Database->transact(function (Transaction $Transaction, Database
 });
 ```
 Imports: `Bootgly\ADI\Databases\SQL\Transaction`, `Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database`.
+The resource calls the closure with two arguments: the `Transaction` and the resource itself, whose queries run in the
+transaction until the closure ends. Inside a route, its `transact()` is the one to use: a `transact()` on the `SQL`
+facade (§2's `$Database`) called inside it does not nest — it opens its own transaction, on another connection.
+
+Outside a route — a command, a job, a script — call `transact()` on the `SQL` facade built as in §2: it blocks until
+the transaction ends and calls the closure with ONE argument. Send every statement through `$Transaction`: a
+`$Database->query()` inside it runs on another connection, outside the transaction. A nested `transact()` is a savepoint.
+```php
+$id = $Database->transact(function (Transaction $Transaction) use ($title): int {
+   $Insert = $Transaction->table(new Identifier('notes'))->insert()->set(new Identifier('title'), $title);
+   return (int) $Transaction->await($Transaction->query($Insert))->Result?->inserted; // PostgreSQL: ->output(…), ->rows[0]['id']
+});
+```
 
 ## 6. Test it
 Add a case to a registered suite ([Testing_guidelines.md](../../../../.agents/rules/Testing_guidelines.md); the bootgly-test skill runs the loop). It runs the real migrations in memory, under a lock path of its own:

@@ -249,11 +249,12 @@ class Connection extends Packages
    }
    /**
     * Run a periodic check for this connection on the worker's supervision
-    * sweep: every `$interval` whole seconds, the first one `$interval`
-    * seconds from now, in place of the check in force. Without `$Check` it
-    * is the idle expiration (`expire()`); a protocol with a liveness rule of
-    * its own — a WebSocket session's ping/pong supervisor — passes it. A
-    * non-positive `$interval` stops the periodic check.
+    * sweep: every `$interval` whole seconds, the first one between
+    * `$interval - 1` and `$interval + 1` seconds from now (the due second is
+    * counted on the wall clock), in place of the check in force. Without
+    * `$Check` it is the idle expiration (`expire()`); a protocol with a
+    * liveness rule of its own — a WebSocket session's ping/pong supervisor —
+    * passes it. A non-positive `$interval` stops the periodic check.
     *
     * The sweep runs once a second on the worker's event loop (see
     * `Connections::sweep()`), so a check lands between `$interval` and
@@ -262,8 +263,11 @@ class Connection extends Packages
     * @param int $interval Whole seconds between two checks.
     * @param null|Closure():void $Check The check to run; null for the idle expiration.
     *
-    * @return bool False when the worker's loop offers no recurring timers:
-    *              nothing was installed, and the caller keeps the static `Timer`.
+    * @return bool False when a check was asked for and the worker's loop
+    *              offers no recurring timers: nothing was installed, and the
+    *              caller keeps the static `Timer`. Stopping the check, or
+    *              asking for one on a closed connection, answers true on
+    *              any loop.
     */
    public function watch (int $interval, null|Closure $Check = null): bool
    {

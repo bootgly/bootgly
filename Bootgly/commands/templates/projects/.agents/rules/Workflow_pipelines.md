@@ -42,6 +42,10 @@
 - **MUST** — Run the kit's own launcher: `bootgly` when the global wrapper is installed, otherwise
   `php ../bootgly` from `projects/` and `php ../../bootgly` from `projects/<Name>/` (one more `../` per
   nested segment). In the `bootgly/bootgly.kit` image: `docker exec -w /bootgly/projects/<Name> <container> bootgly …`.
+- **MUST** — Run every `bootgly` command with the `BOOTGLY_STORAGE_DIR` value its instance was started
+  with: without it, `show`, `logs` and `stop` read the default storage and find nothing. `sudo` drops it
+  (put `env BOOTGLY_STORAGE_DIR=…` right after `sudo`), a `docker exec` needs its own `-e` unless the
+  container was created with it, and a service needs its unit's `Environment=` line.
 - **MUST** — Found a framework bug? Work around it in the project and draft the report for the user
   to file upstream — never patch `Bootgly/` or file it yourself.
 

@@ -21,7 +21,7 @@ MARKER=/bootgly/projects/.initialized
 # ! A storage volume the platform mounted empty and root-owned gets, on a root
 #   start, the layout the kit image creates at build time — an image layer never
 #   reaches a mount. What the demoted workers write goes to the kit's runtime
-#   identity (`bootgly`): logs/ and sessions/ (0700). The storage root, pids/
+#   identity (`bootgly`): logs/ (0755) and sessions/ (0700). The storage root, pids/
 #   and cache/ stay root's: root-run code reads what cache/ holds. An image
 #   without that account has no such layout to mirror: nothing is prepared, and
 #   the server creates what it needs for the identity its project configures.

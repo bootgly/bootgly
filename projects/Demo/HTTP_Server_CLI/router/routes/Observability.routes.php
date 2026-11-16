@@ -102,7 +102,8 @@ return static function (Request $Request, Response $Response, Router $Router)
       Observability::$Instance = $O;
 
       // @ Periodic per-worker dump so files stay fresh for scrapes AND the OTLP ship script
-      //   (worker Timer ticks via Select::loop()'s per-iteration pcntl_signal_dispatch + SIGALRM)
+      //   (the worker's event loop traps SIGALRM, which drives the static Timer, and
+      //    dispatches it between callbacks)
       $interval = (int) (getenv('BOOTGLY_OBSERVABILITY_INTERVAL') ?: 10);
       Timer::add($interval, static function () use ($O, $dir): void {
          $O->dump(new JSON, "$dir/worker-" . (getmypid() ?: 0) . '.json');
