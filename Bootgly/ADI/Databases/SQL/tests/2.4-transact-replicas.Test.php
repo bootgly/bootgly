@@ -15,7 +15,9 @@ return new Test(
       // ! The primary is a scripted peer; the replica is never dialled: a read
       //   routed to it parks in its pool, and the pool an operation was
       //   assigned to tells where it was sent.
-      $sticky = 0.4;
+      // ! A window no stall of a loaded machine outlasts: a read made right
+      //   after a mark is inside it, however late it runs.
+      $sticky = 30.0;
       $config = [
          'routing' => ['sticky' => $sticky],
          'replicas' => [
@@ -33,27 +35,39 @@ return new Test(
 
          return $route;
       };
-      // ! Longer than the sticky window: the mark the write itself set has
-      //   expired by the time the unit of work ends.
-      $outlast = static function () use ($sticky): void {
-         usleep((int) (($sticky + 0.15) * 1_000_000));
+      // ! The window passes for every read-after-write mark the facade holds:
+      //   each one is aged past it, as a sleep longer than the window would
+      //   age it, with no sleep — so the mark the write itself set has
+      //   expired by the time the unit of work ends, and only a mark set
+      //   after this call can route a read to the primary.
+      $Written = new ReflectionProperty(SQL::class, 'Written');
+      $outlast = static function (SQL $Database) use ($Written, $sticky): void {
+         $Marks = $Written->getValue($Database);
+         $Aged = [];
+         foreach ($Marks as $Scope => $mark) {
+            $Aged[] = [$Scope, $mark];
+         }
+         foreach ($Aged as [$Scope, $mark]) {
+            $Marks[$Scope] = $mark - $sticky - 1.0;
+         }
       };
       $Failure = new LogicException('the work failed');
 
       try {
          $Database->await($Database->query('CREATE TABLE marks (id INTEGER PRIMARY KEY, tag TEXT)'));
-         $outlast();
+         $fresh = $route($Database);
+         $outlast($Database);
 
          yield assert(
-            assertion: $route($Database) === 'replica',
-            description: 'Control: outside the sticky window a facade read goes to the replica'
+            assertion: $fresh === 'primary' && $route($Database) === 'replica',
+            description: 'Control: a facade read right after a write runs on the primary, and outside the sticky window it goes to the replica'
          );
 
          // # Committed: the read right after transact() runs on the primary,
          //   although the write inside it is older than the window.
-         $Database->transact(static function (Transaction $Transaction) use ($outlast): void {
+         $Database->transact(static function (Transaction $Transaction) use ($Database, $outlast): void {
             $Transaction->await($Transaction->query("INSERT INTO marks (tag) VALUES ('committed')"));
-            $outlast();
+            $outlast($Database);
          });
 
          yield assert(
@@ -63,12 +77,12 @@ return new Test(
 
          // # Rolled back: no new mark — the write's own mark has expired, and
          //   the rollback sets none.
-         $outlast();
+         $outlast($Database);
 
          try {
-            $Database->transact(static function (Transaction $Transaction) use ($outlast, $Failure): void {
+            $Database->transact(static function (Transaction $Transaction) use ($Database, $outlast, $Failure): void {
                $Transaction->await($Transaction->query("INSERT INTO marks (tag) VALUES ('rolled back')"));
-               $outlast();
+               $outlast($Database);
 
                throw $Failure;
             });
@@ -87,11 +101,11 @@ return new Test(
          $routes = [];
 
          $Database->transact(static function (Transaction $Transaction) use ($Database, $outlast, $route, &$routes): void {
-            $Database->transact(static function (Transaction $Transaction) use ($outlast): void {
+            $Database->transact(static function (Transaction $Transaction) use ($Database, $outlast): void {
                $Transaction->await($Transaction->query("INSERT INTO marks (tag) VALUES ('nested')"));
                // ! The write's own mark expires inside the nested call, so a
                //   mark found right after it could only be the nested commit's.
-               $outlast();
+               $outlast($Database);
             });
 
             $routes[] = $route($Database);
@@ -106,13 +120,13 @@ return new Test(
 
          // # A COMMIT the server refuses sets none: nothing was committed.
          $Refusing->await($Refusing->query('CREATE TABLE marks (id INTEGER PRIMARY KEY, tag TEXT)'));
-         $outlast();
+         $outlast($Refusing);
          $Caught = null;
 
          try {
-            $Refusing->transact(static function (Transaction $Transaction) use ($outlast): void {
+            $Refusing->transact(static function (Transaction $Transaction) use ($Refusing, $outlast): void {
                $Transaction->await($Transaction->query("INSERT INTO marks (tag) VALUES ('refused')"));
-               $outlast();
+               $outlast($Refusing);
             });
          }
          catch (RuntimeException $Exception) {

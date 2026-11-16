@@ -3,6 +3,7 @@
 use Bootgly\ABI\Events\Emission;
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\ACI\Tests\Suite\Test;
+use Bootgly\ACI\Tests\Temporaries;
 use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Databases\SQL\Transaction;
 use Bootgly\ADI\Databases\SQL\Transaction\Events;
@@ -12,7 +13,11 @@ return new Test(
    description: 'SQL::transact(): commits what the work returns, rolls back what it throws and nests as a savepoint (SQLite)',
    skip: extension_loaded('sqlite3') === false,
    test: function () {
-      $file = sys_get_temp_dir() . '/bootgly-sqlite-transact-' . uniqid() . '.db';
+      // ! The database lives in a directory of this run's own (0700, an
+      //   unguessable name created exclusively), never at a guessable name in
+      //   the shared temp directory, where a planted link would be followed
+      $directory = Temporaries::reserve('sqlite-transact');
+      $file = "{$directory}/transact.db";
       // ! A file database keeps the pool it is given: with two connections a
       //   second, independent transaction would be served, not refused — so a
       //   nested call that opened one would show as `created === 2`.
@@ -409,10 +414,11 @@ return new Test(
          Emitter::$Instance = new Emitter;
 
          foreach ([$file, "{$file}-journal", "{$file}-wal", "{$file}-shm"] as $path) {
-            if (file_exists($path)) {
+            if (is_link($path) || is_file($path)) {
                unlink($path);
             }
          }
+         rmdir($directory);
       }
    }
 );

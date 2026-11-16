@@ -49,8 +49,12 @@ return new Test(
       // # Credentials that could never authenticate are refused at construction
       $message = 'S3 Signer: the key, region, service and token must be printable ASCII without spaces.';
       $secret = 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY';
+      // ! A valid session token, refused only because of the key beside it
+      $token = 'FQoGZXIvYXdzSESSIONTOKENSENTINEL';
       $refused = true;
       $leaked = false;
+      $captured = false;
+      $exposed = false;
       $ignored = ini_get('zend.exception_ignore_args');
       ini_set('zend.exception_ignore_args', '0');
       try {
@@ -60,6 +64,7 @@ return new Test(
             ['region' => "us-east-1\r\nx-amz-acl: public-read"],
             ['service' => 's3 '],
             ['token' => "token\nX-Injected: 1"],
+            ['key' => 'AKIA EXAMPLE', 'token' => $token],
          ] as $options) {
             try {
                new S3('', $options + ['bucket' => 'examplebucket', 'key' => 'AKIAEXAMPLE', 'secret' => $secret]);
@@ -70,6 +75,14 @@ return new Test(
                $leaked = $leaked
                   || str_contains($Exception->getTraceAsString(), $secret) === true
                   || trace_holds($Exception->getTrace(), 'bPxRfiCYEXAMPLEKEY') === true;
+
+               // ? The leg with a valid token: the frame that refused the key keeps the
+               //   arguments it may show (the key), so a token beside it would be there too
+               if (($options['token'] ?? '') === $token) {
+                  $captured = trace_holds($Exception->getTrace(), 'AKIA EXAMPLE');
+                  $exposed = str_contains($Exception->getTraceAsString(), $token) === true
+                     || trace_holds($Exception->getTrace(), 'SESSIONTOKENSENTINEL') === true;
+               }
             }
          }
       }
@@ -83,6 +96,10 @@ return new Test(
       yield assert(
          assertion: $leaked === false,
          description: 'the constructor\'s stack trace does not carry the disk options (the secret)'
+      );
+      yield assert(
+         assertion: $captured === true && $exposed === false,
+         description: 'refused for its key, the constructor\'s stack trace shows the key and never the valid session token beside it'
       );
 
       // # A dump shows where the disk points, never what it signs with
