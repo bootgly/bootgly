@@ -111,7 +111,7 @@ return new Test(
 
       // # …and a variable a unit line cannot carry is refused, never altered
       $unwritable = 0;
-      foreach ([['BAD NAME', 'x'], ['A=B', 'x'], ['', 'x'], ['PATH', "/bin\nExecStart=/bin/sh"], ['PATH', "/bin\r"], ['PATH', "/caf\xE9"]] as [$name, $value]) {
+      foreach ([['BAD NAME', 'x'], ['A=B', 'x'], ['', 'x'], ['PATH', "/bin\nExecStart=/bin/sh"], ['PATH', "/bin\r"], ['PATH', "/caf\xE9"], ['PATH', "/data\0/storage"]] as [$name, $value]) {
          try {
             new Service('x', 'App', '/srv/kit', 'x', ['/bin/true'], 'deploy', environment: [$name => $value])->render();
          }
@@ -121,8 +121,8 @@ return new Test(
       }
 
       yield assert(
-         assertion: $unwritable === 6,
-         description: "an environment name systemd does not take, or a value with a line break or bytes that are not UTF-8, is refused: {$unwritable}/6"
+         assertion: $unwritable === 7,
+         description: "an environment name systemd does not take, or a value with a line break, bytes that are not UTF-8 or a NUL byte, is refused: {$unwritable}/7"
       );
 
       // # What systemd expands is neutralized — `%` specifiers everywhere, `$` variables in ExecStart

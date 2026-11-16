@@ -23,7 +23,8 @@ use Bootgly\ABI\Event;
  *
  * - `Boot`     — a worker process started serving. Payload: `$index`.
  * - `Shutdown` — a process is stopping. Payload: `$level` (`'master'`/`'child'`).
- * - `Reload`   — a worker reloaded its application (SIGUSR2). Payload: `$index`.
+ * - `Reload`   — reserved: no built-in server emits it. A reload replaces the
+ *                workers, so each new one emits `Boot`.
  */
 enum Events implements Event
 {

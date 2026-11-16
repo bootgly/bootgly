@@ -184,7 +184,8 @@ class Service
     *
     * @throws InvalidArgumentException When the command does not begin with an
     *    absolute path, or an environment variable has a name systemd does not
-    *    take or a value holding a line break or bytes that are not UTF-8.
+    *    take or a value holding a NUL byte, a line break or bytes that are not
+    *    UTF-8.
     */
    public function render (): string
    {
@@ -221,13 +222,14 @@ class Service
       // @@ One `Environment=` per variable, before the command it is for
       foreach ($this->environment as $name => $value) {
          // ? A unit line carries no line break and an altered value would name
-         //   something else; systemd drops an assignment that is not UTF-8
+         //   something else; systemd drops an assignment that is not UTF-8,
+         //   and one that holds a NUL byte — the service would start without it
          if (
             preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', (string) $name) !== 1
-            || preg_match('/[\r\n]/', $value) === 1
+            || preg_match('/[\x00\r\n]/', $value) === 1
             || preg_match('//u', $value) !== 1
          ) {
-            throw new InvalidArgumentException("The service environment variable {$name} cannot be written to a unit: a name systemd does not take, or a value with a line break or bytes that are not UTF-8.");
+            throw new InvalidArgumentException("The service environment variable {$name} cannot be written to a unit: a name systemd does not take, or a value with a NUL byte, a line break or bytes that are not UTF-8.");
          }
 
          // ! Quoted whole: `%` doubles so no specifier expands, `\` and `"` are
