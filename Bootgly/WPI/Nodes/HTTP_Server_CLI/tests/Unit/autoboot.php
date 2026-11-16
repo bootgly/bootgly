@@ -135,5 +135,7 @@ return new Suite(
       '1.81-router_rewind',
       // # 1.3.x (reactor): an exceptional-condition registration is refused, not waited on
       '1.82-select_except_refusal',
+      // # 1.3.x (reactor): the SSE timers of a worker come due on shared instants
+      '1.83-sse_timer_phases',
    ]
 );

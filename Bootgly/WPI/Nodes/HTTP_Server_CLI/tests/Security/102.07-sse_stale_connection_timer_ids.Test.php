@@ -1,7 +1,10 @@
 <?php
 
+use Bootgly\ACI\Events\Repeating;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Tests\Suite\Test\Separator;
+use Bootgly\WPI\Events\Select;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Modules\HTTP2;
 use Bootgly\WPI\Modules\HTTP2\Frame;
 use Bootgly\WPI\Modules\HTTP2\HPACK;
@@ -14,16 +17,17 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
 
 
 /**
- * Security PoC M3 — closed HTTP/2 SSE streams must release their Connection timer IDs.
+ * Security PoC M3 — closed HTTP/2 SSE streams must release their timers.
  *
- * SSE::open() registers its supervisor both in Timer::$tasks and in the
- * long-lived Connection::$timers array. Before remediation,
- * SSE::disconnect() deleted the live Timer task but never removed the
- * corresponding Connection array member. HTTP/1 closed the dedicated
- * connection and therefore masked the retention; HTTP/2 kept the connection
- * alive after each event stream ended. Repeated requests to an
- * application-configured SSE route consequently retained one dead integer per
- * completed stream and made final Connection::close() revisit every dead ID.
+ * SSE::open() registers a supervisor on the worker's timer owner. Before
+ * remediation, on the static Timer it was listed both in Timer::$tasks and in
+ * the long-lived Connection::$timers array, and SSE::disconnect() deleted the
+ * live Timer task but never removed the corresponding Connection array member.
+ * HTTP/1 closed the dedicated connection and therefore masked the retention;
+ * HTTP/2 kept the connection alive after each event stream ended. Repeated
+ * requests to an application-configured SSE route consequently retained one
+ * dead integer per completed stream and made final Connection::close() revisit
+ * every dead ID.
  *
  * The remote client below opens and gracefully closes several SSE streams on
  * one real h2c connection. The route is intentionally application-provided:
@@ -31,10 +35,19 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
  * exposes this ordinary endpoint shape, unauthenticated requests drive the
  * framework-owned retention without further application error.
  *
- * Controls prove that every stream opened, closed and emitted END_STREAM, that
- * the connection's ordinary idle timer remains live, and that the SSE Timer
- * tasks themselves were actually deleted. A secure implementation keeps only
- * the baseline live connection timers in Connection::$timers.
+ * The verdict follows the owner the worker actually runs:
+ * - On a loop that owns recurring timers (`Repeating`, the built-in Select)
+ *   the supervisor is a recurring timer of the loop and the connection's idle
+ *   expiration rides the worker's supervision sweep, so no static Timer id may
+ *   ever reach Connection::$timers. Controls prove that every stream opened,
+ *   closed and emitted END_STREAM, that each one armed a loop timer while it
+ *   was open, and that the connection stays on the sweep. A secure
+ *   implementation cancels every one of those loop timers — the loop holds as
+ *   many recurring timers after the streams as before them.
+ * - On the static Timer, controls prove that the connection's ordinary idle
+ *   timer remains live and that the SSE Timer tasks themselves were deleted. A
+ *   secure implementation keeps only the baseline live connection timers in
+ *   Connection::$timers.
  */
 $streams = 32;
 $evidenceStream = 2 * $streams + 3;
@@ -43,20 +56,43 @@ $Probe = new class {
    public string $error = '';
    public int $opened = 0;
    public int $closed = 0;
-   /** @var array<string,int> */
+   /** @var array<string,bool|int|string> */
    public array $baseline = [];
-   /** @var array<string,int> */
+   /** @var array<string,bool|int|string> */
    public array $after = [];
    /** @var array<int,true> */
    public array $terminal = [];
+   // # Loop owner: streams whose open() armed a loop timer, their ids, and
+   //   how many of those the loop still holds once the streams closed
+   public int $armed = 0;
+   /** @var array<int,int> */
+   public array $own = [];
+   public int $left = -1;
 };
 
-$Snapshot = static function (Response $Response): array {
+// @ Ids of the recurring timers the worker's loop holds right now; null when
+//   the static Timer owns the worker's timers, `[-1]` when the loop owns them
+//   but is not the built-in reactor whose timers this PoC can read
+$Recurring = static function (): null|array {
+   $Loop = isset(Server::$Event) ? Server::$Event : null;
+   // ?
+   if ($Loop instanceof Repeating === false) {
+      return null;
+   }
+   if ($Loop instanceof Select === false) {
+      return [-1];
+   }
+
+   // :
+   return array_keys(new ReflectionProperty(Select::class, 'Repeaters')->getValue($Loop));
+};
+
+$Snapshot = static function (Response $Response) use ($Recurring): array {
    $PackageProperty = new ReflectionProperty(Response::class, 'Package');
    $Package = $PackageProperty->getValue($Response);
    $Connection = $Package?->Connection ?? null;
    if ($Connection === null) {
-      return ['total' => -1, 'live' => -1, 'stale' => -1];
+      return ['owner' => '', 'total' => -1, 'live' => -1, 'stale' => -1, 'recurring' => -1, 'supervised' => false];
    }
 
    $StatusProperty = new ReflectionProperty(Timer::class, 'status');
@@ -71,10 +107,18 @@ $Snapshot = static function (Response $Response): array {
 
    $total = count($Connection->timers);
 
+   // # Loop owner: the recurring timers of the loop, and the connection's
+   //   idle expiration on the worker's supervision sweep
+   $Timers = $Recurring();
+   $Supervised = new ReflectionProperty(Connections::class, 'Supervised')->getValue();
+
    return [
+      'owner' => $Timers === null ? 'timer' : 'loop',
       'total' => $total,
       'live' => $live,
       'stale' => $total - $live,
+      'recurring' => $Timers === null || $Timers === [-1] ? -1 : count($Timers),
+      'supervised' => isset($Supervised[spl_object_id($Connection)]) && $Connection->due > 0,
    ];
 };
 
@@ -215,7 +259,7 @@ return new Test(
       Request $Request,
       Response $Response,
       Router $Router,
-   ) use ($Probe, $Snapshot): Generator {
+   ) use ($Probe, $Recurring, $Snapshot): Generator {
       yield $Router->route('/m3-sse-timers/setup', static function (
          Request $Request,
          Response $Response,
@@ -238,12 +282,21 @@ return new Test(
       yield $Router->route('/m3-sse-timers/target', static function (
          Request $Request,
          Response $Response,
-      ) use ($Probe): Response {
+      ) use ($Probe, $Recurring): Response {
          $SSE = $Response->SSE;
          $SSE->heartbeat = 0;
+         $Before = $Recurring();
          $SSE->open();
          if ($SSE->opened) {
             $Probe->opened++;
+         }
+         // ? Loop owner: the loop timers this stream armed while open
+         if ($Before !== null && $Before !== [-1]) {
+            $Own = array_values(array_diff($Recurring() ?? [], $Before));
+            if ($Own !== []) {
+               $Probe->armed++;
+               array_push($Probe->own, ...$Own);
+            }
          }
          $SSE->close();
          if ($SSE->closed) {
@@ -256,8 +309,10 @@ return new Test(
       yield $Router->route('/m3-sse-timers/evidence', static function (
          Request $Request,
          Response $Response,
-      ) use ($Probe, $Snapshot): Response {
+      ) use ($Probe, $Recurring, $Snapshot): Response {
          $Probe->after = $Snapshot($Response);
+         // @ Loop owner: the timers the streams armed that the loop still holds
+         $Probe->left = count(array_intersect($Probe->own, $Recurring() ?? []));
 
          return $Response(body: 'M3-SSE-TIMERS-EVIDENCE');
       }, GET);
@@ -271,6 +326,8 @@ return new Test(
             'closed' => $Probe->closed,
             'baseline' => $Probe->baseline,
             'after' => $Probe->after,
+            'armed' => $Probe->armed,
+            'left' => $Probe->left,
          ];
 
          if ($Probe->Encoder !== null) {
@@ -319,9 +376,47 @@ return new Test(
 
       $baseline = $evidence['baseline'] ?? [];
       $after = $evidence['after'] ?? [];
+      $owner = $baseline['owner'] ?? '';
       if (
          ($evidence['opened'] ?? null) !== $streams
          || ($evidence['closed'] ?? null) !== $streams
+         || ($after['owner'] ?? null) !== $owner
+      ) {
+         return 'M3 SSE timer controls did not prove successful open/close on one timer owner: '
+            . json_encode($evidence);
+      }
+
+      // ?: The worker's loop owns the timers (`Repeating`): the supervisors
+      //    are recurring loop timers, the idle expiration rides the sweep
+      if ($owner === 'loop') {
+         if (
+            ($baseline['recurring'] ?? -1) < 0
+            || ($after['recurring'] ?? -1) < 0
+            || ($evidence['armed'] ?? null) !== $streams
+            || ($baseline['supervised'] ?? false) !== true
+            || ($after['supervised'] ?? false) !== true
+         ) {
+            return 'M3 SSE timer controls did not prove, on the loop owner, that every stream '
+               . 'armed a readable loop timer and that the connection kept its idle '
+               . 'expiration on the supervision sweep: ' . json_encode($evidence);
+         }
+
+         $static = ($baseline['total'] ?? -1) + ($after['total'] ?? -1);
+         $left = $evidence['left'] ?? -1;
+         $grown = ($after['recurring'] ?? -1) - ($baseline['recurring'] ?? -1);
+         if ($static !== 0 || $left !== 0 || $grown !== 0) {
+            return "CONFIRMED M3 (loop owner): {$streams} remotely requested HTTP/2 SSE "
+               . "streams opened and closed, yet {$left} of their loop timers are still "
+               . "scheduled, the loop holds {$grown} recurring timers more than before them "
+               . "and the connection lists {$static} static Timer ids. Repeated traffic "
+               . 'grows worker memory and wakeups linearly. Evidence: ' . json_encode($evidence);
+         }
+
+         return true;
+      }
+
+      if (
+         $owner !== 'timer'
          || ($baseline['total'] ?? -1) < 1
          || ($baseline['live'] ?? -1) < 1
          || ($after['live'] ?? -1) !== ($baseline['live'] ?? -2)

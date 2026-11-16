@@ -68,9 +68,13 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
  *
  * When the worker's event loop offers recurring timers
  * (`Bootgly\ACI\Events\Repeating`) the `Tick` runs on a loop timer of its
- * own, at exactly its interval — which may be a fraction of a second — and
- * the supervisor on another one. On a loop without them both share one
- * static `Timer`, in whole seconds — a fractional interval is rounded up.
+ * own, every interval — which may be a fraction of a second — and the
+ * supervisor on another one. Both timers are registered with a slack of
+ * 1/16 of their period, so the streams of a worker that share a period come
+ * due on 16 shared instants instead of waking the loop one by one: a first
+ * run is up to that much late, never early. On a loop without them both
+ * share one static `Timer`, in whole seconds — a fractional interval is
+ * rounded up.
  *
  * HTTP/1.1 hijacks the dedicated connection (chunked framing, guarded by
  * `Decoder_Streaming`); HTTP/2 sustains its stream (DATA frames bounded by
@@ -78,6 +82,13 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
  */
 class SSE extends Resource implements Disconnecting
 {
+   /**
+    * The share of a loop timer's period its first run may be late, so that
+    * the timers of every stream of the worker fall on at most this many
+    * instants per period.
+    */
+   private const int PHASES = 16;
+
    // * Config
    /**
     * Seconds of write silence before a keep-alive comment; `0` disables.
@@ -516,13 +527,19 @@ class SSE extends Resource implements Disconnecting
          // @ Owned by the loop: its ids live in the loop's id space, so they
          //   never join `Connection::$timers` (static Timer ids). Teardown
          //   reaches them through disconnect() on every close path.
-         //   The Tick runs on a timer of its own, at exactly its interval:
-         //   the loop's grid is the Tick's grid. Each of its runs supervises
-         //   too, so the supervisor only joins when it must outpace the Tick
-         //   (heartbeat, lease renewal) or there is no Tick.
+         //   The Tick runs on a timer of its own, every interval: the loop's
+         //   grid is the Tick's grid. Each of its runs supervises too, so the
+         //   supervisor only joins when it must outpace the Tick (heartbeat,
+         //   lease renewal) or there is no Tick.
+         //   Both take a slack: a timer per stream, each on a grid of its
+         //   own, would wake the loop once per stream and period.
          if ($Tick !== null) {
             try {
-               $this->ticker = $Loop->repeat($this->interval, $this->tick(...));
+               $this->ticker = $Loop->repeat(
+                  $this->interval,
+                  $this->tick(...),
+                  $this->interval / self::PHASES
+               );
             }
             catch (InvalidArgumentException) {
                // ? An interval beyond what the loop can schedule never
@@ -530,7 +547,7 @@ class SSE extends Resource implements Disconnecting
             }
          }
          if ($this->ticker === 0 || $cadence < $this->interval) {
-            $this->timer = $Loop->repeat($cadence, $this->supervise(...));
+            $this->timer = $Loop->repeat($cadence, $this->supervise(...), $cadence / self::PHASES);
          }
       }
       else {

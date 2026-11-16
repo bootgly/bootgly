@@ -465,12 +465,18 @@ return static function
     * One sustained event stream per connection.
     *
     * Unlike every other probe here this one parks NOTHING in the reactor: an
-    * open stream is driven by a `Timer` supervisor, and `Select::$parked`
-    * counts deferred-generation waiters only. What it costs instead is one
-    * timer task per stream, and `Timer::tick()` buckets tasks by the absolute
-    * second they are due — so streams opened together are rescheduled
-    * together, forever, and fire as one burst inside a single SIGALRM
-    * handler rather than spreading over the cadence.
+    * open stream is driven by timers, and `Select::$parked` counts
+    * deferred-generation waiters only. What it costs instead is one recurring
+    * loop timer per stream for its `Tick` (and one more for its supervisor
+    * when that must run faster), on the loop's monotonic grid. Both are
+    * registered with a slack, so the streams of a worker share at most 16
+    * instants per period and run as bursts on those instants rather than one
+    * wakeup per stream.
+    *
+    * On a loop without recurring timers the stream falls back to one static
+    * `Timer` task: `Timer::tick()` buckets tasks by the absolute second they
+    * are due, so streams opened together fire as one burst inside a single
+    * SIGALRM handler.
     *
     * The supervisor probe uses this route to hold N streams while sampling an
     * unrelated route's latency, which is where a synchronized burst shows up.
@@ -480,11 +486,11 @@ return static function
     * heartbeat, so lowering it below 10 tightens the burst period.
     */
    $sseHeartbeat = (int) $Env('BENCHMARK_SSE_HEARTBEAT', '15');
-   // # Events emitted per tick, per stream. The supervisor Timer is SIGALRM at
-   //   one-second granularity, so a tick that sent ONE event would cap every
-   //   stream at 1 event/s and measure the alarm clock instead of the server.
-   //   Bursting K per tick makes the offered rate `streams × K` and puts the
-   //   ceiling back where it belongs — in the transport.
+   // # Events emitted per tick, per stream. The route ticks once a second, so
+   //   a tick that sent ONE event would cap every stream at 1 event/s and
+   //   measure the tick's period instead of the server. Bursting K per tick
+   //   makes the offered rate `streams × K` and puts the ceiling back where
+   //   it belongs — in the transport.
    $sseEvents = (int) $Env('BENCHMARK_SSE_EVENTS', '10');
    $ssePayload = str_repeat('x', (int) $Env('BENCHMARK_SSE_PAYLOAD', '32'));
 
