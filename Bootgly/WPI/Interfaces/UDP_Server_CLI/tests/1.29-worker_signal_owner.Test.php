@@ -35,7 +35,10 @@ use Bootgly\WPI\Interfaces\UDP_Server_CLI;
  * built-in loop, so there is no worker on a loop without the capability.)
  *
  * The source pins: the registration sits under the capability guard, before
- * the mask is lifted, and `work()` installs no handler by itself.
+ * the mask is lifted, and `work()` installs no handler by itself. A trap the
+ * loop refuses is logged and the walk goes on to the next signal — its catch
+ * block neither throws, returns, exits nor breaks — and `work()` turns
+ * delivery synchronous in its own body, as a statement under no condition.
  */
 return new Test(
    description: 'A UDP worker should take the master\'s signals over on its loop before it lifts its mask, the static Timer alarm included',
@@ -337,6 +340,8 @@ PHP;
       $traps = [];
       $installers = [];
       $order = [];
+      $catches = [];
+      $switches = [];
       foreach ($Tokens as $index => $Token) {
          $text = is_array($Token) ? $Token[1] : $Token;
          if ($text === '{' || (is_array($Token) && in_array($Token[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true))) {
@@ -390,6 +395,59 @@ PHP;
          ) {
             $installers[$method] = true;
          }
+         // ? `catch (LogicException $Refusal) {` in work() — where a refused
+         //   trap lands: the block it opens is read after the walk
+         else if ($method === 'work' && is_array($Token) && $Token[0] === T_CATCH
+            && ($Tokens[$index + 1] ?? null) === '(' && ($Tokens[$index + 2][1] ?? null) === 'LogicException'
+            && ($Tokens[$index + 3][1] ?? null) === '$Refusal' && ($Tokens[$index + 4] ?? null) === ')'
+            && ($Tokens[$index + 5] ?? null) === '{'
+         ) {
+            $catches[] = $index + 5;
+         }
+         // ? `pcntl_async_signals(` in work() — its nesting inside the method,
+         //   and whether it stands as the statement `pcntl_async_signals(false);`
+         else if ($method === 'work' && $text === 'pcntl_async_signals' && ($Tokens[$index + 1] ?? null) === '(') {
+            $switches[] = [
+               $depth - $opened,
+               in_array($Tokens[$index - 1] ?? null, [';', '{', '}'], true)
+                  && ($Tokens[$index + 2][1] ?? null) === 'false' && ($Tokens[$index + 3] ?? null) === ')'
+                  && ($Tokens[$index + 4] ?? null) === ';',
+            ];
+         }
+      }
+      // @@ What each refusal block of work() does: where it logs, and what in
+      //    it would end the walk over the list (or the worker) instead
+      $refusals = [];
+      foreach ($catches as $open) {
+         $level = 0;
+         $logs = [];
+         $exits = [];
+         for ($cursor = $open + 1; isset($Tokens[$cursor]); $cursor++) {
+            $Token = $Tokens[$cursor];
+            $text = is_array($Token) ? $Token[1] : $Token;
+            if ($text === '{' || (is_array($Token) && in_array($Token[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true))) {
+               $level++;
+            }
+            else if ($text === '}') {
+               // ? The brace that closes the block
+               if ($level === 0) {
+                  break;
+               }
+               $level--;
+            }
+            // ? `$this->Logger->log(` — its nesting inside the block, and
+            //   whether it starts a statement (no condition in front of it)
+            else if ($text === '$this' && ($Tokens[$cursor + 1][0] ?? null) === T_OBJECT_OPERATOR
+               && ($Tokens[$cursor + 2][1] ?? null) === 'Logger' && ($Tokens[$cursor + 3][0] ?? null) === T_OBJECT_OPERATOR
+               && ($Tokens[$cursor + 4][1] ?? null) === 'log' && ($Tokens[$cursor + 5] ?? null) === '('
+            ) {
+               $logs[] = [$level, in_array($Tokens[$cursor - 1] ?? null, [';', '{', '}'], true)];
+            }
+            else if (is_array($Token) && in_array($Token[0], [T_THROW, T_RETURN, T_EXIT, T_BREAK], true)) {
+               $exits[] = $text;
+            }
+         }
+         $refusals[] = ['logs' => $logs, 'exits' => $exits];
       }
       $joined = implode('', array_map(static fn ($Token): string => is_array($Token) ? $Token[1] : $Token, $Tokens));
       $Pins = [
@@ -398,22 +456,36 @@ PHP;
          'order in work()' => $order,
          'the list is the one the master installed' => str_contains(
             $joined,
-            'foreach($Signals->installedas$signal){$Loop->trap($signal,$Handler);}'
+            'foreach($Signals->installedas$signal){try{$Loop->trap($signal,$Handler);}catch(LogicException$Refusal){'
          ),
          'the handler is read at dispatch' => str_contains(
             $joined,
             '$Handler=staticfunction(int$signal)use($Signals):void{($Signals->handler)($signal);};'
          ),
+         'delivery is synchronous before the first trap' => (static function () use ($joined): bool {
+            $work = strpos($joined, 'protectedfunctionwork(');
+            $synchronous = $work === false ? false : strpos($joined, 'pcntl_async_signals(false);', $work);
+            $trapped = $work === false ? false : strpos($joined, '$Loop->trap(', $work);
+
+            return $synchronous !== false && $trapped !== false && $synchronous < $trapped;
+         })(),
+         // [depth inside work(), stands as `pcntl_async_signals(false);`]
+         'delivery turns synchronous in the body of work() itself, under no condition' => $switches,
+         // [log calls: [depth inside the block, starts a statement]; throw/return/exit/break in it]
+         'a refused trap is logged once and the walk goes on to the next signal' => $refusals,
          'Select offers the capability' => is_subclass_of(Select::class, Signalling::class),
       ];
 
-      yield new Assertion(description: 'the UDP worker registration is guarded by the capability, precedes the unmask and is the only signal installation of work()')
+      yield new Assertion(description: 'the UDP worker registration is guarded by the capability, precedes the unmask and is the only signal installation of work(); a refused trap is only logged, and delivery turns synchronous unconditionally')
          ->expect($Pins, Op::Identical, [
             'traps' => [['work', true, '$Loop', '$signal,$Handler']],
             'work() installs a handler itself' => false,
             'order in work()' => ['trap', 'unmask'],
             'the list is the one the master installed' => true,
             'the handler is read at dispatch' => true,
+            'delivery is synchronous before the first trap' => true,
+            'delivery turns synchronous in the body of work() itself, under no condition' => [[0, true]],
+            'a refused trap is logged once and the walk goes on to the next signal' => [['logs' => [[0, true]], 'exits' => []]],
             'Select offers the capability' => true,
          ])
          ->assert();

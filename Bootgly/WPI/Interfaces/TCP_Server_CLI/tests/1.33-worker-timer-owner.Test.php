@@ -20,8 +20,8 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 
 
 /**
- * The worker-side tickers of the TCP server — the master watchdog, the
- * recycle gate, the drain poll — have one owner per worker: the event loop
+ * The worker-side tickers of the TCP server — the master watchdog with the
+ * recycle gate on it, the drain poll — have one owner per worker: the event loop
  * when it offers recurring timers, the static `Timer` otherwise. Every one of
  * them is registered through the private `repeat()`, the only place of the
  * class that still adds a static Timer task.
@@ -50,7 +50,7 @@ return new Test(
             usleep((int) max(1, min(20_000, $left / 1_000)));
          }
       };
-      $Evidence = ['error' => '', 'loop' => null, 'runs' => null, 'legacy' => null, 'pin' => null, 'sweep' => null];
+      $Evidence = ['error' => '', 'loop' => null, 'runs' => null, 'legacy' => null, 'pin' => null, 'sweep' => null, 'await' => null];
       $OldEvent = isset(TCP_Server_CLI::$Event) ? TCP_Server_CLI::$Event : null;
       $oldContext = isset(TCP_Server_CLI::$context) ? TCP_Server_CLI::$context : null;
       $NS = 1_000_000_000;
@@ -106,6 +106,7 @@ return new Test(
          $adders = [];
          $callers = [];
          $sweepers = [];
+         $awaiters = [];
          foreach ($Tokens as $index => $Token) {
             $text = is_array($Token) ? $Token[1] : $Token;
             if ($text === '{' || (is_array($Token) && in_array($Token[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true))) {
@@ -135,6 +136,12 @@ return new Test(
             ) {
                $callers[] = $method;
             }
+            // ? `$this->await(` — with its nesting inside the method
+            else if ($text === '$this' && ($Tokens[$index + 1][0] ?? null) === T_OBJECT_OPERATOR
+               && ($Tokens[$index + 2][1] ?? null) === 'await' && ($Tokens[$index + 3] ?? null) === '('
+            ) {
+               $awaiters[] = [$method, $depth - $opened];
+            }
             // ? `Connections::sweep(` — with its nesting inside the method
             else if ($text === 'Connections' && ($Tokens[$index + 1][0] ?? null) === T_DOUBLE_COLON
                && ($Tokens[$index + 2][1] ?? null) === 'sweep' && ($Tokens[$index + 3] ?? null) === '('
@@ -144,6 +151,7 @@ return new Test(
          }
          $Evidence['pin'] = [$adders, $callers];
          $Evidence['sweep'] = $sweepers;
+         $Evidence['await'] = $awaiters;
       }
       catch (Throwable $Throwable) {
          $Evidence['error'] = $Throwable::class . ': ' . $Throwable->getMessage();
@@ -173,8 +181,12 @@ return new Test(
          description: "on a loop without recurring timers the ticker is one static Timer task and the loop is asked for nothing — observed: {$observed}"
       );
       yield assert(
-         assertion: $Evidence['pin'] === [['repeat'], ['work', 'work', 'drain']],
-         description: "repeat() is the only method of the class that adds a static Timer task; the watchdog and the recycle gate (work) and the drain poll (drain) register through it — observed: {$observed}"
+         assertion: $Evidence['pin'] === [['repeat'], ['work', 'drain']],
+         description: "repeat() is the only method of the class that adds a static Timer task; the worker's ticker (work) and the drain poll (drain) register through it — observed: {$observed}"
+      );
+      yield assert(
+         assertion: $Evidence['await'] === [['work', 2]],
+         description: "a gated worker awaits the master's go on the worker's ticker (inside its closure, under the gate), so it registers no timer of its own — observed: {$observed}"
       );
       yield assert(
          assertion: $Evidence['sweep'] === [['work', 1], ['work', 0]],

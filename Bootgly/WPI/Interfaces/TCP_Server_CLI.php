@@ -189,6 +189,7 @@ use ArgumentCountError;
 use BackedEnum;
 use Closure;
 use InvalidArgumentException;
+use LogicException;
 use RuntimeException;
 use Socket;
 use Throwable;
@@ -1444,6 +1445,12 @@ class TCP_Server_CLI implements Servers
     */
    protected function work (Process $Process, int $index): void
    {
+      // ! Synchronous delivery, whatever the master had at the fork: in
+      //   Monitor mode its console turns asynchronous signals on, and a
+      //   worker forked then would run a handler in the middle of a callback
+      //   instead of at the loop's dispatch points
+      pcntl_async_signals(false);
+
       // @ Signals — a loop that dispatches signals takes over, in this
       //   worker, every signal the master installed: each one keeps reaching
       //   `handle()`, now as a handler of the loop. Trapped before the mask
@@ -1459,7 +1466,17 @@ class TCP_Server_CLI implements Servers
             ($Signals->handler)($signal);
          };
          foreach ($Signals->installed as $signal) {
-            $Loop->trap($signal, $Handler);
+            try {
+               $Loop->trap($signal, $Handler);
+            }
+            catch (LogicException $Refusal) {
+               // ? Not the loop's to take — held by another loop, or
+               //   installed with a callable the loop could not put back:
+               //   the handler this worker inherited keeps the signal
+               $this->Logger->log(
+                  warning: "Signal {$signal} stays with the handler the worker inherited: {$Refusal->getMessage()}@.;"
+               );
+            }
          }
       }
 
@@ -1503,6 +1520,11 @@ class TCP_Server_CLI implements Servers
             $this->stop();
 
             return;
+         }
+
+         // @ A gated worker awaits the master's go on this ticker too
+         if (self::$gated) {
+            $this->await();
          }
 
          // @ The connections' periodic checks ride this ticker: one wakeup
@@ -1613,8 +1635,8 @@ class TCP_Server_CLI implements Servers
          self::$gated = false;
       }
       if (self::$gated && $this->Beacon !== null) {
+         // ! Read by the worker's ticker (`await()`), never blocking it
          stream_set_blocking($this->Beacon, false);
-         $this->repeat(1, $this->await(...));
       }
 
       // @ Booted: tell the master through the beacon, so a later death of
