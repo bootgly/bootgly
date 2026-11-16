@@ -421,6 +421,12 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
     * wait, so an idle reactor wakes for it on time. The deadlines are kept in
     * a heap: a pass costs what is due, however many timers are waiting.
     *
+    * With a `$slack` the first run moves up to the next multiple of the slack
+    * on the loop's clock, and the grid starts there: timers that name the
+    * same slack start on shared instants and share one wakeup, where each
+    * would otherwise wake the reactor on its own, and keep sharing them when
+    * their interval is a whole multiple of the slack.
+    *
     * The id shares the id space of `defer()` and is cancelled with `cancel()`,
     * also from inside a callback (its own or another one's). A callback that
     * throws is reported through `Throwables::notify()` with
@@ -429,13 +435,18 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
     * @param float $interval Seconds between runs; below `RESOLUTION` it is
     *    raised up to it.
     * @param Closure():void $Callback Runs on the loop, outside any Fiber.
+    * @param float $slack Seconds the first run may be late, never early, to
+    *    share its wakeups; zero keeps the grid anchored at registration.
+    *    Below `RESOLUTION` it is raised up to it, above the interval it is
+    *    the interval.
     *
     * @throws InvalidArgumentException When the interval is zero, negative,
-    *    not a number, infinite or longer than `HORIZON`.
+    *    not a number, infinite or longer than `HORIZON`, or the slack is
+    *    negative, not a number or infinite.
     *
     * @return int The timer id, for `cancel()`.
     */
-   public function repeat (float $interval, Closure $Callback): int
+   public function repeat (float $interval, Closure $Callback, float $slack = 0.0): int
    {
       // ? `is_finite()` refuses NAN and both infinities
       if (is_finite($interval) === false || $interval <= 0.0 || $interval > self::HORIZON) {
@@ -447,9 +458,25 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
          );
       }
 
+      if (is_finite($slack) === false || $slack < 0.0) {
+         $given = var_export($slack, true);
+
+         throw new InvalidArgumentException(
+            "A recurring slack must be a finite number of seconds, zero or more: {$given} given."
+         );
+      }
+
       // ! Whole nanoseconds from here on: the grid is integer arithmetic
-      $interval = (int) (max(self::RESOLUTION, $interval) * 1_000_000_000);
+      $period = max(self::RESOLUTION, $interval);
+      $interval = (int) ($period * 1_000_000_000);
       $deadline = (int) hrtime(true) + $interval;
+      // ? Slack: the grid starts on the next point every timer of the same
+      //   slack shares, so they come due together. Bounded by the interval
+      //   before it becomes an integer: no finite slack overflows one
+      if ($slack > 0.0) {
+         $quantum = (int) (min($period, max(self::RESOLUTION, $slack)) * 1_000_000_000);
+         $deadline += ($quantum - $deadline % $quantum) % $quantum;
+      }
 
       $ID = ++$this->timer;
       $this->Repeaters[$ID] = [
@@ -512,6 +539,11 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
     * back. Nothing is installed, changed or restored for a signal this loop
     * never trapped. A trap made before a fork is copied into the child, with
     * the loop and the process disposition alike.
+    *
+    * A loop that trapped a signal must be `destroy()`ed — or the signal
+    * `untrap()`ped — before it is dropped: the process's handler table keeps
+    * the loop alive, its handler keeps running, and another loop's `trap()`
+    * of that signal is refused.
     *
     * What the signal did before is what PHP reports, and PHP knows only the
     * handlers it installed itself: a signal the process inherited as
@@ -832,10 +864,11 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
          }
 
          if ($streams === false) {
-            // ? Every worker receives a one-second SIGALRM. PHP reports an
-            //   interrupted blocking select and an invalid descriptor set as
-            //   the same `false`, so dispatch the signal and immediately
-            //   probe the current persistent sets without blocking.
+            // ? A handled signal — a trapped one, the alarm of an application
+            //   `Timer` — interrupts the blocking select. PHP reports that
+            //   and an invalid descriptor set as the same `false`, so
+            //   dispatch the signal and immediately probe the current
+            //   persistent sets without blocking.
             pcntl_signal_dispatch();
             // ? A descriptor closed while still registered fails every select()
             //   of the set — a dependency session torn down by one Fiber's
@@ -1514,8 +1547,18 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
       $wait = null;
       $fired = false;
 
+      // ! What is due is listed first: a callback may cancel a one-shot
+      //   that is due in this very pass, and that one must not run
+      $due = [];
       foreach ($this->Timers as $ID => $Timer) {
-         if ($Timer['deadline'] > $now) {
+         if ($Timer['deadline'] <= $now) {
+            $due[] = $ID;
+         }
+      }
+      foreach ($due as $ID) {
+         $Timer = $this->Timers[$ID] ?? null;
+         // ? Cancelled by a callback of this very pass
+         if ($Timer === null) {
             continue;
          }
 
@@ -1529,8 +1572,16 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
          }
       }
 
+      $due = [];
       foreach ($this->MonotonicTimers as $ID => $Timer) {
-         if ($Timer['deadline'] > $nowMonotonic) {
+         if ($Timer['deadline'] <= $nowMonotonic) {
+            $due[] = $ID;
+         }
+      }
+      foreach ($due as $ID) {
+         $Timer = $this->MonotonicTimers[$ID] ?? null;
+         // ? Cancelled by a callback of this very pass
+         if ($Timer === null) {
             continue;
          }
 

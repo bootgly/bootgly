@@ -39,6 +39,14 @@ interface Repeating extends Scheduler
     * replayed as a burst, and the next run is the first grid point after the
     * instant the late run was dispatched.
     *
+    * Slack — with a `$slack` the grid starts later: its first point is the
+    * first multiple of the slack, on the loop's clock, at or after
+    * `registration + interval`. Timers that name the same slack start on
+    * shared instants and wake the loop once for all of them, where each
+    * would wake it on its own, and keep sharing them when their interval is
+    * a whole multiple of the slack; the first run is up to one slack late,
+    * never early, and the runs after it keep the interval.
+    *
     * Lifecycle — the returned id shares the id space of `defer()` and is
     * cancelled with `cancel()`. A callback may cancel itself or any other
     * timer: a recurring callback cancelled earlier in a pass never runs in
@@ -48,11 +56,17 @@ interface Repeating extends Scheduler
     * @param float $interval Seconds between runs. Positive and finite; an
     *    implementation raises an interval below its resolution up to it.
     * @param Closure():void $Callback Runs on the loop, outside any Fiber.
+    * @param float $slack Seconds the first run may be late to share its
+    *    wakeups with the timers of the same slack; zero (the default) keeps
+    *    the grid anchored at registration. An implementation raises a slack
+    *    below its resolution up to it and takes one above the interval as
+    *    the interval.
     *
     * @throws InvalidArgumentException When the interval is zero, negative,
-    *    not a number, infinite, or too long to be scheduled.
+    *    not a number, infinite, or too long to be scheduled, or the slack is
+    *    negative, not a number or infinite.
     *
     * @return int The timer id, for `cancel()`.
     */
-   public function repeat (float $interval, Closure $Callback): int;
+   public function repeat (float $interval, Closure $Callback, float $slack = 0.0): int;
 }

@@ -510,6 +510,119 @@ return new Test(
             description: 'destroy() with stopped timers still in the heap leaves no timer, no heap entry and no leftover count — observed: '
                . json_encode(['held' => $held, 'dropped' => $dropped])
          );
+
+         // @@ L) Slack: the timers of one slack share their grid points, so
+         //    they come due in one pass
+         $Select = $reactor();
+         $quantum = 50 * $MS;
+         $interval = 200 * $MS;
+         // ! Start right after a point of the slack's grid: the six
+         //   registrations below all fall inside the same quantum
+         $wait((intdiv((int) hrtime(true), $quantum) + 1) * $quantum + $MS);
+         $runs = 0;
+         $IDs = [];
+         $anchored = [];
+         $before = (int) hrtime(true);
+         for ($timer = 0; $timer < 6; $timer++) {
+            $IDs[] = $Select->repeat(0.2, static function () use (&$runs): void {
+               $runs++;
+            }, 0.05);
+            $anchored[] = $Select->repeat(0.2, static function (): void {});
+         }
+         $after = (int) hrtime(true);
+         $Set = $Repeaters->getValue($Select);
+         $shared = array_values(array_unique(array_map(static fn (int $ID): int => $Set[$ID]['deadline'], $IDs)));
+         $apart = count(array_unique(array_map(static fn (int $ID): int => $Set[$ID]['deadline'], $anchored)));
+         foreach ($anchored as $ID) {
+            $Select->cancel($ID);
+         }
+         $first = $shared[0] ?? 0;
+         $wait($first);
+         $tick->invoke($Select);
+         $together = $runs;
+         $Set = $Repeaters->getValue($Select);
+         $moved = array_values(array_unique(array_map(static fn (int $ID): int => $Set[$ID]['deadline'], $IDs)));
+         $Select->destroy();
+
+         yield assert(
+            assertion: count($shared) === 1
+               && $first % $quantum === 0
+               && $first >= $before + $interval && $first < $after + $interval + $quantum
+               && $apart === 6
+               && $together === 6
+               && $moved === [$first + $interval],
+            description: 'six timers of one slack share one deadline — on the grid of the slack, not before the interval and less than one slack late — where six without it have six; one pass runs them all and the next run is one interval later — observed: '
+               . json_encode(['shared' => count($shared), 'onGrid' => $first % $quantum, 'late' => ($first - $before - $interval) / $MS, 'apart' => $apart, 'together' => $together, 'moved' => count($moved)])
+         );
+
+         $Select = $reactor();
+         $refused = [];
+         foreach ([-1.0, NAN, INF, -INF] as $slack) {
+            try {
+               $Select->repeat(0.05, static function (): void {}, $slack);
+               $refused[] = false;
+            }
+            catch (InvalidArgumentException) {
+               $refused[] = true;
+            }
+         }
+         $registered = count($Repeaters->getValue($Select));
+         // ! Above the interval it is the interval; below the resolution, the
+         //   resolution; zero keeps the anchor at registration
+         $wide = $Select->repeat(0.05, static function (): void {}, 5.0);
+         // ! A finite slack too long to count in nanoseconds is the interval too
+         $huge = $Select->repeat(0.05, static function (): void {}, 1e12);
+         $latest = (int) hrtime(true) + 2 * 50 * $MS;
+         $fine = $Select->repeat(0.05, static function (): void {}, 0.000_000_001);
+         $before = (int) hrtime(true);
+         $none = $Select->repeat(0.05, static function (): void {}, 0.0);
+         $after = (int) hrtime(true);
+         $Set = $Repeaters->getValue($Select);
+         $Select->destroy();
+
+         yield assert(
+            assertion: $refused === [true, true, true, true] && $registered === 0
+               && $Set[$wide]['deadline'] % (50 * $MS) === 0 && $Set[$wide]['deadline'] <= $latest
+               && $Set[$huge]['deadline'] % (50 * $MS) === 0 && $Set[$huge]['deadline'] <= $latest
+               && $Set[$fine]['deadline'] % (int) (Select::RESOLUTION * 1_000_000_000) === 0
+               && $Set[$none]['deadline'] >= $before + 50 * $MS && $Set[$none]['deadline'] <= $after + 50 * $MS,
+            description: 'a negative, NAN or infinite slack is refused and registers nothing; one above the interval is the interval, one below the resolution is the resolution, zero keeps the grid anchored at registration — observed: '
+               . json_encode(['refused' => $refused, 'registered' => $registered, 'wide' => $Set[$wide]['deadline'] % (50 * $MS), 'fine' => $Set[$fine]['deadline'] % 1_000_000])
+         );
+
+         // @@ M) A one-shot cancelled by a callback of the same pass does not
+         //    run, in either clock domain
+         $Select = $reactor();
+         $ran = [];
+         $answers = [];
+         $second = 0;
+         $due = microtime(true) - 0.001;
+         $Select->defer($due, static function () use (&$ran, &$answers, &$second, $Select): void {
+            $ran[] = 'wall first';
+            $answers[] = $Select->cancel($second);
+         });
+         $second = $Select->defer($due, static function () use (&$ran): void {
+            $ran[] = 'wall second';
+         });
+         $tick->invoke($Select);
+         $fourth = 0;
+         $due = (int) hrtime(true) - 1_000;
+         $Select->defer($due, static function () use (&$ran, &$answers, &$fourth, $Select): void {
+            $ran[] = 'monotonic first';
+            $answers[] = $Select->cancel($fourth);
+         });
+         $fourth = $Select->defer($due, static function () use (&$ran): void {
+            $ran[] = 'monotonic second';
+         });
+         $tick->invoke($Select);
+         $idle = $tick->invoke($Select);
+         $Select->destroy();
+
+         yield assert(
+            assertion: $ran === ['wall first', 'monotonic first'] && $answers === [true, true] && $idle === null,
+            description: 'a one-shot that an earlier callback of the same pass cancelled does not run, on the wall clock and on the monotonic one, and cancel() answered true — observed: '
+               . json_encode(['ran' => $ran, 'answers' => $answers, 'idle' => $idle])
+         );
       }
       finally {
          Throwables::$reporters = $Reporters;
