@@ -19,6 +19,7 @@ use function hash_equals;
 use function hash_hmac_algos;
 use function hash_pbkdf2;
 use function in_array;
+use function intdiv;
 use function password_get_info;
 use function str_starts_with;
 use function strlen;
@@ -55,7 +56,8 @@ class PBKDF2 implements Verifier
    public private(set) string $digest;
    /**
     * Iteration ceiling — a stored hash asking for more never verifies, so
-    * a hostile row cannot pin a worker.
+    * what one row can cost is bounded: by this count times the cost of the
+    * digest. A slower digest (`sha512`, `whirlpool`) deserves a lower one.
     */
    public private(set) int $ceiling;
 
@@ -86,9 +88,10 @@ class PBKDF2 implements Verifier
     * @param int $ceiling Highest iteration count a stored hash may ask
     *    for — set it to the highest count present in the imported rows.
     *
-    * @throws InvalidArgumentException When the prefix is empty or starts
-    *    like a native hash, the digest is not an HMAC algorithm of this PHP
-    *    build or the ceiling is below 1.
+    * @throws InvalidArgumentException When the prefix is empty, starts like
+    *    a native hash or is so long that no stored hash of this format fits
+    *    the length a verifier reads, the digest is not an HMAC algorithm of
+    *    this PHP build or the ceiling is below 1.
     */
    public function __construct (string $prefix, string $digest = 'sha256', int $ceiling = 1_000_000)
    {
@@ -117,6 +120,18 @@ class PBKDF2 implements Verifier
 
       // * Metadata
       $this->length = strlen(hash($digest, '', true));
+
+      // ? A prefix that leaves no room for the shortest row of this format
+      //   (`1:<one salt byte>:<key>`): every stored hash would be longer
+      //   than the verifier reads, so none would ever verify — in silence
+      $shortest = strlen($prefix) + 7 + 4 * intdiv($this->length + 2, 3);
+      if ($shortest > self::LIMIT) {
+         $limit = self::LIMIT;
+
+         throw new InvalidArgumentException(
+            "PBKDF2 verifier prefix is too long: no stored hash of this format fits in {$limit} bytes."
+         );
+      }
    }
 
    /**

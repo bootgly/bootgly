@@ -20,6 +20,7 @@ use function password_needs_rehash;
 use function password_verify;
 use InvalidArgumentException;
 use RuntimeException;
+use SensitiveParameter;
 use Throwable;
 use TypeError;
 
@@ -105,7 +106,7 @@ class Password
    /**
     * Hash a password with the current policy.
     */
-   public function hash (#[\SensitiveParameter] string $password): string
+   public function hash (#[SensitiveParameter] string $password): string
    {
       return password_hash($password, self::ALGORITHM, [
          'memory_cost' => $this->memory,
@@ -125,9 +126,11 @@ class Password
     * another stack (`$2a$`, `$6$`) that the password did not open. A
     * verifier that throws fails the verification: the throwable is reported
     * through `Throwables::notify()` and no other verifier is asked for that
-    * hash.
+    * hash. `notify()` reports a throwable once per instance: a verifier that
+    * throws the same object again fails every verification and is reported
+    * for the first one only.
     */
-   public function verify (#[\SensitiveParameter] string $password, #[\SensitiveParameter] string $hash): bool
+   public function verify (#[SensitiveParameter] string $password, #[SensitiveParameter] string $hash): bool
    {
       // ? Empty stored hashes never verify
       if ($hash === '') {
@@ -182,7 +185,7 @@ class Password
     * When the password is valid but the stored hash no longer conforms
     * to the current policy, the result carries a fresh hash to persist.
     */
-   public function inspect (#[\SensitiveParameter] string $password, #[\SensitiveParameter] string $hash): Verification
+   public function inspect (#[SensitiveParameter] string $password, #[SensitiveParameter] string $hash): Verification
    {
       // ? Invalid passwords never trigger a rehash
       if ($this->verify($password, $hash) === false) {

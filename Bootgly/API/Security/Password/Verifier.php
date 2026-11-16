@@ -40,7 +40,8 @@ use SensitiveParameter;
  * - it compares in constant time (`hash_equals()`);
  * - it answers false, never throws, on a malformed row. A verifier that
  *   throws fails the verification — the throwable is reported through
- *   `Throwables::notify()` and no other verifier is asked for that hash;
+ *   `Throwables::notify()`, once per throwable instance, and no other
+ *   verifier is asked for that hash;
  * - it marks the password and the stored hash `#[SensitiveParameter]`
  *   (attributes are not inherited from this contract), so neither appears
  *   in the trace of a reported throwable.

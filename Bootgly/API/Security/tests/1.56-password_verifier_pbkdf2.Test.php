@@ -17,6 +17,7 @@ use function bin2hex;
 use function defined;
 use function hash_pbkdf2;
 use function implode;
+use function json_encode;
 use function rtrim;
 use function str_repeat;
 use function strlen;
@@ -213,6 +214,17 @@ return new Test(
          'negative ceiling' => static fn () => new PBKDF2(prefix: 'v1:', ceiling: -1),
          'bcrypt prefix' => static fn () => new PBKDF2(prefix: '$2y$'),
          'bcrypt-like prefix' => static fn () => new PBKDF2(prefix: '$2y$legacy:'),
+         // ! sha256: the shortest row is the prefix plus 51 bytes
+         'prefix that leaves no room for a row' => static fn () => new PBKDF2(prefix: str_repeat('p', 974)),
+         // ! sha512 and md5 keys (64 and 16 bytes) are one byte past a
+         //   multiple of 3, where sha256's (32) is two: their padded Base64
+         //   takes 88 and 24 bytes, the shortest row the prefix plus 95 and 31
+         'prefix that leaves no room for a sha512 row' => static fn () => new PBKDF2(prefix: str_repeat('p', 930), digest: 'sha512'),
+         'prefix that leaves no room for an md5 row' => static fn () => new PBKDF2(prefix: str_repeat('p', 994), digest: 'md5'),
+         // ! sha384's key (48 bytes) is a multiple of 3: its Base64 takes 64
+         //   bytes, the shortest row the prefix plus 71
+         'prefix that leaves no room for a sha384 row' => static fn () => new PBKDF2(prefix: str_repeat('p', 954), digest: 'sha384'),
+         'prefix longer than a row may be' => static fn () => new PBKDF2(prefix: str_repeat('p', 1101)),
       ];
       // ? PHP names the argon2 identifiers only on a build that has Argon2
       if (defined('PASSWORD_ARGON2ID')) {
@@ -237,7 +249,33 @@ return new Test(
 
       yield assert(
          assertion: $legs === [],
-         description: "an empty prefix, a prefix PHP could read as a native hash, a digest that is not an HMAC algorithm and a ceiling below one are refused with InvalidArgumentException — accepted: [{$failed}]"
+         description: "an empty prefix, a prefix PHP could read as a native hash, a prefix too long for any row to fit, a digest that is not an HMAC algorithm and a ceiling below one are refused with InvalidArgumentException — accepted: [{$failed}]"
+      );
+
+      // # The longest prefix that still leaves room for a row is accepted,
+      //   and that row verifies — for a key two bytes past a multiple of 3
+      //   (sha256), for keys one byte past it (sha512, md5) and for a key
+      //   that is one (sha384)
+      $accepted = [];
+      foreach (['sha256' => [973, 32], 'sha512' => [929, 64], 'md5' => [993, 16], 'sha384' => [953, 48]] as $digest => [$length, $size]) {
+         $prefix = str_repeat('p', $length);
+         $row = "{$prefix}1:" . base64_encode('s') . ':'
+            . base64_encode(hash_pbkdf2($digest, 'correct horse', 's', 1, $size, true));
+         try {
+            $Longest = new PBKDF2(prefix: $prefix, digest: $digest);
+            $accepted[$digest] = strlen($row) === 1024
+               && $Longest->verify('correct horse', $row) === true
+               && $Longest->verify('wrong horse', $row) === false;
+         }
+         catch (InvalidArgumentException) {
+            $accepted[$digest] = 'refused';
+         }
+      }
+      $observed = json_encode($accepted);
+
+      yield assert(
+         assertion: $accepted === ['sha256' => true, 'sha512' => true, 'md5' => true, 'sha384' => true],
+         description: "the longest prefix that leaves room for the shortest row is accepted and its 1024-byte row verifies, for sha256, sha512, md5 and sha384 — observed: {$observed}"
       );
 
       // # A prefix that only resembles a native one is accepted
