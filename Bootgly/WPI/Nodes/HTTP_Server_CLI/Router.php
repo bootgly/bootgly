@@ -11,30 +11,42 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
+use const T_FN;
+use const T_FUNCTION;
+use function array_fill;
 use function array_intersect;
 use function array_keys;
+use function array_splice;
 use function array_values;
 use function count;
 use function explode;
+use function file_get_contents;
 use function implode;
 use function in_array;
 use function is_array;
+use function is_file;
 use function is_int;
 use function is_object;
 use function is_string;
 use function ltrim;
+use function max;
 use function preg_match;
 use function preg_quote;
 use function rtrim;
 use function serialize;
+use function spl_object_id;
 use function str_ends_with;
 use function strpos;
 use function substr;
 use function substr_count;
+use function token_get_all;
 use function trim;
 use Closure;
+use Error;
 use Generator;
 use InvalidArgumentException;
+use ReflectionClass;
+use ReflectionFunction;
 use Throwable;
 
 use const Bootgly\WPI;
@@ -95,31 +107,6 @@ class Router
    private null|string $groupPrefix = null;
    /** @var null|array<string> Active group methods; an empty list is method-agnostic. */
    private null|array $groupMethods = null;
-   // # Route list
-   /**
-    * Equal method lists of the route list, stored once and shared by the rows
-    * that carry them — a warm-up table, released when the warm-up ends.
-    *
-    * @var array<string,array<int,string>>
-    */
-   private array $methodLists = [];
-   /**
-    * Equal parameter lists of the route list, shared the same way.
-    *
-    * @var array<string,array<int,array{name:string,constraint:null|string,pattern:string}>>
-    */
-   private array $parameterLists = [];
-   // # Attempt
-   /**
-    * What the Router held before its first registration attempt — a copy
-    * `rewind()` takes, dropped when the warm-up ends.
-    */
-   private null|self $Baseline = null;
-   /**
-    * Whether a new attempt began and has registered nothing yet: its first
-    * registration puts `$Baseline` back before it is stored.
-    */
-   private bool $stale = false;
 
    /**
     * Whether the route cache has been warmed (all routes registered).
@@ -150,6 +137,58 @@ class Router
     * @var array<int,Registration>
     */
    public private(set) array $Routes = [];
+   // # Route list
+   /**
+    * Equal method lists of the route list, stored once and shared by the rows
+    * that carry them — a warm-up table, released when the warm-up ends.
+    *
+    * @var array<string,array<int,string>>
+    */
+   private array $methodLists = [];
+   /**
+    * Equal parameter lists of the route list, shared the same way.
+    *
+    * @var array<string,array<int,array{name:string,constraint:null|string,pattern:string}>>
+    */
+   private array $parameterLists = [];
+   /**
+    * How many functions and closures each PHP file declares per line, read
+    * when a closure in a Middleware is compared during the warm-up.
+    *
+    * @var array<string,array<int,int>>
+    */
+   private array $declarations = [];
+   // # Attempt
+   /**
+    * What the Router held before its first registration attempt — a copy
+    * `rewind()` takes, dropped when the warm-up ends.
+    */
+   private null|self $Baseline = null;
+   /**
+    * Whether a new attempt began and has stored nothing yet: the first
+    * registration it stores puts `$Baseline` back before it.
+    */
+   private bool $stale = false;
+   /**
+    * Whether the attempt has not called `intercept()` yet: its first one
+    * starts from the Middlewares of `$Baseline`.
+    */
+   private bool $fresh = false;
+   /**
+    * The intercepted Middlewares each registration was stored with, by
+    * methods and path, one entry per stored registration of that pair in an
+    * attempt — kept between `rewind()` and the warm-up, which registers on
+    * its own (null).
+    *
+    * @var null|array<string,array<int,array<Middleware>>>
+    */
+   private null|array $Trail = null;
+   /**
+    * The last turn the attempt stored of each methods and path pair.
+    *
+    * @var array<string,int>
+    */
+   private array $turns = [];
 
 
    public function __construct ()
@@ -249,6 +288,12 @@ class Router
       // ? Cache already warmed — a handler that runs again registers nothing
       if ($this->cached) {
          return;
+      }
+      // ? First intercept() of a new attempt: its Middlewares start from the
+      //   mark, not on top of the ones the last attempt intercepted
+      if ($this->fresh && $this->Baseline !== null) {
+         $this->fresh = false;
+         $this->Middlewares = $this->Baseline->Middlewares;
       }
 
       foreach ($Middlewares as $Middleware) {
@@ -640,13 +685,6 @@ class Router
       null|array $cacheConfig = null,
       null|string $directBody = null
    ): void {
-      // ? First registration of a new attempt: it starts from what the Router
-      //   held before the first one, not on top of the last
-      if ($this->stale && $this->Baseline !== null) {
-         $this->stale = false;
-         $this->restore($this->Baseline);
-      }
-
       $normalizedRoute = ($route === '/' ? '' : rtrim($route, '/'));
 
       // @ Prepend group prefix when flattening nested routes
@@ -684,7 +722,30 @@ class Router
          }
       }
 
-      $MergedMiddlewares = [...$this->Middlewares, ...$Middlewares];
+      // @ Intercepted Middlewares of this registration
+      $Intercepted = $this->Middlewares;
+      $trail = null;
+      $turn = 0;
+      if ($this->Trail !== null) {
+         $trail = implode(',', $methodsList) . " $normalizedRoute";
+         $turn = ($this->turns[$trail] ?? -1) + 1;
+
+         // ? A registration an earlier attempt made too: the Middlewares this
+         //   attempt intercepted itself up to here, plus the ones it was
+         //   stored with then that this attempt did not intercept — never
+         //   fewer than either, so a Middleware one run intercepts and
+         //   another skips keeps the route behind it
+         if (isSet($this->Trail[$trail][$turn])) {
+            $Own = $this->Middlewares;
+            if ($this->fresh && $this->Baseline !== null) {
+               $Own = $this->Baseline->Middlewares;
+            }
+
+            $Intercepted = $this->merge($this->Trail[$trail][$turn], $Own);
+         }
+      }
+
+      $MergedMiddlewares = [...$Intercepted, ...$Middlewares];
 
       // @ Pre-bind Closure to Route — gives handlers `$this->Params` access
       //   and (empirically) keeps Closure call path on JIT-friendly fast track
@@ -753,6 +814,8 @@ class Router
 
       // @ Catch-all route — store dispatcher closure directly (O(1) callable)
       if ($normalizedRoute === '/*') {
+         $this->rebase();
+         $this->trace($trail, $turn, $Intercepted);
          $this->CatchAllCache = $this->dispatch($boundHandler, $MergedMiddlewares);
          // @ Route list row — the single slot is tested against no method
          $this->Routes[] = new Registration(
@@ -774,6 +837,8 @@ class Router
          if (strpos($route, ':*') !== false) {
             $prefix = rtrim(explode(':*', $normalizedRoute)[0], '/');
 
+            $this->rebase();
+            $this->trace($trail, $turn, $Intercepted);
             $this->pendingGroups[] = [
                'prefix' => $prefix,
                'handler' => $handler,
@@ -918,6 +983,8 @@ class Router
          }
          $segCountKey = $hasCatchAll ? 0 : count($parts);
 
+         $this->rebase();
+         $this->trace($trail, $turn, $Intercepted);
          $this->dynamicCache[$firstSegKey][$segCountKey][] = [
             'type' => $isSimple ? 'simple' : 'complex',
             'pattern' => $pattern,
@@ -950,6 +1017,12 @@ class Router
       if ($methodAgnostic) {
          $methodsList = [''];
       }
+      // ? Nothing to store (an empty, non-agnostic method list) — no row
+      if ($methodsList === []) {
+         return;
+      }
+      $this->rebase();
+      $this->trace($trail, $turn, $Intercepted);
       $Dispatcher = $directBody !== null && $MergedMiddlewares === []
          ? $directBody
          : $this->dispatch($boundHandler, $MergedMiddlewares);
@@ -963,10 +1036,6 @@ class Router
          if ($method === '') {
             $this->hasAgnosticStatic = true;
          }
-      }
-      // ? Nothing was stored (an empty, non-agnostic method list) — no row
-      if ($methodsList === []) {
-         return;
       }
       // @ Route list row — equal method lists are stored once (a dynamic
       //   row shares its list with the cache entry instead). An empty method
@@ -1061,11 +1130,15 @@ class Router
     * read the route list in a test, a command or a tool:
     * `$Router->warm($Handler($Request, $Response, $Router))`.
     *
-    * `$Routes` may be null when the routes were registered through direct
+    * Pass null when the routes were registered through direct
     * `$Router->route(...)` calls (no yield): only the groups remain.
     *
-    * A warm-up that throws leaves the Router cold and as this call found it:
-    * the routes registered before the call stay, their groups pending again.
+    * A warm-up that throws leaves the Router cold and as this call found it
+    * — the routes registered before the call stay, their groups pending
+    * again — unless the route set warmed the Router by itself before it
+    * threw.
+    *
+    * @param null|Generator $Routes The route set to drain.
     *
     * @throws Throwable What a route set or a registration threw.
     */
@@ -1081,6 +1154,9 @@ class Router
 
       try {
          $this->Middlewares = [];
+         // ! A warm-up registers on its own: no trail to take from
+         $this->fresh = false;
+         $this->Trail = null;
          if ($Routes !== null) {
             foreach ($Routes as $_) {
                // @ Intentional drain: route() registers via cache(), yields false
@@ -1100,6 +1176,8 @@ class Router
             $this->restore($Found);
             $this->Middlewares = $Found->Middlewares;
             $this->stale = $Found->stale;
+            $this->fresh = $Found->fresh;
+            $this->Trail = $Found->Trail;
          }
 
          throw $Throwable;
@@ -1108,16 +1186,18 @@ class Router
       // @ The rows keep what they share; the warm-up tables are done
       $this->methodLists = [];
       $this->parameterLists = [];
+      $this->declarations = [];
+      $this->turns = [];
       $this->Baseline = null;
       $this->cached = true;
    }
    /**
     * Mark the start of a registration attempt on a cold Router. The first
     * call records what the Router holds. After every later one the
-    * intercepted Middlewares are the recorded ones again, and the first
-    * registration puts the rest back before it is stored — the dispatch
-    * tables, the pending groups and the route list. A warm Router ignores
-    * the call.
+    * first registration puts the recorded state back before it is stored —
+    * the dispatch tables, the pending groups and the route list — and the
+    * first `intercept()` starts from the recorded Middlewares again. A warm
+    * Router ignores the call.
     *
     * The server calls it before each run of the request handler while the
     * Router is cold, so a route set that runs more than once — its handler
@@ -1126,10 +1206,31 @@ class Router
     * and so does everything when an attempt registers nothing: a handler
     * that registers on its first run only keeps its routes.
     *
-    * An attempt is whole or nothing: once it registers a route, the routes
-    * and the Middlewares an earlier attempt registered and this one does not
-    * repeat are gone. A handler must not guard part of its registrations —
-    * an `intercept()` least of all — to run once while the rest runs again.
+    * The routes of an attempt are whole or nothing: once it registers one,
+    * the routes an earlier attempt registered and this one does not repeat
+    * are gone — a handler must not guard part of its routes to run once
+    * while the rest runs again. The intercepted Middlewares follow the
+    * registration instead, and never shrink: a registration an earlier
+    * attempt made too — the same methods and path, the same how-many-th
+    * stored time in the attempt (a refused one takes no turn) — is stored
+    * with the Middlewares this attempt intercepted itself up to there, in
+    * their order, plus each one it had then that this attempt did not
+    * intercept, kept in its place (one built again the same way — the
+    * same class with the same property values, the objects and closures
+    * it holds compared the same way — is the same Middleware, and this
+    * attempt's is kept; a configuration that differs, or that cannot be
+    * compared — see `compare()` —, is another one, so a Middleware built
+    * from what changes on every run is kept once per run); a
+    * new one takes the Middlewares intercepted at that point: the last
+    * attempt's until this attempt's first `intercept()`, the recorded ones
+    * plus this attempt's after it. So a route stays behind a Middleware
+    * intercepted on the first run only, or on a later run only. Two shapes
+    * still lose a Middleware intercepted on the first run only: a route
+    * only a later run registers, after an `intercept()` of that run, when
+    * the run skips the first-run-only one; and a path a run registers fewer
+    * times than the run before, when an earlier registration of it sat ahead
+    * of that first-run-only `intercept()`. A route set that yields its routes
+    * is drained by the warm-up, which starts from no intercepted Middleware.
     */
    public function rewind (): void
    {
@@ -1141,12 +1242,224 @@ class Router
       // ?: First attempt: nothing to put back yet
       if ($this->Baseline === null) {
          $this->Baseline = clone $this;
+         $this->Trail = [];
 
          return;
       }
 
       $this->stale = true;
-      $this->Middlewares = $this->Baseline->Middlewares;
+      $this->fresh = true;
+      $this->turns = [];
+   }
+   /**
+    * Start the attempt from the mark: the first registration it stores puts
+    * back what the Router held before the first attempt, instead of landing
+    * on top of the last one. A registration that is refused stores nothing
+    * and puts nothing back.
+    */
+   private function rebase (): void
+   {
+      // ? Not the first store of a new attempt
+      if ($this->stale === false || $this->Baseline === null) {
+         return;
+      }
+
+      $this->stale = false;
+      $this->restore($this->Baseline);
+   }
+   /**
+    * Whether two values are the same for a Middleware — so the same that
+    * they behave the same; whatever cannot be told is another one:
+    * - arrays: identical (one shared array, in one step), or the same
+    *   keys, in the same order, with the same values;
+    * - scalars, nulls and resources: identical;
+    * - objects: the same instance, or the same class with the same
+    *   properties — except an object of a class PHP defines, or of one
+    *   extending it, and a lazy object not initialized yet, whose state
+    *   the properties do not show: those are the same instance only;
+    * - closures: the same instance, or the same declaration — alone on
+    *   its line of a file — with the same called class, scope, bound
+    *   object and captured variables.
+    * Values are compared this way all the way down, 16 levels at most
+    * (deeper is another one); an object pair met again — a cycle, or one
+    * shared below both — counts as the same.
+    *
+    * @param array<string,true> $pairs The object pairs met so far.
+    */
+   private function compare (mixed $A, mixed $B, array &$pairs, int $depth = 0): bool
+   {
+      // ? Too deep to tell: another one
+      if ($depth > 16) {
+         return false;
+      }
+      // ? Arrays — compared here, value by value, when `===` cannot tell
+      if (is_array($A) || is_array($B)) {
+         // ? Identical: one shared array is told in one step, however large
+         try {
+            if ($A === $B) {
+               return true;
+            }
+         }
+         catch (Error) { // @phpstan-ignore catch.neverThrown
+            // ? An array that holds a reference to itself (`===` throws
+            //   "Nesting level too deep"): compared below
+         }
+         if (is_array($A) === false || is_array($B) === false || array_keys($A) !== array_keys($B)) {
+            return false;
+         }
+         // @@ Each value
+         foreach ($A as $key => $value) {
+            if ($this->compare($value, $B[$key], $pairs, $depth + 1) === false) {
+               return false;
+            }
+         }
+
+         return true;
+      }
+      // ? Identical
+      if ($A === $B) {
+         return true;
+      }
+      // ? Scalars, nulls and resources are identical or not the same
+      if (is_object($A) === false || is_object($B) === false || $A::class !== $B::class) {
+         return false;
+      }
+      // ? An object pair met again: a cycle, or one shared below both
+      $first = spl_object_id($A);
+      $second = spl_object_id($B);
+      $pair = "$first:$second";
+      if (isSet($pairs[$pair])) {
+         return true;
+      }
+      $pairs[$pair] = true;
+
+      // ?: Closures: the declaration, alone on its line, the called class,
+      //    the scope, the bound object and the captured variables
+      if ($A instanceof Closure && $B instanceof Closure) {
+         $Function = new ReflectionFunction($A);
+         $Other = new ReflectionFunction($B);
+         $file = $Function->getFileName();
+         $line = $Function->getStartLine();
+
+         return $Function->getName() === $Other->getName()
+            && $file === $Other->getFileName()
+            && $line === $Other->getStartLine()
+            && $Function->getEndLine() === $Other->getEndLine()
+            && ($file === false || $this->tally($file, (int) $line) === 1)
+            && $Function->getClosureCalledClass()?->name === $Other->getClosureCalledClass()?->name
+            && $Function->getClosureScopeClass()?->name === $Other->getClosureScopeClass()?->name
+            && $this->compare($Function->getClosureThis(), $Other->getClosureThis(), $pairs, $depth + 1)
+            && $this->compare($Function->getStaticVariables(), $Other->getStaticVariables(), $pairs, $depth);
+      }
+      // ? State the properties do not show: the same instance only
+      $Class = new ReflectionClass($A);
+      if ($Class->isUninitializedLazyObject($A) || $Class->isUninitializedLazyObject($B)) {
+         return false;
+      }
+      // @@ A class PHP defines, or one it extends
+      for ($Ancestor = $Class; $Ancestor !== false; $Ancestor = $Ancestor->getParentClass()) {
+         if ($Ancestor->isInternal()) {
+            return false;
+         }
+      }
+
+      // : Objects: the same properties, one level down
+      return $this->compare((array) $A, (array) $B, $pairs, $depth);
+   }
+   /**
+    * How many functions and closures are declared on line `$line` of the
+    * PHP file `$file` — 0 when it is not a readable file (`eval()`'d code).
+    * Each file is read once per warm-up.
+    */
+   private function tally (string $file, int $line): int
+   {
+      // ? Not read yet
+      if (isSet($this->declarations[$file]) === false) {
+         $lines = [];
+         // ? A file gone or unreadable since it was loaded: no declaration
+         //   to count, so the closure is another one
+         try {
+            $source = is_file($file) ? @file_get_contents($file) : false;
+         }
+         catch (Throwable) {
+            // ? Out of reach since it was loaded (`open_basedir`)
+            $source = false;
+         }
+         if ($source !== false) {
+            // @@ Each `function` / `fn` keyword, by the line it starts on
+            foreach (token_get_all($source) as $Token) {
+               if (is_array($Token) && ($Token[0] === T_FUNCTION || $Token[0] === T_FN)) {
+                  $lines[$Token[2]] = ($lines[$Token[2]] ?? 0) + 1;
+               }
+            }
+         }
+         $this->declarations[$file] = $lines;
+      }
+
+      // :
+      return $this->declarations[$file][$line] ?? 0;
+   }
+   /**
+    * The Middlewares a registration an earlier attempt made too is stored
+    * with: `$Own`, the ones this attempt intercepted itself, in their order,
+    * with each one of `$Kept` — the ones it was stored with then — that
+    * `$Own` lacks put back in its place, right after the last one before it
+    * that `$Own` holds. A Middleware of `$Kept` and one of `$Own` are the
+    * same when `compare()` finds them so — the same instance, or one built
+    * again the same way —: a configuration that differs is another
+    * Middleware, kept beside it. Each one of `$Own` stands for one of
+    * `$Kept` at most.
+    *
+    * @param array<Middleware> $Kept
+    * @param array<Middleware> $Own
+    *
+    * @return array<Middleware>
+    */
+   private function merge (array $Kept, array $Own): array
+   {
+      // ! This attempt's own, each not yet standing for a kept one
+      $Merged = array_values($Own);
+      $free = array_fill(0, count($Merged), true);
+      $cursor = 0;
+
+      // @@ Put back what this attempt lacks, in its place
+      foreach ($Kept as $Middleware) {
+         foreach ($Merged as $index => $Current) {
+            $pairs = [];
+            if ($free[$index] && $this->compare($Current, $Middleware, $pairs)) {
+               $free[$index] = false;
+               $cursor = max($cursor, $index + 1);
+
+               continue 2;
+            }
+         }
+
+         array_splice($Merged, $cursor, 0, [$Middleware]);
+         array_splice($free, $cursor, 0, [false]);
+         $cursor++;
+      }
+
+      // :
+      return $Merged;
+   }
+   /**
+    * Record a stored registration in the trail of the attempt: the
+    * Middlewares `$Intercepted` it was stored with, as the `$turn`-th
+    * registration of its methods and path `$trail`. Called where the
+    * registration is stored, so one that is refused takes no turn. Does
+    * nothing outside an attempt (`$trail` null: the warm-up).
+    *
+    * @param array<Middleware> $Intercepted
+    */
+   private function trace (null|string $trail, int $turn, array $Intercepted): void
+   {
+      // ? Outside an attempt
+      if ($trail === null || $this->Trail === null) {
+         return;
+      }
+
+      $this->turns[$trail] = $turn;
+      $this->Trail[$trail][$turn] = $Intercepted;
    }
    /**
     * Put the dispatch tables, the pending groups and the route list of
