@@ -19,7 +19,9 @@ use Bootgly\ACI\Tests\Suite\Test;
  * A recycle is proved, not claimed — live, on a one-worker Foreground HTTP
  * server with `maxRequests: 1` (every answered request recycles its worker)
  * whose workers exit with status 75 (`RECYCLE`) at boot while a counter file
- * says so. Every verdict below is read per worker PID, so it holds whichever
+ * says so. A worker that boots records itself only once its event loop runs,
+ * so the spec never kills one the master still takes for a boot in progress.
+ * Every verdict below is read per worker PID, so it holds whichever
  * legitimate path the master takes — the overlap (`recycling, forking its
  * replacement`) or a recycle whose exit it reaps before reading the beacon
  * (`recycled, reforking`):
@@ -56,6 +58,7 @@ require getenv('SUPERVISION_AUTOBOOT');
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\ACI\Process\Events as Worker;
 use Bootgly\API\Endpoints\Server\Modes;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
@@ -73,7 +76,12 @@ Emitter::$Instance->listen(Worker::Boot, static function () use ($counter, $boot
       file_put_contents($boots, "{$PID}:died\n", FILE_APPEND);
       exit(75);
    }
-   file_put_contents($boots, "{$PID}:ok\n", FILE_APPEND);
+   // ! Recorded from the event loop: the worker has told the master it
+   //   booted, so a kill from now on is a worker that served — between
+   //   `Boot` and the loop it would be a boot that failed
+   TCP_Server_CLI::$Event->defer(hrtime(true), static function () use ($boots, $PID): void {
+      file_put_contents($boots, "{$PID}:ok\n", FILE_APPEND);
+   });
 });
 
 $Server = new HTTP_Server_CLI(Modes::Foreground);
@@ -328,7 +336,17 @@ PHP;
          && $Logged($exited, 'recycl') === false;
       $Observed['group clean'] = $clean;
 
-      yield new Assertion(description: 'an exit 75 at boot or from a handler is a crash; a recycle — reaped before its beacon is read or not — is a recycle, and restarts the slot\'s streak')
+      // ! Evidence for a failure: the boots and the master's verdict lines
+      preg_match_all('/Worker #\d+ \(PID: \d+\) [^.]+/', $output, $Verdicts);
+      $evidence = json_encode([
+         'boots' => array_map(static fn (array $Record): string => "{$Record[0]}:{$Record[1]}", $Records),
+         'verdicts' => $Verdicts[0],
+      ]);
+
+      yield new Assertion(
+         description: 'an exit 75 at boot or from a handler is a crash; a recycle — reaped before its beacon is read or not — is a recycle, and restarts the slot\'s streak',
+         fallback: "Failed — {$evidence}"
+      )
          ->expect($Observed, Op::Identical, [
             'the first worker booted' => true,
             'four boot exits, then a worker serves' => true,
