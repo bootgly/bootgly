@@ -2084,7 +2084,7 @@ return new Test(
          $share = intdiv($default, 2);
          $peers = 14;
          // ! 4,999,999 zeros — `[0,0,…]`, 9,999,999 bytes (under `maxBodySize`)
-         $body = '[' . implode(',', array_fill(0, 4_999_999, '0')) . ']';
+         $body = '[' . str_repeat('0,', 4_999_998) . '0]';
          $gets = str_repeat("GET /o HTTP/1.1\r\nHost: localhost\r\n\r\n", $owed);
          $request = $gets . $Post('/n', 'application/json', $body);
          $base = $Measure($port) ?? [];

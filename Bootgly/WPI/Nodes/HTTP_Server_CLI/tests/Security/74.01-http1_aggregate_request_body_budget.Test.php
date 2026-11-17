@@ -3393,14 +3393,18 @@ return new Test(
          gc_collect_cycles();
 
          // ! The REAL constructor — the self-reference is created there, not
-         //   at close. `guard()` parks `[$this, 'expire']` in the static Timer
-         //   map, so drop that root first: it is an unrelated, already-fixed
-         //   retention path and would mask this one.
+         //   at close. `guard()` parks the idle expiration on the worker's
+         //   supervision sweep (`Connections::supervise()`) on a loop with
+         //   recurring timers, or `[$this, 'expire']` in the static Timer map
+         //   otherwise, so drop both roots first: `close()` drops them too,
+         //   they are unrelated, already-fixed retention paths and would mask
+         //   this one.
          $Lifetime = new Connection($socket, '127.0.0.1', 12345);
          foreach ($Lifetime->timers as $timer) {
             Timer::del($timer);
          }
          $Lifetime->timers = [];
+         Connections::release($Lifetime);
 
          $Weak = WeakReference::create($Lifetime);
          unset($Lifetime);
