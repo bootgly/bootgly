@@ -214,8 +214,6 @@ if (($release['draft'] ?? true) !== false || ($release['prerelease'] ?? true) !=
 
 $URL = $release['html_url'] ?? null;
 $URL = is_string($URL) ? $URL : "https://github.com/{$repository}/releases/tag/{$tag}";
-$published = $release['published_at'] ?? null;
-$published = is_string($published) ? $published : '';
 $notes = $release['body'] ?? null;
 ['focus' => $focus, 'changes' => $changes] = parse(is_string($notes) ? $notes : '');
 $kind = match (true) {
@@ -255,8 +253,9 @@ $lines[] = "Upgrade: <code>{$upgrade}</code>";
 $lines[] = "Release notes: {$URL}";
 $telegram = implode("\n", $lines);
 
-// # Discord (embed: title 256, description 4096 characters)
-$lines = [];
+// # Discord (message content, 2000 characters): the release link at the end
+//   unfurls into GitHub's release card, like a link posted by hand
+$lines = ["🚀 **Bootgly {$tag} is out** — a {$kind} release", ''];
 if ($focus !== '') {
    $lines[] = $focus;
    $lines[] = '';
@@ -273,11 +272,12 @@ if ($shown !== []) {
    $lines[] = '';
 }
 $lines[] = "Upgrade: `{$upgrade}`";
+$lines[] = $URL;
 $discord = implode("\n", $lines);
 
 // ? Limits: refuse rather than post a cut message
-if (mb_strlen($telegram) > 4096 || mb_strlen($discord) > 4096) {
-   report('error', "The announcement of {$tag} is longer than 4096 characters.");
+if (mb_strlen($telegram) > 4096 || mb_strlen($discord) > 2000) {
+   report('error', "The announcement of {$tag} is longer than Telegram (4096) or Discord (2000) accepts.");
    exit(1);
 }
 
@@ -306,13 +306,8 @@ foreach ($networks as $network) {
       default: // discord
          $secret = (string) getenv('DISCORD_WEBHOOK_URL');
          $payload = [
+            'content' => $discord,
             'allowed_mentions' => ['parse' => []],
-            'embeds' => [[
-               'title' => "Bootgly {$tag} is out",
-               'url' => $URL,
-               'description' => $discord,
-               'footer' => ['text' => "Bootgly PHP Framework · {$kind} release"],
-            ] + ($published !== '' ? ['timestamp' => $published] : [])],
          ];
          $valid = preg_match('#^https://(?:discord|discordapp)\.com/api/(?:v\d+/)?webhooks/\d+/[\w-]+$#D', $secret) === 1;
          $endpoint = "{$secret}?wait=true";
