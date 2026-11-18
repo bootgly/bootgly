@@ -1,0 +1,85 @@
+name: Announce (social networks)
+
+# Announces every STABLE release of bootgly/bootgly on Bootgly's social
+# channels: one short English message built from the release notes (the
+# `> Focus:` line and what `## Changes` lists) with the link to them.
+# Pre-releases (-beta.N, -rc.N) are never announced; `released` also fires when
+# a pre-release is promoted to stable, and never for a pre-release.
+#
+# Networks and their repository secrets:
+#   telegram — TELEGRAM_BOT_TOKEN: a bot that is an administrator of @bootgly
+#              allowed to post messages.
+#   discord  — DISCORD_WEBHOOK_URL: the webhook of the announcements channel.
+# Each network is a job of its own: a missing secret or a failed post fails
+# that job only, and "Re-run failed jobs" retries only the networks that
+# failed (a post that timed out after the network accepted it is posted again).
+#
+# A manual dispatch announces a given tag — a dry run by default, which prints
+# each payload and posts nothing.
+
+on:
+  release:
+    types: [released]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Stable release tag to announce (e.g. v1.3.0).'
+        required: true
+      network:
+        description: 'Network to post on.'
+        type: choice
+        options: [all, telegram, discord]
+        default: all
+      dry_run:
+        description: 'Print the messages without posting them.'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: announce-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  announce:
+    name: announce on ${{ matrix.network }}
+    # ! Forks never announce; a release event is filtered here (no runner for a
+    #   pre-release), and the script refuses anything that is not stable.
+    if: >-
+      github.repository == 'bootgly/bootgly' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (!github.event.release.prerelease && !contains(github.event.release.tag_name, '-')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        network: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.network != 'all' && format('["{0}"]', inputs.network) || '["telegram","discord"]') }}
+
+    steps:
+      - name: Checkout the announcement script
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      # ! Every value reaches the script through the environment, never through
+      #   `${{ }}` inside `run:` — a tag or an input is never shell code.
+      - name: Announce
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          NETWORKS: ${{ matrix.network }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+          GH_TOKEN: ${{ github.token }}
+          TELEGRAM_BOT_TOKEN: ${{ matrix.network == 'telegram' && secrets.TELEGRAM_BOT_TOKEN || '' }}
+          TELEGRAM_CHAT: '@bootgly'
+          DISCORD_WEBHOOK_URL: ${{ matrix.network == 'discord' && secrets.DISCORD_WEBHOOK_URL || '' }}
+        run: php .github/scripts/announce.php
