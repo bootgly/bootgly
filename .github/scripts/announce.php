@@ -46,7 +46,12 @@ function report (string $level, string $message): void
  *
  * @return array{int,string,string}
  */
-function request (string $method, string $URL, array $headers = [], null|string $body = null): array
+function request (
+   string $method,
+   #[SensitiveParameter] string $URL,
+   #[SensitiveParameter] array $headers = [],
+   null|string $body = null
+): array
 {
    // !
    $Handle = curl_init($URL);
