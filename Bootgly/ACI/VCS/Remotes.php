@@ -19,14 +19,13 @@ use function rtrim;
 use function str_contains;
 use function str_ends_with;
 use function str_starts_with;
-use function strcspn;
 use function strlen;
 use function strrpos;
-use function strspn;
 use function strtolower;
 use function substr;
 use function trim;
 
+use Bootgly\ABI\Data\URI;
 use Bootgly\ACI\VCS\Remotes\Refusals;
 
 
@@ -39,8 +38,6 @@ final class Remotes
    public const array TRANSPORTS = ['https', 'ssh', 'git+ssh', 'file'];
    /** The refused transports that are plaintext — the rest are merely unsupported. */
    private const array PLAINTEXT = ['http', 'git', 'ftp'];
-   /** The transports whose userinfo is a login, not a secret. */
-   private const array SHELLS = ['ssh', 'git+ssh'];
 
    // * Config
    public private(set) Git $Git;
@@ -55,7 +52,11 @@ final class Remotes
    /**
     * List the remotes with their fetch URLs.
     *
-    * @return array<string,string> Remote name => fetch URL.
+    * The URLs are raw — as configured, credentials included
+    * (`https://<token>@host/`): data to check and connect with, never text
+    * to show or log. Display one only through `redact()`.
+    *
+    * @return array<string,string> Remote name => fetch URL, raw.
     */
    public function list (): array
    {
@@ -232,13 +233,11 @@ final class Remotes
    /**
     * Redact a repository URL for display.
     *
-    * The userinfo of a `scheme://` URL is dropped (a lone name may be a token),
-    * except an SSH login with no password; it runs to the last `@` before the
-    * next `/` after the scheme's slashes (any extra ones skipped, except in
-    * `file://`), so nothing git or curl could read as a credential is shown.
-    * An scp-like `user:password@host:path` loses its `user:password@`; other
-    * scp-like addresses and paths come back unchanged. Display only — it says
-    * nothing about which host is dialed: `screen()` the URL first.
+    * The userinfo of every `scheme://` URL goes by `URI::redact()` (a lone
+    * name may be a token), except an SSH login with no password; an scp-like
+    * `user:password@host:path` loses its `user:password@`; other scp-like
+    * addresses and paths come back unchanged. Display only — it says nothing
+    * about which host is dialed: `screen()` the URL first.
     *
     * @param string $URL The repository URL.
     *
@@ -250,32 +249,15 @@ final class Remotes
       if (str_contains($URL, '://') === false && preg_match('#^[^/:@]*:[^/@]*@([^/]*:.*)$#s', $URL, $matches) === 1) {
          return $matches[1];
       }
-      // ?: No `scheme://`
-      if (preg_match('#^([A-Za-z0-9][A-Za-z0-9+.-]*)://#', $URL, $matches) !== 1) {
-         return $URL;
-      }
+      // ?: An SSH login with no password is a name, not a secret — the rest still goes through the canonical rule
+      if (preg_match('#^(?:ssh|git\+ssh):///*([^/]*)@#i', $URL, $matches) === 1 && str_contains($matches[1], ':') === false) {
+         $rest = URI::redact(substr($URL, strlen($matches[0])));
 
-      $scheme = strtolower($matches[1]);
-      $rest = substr($URL, strlen($matches[0]));
-      // ! Slashes past the second one still lead curl to an authority — never in `file://`
-      $slashes = $scheme === 'file' ? '' : substr($rest, 0, strspn($rest, '/'));
-      $rest = substr($rest, strlen($slashes));
-      $authority = substr($rest, 0, strcspn($rest, '/'));
-      $at = strrpos($authority, '@');
-      // ?: No userinfo
-      if ($at === false) {
-         return $URL;
+         return "{$matches[0]}{$rest}";
       }
-
-      // ! An SSH login stays; any other userinfo goes
-      $userinfo = substr($authority, 0, $at);
-      $login = in_array($scheme, self::SHELLS, true) === true && str_contains($userinfo, ':') === false
-         ? "{$userinfo}@"
-         : '';
-      $tail = substr($rest, $at + 1);
 
       // :
-      return "{$matches[1]}://{$slashes}{$login}{$tail}";
+      return URI::redact($URL);
    }
 
    /**

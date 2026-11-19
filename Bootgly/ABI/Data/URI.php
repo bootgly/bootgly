@@ -22,12 +22,14 @@ use function implode;
 use function inet_ntop;
 use function inet_pton;
 use function preg_match;
+use function str_contains;
 use function str_ends_with;
 use function str_starts_with;
 use function strcspn;
 use function strlen;
 use function strpos;
 use function strrpos;
+use function strspn;
 use function strtolower;
 use function substr;
 use Stringable;
@@ -68,6 +70,8 @@ final class URI implements Stringable
       . "\x20\x7F\\";
    /** RFC 3986 §3.1 scheme. */
    private const string SCHEME = '/^[a-z][a-z0-9+.\-]*$/iD';
+   /** The bytes a scheme is made of. */
+   private const string SCHEME_BYTES = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+.-';
    /** RFC 3986 §3.2.1 userinfo. */
    private const string USERINFO = "/^(?:[a-z0-9\\-._~!$&'()*+,;=:]|%[0-9a-f]{2})*$/iD";
    /** RFC 3986 §3.2.2 reg-name (IPv4 included), never empty. */
@@ -227,6 +231,74 @@ final class URI implements Stringable
       catch (ValueError) {
          return null;
       }
+   }
+
+   /**
+    * Redact the credentials of every URL in a text, for display.
+    *
+    * Each `://` opens an authority: the slashes after it are skipped (curl
+    * reads the userinfo behind a third slash — but in `file://` they open the
+    * path) and everything up to the LAST `@` before the next `/` is dropped,
+    * so a password, a token or a lone name that may be one is never shown.
+    *
+    * Lexical and tolerant: the text need not be one URI (a log line, an error
+    * message, a command line), nothing is parsed or refused, and no regular
+    * expression runs — a malformed or hostile text costs one linear pass and
+    * can never come back unredacted because a parser gave up.
+    *
+    * Display only: it neither validates nor dials anything, and it errs on
+    * the safe side — an `@` before the first `/` goes even when it sits in a
+    * query or a fragment (`https://h?a@b/x` → `https://b/x`). A URL with no
+    * `://` (an scp-like `user:password@host:path`) is not one it can see.
+    *
+    * @param string $text Any text — one URL, a line, a message.
+    *
+    * @return string The text with the userinfo of every URL removed.
+    */
+   public static function redact (string $text): string
+   {
+      // ?: No `@` or no `://` — nothing to drop
+      if (str_contains($text, '@') === false || str_contains($text, '://') === false) {
+         return $text;
+      }
+
+      // !
+      $redacted = '';
+      $kept = 0;
+      $from = 0;
+      // @@ Each `://` opens an authority
+      while (($opening = strpos($text, '://', $from)) !== false) {
+         $slashes = strspn($text, '/', $opening + 3);
+         $authority = $opening + 3 + $slashes;
+         $from = $authority;
+
+         // ? `file://` past its second slash is a path, not an authority
+         if (
+            $slashes > 0
+            && $opening >= 4
+            && strtolower(substr($text, $opening - 4, 4)) === 'file'
+            && ($opening === 4 || strspn($text[$opening - 5], self::SCHEME_BYTES) === 0)
+         ) {
+            continue;
+         }
+
+         // ! The authority runs to the next `/`; the userinfo, to its last `@`
+         $end = strpos($text, '/', $authority);
+         $at = strrpos(substr($text, $authority, ($end === false ? strlen($text) : $end) - $authority), '@');
+         // ? No userinfo
+         if ($at === false) {
+            continue;
+         }
+
+         $redacted .= substr($text, $kept, $authority - $kept);
+         $kept = $authority + $at + 1;
+         $from = $kept;
+      }
+
+      $tail = substr($text, $kept);
+
+      // :
+      return "{$redacted}{$tail}";
    }
 
    /**

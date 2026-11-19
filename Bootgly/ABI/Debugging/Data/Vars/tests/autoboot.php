@@ -24,5 +24,6 @@ return new Suite(
       '2.1-dump-themes',
       '3.1-vars-delegate',
       '1.8-dump-controls',
+      '1.9-dump-redactable',
    ]
 );

@@ -48,6 +48,30 @@ class DumpInfoEmpty
    }
 }
 
+class DumpInfoNull
+{
+   public string $visible = 'v';
+
+
+   /** @return null|array<mixed> */
+   public function __debugInfo (): null|array
+   {
+      return null;
+   }
+}
+
+class DumpInfoScalar
+{
+   public string $visible = 'v';
+
+
+   /** @return mixed */
+   public function __debugInfo ()   // @phpstan-ignore missingType.return
+   {
+      return 'not an array';
+   }
+}
+
 return new Test(
    description: 'It should dump enums, closures, resources and __debugInfo bodies',
    test: function () {
@@ -103,6 +127,13 @@ return new Test(
          assertion: $Dumper->dump(new DumpInfo) === $expected
             && $Dumper->dump(new DumpInfoEmpty) === 'Bootgly\ABI\Debugging\Data\Vars\DumpInfoEmpty {}',
          description: '__debugInfo overrides the property walk'
+      );
+
+      // @ A body that is not an array is the empty body `var_dump` shows — never the walk, never a crash
+      yield assert(
+         assertion: $Dumper->dump(new DumpInfoNull) === 'Bootgly\ABI\Debugging\Data\Vars\DumpInfoNull {}'
+            && $Dumper->dump(new DumpInfoScalar) === 'Bootgly\ABI\Debugging\Data\Vars\DumpInfoScalar {}',
+         description: 'A null or non-array __debugInfo body renders {}'
       );
    }
 );

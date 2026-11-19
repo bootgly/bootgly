@@ -39,10 +39,10 @@ use Bootgly\ACI\VCS\Remotes\Refusals;
  * - `redact()` drops the userinfo of a `scheme://` URL (keeping an SSH login)
  *   and the `user:password@` of an scp-like address, and changes nothing after
  *   its authority — which, but in `file://`, comes after every slash curl
- *   skips. The display sites of `projects import`
- *   cannot reach it end to end: once credentials are refused, no admitted URL
- *   carries a secret. So this table is the only spec that would notice a
- *   broken `redact()`.
+ *   skips — but the userinfo of another URL in the value. The display sites
+ *   of `projects import` cannot reach it end to end: once credentials are
+ *   refused, no admitted URL carries a secret. So this table is the only spec
+ *   that would notice a broken `redact()`.
  * - `normalize()` matches nothing for a spoofed authority, a remote helper or
  *   a `file://` that names a host (git reads a local path there, not that
  *   host), reduces an scp-like value to the host git dials — its FIRST `:` —,
@@ -258,12 +258,16 @@ return new Test(
          'https://github.com/bootgly/bootgly.kit@v1' => 'https://github.com/bootgly/bootgly.kit@v1',
          'https://ghp_TOKEN@github.com/o/user:pw@x/r' => 'https://github.com/o/user:pw@x/r',
          'ssh://git:S3CRET@github.com/a@b' => 'ssh://github.com/a@b',
+         // ! Another URL in the value is redacted too — behind an SSH login included
+         'https://h/p/https://tok@x/' => 'https://h/p/https://x/',
+         'https://a@h1 https://b@h2/x' => 'https://h1 https://h2/x',
+         'ssh://git@h/p/https://tok@x/' => 'ssh://git@h/p/https://x/',
          '' => '',
       ]);
 
       yield assert(
          assertion: $mismatches === '',
-         description: "redact() strips https and file:// userinfo (password, token, bare `@`, behind a third slash too), an ssh password with its login and an scp-like `user:password@`, keeps an ssh login, and leaves other scp-like values (an `@` in the path included), paths, a file:// path and everything after the authority intact{$mismatches}"
+         description: "redact() strips https and file:// userinfo (password, token, bare `@`, behind a third slash too), an ssh password with its login and an scp-like `user:password@`, keeps an ssh login, and leaves other scp-like values (an `@` in the path included), paths, a file:// path and everything after the authority but another URL's userinfo intact{$mismatches}"
       );
 
       // # normalize() — comparable to nothing

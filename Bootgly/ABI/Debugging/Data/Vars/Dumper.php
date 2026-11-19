@@ -12,6 +12,7 @@ namespace Bootgly\ABI\Debugging\Data\Vars;
 
 
 use function addcslashes;
+use function array_key_exists;
 use function count;
 use function get_debug_type;
 use function get_resource_type;
@@ -318,7 +319,7 @@ class Dumper
    }
 
    /**
-    * Enumerate container entries — shared by arrays and `__debugInfo` bodies.
+    * Enumerate array entries.
     *
     * @param array<mixed> $array
     */
@@ -358,6 +359,13 @@ class Dumper
 
    /**
     * Expand an object — class name header + property walk with visibility sigils.
+    *
+    * A `__debugInfo()` body replaces the walk. When its keys name properties
+    * (PHP's mangled name for a non-public one, as an `(array)` cast gives it),
+    * those keep their walk rows with the body's values, and the uninitialized
+    * and virtual properties keep their value-less rows; any other entry is a
+    * quoted key. A body that is not an array (`null`) is the empty body
+    * `var_dump` shows.
     */
    private function expand (object $Object, int $level): string
    {
@@ -374,28 +382,16 @@ class Dumper
 
       $closing = str_repeat(' ', $level * self::INDENTATION);
 
-      // ? `__debugInfo` overrides the property walk — author-defined body
-      if (method_exists($Object, '__debugInfo') === true) {
-         /** @var array<mixed> $info */
-         $info = $Object->__debugInfo();
-         if ($info === []) {
-            return "{$classname} " . $this->Theme->apply(self::PONTUATION, '{}');
-         }
-
-         return "{$classname} " . $this->Theme->apply(self::PONTUATION, '{')
-            . $this->enumerate($info, $level)
-            . "\n{$closing}" . $this->Theme->apply(self::PONTUATION, '}');
-      }
-
-      // ! Properties — own pass, then ancestor privates (ReflectionObject misses them)
+      // ! Properties — own pass, then ancestor privates (ReflectionObject misses them),
+      //   each under its name in an `(array)` cast (mangled when not public)
       $Reflection = new ReflectionObject($Object);
-      /** @var array<int,array{0:ReflectionProperty,1:null|string}> $Properties */
+      /** @var array<int|string,array{0:ReflectionProperty,1:null|string}> $Properties */
       $Properties = [];
       foreach ($Reflection->getProperties() as $Property) {
          if ($Property->isStatic() === true) {
             continue;
          }
-         $Properties[] = [$Property, null];
+         $Properties[$this->mangle($Property)] = [$Property, null];
       }
       $Ancestor = $Reflection->getParentClass();
       while ($Ancestor !== false) {
@@ -408,28 +404,95 @@ class Dumper
             if ($Property->isStatic() === true) {
                continue;
             }
-            $Properties[] = [$Property, $origin];
+            $Properties[$this->mangle($Property)] = [$Property, $origin];
          }
          $Ancestor = $Ancestor->getParentClass();
       }
 
+      // ! `__debugInfo` — the author's body replaces the walk; one that is not an
+      //   array (`null`) is the empty body `var_dump` shows
+      $body = null;
+      if (method_exists($Object, '__debugInfo') === true) {
+         $info = $Object->__debugInfo();
+         $body = is_array($info) === true ? $info : [];
+      }
+
       // ? Empty body
-      if ($Properties === []) {
+      if ($body === [] || ($body === null && $Properties === [])) {
          return "{$classname} " . $this->Theme->apply(self::PONTUATION, '{}');
       }
 
-      // @@ Properties
-      $count = count($Properties);
+      // ! Rows — [property or null, origin, key, value, state]
+      /** @var array<int,array{0:null|ReflectionProperty,1:null|string,2:int|string,3:mixed,4:string}> $Rows */
+      $Rows = [];
+      // ? A body that names properties: their rows, with the body's values —
+      //   plus the value-less rows of uninitialized and virtual properties,
+      //   which no `(array)` cast carries; a property the body hides stays hidden
+      $named = false;
+      if ($body !== null) {
+         foreach ($body as $key => $value) {
+            if (isSet($Properties[$key]) === true) {
+               $named = true;
+               break;
+            }
+         }
+      }
+      if ($body === null || $named === true) {
+         foreach ($Properties as $key => [$Property, $origin]) {
+            // ! Guard order is load-bearing: virtual props report initialized
+            $state = match (true) {
+               $body !== null && array_key_exists($key, $body) === true => 'value',
+               $Property->isVirtual() === true => 'virtual',
+               $Property->isInitialized($Object) === false => 'uninitialized',
+               $body !== null => 'hidden',
+               default => 'value'
+            };
+            if ($state === 'hidden') {
+               continue;
+            }
+
+            $value = match (true) {
+               $state !== 'value' => null,
+               $body !== null => $body[$key],
+               default => $Property->getRawValue($Object)
+            };
+            $Rows[] = [$Property, $origin, $key, $value, $state];
+         }
+      }
+      // ! Body entries that name no property — quoted keys
+      if ($body !== null) {
+         foreach ($body as $key => $value) {
+            if ($named === false || isSet($Properties[$key]) === false) {
+               $Rows[] = [null, null, $key, $value, 'value'];
+            }
+         }
+      }
+
+      // @@ Rows
+      $count = count($Rows);
       $indentation = str_repeat(' ', ($level + 1) * self::INDENTATION);
       $entries = '';
       $rendered = 0;
-      foreach ($Properties as [$Property, $origin]) {
+      foreach ($Rows as [$Property, $origin, $key, $value, $state]) {
          // ? Items cap
          if ($rendered >= $this->items) {
             $remaining = $count - $rendered;
             $entries .= "\n{$indentation}"
                . $this->Theme->apply(self::NOTE, "… +{$remaining} more");
             break;
+         }
+         $rendered++;
+
+         // ? A body entry that names no property — a quoted key
+         if ($Property === null) {
+            $keyed = is_string($key) === true
+               ? $this->quote($key)
+               : $this->Theme->apply(self::TYPE_INT, (string) $key);
+            $entries .= "\n{$indentation}{$keyed} "
+               . $this->Theme->apply(self::PONTUATION, '=>')
+               . ' ' . $this->walk($value, $level + 1);
+
+            continue;
          }
 
          // # Modifiers
@@ -439,12 +502,10 @@ class Dumper
             default                           => '-'
          };
          $modifiers = $Property->isReadOnly() === true ? 'readonly ' : '';
-         // # Value — guard order is load-bearing: virtual props report initialized
-         $rendering = match (true) {
-            $Property->isVirtual() === true             => $this->Theme->apply(self::NOTE, 'virtual'),
-            $Property->isInitialized($Object) === false => $this->Theme->apply(self::NOTE, 'uninitialized'),
-            default => $this->walk($Property->getRawValue($Object), $level + 1)
-         };
+         // # Value
+         $rendering = $state === 'value'
+            ? $this->walk($value, $level + 1)
+            : $this->Theme->apply(self::NOTE, $state);
 
          $entries .= "\n{$indentation}"
             . $this->Theme->apply(self::MODIFIER, "{$modifiers}{$sigil}")
@@ -455,13 +516,25 @@ class Dumper
          if ($origin !== null) {
             $entries .= ' ' . $this->Theme->apply(self::NOTE, "({$this->escape($origin)})");
          }
-
-         $rendered++;
       }
 
       // :
       return "{$classname} " . $this->Theme->apply(self::PONTUATION, '{')
          . $entries
          . "\n{$closing}" . $this->Theme->apply(self::PONTUATION, '}');
+   }
+
+   /**
+    * Name a property as an `(array)` cast or a `__debugInfo()` body does —
+    * mangled when it is not public.
+    */
+   private function mangle (ReflectionProperty $Property): string
+   {
+      // :
+      return match (true) {
+         $Property->isPrivate() === true   => "\0{$Property->class}\0{$Property->name}",
+         $Property->isProtected() === true => "\0*\0{$Property->name}",
+         default                           => $Property->name
+      };
    }
 }

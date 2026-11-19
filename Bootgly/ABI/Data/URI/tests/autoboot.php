@@ -19,5 +19,6 @@ return new Suite(
       '1.3-uri-references-abnormal',
       '1.4-uri-references-hostile',
       '1.5-uri-reduce-linear',
+      '1.6-uri-redact',
    ]
 );
