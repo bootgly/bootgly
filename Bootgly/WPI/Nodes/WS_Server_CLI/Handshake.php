@@ -27,6 +27,7 @@ use function strlen;
 use function strtolower;
 use function trim;
 use Closure;
+use SensitiveParameter;
 
 use Bootgly\WPI\Modules\WS;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Authenticating\Guard;
@@ -283,7 +284,7 @@ class Handshake
     *   identity/claims/tokenHeaders exposed by the guard) on success, or null
     *   when every guard denies.
     */
-   public static function authenticate (array $fields, array $Guards): null|Request
+   public static function authenticate (#[SensitiveParameter] array $fields, array $Guards): null|Request
    {
       // ! A request adapter exposing the upgrade headers + a Basic parser, so
       //   Bearer/JWT/Basic and header-reading guards work and can `expose()`.
@@ -336,7 +337,7 @@ class Handshake
     *
     * @param array<string, mixed> $fields Lowercased header map from Frame::parse().
     */
-   public static function permit (array $fields): bool
+   public static function permit (#[SensitiveParameter] array $fields): bool
    {
       // ?
       if (self::$predicate === null) {

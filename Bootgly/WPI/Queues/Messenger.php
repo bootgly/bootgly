@@ -11,6 +11,8 @@
 namespace Bootgly\WPI\Queues;
 
 
+use SensitiveParameter;
+
 use Bootgly\ACI\Queues;
 use Bootgly\ACI\Queues\Config;
 use Bootgly\ACI\Queues\Handler;
@@ -37,7 +39,7 @@ class Messenger
     *
     * @param array<string,mixed>|Config|Queues $config Queue config array, a prepared Config, or an existing manager.
     */
-   public function __construct (array|Config|Queues $config = [])
+   public function __construct (#[SensitiveParameter] array|Config|Queues $config = [])
    {
       // * Data
       $this->Queues = $config instanceof Queues

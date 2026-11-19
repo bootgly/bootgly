@@ -16,7 +16,10 @@ use function is_array;
 use function is_bool;
 use function is_scalar;
 use InvalidArgumentException;
+use SensitiveParameter;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\ADI\Casters;
 use Bootgly\ADI\Casters\Modes;
 
@@ -26,9 +29,15 @@ use Bootgly\ADI\Casters\Modes;
  *
  * API config scopes may build this value, but this class deliberately has no
  * API dependency so the ADI layer remains standalone.
+ *
+ * Debug dumps mask the passwords, the primary's and each replica's; the
+ * frames that carry the raw config keep it out of a stack trace.
  */
 class Config
 {
+   use Redactable;
+
+
    public const string DEFAULT_DRIVER = 'pgsql';
    public const string DEFAULT_HOST = '127.0.0.1';
    public const int DEFAULT_PORT = 5432;
@@ -61,6 +70,7 @@ class Config
    public int $port;
    public string $database;
    public string $username;
+   #[Secret]
    public string $password;
    public float $timeout;
    /**
@@ -73,6 +83,7 @@ class Config
    /** @var array{min:int,max:int} */
    public array $pool;
    /** @var array<int,array<string,mixed>> */
+   #[Secret(['password'])]
    public array $replicas;
 
    // * Data
@@ -87,7 +98,7 @@ class Config
     *
     * @param array<string,mixed> $config
     */
-   public function __construct (array $config = [])
+   public function __construct (#[SensitiveParameter] array $config = [])
    {
       $pool = $config['pool'] ?? [];
       if (is_array($pool) === false) {
@@ -176,7 +187,7 @@ class Config
     *
     * @return array<int,array<string,mixed>>
     */
-   private function normalize (mixed $replicas): array
+   private function normalize (#[SensitiveParameter] mixed $replicas): array
    {
       if (is_array($replicas) === false) {
          return [];
@@ -280,7 +291,7 @@ class Config
     *
       * @return null|array{driver:mixed,host:string,port:mixed,database:mixed,username:mixed,password:mixed,timeout:mixed,secure:mixed,pool:mixed,statements:mixed}
     */
-   protected function accept (mixed $replica): null|array
+   protected function accept (#[SensitiveParameter] mixed $replica): null|array
    {
       if (is_array($replica) === false) {
          return null;

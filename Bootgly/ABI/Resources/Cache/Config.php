@@ -48,8 +48,11 @@ use function umask;
 use Closure;
 use InvalidArgumentException;
 use RuntimeException;
+use SensitiveParameter;
 
 use Bootgly\ABI\Clock;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 
 
 /**
@@ -60,6 +63,9 @@ use Bootgly\ABI\Clock;
  */
 class Config
 {
+   use Redactable;
+
+
    public const string DEFAULT_DRIVER = 'file';
    public const string DEFAULT_PREFIX = '';
    public const int DEFAULT_TTL = 0;
@@ -158,8 +164,9 @@ class Config
     */
    public private(set) int $port;
    /**
-    * Redis AUTH password ('' disables AUTH).
+    * Redis AUTH password ('' disables AUTH). A debug dump shows it masked.
     */
+   #[Secret]
    public private(set) string $password;
    /**
     * Redis logical database index.
@@ -209,9 +216,9 @@ class Config
    /**
     * Create a configuration value.
     *
-    * @param array<string,mixed> $config
+    * @param array<string,mixed> $config Sensitive: it may carry the Redis password.
     */
-   public function __construct (array $config = [])
+   public function __construct (#[SensitiveParameter] array $config = [])
    {
       // ? Unknown option — a misspelled key would silently take the default
       $unknown = array_diff(array_keys($config), self::OPTIONS);

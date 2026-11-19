@@ -17,6 +17,7 @@ use function is_string;
 use function strlen;
 
 use Bootgly\ABI\Data\Language;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_HTTP2;
@@ -38,8 +39,13 @@ trait Raw
    //   from an interned string by the handler), so the three `===` guards
    //   cost O(1); any real change (new header block, different body,
    //   status transition) is a content mismatch and rebuilds.
+   //   The response object outlives its request (the worker reuses it), so
+   //   the two copies of the header block — `Set-Cookie` lines included —
+   //   are masked whole in a debug dump.
+   #[Secret]
    private string $wire = '';
    private string $wireStatus = '';
+   #[Secret]
    private string $wireHeader = '';
    private string $wireBody = '';
 

@@ -27,7 +27,10 @@ use function session_get_cookie_params;
 use function unserialize;
 use ReflectionClass;
 use RuntimeException;
+use SensitiveParameter;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header\Cookie;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
@@ -39,6 +42,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Regenerators;
 
 class Session
 {
+   use Redactable;
+
+
    // * Config
    public static string $name = 'PHPSID';
    public static bool $autoUpdateTimestamp = false;
@@ -76,6 +82,8 @@ class Session
    protected bool $persisted = false;
    /** Opaque revision of the exact persisted snapshot loaded by this object. */
    protected null|string $revision = null;
+   /** The session ID — the bearer credential of the session, masked in a debug dump. */
+   #[Secret]
    public protected(set) string $id;
    /**
     * True when the supplied ID matched an existing server-issued session
@@ -92,7 +100,7 @@ class Session
    protected bool $cookieEmitted = false;
 
 
-   public function __construct (string $id)
+   public function __construct (#[SensitiveParameter] string $id)
    {
       // ? Init
       if (self::$initialized === false) {
@@ -370,7 +378,7 @@ class Session
     * Cookie issuance is still deferred to `emit()` and only fires on the
     * next mutation, preserving the read-only no-Set-Cookie invariant.
     */
-   public function rotate (string $newId): void
+   public function rotate (#[SensitiveParameter] string $newId): void
    {
       // ! rotate() is the strict-mode path for an unknown, unloaded ID. If a
       //   caller applies it to persisted state, discard that state so this
@@ -581,7 +589,7 @@ class Session
     *
     * @return null|array<string,mixed>
     */
-   private static function decode (string $payload): null|array
+   private static function decode (#[SensitiveParameter] string $payload): null|array
    {
       $data = @unserialize($payload, [
          'allowed_classes' => false,

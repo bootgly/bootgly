@@ -73,5 +73,10 @@ return new Suite(
       '1.34-worker-signal-owner',
       // # 1.3.x: every server logs to the exceptions channel what it catches and survives — the registration is the transport's, not the HTTP node's
       '1.35-exceptions-reporter',
+      // # 1.4.x: the TLS passphrase never reaches a debug dump nor a stack trace
+      '1.36-redaction-dumps',
+      '1.37-redaction-traces',
+      // # 1.4.x: the wire buffers of a connection never reach a debug dump
+      '1.38-redaction-buffers',
    ]
 );

@@ -13,6 +13,7 @@ namespace Bootgly\ABI\Data\RESP;
 
 use function count;
 use function strlen;
+use SensitiveParameter;
 
 
 /**
@@ -26,9 +27,9 @@ class Encoder
    /**
     * Encode a command (verb + arguments) into RESP multibulk wire bytes.
     *
-    * @param array<int,int|float|string> $command
+    * @param array<int,int|float|string> $command Sensitive: an `AUTH` command carries the password.
     */
-   public function encode (array $command): string
+   public function encode (#[SensitiveParameter] array $command): string
    {
       $count = count($command);
       $out = "*{$count}\r\n";

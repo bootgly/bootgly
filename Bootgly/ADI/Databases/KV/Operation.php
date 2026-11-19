@@ -11,15 +11,23 @@
 namespace Bootgly\ADI\Databases\KV;
 
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\ADI\Database\Connection;
 use Bootgly\ADI\Database\Operation as DatabaseOperation;
 
 
 /**
  * Pending key-value database operation.
+ *
+ * Debug dumps mask its wire buffer: the first command on a fresh connection
+ * carries the `AUTH` preamble with the password.
  */
 class Operation extends DatabaseOperation
 {
+   use Redactable;
+
+
    // * Config
    public string $command;
    /** @var array<int,mixed> */
@@ -27,6 +35,7 @@ class Operation extends DatabaseOperation
 
    // * Data
    public mixed $response = null;
+   #[Secret]
    public string $write = '';
 
    // * Metadata

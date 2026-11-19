@@ -32,5 +32,8 @@ return new Suite(
       '5.2-file-handler-atomic_commit_destroy',
       // # 1.1.0-dev (SESS-3): the key path is classified with one look
       '2.5-cache-handler-key_single_look',
+      // # 1.4.0: secrets stay out of debug dumps and exception traces
+      '6.1-session_dump_redaction',
+      '6.2-session_trace_redaction',
    ]
 );

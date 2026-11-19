@@ -25,10 +25,14 @@ use function strlen;
 use function strtolower;
 use function trim;
 use InvalidArgumentException;
+use SensitiveParameter;
 
 
 /**
  * SQL database configuration.
+ *
+ * Debug dumps mask the passwords as the base configuration does; the frames
+ * that carry the raw config keep it out of a stack trace.
  */
 class Config extends \Bootgly\ADI\Database\Config
 {
@@ -105,7 +109,7 @@ class Config extends \Bootgly\ADI\Database\Config
     *
     * @param array<string,mixed> $config
     */
-   public function __construct (array $config = [])
+   public function __construct (#[SensitiveParameter] array $config = [])
    {
       parent::__construct($config);
 
@@ -284,7 +288,7 @@ class Config extends \Bootgly\ADI\Database\Config
    /**
     * Complete SQL-specific replica configuration.
     */
-   private function complete (mixed $replicas): void
+   private function complete (#[SensitiveParameter] mixed $replicas): void
    {
       foreach ($this->replicas as $id => $replica) {
          $this->replicas[$id]['statements'] = $this->statements;

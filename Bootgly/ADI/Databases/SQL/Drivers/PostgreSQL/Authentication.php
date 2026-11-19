@@ -30,14 +30,23 @@ use function strlen;
 use function substr;
 use InvalidArgumentException;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\ADI\Database\Config;
 
 
 /**
  * PostgreSQL authentication helper.
+ *
+ * Debug dumps mask the expected SCRAM server signature: derived from the
+ * password, it would let anyone holding the exchange beside it test password
+ * guesses offline.
  */
 class Authentication
 {
+   use Redactable;
+
+
    /**
     * The highest SCRAM iteration count accepted: PBKDF2 runs synchronously in
     * the worker, so a hostile server could otherwise stall it for minutes
@@ -54,6 +63,7 @@ class Authentication
    public string $clientFirstBare = '';
    public string $serverFirst = '';
    public string $clientFinal = '';
+   #[Secret]
    public string $serverSignature = '';
    public bool $authenticated = false;
 

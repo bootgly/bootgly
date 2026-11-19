@@ -13,6 +13,7 @@ namespace Bootgly\ABI\Resources;
 
 use function spl_object_id;
 use Closure;
+use SensitiveParameter;
 
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\ABI\Resources\Cache\Config;
@@ -42,9 +43,9 @@ class Cache
 
 
    /**
-    * @param array<string,mixed>|Config $config
+    * @param array<string,mixed>|Config $config Sensitive: it may carry the Redis password.
     */
-   public function __construct (array|Config $config = [])
+   public function __construct (#[SensitiveParameter] array|Config $config = [])
    {
       // * Config
       $this->Config = $config instanceof Config

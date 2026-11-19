@@ -22,14 +22,17 @@ use function time;
 use BackedEnum;
 use Closure;
 use InvalidArgumentException;
+use SensitiveParameter;
 
 use Bootgly\ABI\Configs as Configuring;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\ACI\Events\Repeating;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI\Event;
 use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI;
+use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Modules\WS;
 use Bootgly\WPI\Modules\WS\Client;
 use Bootgly\WPI\Nodes\WS_Client_CLI\Configs;
@@ -96,9 +99,11 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
    protected Decoder_Framing $Framing;
    // # Handshake (armed by connect(), re-used on every re-dial)
    protected string $key = '';
-   protected string $request = '';          // the encoded upgrade GET
+   #[Secret]
+   protected string $request = '';          // the encoded upgrade GET (its Authorization line included)
    protected string $URI = '/';
    /** @var array<string,string> */
+   #[Secret(HTTP::SECRET_HEADERS)]
    protected array $headers = [];
    /** @var array<string> */
    protected array $subprotocols = [];      // offered subprotocols (validate the server's choice)
@@ -240,7 +245,7 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
     *
     * @return resource|false The connected socket, or false on dial failure.
     */
-   public function connect (string $URI = '/', array $headers = [], array $subprotocols = [])
+   public function connect (string $URI = '/', #[SensitiveParameter] array $headers = [], array $subprotocols = [])
    {
       // ! Single blocking connection — an abrupt drop reconnects (if enabled) and a
       //   graceful close tears down the whole loop so this call returns.
@@ -294,7 +299,7 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
     *
     * @return resource|false The connected socket, or false on dial failure.
     */
-   public function open (string $URI = '/', array $headers = [], array $subprotocols = [])
+   public function open (string $URI = '/', #[SensitiveParameter] array $headers = [], array $subprotocols = [])
    {
       // ! Concurrent mode — the shared loop stops only when the LAST connection
       //   closes (see the onClientDisconnect router).
@@ -471,7 +476,7 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
     * @param array<string,string> $headers
     * @param array<string> $subprotocols
     */
-   private function build (string $URI, array $headers, array $subprotocols): string
+   private function build (string $URI, #[SensitiveParameter] array $headers, array $subprotocols): string
    {
       // ? Reject CR/LF injection and malformed tokens — fail locally with a clear
       //   error rather than emit a corrupt or attacker-shaped request head (the

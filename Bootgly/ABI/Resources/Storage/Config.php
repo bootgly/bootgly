@@ -19,6 +19,9 @@ use function rtrim;
 use function sys_get_temp_dir;
 use SensitiveParameter;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
+
 
 /**
  * ABI-native storage configuration.
@@ -29,6 +32,9 @@ use SensitiveParameter;
  */
 class Config
 {
+   use Redactable;
+
+
    public const string DEFAULT_DISK = 'local';
 
    // * Config
@@ -38,9 +44,11 @@ class Config
    public string $default;
    /**
     * Disk definitions keyed by disk name; each is `['driver' => type, ...options]`.
+    * A debug dump shows every `secret` and `token` option masked.
     *
     * @var array<string,array<string,mixed>>
     */
+   #[Secret(['secret', 'token'])]
    public array $disks;
 
 

@@ -12,10 +12,17 @@ namespace Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header;
 
 
 use function rawurlencode;
+use SensitiveParameter;
+
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 
 
 class Cookie
 {
+   use Redactable;
+
+
    // * Config
    public int|null $expiration;
    public string $path;
@@ -26,12 +33,14 @@ class Cookie
 
    // * Data
    protected string $name;
+   /** The cookie value — a session id or a token, masked in a debug dump. */
+   #[Secret]
    protected string $value;
 
    // * Metadata
    // ...
 
-   public function __construct (string $name, string $value)
+   public function __construct (string $name, #[SensitiveParameter] string $value)
    {
       // * Config
       $this->name = $name;

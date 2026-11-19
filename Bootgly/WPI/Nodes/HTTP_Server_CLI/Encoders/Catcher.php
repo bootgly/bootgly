@@ -27,6 +27,7 @@ use Throwable;
 use Bootgly\ABI\Code\__String\Path;
 use Bootgly\ABI\Data\Language;
 use Bootgly\ABI\Debugging\Data\Throwables;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\ABI\Debugging\Page;
 use Bootgly\ABI\Templates\Template;
 use Bootgly\API\Environments;
@@ -157,10 +158,11 @@ abstract class Catcher
                'peer' => $Request->peer
             ];
 
+            // ! Field names are lowercased at parse time (RFC 9110 §5.1)
             $headers = $Request->headers;
-            foreach (['authorization', 'cookie'] as $sensitive) {
-               if (isSet($headers[$sensitive])) {
-                  $headers[$sensitive] = '******';
+            foreach (HTTP::SECRET_HEADERS as $sensitive) {
+               if (isSet($headers[$sensitive]) === true) {
+                  $headers[$sensitive] = Secret::MASK;
                }
             }
             $context['Headers'] = $headers;

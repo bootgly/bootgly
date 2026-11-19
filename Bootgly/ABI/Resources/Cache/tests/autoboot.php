@@ -56,5 +56,9 @@ return new Suite(
       '1.12-apcu-remain-clock',
       // # 1.1.0: File records are written through File->replace() (not synced)
       '1.13-file-write-replace',
+      // # 1.4.0: the Redis password stays out of debug dumps and stack traces
+      '7.5-security-dump-redaction',
+      '7.6-security-config-trace',
+      '7.7-security-redis-auth-trace',
    ]
 );

@@ -24,6 +24,11 @@ use function substr;
 use InvalidArgumentException;
 use LogicException;
 use RuntimeException;
+use SensitiveParameter;
+use SensitiveParameterValue;
+
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 
 
 /**
@@ -34,13 +39,18 @@ use RuntimeException;
  * callers cannot supply either. The class is final so accepted keys can
  * never weaken those invariants through overrides.
  *
- * The raw key material is private. It is redacted from `var_dump`, absent
- * from JSON and both serialization directions are refused. Same-process
- * reflection (e.g. `var_export`, `get_mangled_object_vars`) cannot be
+ * The raw key material is private and sealed in a `SensitiveParameterValue`:
+ * debug dumps (`var_dump`, `print_r`, `debug_zval_dump`, `Dumper`) show it
+ * redacted, and JSON, `var_export`, `(array)` and `get_mangled_object_vars`
+ * never reach its bytes; both serialization directions are refused.
+ * Same-process reflection (reading the sealed value back) cannot be
  * prevented in PHP and is outside this boundary.
  */
 final class Key
 {
+   use Redactable;
+
+
    // * Config
    /**
     * Optional key identifier carried by ciphertext envelopes.
@@ -50,10 +60,13 @@ final class Key
 
    // * Data
    /**
-    * Sensitive raw key material (exactly 32 bytes). Not exposed by any
-    * supported API.
+    * Sensitive raw key material (exactly 32 bytes), sealed. Not exposed by
+    * any supported API.
+    *
+    * @var SensitiveParameterValue<string>
     */
-   private string $material;
+   #[Secret]
+   private SensitiveParameterValue $Material;
 
    // * Metadata
    /**
@@ -77,7 +90,7 @@ final class Key
     * @throws RuntimeException When OpenSSL symmetric encryption is unavailable.
     */
    public function __construct (
-      #[\SensitiveParameter] string $material,
+      #[SensitiveParameter] string $material,
       null|string $id = null
    )
    {
@@ -85,7 +98,7 @@ final class Key
       $this->id = $id;
 
       // * Data
-      $this->material = $material;
+      $this->Material = new SensitiveParameterValue($material);
 
       // @ Validate.
       $this->guard();
@@ -117,7 +130,7 @@ final class Key
     * @throws RuntimeException When OpenSSL symmetric encryption is unavailable.
     */
    public static function import (
-      #[\SensitiveParameter] string $encoded,
+      #[SensitiveParameter] string $encoded,
       null|string $id = null
    ): self
    {
@@ -145,7 +158,7 @@ final class Key
     *
     * @return string The raw `IV ∥ ciphertext ∥ tag` bytes.
     */
-   public function seal (#[\SensitiveParameter] string $plaintext, string $AAD): string
+   public function seal (#[SensitiveParameter] string $plaintext, string $AAD): string
    {
       // ! Fresh nonce per seal.
       $IV = random_bytes(self::IV_LENGTH);
@@ -155,7 +168,7 @@ final class Key
       $sealed = openssl_encrypt(
          $plaintext,
          self::CIPHER,
-         $this->material,
+         $this->Material->getValue(),
          OPENSSL_RAW_DATA,
          $IV,
          $tag,
@@ -196,7 +209,7 @@ final class Key
       $plaintext = openssl_decrypt(
          $ciphertext,
          self::CIPHER,
-         $this->material,
+         $this->Material->getValue(),
          OPENSSL_RAW_DATA,
          $IV,
          $tag,
@@ -209,19 +222,6 @@ final class Key
       }
 
       return $plaintext;
-   }
-
-   /**
-    * Redact the key material from debug dumps.
-    *
-    * @return array<string,null|string>
-    */
-   public function __debugInfo (): array
-   {
-      return [
-         'id' => $this->id,
-         'material' => '[redacted]'
-      ];
    }
 
    /**
@@ -250,7 +250,7 @@ final class Key
     */
    private function guard (): void
    {
-      if (strlen($this->material) !== 32) {
+      if (strlen($this->Material->getValue()) !== 32) {
          throw new InvalidArgumentException('Encrypter keys must be exactly 32 bytes.');
       }
 

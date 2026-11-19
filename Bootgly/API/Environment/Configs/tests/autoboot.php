@@ -53,5 +53,7 @@ return new Suite(
       '8.x-configs_schema_load',
       // # 1.2.0: cast failures keep values and defaults out of exception traces.
       '1.x-config_trace_redaction',
+      // # 1.4.0: a loader keeps its .env map out of debug dumps.
+      '3.x-configs_dump_redaction',
    ]
 );

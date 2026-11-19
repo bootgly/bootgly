@@ -21,6 +21,10 @@ use function strlen;
 use InvalidArgumentException;
 use OpenSSLAsymmetricKey;
 use OpenSSLCertificate;
+use SensitiveParameter;
+
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 
 
 /**
@@ -28,6 +32,9 @@ use OpenSSLCertificate;
  */
 class Key
 {
+   use Redactable;
+
+
    // * Config
    /**
     * Algorithm this key is allowed to verify/sign.
@@ -38,8 +45,9 @@ class Key
     */
    public private(set) null|string $id;
    /**
-    * Sensitive key material.
+    * Sensitive key material. A debug dump shows it redacted.
     */
+   #[Secret]
    public private(set) string|OpenSSLAsymmetricKey|OpenSSLCertificate $Material;
 
    // * Data
@@ -55,7 +63,7 @@ class Key
     * @throws InvalidArgumentException When the key material or algorithm is unsafe.
     */
    public function __construct (
-      #[\SensitiveParameter] mixed $material,
+      #[SensitiveParameter] mixed $material,
       string $algorithm = 'HS256',
       null|string $id = null
    )

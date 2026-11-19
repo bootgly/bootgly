@@ -85,5 +85,10 @@ return new Suite(
       '1.57-password_verifier_throwing',
       '1.58-users_legacy_upgrade',
       '1.59-password_verifiers_surface',
+      // # 1.4.0: secrets stay out of debug dumps and exception traces
+      '1.60-security_dump_redaction',
+      '1.61-jwt_trace_redaction',
+      '1.62-credentials_trace_redaction',
+      '1.63-encrypter_key_sealed',
    ]
 );

@@ -38,6 +38,7 @@ use function substr;
 use function unserialize;
 use Redis as RedisClient;
 use RuntimeException;
+use SensitiveParameter;
 use Throwable;
 
 use Bootgly\ABI\Data\RESP\Decoder;
@@ -316,9 +317,9 @@ class Redis extends Driver
    /**
     * Send one command over the native socket and read its single reply (no connect).
     *
-    * @param array<int,int|string> $arguments Command and its arguments.
+    * @param array<int,int|string> $arguments Command and its arguments — `AUTH <password>` too, so never shown in a stack trace.
     */
-   private function dispatch (array $arguments): mixed
+   private function dispatch (#[SensitiveParameter] array $arguments): mixed
    {
       $this->write($this->Encoder->encode($arguments));
 
@@ -329,9 +330,9 @@ class Redis extends Driver
    /**
     * Write the full payload to the socket (fwrite may short-write).
     *
-    * @param string $payload Encoded RESP bytes.
+    * @param string $payload Encoded RESP bytes — an `AUTH <password>` too, so never shown in a stack trace.
     */
-   private function write (string $payload): void
+   private function write (#[SensitiveParameter] string $payload): void
    {
       $Socket = $this->Socket;
       if (is_resource($Socket) === false) {

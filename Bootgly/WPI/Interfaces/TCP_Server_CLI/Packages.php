@@ -42,6 +42,7 @@ use function strlen;
 use function substr;
 use Throwable;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\API\Workables\Server as SAPI;
@@ -102,6 +103,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
    //   Bytes that fwrite() could not push to the socket; held until the
    //   event loop signals EVENT_WRITE readiness. Empty string means no
    //   deferred write is in flight.
+   #[Secret]
    public string $pendingBuffer = '';
    //   Drain cursor inside `$pendingBuffer`. Always 0 after `reset()`.
    public int $pendingOffset = 0;
@@ -180,6 +182,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
    //   prepends them to the fresh read before decoding (`$carried` on the
    //   base Packages flags such reassembled events). Empty string means
    //   nothing is carried. Raw TCP (no registered decoder) never retains.
+   #[Secret]
    public protected(set) string $carry = '';
 
 

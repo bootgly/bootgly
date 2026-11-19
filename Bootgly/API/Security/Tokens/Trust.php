@@ -24,6 +24,7 @@ use function random_int;
 use function strlen;
 use InvalidArgumentException;
 use RuntimeException;
+use SensitiveParameter;
 use stdClass;
 
 use Bootgly\ADI\Databases\SQL as SQLDatabase;
@@ -136,13 +137,14 @@ class Trust
     * or revoking. Any other wrong validator returns a `Theft` incident only
     * after revoking ALL of the user's devices; a revocation failure returns
     * `null`. A concurrent rotation losing the conditional-update race also
-    * returns `null`.
+    * returns `null`. The token is a sensitive parameter: exception traces
+    * never carry it.
     *
     * @return null|Theft|Token
     * @throws InvalidArgumentException When the ttl is not positive.
     * @throws RuntimeException When a database wait fails without a recorded Operation error.
     */
-   public function rotate (string $token, int $ttl = 2592000): null|Theft|Token
+   public function rotate (#[SensitiveParameter] string $token, int $ttl = 2592000): null|Theft|Token
    {
       // ?
       if ($ttl < 1) {
@@ -238,9 +240,11 @@ class Trust
    /**
     * Drop the presented device series (single-device logout).
     *
+    * The token is a sensitive parameter: exception traces never carry it.
+    *
     * @throws RuntimeException When a database wait fails without a recorded Operation error.
     */
-   public function forget (string $token): bool
+   public function forget (#[SensitiveParameter] string $token): bool
    {
       // !
       $parts = $this->split($token);
@@ -325,7 +329,7 @@ class Trust
     *
     * @return null|array{0:string,1:string}
     */
-   private function split (string $token): null|array
+   private function split (#[SensitiveParameter] string $token): null|array
    {
       $parts = explode('.', $token, 2);
       // ?

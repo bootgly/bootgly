@@ -11,8 +11,19 @@
 namespace Bootgly\WPI\Endpoints\Servers;
 
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
+
+
+/**
+ * The wire bytes of a connection — what it read, what it writes and the last
+ * request head it keyed — carry its credential headers, so a debug dump masks them.
+ */
 abstract class Packages
 {
+   use Redactable;
+
+
    // * Config
    public bool $cache;
 
@@ -29,12 +40,19 @@ abstract class Packages
 
    public bool $changed;
    // # IO
+   #[Secret]
    public string $input;
+   #[Secret]
    public string $output;
 
    // * Metadata
    // # Handler
-   /** @var array<string> */
+   /**
+    * Its first slot is a reference to `$input`, so it carries the same bytes.
+    *
+    * @var array<string>
+    */
+   #[Secret]
    public array $callbacks;
    // # Expiration
    public bool $expired;
@@ -72,6 +90,7 @@ abstract class Packages
     * owned, like `$decoded`; the endpoint layer does not name the decoded
     * type.
     */
+   #[Secret]
    public string $known = '';
    /**
     * The decoded template for `$known` — set on the second consecutive

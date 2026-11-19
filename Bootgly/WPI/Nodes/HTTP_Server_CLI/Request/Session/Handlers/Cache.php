@@ -51,6 +51,7 @@ use function unlink;
 use function unpack;
 use InvalidArgumentException;
 use RuntimeException;
+use SensitiveParameter;
 
 use Bootgly\ABI\Resources\Cache as CacheResource;
 use Bootgly\API\Security\Encrypter;
@@ -92,7 +93,7 @@ class Cache implements Committing
     *        two removed (the `shared` driver also forces `permissions` to
     *        0600), and an unknown key is refused by name.
     */
-   public function __construct (array|CacheResource $config = [])
+   public function __construct (#[SensitiveParameter] array|CacheResource $config = [])
    {
       $settings = is_array($config) ? $config : [];
       $material = self::load($settings);
@@ -164,7 +165,7 @@ class Cache implements Committing
       $this->Cache = new CacheResource($cache);
    }
 
-   public function read (string $sessionId): string|false
+   public function read (#[SensitiveParameter] string $sessionId): string|false
    {
       $revision = null;
 
@@ -172,7 +173,7 @@ class Cache implements Committing
    }
 
    public function fetch (
-      string $sessionId,
+      #[SensitiveParameter] string $sessionId,
       null|string &$revision = null,
    ): string|false
    {
@@ -188,7 +189,10 @@ class Cache implements Committing
       return $this->open($record, $sessionId, $revision);
    }
 
-   public function write (string $sessionId, string $sessionData): bool
+   public function write (
+      #[SensitiveParameter] string $sessionId,
+      #[SensitiveParameter] string $sessionData
+   ): bool
    {
       // ?
       if (self::validate($sessionId) === false) {
@@ -203,8 +207,8 @@ class Cache implements Committing
    }
 
    public function commit (
-      string $sessionId,
-      string $sessionData,
+      #[SensitiveParameter] string $sessionId,
+      #[SensitiveParameter] string $sessionData,
       null|string &$revision,
    ): bool
    {
@@ -268,7 +272,7 @@ class Cache implements Committing
       throw new RuntimeException('The Cache driver failed its atomic Session commit.');
    }
 
-   public function revoke (string $sessionId, string $revision): bool
+   public function revoke (#[SensitiveParameter] string $sessionId, string $revision): bool
    {
       if (self::validate($sessionId) === false) {
          return false;
@@ -301,7 +305,7 @@ class Cache implements Committing
       throw new RuntimeException('The Cache driver failed its atomic Session revocation.');
    }
 
-   public function touch (string $sessionId): bool
+   public function touch (#[SensitiveParameter] string $sessionId): bool
    {
       // ?
       if (self::validate($sessionId) === false) {
@@ -319,7 +323,7 @@ class Cache implements Committing
       return $this->Cache->renew($sessionId, Session::$lifetime);
    }
 
-   public function destroy (string $sessionId): bool
+   public function destroy (#[SensitiveParameter] string $sessionId): bool
    {
       // ? Invalid ID — nothing to destroy
       if (self::validate($sessionId) === false) {
@@ -342,8 +346,8 @@ class Cache implements Committing
 
    /** @return array{version:int,revision:string,sealed:string} */
    private function seal (
-      string $sessionData,
-      string $sessionId,
+      #[SensitiveParameter] string $sessionData,
+      #[SensitiveParameter] string $sessionId,
       string $revision,
    ): array
    {
@@ -360,7 +364,7 @@ class Cache implements Committing
    /** Decode one versioned record, retaining compatibility with legacy ciphertext. */
    private function open (
       mixed $record,
-      string $sessionId,
+      #[SensitiveParameter] string $sessionId,
       null|string &$revision = null,
    ): string|false
    {
@@ -403,7 +407,7 @@ class Cache implements Committing
     * Keys reach shared backends verbatim after the prefix, so the same hex
     * hygiene prevents key-namespace injection via attacker-supplied IDs.
     */
-   private static function validate (string $sessionId): bool
+   private static function validate (#[SensitiveParameter] string $sessionId): bool
    {
       return preg_match('/^[a-f0-9]{32,64}$/', $sessionId) === 1;
    }
@@ -413,7 +417,7 @@ class Cache implements Committing
     *
     * @param array<string,mixed> $config
     */
-   private static function load (array $config): string
+   private static function load (#[SensitiveParameter] array $config): string
    {
       $secret = $config['secret'] ?? null;
       if ($secret !== null) {

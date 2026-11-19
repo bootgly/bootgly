@@ -19,6 +19,9 @@ use function strpos;
 use function substr;
 use function trim;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
+use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Authentications\Basic;
 
 
@@ -30,13 +33,21 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Authentications\Basic;
  *
  * Session-backed guards are unsupported during a stateless upgrade — `Session`
  * is always null, so such guards deny gracefully instead of erroring.
+ *
+ * A debug dump never shows the resolved `token` nor the credential headers
+ * (`HTTP::SECRET_HEADERS`).
  */
 class Request
 {
+   use Redactable;
+
+
    // * Data
    public Header $Header;
    /** @var array<string, mixed> */
+   #[Secret(HTTP::SECRET_HEADERS)]
    public array $headers;
+   #[Secret]
    public string $token = '';
    public mixed $Session = null;
    public bool $sessioned = false;

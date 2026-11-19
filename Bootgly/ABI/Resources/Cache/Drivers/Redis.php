@@ -39,6 +39,7 @@ use function strlen;
 use function substr;
 use Redis as RedisClient;
 use RuntimeException;
+use SensitiveParameter;
 use Throwable;
 
 use Bootgly\ABI\Data\RESP\Decoder;
@@ -487,9 +488,12 @@ LUA;
    /**
     * Send a command over the native socket and read one RESP reply.
     *
+    * Sensitive: `connect()` sends `['AUTH', <password>]` through here, and `read()`
+    * rethrows a refused AUTH (`WRONGPASS`) with this frame on the stack.
+    *
     * @param array<int,int|string> $arguments
     */
-   private function dispatch (array $arguments): mixed
+   private function dispatch (#[SensitiveParameter] array $arguments): mixed
    {
       $this->write($this->Encoder->encode($arguments));
 
@@ -498,8 +502,10 @@ LUA;
 
    /**
     * Write the full payload to the socket (fwrite may short-write).
+    *
+    * Sensitive: the payload is RESP bytes — an AUTH command carries the password.
     */
-   private function write (string $payload): void
+   private function write (#[SensitiveParameter] string $payload): void
    {
       $Socket = $this->Socket;
       if (is_resource($Socket) === false) {

@@ -23,9 +23,11 @@ use function strpbrk;
 use function strtolower;
 use function substr;
 use function unpack;
-
 use InvalidArgumentException;
+use SensitiveParameter;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\WPI\Modules\HTTP2;
 use Bootgly\WPI\Modules\HTTP2\Errors;
 use Bootgly\WPI\Modules\HTTP2\Frame;
@@ -42,9 +44,17 @@ use Bootgly\WPI\Nodes\HTTP_Client_CLI\Session\Stream;
  * the `$outbox` string, which the transport owner moves into the socket
  * output. The engine never touches sockets, Requests or Responses — it is
  * the role-inverted mirror of the server's `Decoder_HTTP2`.
+ *
+ * Its wire bytes carry credential headers — `Authorization` and `Cookie` in
+ * the frames it queues; `Set-Cookie` in the partial frame it carries, in the
+ * header block fragments and in the response head of each completion record —
+ * so a debug dump masks them.
  */
 final class Session
 {
+   use Redactable;
+
+
    // @ Connection-specific request fields stripped before HPACK (RFC 9113 §8.2.2)
    protected const array FORBIDDEN = [
       'connection' => true,
@@ -88,8 +98,10 @@ final class Session
    // * Metadata
    // # Transport
    /** Frames awaiting write — the consumer moves this into the socket output. */
+   #[Secret]
    public string $outbox = '';
    /** Partial-frame carry between feeds. */
+   #[Secret]
    public string $buffer = '';
    /**
     * Peer-induced bytes queued and possibly still unsent (bounded by
@@ -100,6 +112,7 @@ final class Session
    public protected(set) int $debt = 0;
    // # Completion
    /** @var array<int, array{stream: int, code: int, headerRaw: string, body: string, error: null|Errors, retryable: bool, status: null|string}> */
+   #[Secret(['headerRaw'])]
    public array $done = [];
    // # Flow control (connection level)
    /** Send window (peer-replenished). */
@@ -132,6 +145,7 @@ final class Session
    /** Stream id awaiting CONTINUATION frames (0 = none). */
    private int $expected = 0;
    /** Accumulated header block fragments. */
+   #[Secret]
    private string $fragments = '';
    /** END_STREAM flag carried by the opening HEADERS frame. */
    private bool $ending = false;
@@ -162,12 +176,13 @@ final class Session
     * much of the request body as the send windows admit — the unsent tail
     * is parked in the stream backlog and drained by later credit.
     *
-    * @param array<string, string|array<int, string>> $fields Regular fields, any case (connection-specific ones are stripped).
+    * @param array<string, string|array<int, string>> $fields Regular fields, any case (connection-specific ones are stripped);
+    *        their `Authorization` and `Cookie` included, they never reach a stack trace.
     *
     * @return int The stream id, or `0` when no stream can be opened.
     * @throws InvalidArgumentException When method or path is unsafe.
     */
-   public function open (string $method, string $scheme, string $authority, string $path, array $fields, string $body = ''): int
+   public function open (string $method, string $scheme, string $authority, string $path, #[SensitiveParameter] array $fields, string $body = ''): int
    {
       // ? Reject before allocating a stream id or appending HPACK/frame bytes.
       if (Request::check($method, $path) === false) {

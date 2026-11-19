@@ -11,12 +11,24 @@
 namespace Bootgly\API\Security\JWT;
 
 
+use SensitiveParameter;
+
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
+
+
 /**
  * Issued refresh-token snapshot.
+ *
+ * The refresh token never shows in a debug dump or an exception trace.
  */
 class Token
 {
+   use Redactable;
+
+
    // * Data
+   #[Secret]
    public private(set) string $refresh;
    public private(set) string $subject;
    public private(set) string $family;
@@ -36,7 +48,7 @@ class Token
     * @param array<string,mixed> $claims
     */
    public function __construct (
-      string $refresh,
+      #[SensitiveParameter] string $refresh,
       string $subject,
       string $family,
       array $claims,

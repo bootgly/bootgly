@@ -41,6 +41,7 @@ use function strpos;
 use function strtoupper;
 use function substr;
 use InvalidArgumentException;
+use SensitiveParameter;
 use Throwable;
 
 use Bootgly\ACI\Mail\Config;
@@ -631,9 +632,10 @@ class SMTP_Client
    // ---
 
    /**
-    * Write a command and read its reply.
+    * Write a command and read its reply. The command may carry AUTH
+    * credentials, so a stack trace never shows it.
     */
-   private function exchange (string $command, float $wait, null|string $trace = null): Reply
+   private function exchange (#[SensitiveParameter] string $command, float $wait, null|string $trace = null): Reply
    {
       $this->write($command, $trace);
 
@@ -644,9 +646,10 @@ class SMTP_Client
    /**
     * Write bytes with partial-write handling. `$trace` overrides what is
     * traced (credential redaction, DATA byte count); null traces the raw
-    * bytes and '' suppresses the trace entirely.
+    * bytes and '' suppresses the trace entirely. The bytes may carry AUTH
+    * credentials, so a stack trace never shows them.
     */
-   private function write (string $bytes, null|string $trace = null): void
+   private function write (#[SensitiveParameter] string $bytes, null|string $trace = null): void
    {
       $socket = $this->socket;
 

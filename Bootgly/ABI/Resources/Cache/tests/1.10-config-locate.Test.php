@@ -196,10 +196,11 @@ return new Test(
          //   in a process of its own, with sys_temp_dir pointed there
          mkdir("{$base}/open", 0o700);
          chmod("{$base}/open", 0o777);
-         $script = 'require $argv[1]; echo Bootgly\\ABI\\Resources\\Cache\\Config::locate($argv[2]);';
+         // ! An autoloader rooted at the framework: Config declares the Redactable trait
+         $script = 'spl_autoload_register(static function (string $class) use ($argv): void { $file = strtr($class, "\\\\", "/"); require "{$argv[1]}{$file}.php"; }); echo Bootgly\\ABI\\Resources\\Cache\\Config::locate($argv[2]);';
          $fallback = trim((string) shell_exec(
             escapeshellarg(PHP_BINARY) . ' -d ' . escapeshellarg("sys_temp_dir={$base}/open") . ' -r ' . escapeshellarg($script)
-            . ' ' . escapeshellarg((string) realpath(__DIR__ . '/../Config.php')) . ' ' . escapeshellarg("{$base}/open") . ' 2>&1'
+            . ' ' . escapeshellarg(BOOTGLY_ROOT_DIR) . ' ' . escapeshellarg("{$base}/open") . ' 2>&1'
          ));
          chmod("{$base}/open", 0o700);
          $slash = (string) realpath('/tmp');

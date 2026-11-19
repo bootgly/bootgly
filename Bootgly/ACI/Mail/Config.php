@@ -17,6 +17,10 @@ use function is_scalar;
 use function preg_match;
 use Closure;
 use InvalidArgumentException;
+use SensitiveParameter;
+
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 
 
 /**
@@ -25,9 +29,16 @@ use InvalidArgumentException;
  * Array-driven and constant-defaulted, matching the shape used across Bootgly
  * (mirrors `ACI\Queues\Config`). The SMTP client can be built from a plain
  * config array or a prepared Config value.
+ *
+ * The credentials stay out of debug output: a dump (`var_dump`, `print_r`,
+ * `Dumper`) masks `password` and `token`, and a stack trace never shows the
+ * config array the constructor receives.
  */
 class Config
 {
+   use Redactable;
+
+
    public const string SECURE_NONE = 'none';
    public const string SECURE_TLS = 'tls';
    public const string SECURE_STARTTLS = 'starttls';
@@ -78,12 +89,15 @@ class Config
     */
    public string $username;
    /**
-    * AUTH PLAIN/LOGIN secret.
+    * AUTH PLAIN/LOGIN secret (masked in debug dumps).
     */
+   #[Secret]
    public string $password;
    /**
-    * XOAUTH2 bearer token (non-empty selects the XOAUTH2 mechanism).
+    * XOAUTH2 bearer token (non-empty selects the XOAUTH2 mechanism; masked
+    * in debug dumps).
     */
+   #[Secret]
    public string $token;
    /**
     * EHLO/HELO client name ('' falls back to the machine hostname).
@@ -116,9 +130,9 @@ class Config
 
 
    /**
-    * @param array<string,mixed> $config
+    * @param array<string,mixed> $config The options (`password` and `token` included) — never shown in a stack trace.
     */
-   public function __construct (array $config = [])
+   public function __construct (#[SensitiveParameter] array $config = [])
    {
       $host = $config['host'] ?? self::DEFAULT_HOST;
       $port = $config['port'] ?? self::DEFAULT_PORT;

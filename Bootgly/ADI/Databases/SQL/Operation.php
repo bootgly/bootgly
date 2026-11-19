@@ -13,6 +13,8 @@ namespace Bootgly\ADI\Databases\SQL;
 
 use function microtime;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\ADI\Database\Connection;
 use Bootgly\ADI\Database\Operation as DatabaseOperation;
@@ -23,9 +25,16 @@ use Bootgly\ADI\Databases\SQL\Events;
 
 /**
  * Pending SQL database operation.
+ *
+ * Debug dumps mask its wire buffer: during authentication it carries the
+ * password or a response derived from it — PostgreSQL's MD5 response or
+ * SCRAM proof, MySQL's scramble.
  */
 class Operation extends DatabaseOperation
 {
+   use Redactable;
+
+
    // * Config
    public string $SQL;
 
@@ -33,6 +42,7 @@ class Operation extends DatabaseOperation
    public string $statement = '';
    public string $portal = '';
    public bool $prepared = false;
+   #[Secret]
    public string $write = '';
    public string $status = '';
    /** Machine-readable failure code — PostgreSQL SQLSTATE, MySQL errno or

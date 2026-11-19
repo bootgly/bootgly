@@ -59,10 +59,13 @@ use function trim;
 use Closure;
 use InvalidArgumentException;
 use JsonException;
+use SensitiveParameter;
 use Throwable;
 
 use Bootgly\ABI\Clock;
 use Bootgly\ABI\Data\URI;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\API\Security\JWT\Remote\Response;
 
 
@@ -89,6 +92,9 @@ use Bootgly\API\Security\JWT\Remote\Response;
  */
 class Remote implements KeyResolver
 {
+   use Redactable;
+
+
    private const int MAX_TTL = 31_536_000;
    /**
     * The least time, in seconds, a hop's next address is tried with: when
@@ -97,6 +103,10 @@ class Remote implements KeyResolver
    private const float TRY_FLOOR = 0.05;
 
    // * Config
+   /**
+    * The JWKS URL. A debug dump shows it without its userinfo.
+    */
+   #[Secret(URI: true)]
    public private(set) string $URI;
    public private(set) null|string $algorithm;
    /**
@@ -180,9 +190,12 @@ class Remote implements KeyResolver
 
    /**
     * Create a remote JWKS resolver.
+    *
+    * Sensitive: `$URI` may carry credentials in its userinfo — a trace never
+    * shows it, and a dump shows it redacted.
     */
    public function __construct (
-      string $URI,
+      #[SensitiveParameter] string $URI,
       null|callable $Fetcher = null,
       null|string $algorithm = 'RS256',
       int $ttl = 3600,

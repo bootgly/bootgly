@@ -18,8 +18,11 @@ use function is_scalar;
 use function rtrim;
 use function sys_get_temp_dir;
 use Closure;
+use SensitiveParameter;
 
 use Bootgly\ABI\Clock;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\ACI\Queues\Backoffs;
 
 
@@ -29,9 +32,16 @@ use Bootgly\ACI\Queues\Backoffs;
  * Array-driven and constant-defaulted, matching the shape used across Bootgly
  * (mirrors `ABI\Resources\Cache\Config`). A queue can be built from a plain
  * config array or a prepared Config value.
+ *
+ * The Redis password stays out of debug output: a dump (`var_dump`,
+ * `print_r`, `Dumper`) masks it, and a stack trace never shows the config
+ * array the constructor receives.
  */
 class Config
 {
+   use Redactable;
+
+
    public const string DEFAULT_DRIVER = 'file';
    public const string DEFAULT_PREFIX = '';
    public const int DEFAULT_ATTEMPTS = 3;
@@ -77,8 +87,9 @@ class Config
     */
    public int $port;
    /**
-    * Redis AUTH password ('' disables AUTH).
+    * Redis AUTH password ('' disables AUTH; masked in debug dumps).
     */
+   #[Secret]
    public string $password;
    /**
     * Redis logical database index.
@@ -136,9 +147,9 @@ class Config
 
 
    /**
-    * @param array<string,mixed> $config
+    * @param array<string,mixed> $config The options (`password` included) — never shown in a stack trace.
     */
-   public function __construct (array $config = [])
+   public function __construct (#[SensitiveParameter] array $config = [])
    {
       $driver = $config['driver'] ?? self::DEFAULT_DRIVER;
       $prefix = $config['prefix'] ?? self::DEFAULT_PREFIX;

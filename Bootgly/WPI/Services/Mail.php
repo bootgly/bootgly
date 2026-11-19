@@ -11,6 +11,8 @@
 namespace Bootgly\WPI\Services;
 
 
+use SensitiveParameter;
+
 use Bootgly\ACI\Mail\Config;
 use Bootgly\ACI\Mail\Message;
 use Bootgly\ACI\Mail\Receipt;
@@ -39,7 +41,7 @@ class Mail
     *
     * @param array<string,mixed>|Config $config Mail (SMTP) configuration.
     */
-   public static function boot (array|Config $config = []): Messenger
+   public static function boot (#[SensitiveParameter] array|Config $config = []): Messenger
    {
       // :
       return self::$Messenger = new Messenger($config);

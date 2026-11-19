@@ -40,6 +40,8 @@ use function time;
 use function unpack;
 use Throwable;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\API\Environments;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
@@ -78,9 +80,16 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Frame as RequestFrame;
  * read. Control frames are assembled through `$outbox`, then transferred to
  * the accounting transport writer before every decoder return. When a request
  * completes, this happens before application dispatch can defer its response.
+ *
+ * The request bytes it carries — a partial frame and the header block
+ * fragments awaiting CONTINUATION — hold the credential headers, so a debug
+ * dump masks them.
  */
 class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
 {
+   use Redactable;
+
+
    // @ Maximum serialized DATA retained by one decoder callback. This bounds
    //   the event-local duplicate created while disk-backed tails are framed,
    //   even when a peer advertises the RFC maximum flow-control windows.
@@ -163,6 +172,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
    // * Metadata
    // # Transport
    // @ Partial-frame carry between reads
+   #[Secret]
    public string $buffer;
    // @ Pending control frames, batched into the next write
    public string $outbox;
@@ -205,6 +215,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
    // @ Stream id awaiting CONTINUATION frames (0 = none)
    protected int $expected;
    // @ Accumulated header block fragments
+   #[Secret]
    protected string $fragments;
    // @ END_STREAM flag carried by the opening HEADERS frame
    protected bool $ending;

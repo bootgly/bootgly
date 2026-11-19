@@ -25,6 +25,7 @@ use function random_int;
 use function strlen;
 use InvalidArgumentException;
 use RuntimeException;
+use SensitiveParameter;
 use stdClass;
 
 use Bootgly\ADI\Databases\SQL as SQLDatabase;
@@ -139,12 +140,13 @@ class Tokens
     * Consume a token exactly once.
     *
     * A tampered verifier never consumes the row — the legitimate link
-    * stays redeemable. Expired rows are purged on contact.
+    * stays redeemable. Expired rows are purged on contact. The token is a
+    * sensitive parameter: exception traces never carry it.
     *
     * @return null|string The owner user id, or `null` on any recorded failure.
     * @throws RuntimeException When a database wait fails without a recorded Operation error.
     */
-   public function redeem (string $token, Purposes $Purpose): null|string
+   public function redeem (#[SensitiveParameter] string $token, Purposes $Purpose): null|string
    {
       // !
       $parts = $this->split($token);
@@ -204,9 +206,11 @@ class Tokens
    /**
     * Check a token without consuming it (e.g. rendering a reset form).
     *
+    * The token is a sensitive parameter: exception traces never carry it.
+    *
     * @throws RuntimeException When a database wait fails without a recorded Operation error.
     */
-   public function check (string $token, Purposes $Purpose): bool
+   public function check (#[SensitiveParameter] string $token, Purposes $Purpose): bool
    {
       // !
       $parts = $this->split($token);
@@ -350,7 +354,7 @@ class Tokens
     *
     * @return null|array{0:string,1:string}
     */
-   private function split (string $token): null|array
+   private function split (#[SensitiveParameter] string $token): null|array
    {
       $parts = explode('.', $token, 2);
       // ?

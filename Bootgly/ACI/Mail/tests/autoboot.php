@@ -34,5 +34,9 @@ return new Suite(
       '8.5-message-union',
       '9.1-message-template',
       '9.2-message-transfer',
+      // # 1.4.0: the credentials stay out of debug dumps and stack traces
+      '1.2-config-dump',
+      '1.3-config-trace',
+      '5.2-auth-trace',
    ]
 );

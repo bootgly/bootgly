@@ -18,6 +18,8 @@ use AllowDynamicProperties;
 use RuntimeException;
 use SensitiveParameter;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\API\Environment\Configs\Config\Types;
 
 
@@ -27,14 +29,22 @@ use Bootgly\API\Environment\Configs\Config\Types;
  * Nodes are created by object navigation (`$Config->Database->Host`) and can
  * hold one scalar/config value with `bind()`. Child navigation returns the
  * parent after binding, which enables fluent config declarations.
+ *
+ * A debug dump shows the tree — scopes, names, children — with every bound
+ * value masked: a node binds `.env` values, and any of them may be a secret.
+ * `get()` reads the value.
  */
 #[AllowDynamicProperties]
 class Config
 {
+   use Redactable;
+
+
    // * Config
    public readonly string $scope;
 
    // * Data
+   #[Secret]
    protected mixed $value = null;
    /** @var array<string,self> */
    protected array $children = [];

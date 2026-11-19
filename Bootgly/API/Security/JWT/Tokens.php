@@ -28,6 +28,8 @@ use function time;
 use InvalidArgumentException;
 use JsonException;
 use RuntimeException;
+use SensitiveParameter;
+use SensitiveParameterValue;
 
 
 /**
@@ -99,8 +101,11 @@ class Tokens
 
    /**
     * Inspect an active refresh token.
+    *
+    * The token is a sensitive parameter here and in every method it reaches:
+    * exception traces never carry it.
     */
-   public function inspect (string $refresh): null|Token
+   public function inspect (#[SensitiveParameter] string $refresh): null|Token
    {
       $Record = $this->read($refresh);
       if ($Record === null) {
@@ -117,7 +122,7 @@ class Tokens
    /**
     * Check whether a refresh token is active.
     */
-   public function check (string $refresh): bool
+   public function check (#[SensitiveParameter] string $refresh): bool
    {
       return $this->inspect($refresh) !== null;
    }
@@ -141,13 +146,17 @@ class Tokens
     *    the presented token stays valid for a retry — unless it was already
     *    consumed, then the retry is a `Replay`.
     */
-   public function rotate (string $refresh, int $ttl): null|Replay|Token
+   public function rotate (#[SensitiveParameter] string $refresh, int $ttl): null|Replay|Token
    {
       if ($ttl < 1) {
          throw new InvalidArgumentException('JWT refresh token ttl must be positive.');
       }
 
-      $Result = $this->Cache->lock(function () use ($refresh, $ttl): null|Replay|Token {
+      // ! The token enters the locked section sealed: a trace that holds the
+      //   Closure (the lock's argument) dumps every variable it captured
+      $Refresh = new SensitiveParameterValue($refresh);
+      $Result = $this->Cache->lock(function () use ($Refresh, $ttl): null|Replay|Token {
+         $refresh = $Refresh->getValue();
          // ! The presented token — nothing is destroyed yet
          $Record = $this->read($refresh);
          // ? Not active: a spent token is a replay, anything else unknown
@@ -258,9 +267,12 @@ class Tokens
     * @throws RuntimeException When the store refuses a write: a retry with
     *    the same token completes the revocation.
     */
-   public function revoke (string $refresh): bool
+   public function revoke (#[SensitiveParameter] string $refresh): bool
    {
-      $Result = $this->Cache->lock(function () use ($refresh): bool {
+      // ! Sealed for the locked section, as in rotate()
+      $Refresh = new SensitiveParameterValue($refresh);
+      $Result = $this->Cache->lock(function () use ($Refresh): bool {
+         $refresh = $Refresh->getValue();
          // ! The presented token
          $Record = $this->read($refresh);
          // ? Not active: a spent token revokes its family, anything else is unknown
@@ -369,7 +381,7 @@ class Tokens
     *
     * @return null|array{subject:string,family:string,claims:array<string,mixed>,issued:int,expires:int}
     */
-   private function read (string $refresh): null|array
+   private function read (#[SensitiveParameter] string $refresh): null|array
    {
       $value = $this->Cache->read($this->index('active', $refresh));
       if ($value === null) {
@@ -384,7 +396,7 @@ class Tokens
     *
     * @return null|array{subject:string,family:string,claims:array<string,mixed>,issued:int,expires:int}
     */
-   private function take (string $refresh): null|array
+   private function take (#[SensitiveParameter] string $refresh): null|array
    {
       $value = $this->Cache->take($this->index('active', $refresh));
       if ($value === null) {
@@ -403,7 +415,7 @@ class Tokens
     *
     * @return null|array{subject:string,family:string,claims:array<string,mixed>,expires:int,horizon:int}
     */
-   private function detect (string $refresh): null|array
+   private function detect (#[SensitiveParameter] string $refresh): null|array
    {
       $value = $this->Cache->read($this->index('spent', $refresh));
       if ($value === null) {
@@ -515,7 +527,7 @@ class Tokens
     *
     * @param array{subject:string,family:string,claims:array<string,mixed>,issued:int,expires:int} $Record
     */
-   private function cast (string $refresh, array $Record): Token
+   private function cast (#[SensitiveParameter] string $refresh, array $Record): Token
    {
       return new Token(
          $refresh,
@@ -564,9 +576,9 @@ class Tokens
    }
 
    /**
-    * Build a refresh-token cache key.
+    * Build a refresh-token cache key from a token or a family id.
     */
-   private function index (string $scope, string $value): string
+   private function index (string $scope, #[SensitiveParameter] string $value): string
    {
       return "jwt:refresh:{$scope}:" . hash('sha256', $value);
    }

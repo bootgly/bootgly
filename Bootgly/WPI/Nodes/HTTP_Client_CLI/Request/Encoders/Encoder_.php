@@ -13,8 +13,8 @@ namespace Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Encoders;
 
 use function stripos;
 use function strlen;
-
 use InvalidArgumentException;
+use SensitiveParameter;
 
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Encoder;
@@ -23,6 +23,8 @@ use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Encoder;
 class Encoder_ extends Encoder
 {
    /**
+    * @param string $headerRaw The raw header block — its `Authorization` and
+    *        `Cookie` lines included: it never reaches a stack trace.
     * @param int<0, max>|null $length
     * @param-out int<0, max>|null $length
     * @throws InvalidArgumentException When request-line values are unsafe.
@@ -31,7 +33,7 @@ class Encoder_ extends Encoder
       string $method,
       string $URI,
       string $protocol,
-      string $headerRaw,
+      #[SensitiveParameter] string $headerRaw,
       string $body = '',
       string $host = '',
       int $port = 80,

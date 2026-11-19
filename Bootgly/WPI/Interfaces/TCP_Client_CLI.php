@@ -56,6 +56,8 @@ use Throwable;
 
 use Bootgly\ABI\Configs as Configuring;
 use Bootgly\ABI\Debugging\Data\Vars;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Events\Timer;
@@ -76,6 +78,7 @@ use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
 class TCP_Client_CLI implements Clients
 {
    use Configurable;
+   use Redactable;
 
    // # Configs
    /** The Configs carrying the socket — host, port and workers. */
@@ -117,6 +120,7 @@ class TCP_Client_CLI implements Clients
    protected null|int $port = null;
    protected int $workers;
    /** @var array<string,mixed>|null Secure SSL/TLS Stream Context */
+   #[Secret(['passphrase'])]
    protected null|array $secure = null;
    // # Mode
    protected int $mode;

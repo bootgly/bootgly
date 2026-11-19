@@ -20,6 +20,7 @@ use function rtrim;
 use function str_repeat;
 use function strlen;
 use function strtr;
+use SensitiveParameter;
 
 use Bootgly\API\Security\Encrypter\Key;
 use Bootgly\API\Security\Encrypter\Keyring;
@@ -58,7 +59,7 @@ class Encrypter
     * @throws \InvalidArgumentException When raw key material is invalid.
     * @throws \RuntimeException When OpenSSL symmetric encryption is unavailable.
     */
-   public function __construct (#[\SensitiveParameter] string|Key|Keyring $key)
+   public function __construct (#[SensitiveParameter] string|Key|Keyring $key)
    {
       // * Config
       $this->Keyring = match (true) {
@@ -74,7 +75,7 @@ class Encrypter
     * @throws \Random\RandomException When the randomness source fails.
     * @throws \RuntimeException When the OpenSSL encryption fails.
     */
-   public function encrypt (#[\SensitiveParameter] string $plaintext, string $AAD = ''): string
+   public function encrypt (#[SensitiveParameter] string $plaintext, string $AAD = ''): string
    {
       // ! Primary key and authenticated envelope prefix.
       $Key = $this->Keyring->Primary;

@@ -47,5 +47,7 @@ return new Suite(
       '11.5-authentication_challenge_errors',
       // # 1.2.0: TrustedProxy strategies (Rightmost/Leftmost/Header) + relay
       '8.3-trusted_proxy_strategies',
+      // # 1.4.0: secrets stay out of debug dumps and exception traces
+      '9.3-csrf_trace_redaction',
    ]
 );

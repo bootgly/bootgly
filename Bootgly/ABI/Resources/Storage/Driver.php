@@ -12,6 +12,10 @@ namespace Bootgly\ABI\Resources\Storage;
 
 
 use function rtrim;
+use SensitiveParameter;
+
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 
 
 /**
@@ -23,11 +27,19 @@ use function rtrim;
  */
 abstract class Driver
 {
+   use Redactable;
+
+
    // * Config
    public private(set) string $root;
 
    // * Data
-   /** @var array<string,mixed> */
+   /**
+    * The disk options — a debug dump shows every `secret` and `token` one masked.
+    *
+    * @var array<string,mixed>
+    */
+   #[Secret(['secret', 'token'])]
    protected array $options;
 
    // * Metadata
@@ -44,9 +56,9 @@ abstract class Driver
    /**
     * Build a driver bound to one disk root.
     *
-    * @param array<string,mixed> $options
+    * @param array<string,mixed> $options Sensitive: a remote disk's credentials.
     */
-   public function __construct (string $root, array $options = [])
+   public function __construct (string $root, #[SensitiveParameter] array $options = [])
    {
       // * Config
       // ? Normalize a trailing slash so drivers build clean paths (keep bare "/")

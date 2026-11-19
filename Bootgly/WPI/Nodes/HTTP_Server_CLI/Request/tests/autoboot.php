@@ -24,5 +24,8 @@ return new Suite(
       '1.8-shed_head',
       '1.9-capture_charges_head',
       '1.10-clean_frees_snapshot_token',
+      // # 1.4.0: secrets stay out of debug dumps and exception traces
+      '1.11-request_dump_redaction',
+      '1.12-basic_trace_redaction',
    ]
 );

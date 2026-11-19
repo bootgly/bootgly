@@ -17,6 +17,8 @@ use function ord;
 use function strlen;
 use function substr;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\WPI\Modules\HTTP2\HPACK\Huffman;
 
 
@@ -32,9 +34,14 @@ use Bootgly\WPI\Modules\HTTP2\HPACK\Huffman;
  * cached and replayed across streams and connections.
  *
  * One instance per connection carries the request-decoding dynamic table.
+ * Its entries are decoded header fields — `Authorization`, `Cookie` and
+ * `Set-Cookie` values among them — so a debug dump masks the table.
  */
 class HPACK
 {
+   use Redactable;
+
+
    // @ Static table (RFC 7541 Appendix A), index 1..61.
    protected const array TABLE = [
       [':authority', ''],
@@ -182,6 +189,7 @@ class HPACK
    // * Data
    // # Dynamic table (decode side) — absolute insertion id → [name, value, size]
    /** @var array<int, array{0: string, 1: string, 2: int}> */
+   #[Secret]
    protected array $dynamic;
 
    // * Metadata

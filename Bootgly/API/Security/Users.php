@@ -18,6 +18,7 @@ use function is_string;
 use function random_bytes;
 use function rtrim;
 use RuntimeException;
+use SensitiveParameter;
 use stdClass;
 
 use Bootgly\ABI\Events\Emitter;
@@ -127,7 +128,7 @@ class Users
     * @return null|string The new account id — `null` on a duplicate identifier.
     * @throws RuntimeException When the database fails.
     */
-   public function enroll (string $email, #[\SensitiveParameter] string $password): null|string
+   public function enroll (string $email, #[SensitiveParameter] string $password): null|string
    {
       // ?
       if ($email === '' || $password === '') {
@@ -212,7 +213,7 @@ class Users
     *    the account holds them after the upgrade.
     * @throws RuntimeException When the database fails.
     */
-   public function verify (string $email, #[\SensitiveParameter] string $password): null|Identity
+   public function verify (string $email, #[SensitiveParameter] string $password): null|Identity
    {
       // !
       $row = $this->select($email);
@@ -300,7 +301,7 @@ class Users
     *
     * @throws RuntimeException When the database fails.
     */
-   public function check (string $user, #[\SensitiveParameter] string $password): bool
+   public function check (string $user, #[SensitiveParameter] string $password): bool
    {
       // !
       $row = $this->locate($user);
@@ -346,7 +347,7 @@ class Users
     *
     * @throws RuntimeException When the database fails.
     */
-   public function rotate (string $user, #[\SensitiveParameter] string $password): bool
+   public function rotate (string $user, #[SensitiveParameter] string $password): bool
    {
       // ?
       if ($user === '' || $password === '') {

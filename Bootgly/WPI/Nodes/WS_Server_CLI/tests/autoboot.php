@@ -36,6 +36,9 @@ return new Suite(
       // # 1.3.x: the heartbeat supervisor rides the worker loop's recurring timers — one timer owner
       '5.6-session_timer_owner',
       // # A message handler failure the server survives is reported (the `exceptions` channel)
-      '6.1-message_failure_report'
+      '6.1-message_failure_report',
+      // # 1.4.x: the upgrade credentials never reach a debug dump nor a stack trace
+      '7.1-redaction_dumps',
+      '7.2-redaction_traces'
    ]
 );

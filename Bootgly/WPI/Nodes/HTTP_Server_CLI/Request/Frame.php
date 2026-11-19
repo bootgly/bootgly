@@ -29,10 +29,13 @@ use function substr;
 use function substr_count;
 use function trim;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\API\Environments;
 use Bootgly\API\Workables\Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
+use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
@@ -54,9 +57,15 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
  * `$Package->reject()` itself and returns `null`. The caller (`Request::decode()`)
  * just returns `0`. Incomplete buffers also return `null` (without `reject()`)
  * so the caller waits for more bytes.
+ *
+ * A debug dump masks the credential fields (`HTTP::SECRET_HEADERS`) and the
+ * raw header block, which carries them.
  */
 final class Frame
 {
+   use Redactable;
+
+
    // * Config
    /**
     * RFC 9110 §5.6.2 tchar set — the complete alphabet of a field-name.
@@ -111,8 +120,10 @@ final class Frame
 
    // # Header block
    /** Raw header block, with any test-only `X-Bootgly-Test:` line stripped. */
+   #[Secret]
    public string $headerRaw = '';
    /** @var array<string, string|array<int,string>> Lowercase-keyed field map. */
+   #[Secret(HTTP::SECRET_HEADERS)]
    public array $fields = [];
 
    // # Framing decisions

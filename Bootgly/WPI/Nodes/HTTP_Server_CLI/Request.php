@@ -65,6 +65,8 @@ use JsonException;
 use Throwable;
 
 use const Bootgly\WPI;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\ABI\Resources\Storage\Driver;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
@@ -90,6 +92,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session;
 
 class Request
 {
+   use Redactable;
+
+
    /**
     * What the objects of a deferred snapshot cost — the cloned Request,
     * Header and Body and its ledger token (`capture()`). Measured, rounded up.
@@ -773,12 +778,18 @@ class Request
    public int $stream = 0;
 
    private string $authUsername = '';
+   /**
+    * Backing store of `$password` — masked in a debug dump.
+    */
+   #[Secret]
    private string $authPassword = '';
    private bool $authParsed = false;
    private null|Basic $AuthCredentials = null;
    /**
-    * Cached Bearer token parsed from the Authorization header.
+    * Cached Bearer token parsed from the Authorization header — masked in a
+    * debug dump.
     */
+   #[Secret]
    private string $authToken = '';
    private bool $authTokenParsed = false;
 

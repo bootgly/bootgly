@@ -27,6 +27,7 @@ use function strpos;
 use function strrpos;
 use function substr;
 use Closure;
+use SensitiveParameter;
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session;
@@ -161,7 +162,7 @@ class CSRF implements Middleware
     * Render the masked value instead of the raw session token, e.g.:
     *   CSRF::mask($Request->Session->get('_csrf_token'))
     */
-   public static function mask (string $token): string
+   public static function mask (#[SensitiveParameter] string $token): string
    {
       if ($token === '') {
          return '';
@@ -179,7 +180,7 @@ class CSRF implements Middleware
     * @return string The unmasked token, or '' when `$masked` is not a
     *   well-formed masked value (so callers can fall back to a raw comparison).
     */
-   public static function unmask (string $masked): string
+   public static function unmask (#[SensitiveParameter] string $masked): string
    {
       $binary = @hex2bin($masked);
       // ? Must be hex of (nonce ‖ cipher) — non-empty and even-length halves.

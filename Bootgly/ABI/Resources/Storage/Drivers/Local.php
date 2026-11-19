@@ -39,6 +39,7 @@ use function uniqid;
 use function unlink;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use SensitiveParameter;
 use SplFileInfo;
 
 use Bootgly\ABI\Code\__String\Path;
@@ -67,9 +68,9 @@ class Local extends Driver
    /**
     * Build the local driver and bind a realpath jail guard to the disk root.
     *
-    * @param array<string,mixed> $options
+    * @param array<string,mixed> $options Sensitive: the disk definition may still carry a remote disk's credentials.
     */
-   public function __construct (string $root, array $options = [])
+   public function __construct (string $root, #[SensitiveParameter] array $options = [])
    {
       parent::__construct($root, $options);
 

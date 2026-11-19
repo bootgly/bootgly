@@ -195,6 +195,9 @@ class S3 extends Driver
     * What a dump of the disk shows: where it points, never its credentials (nor the signer
     * and the handle, which hold them).
     *
+    * Written by hand on purpose, instead of `Redactable`: it lists only the safe fields, so a
+    * credential a later change adds stays out of the dump without a `#[Secret]` mark.
+    *
     * @return array<string,string>
     */
    public function __debugInfo (): array
@@ -860,13 +863,13 @@ class S3 extends Driver
    /**
     * Send one HTTP/1.1 request over a blocking TLS/TCP socket; `[code, headers, body]`.
     *
-    * @param array<string,string> $headers
+    * @param array<string,string> $headers Sensitive: the signed `Authorization` and the session token.
     * @param resource|null $sink Stream the response body into this sink instead of buffering.
     * @param null|array{0:int,1:null|int} $window The `[offset, length]` a ranged read asked for.
     *
     * @return array{0:int,1:array<string,string|array<int,string>>,2:string}
     */
-   private function send (string $method, string $URI, array $headers, string $body, $sink = null, null|array $window = null): array
+   private function send (string $method, string $URI, #[SensitiveParameter] array $headers, string $body, $sink = null, null|array $window = null): array
    {
       $transport = $this->scheme === 'https' ? 'tls' : 'tcp';
       $context = stream_context_create($this->scheme === 'https'

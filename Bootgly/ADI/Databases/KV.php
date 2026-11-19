@@ -11,6 +11,8 @@
 namespace Bootgly\ADI\Databases;
 
 
+use SensitiveParameter;
+
 use Bootgly\ADI\Database;
 use Bootgly\ADI\Database\Config;
 use Bootgly\ADI\Databases\KV\Drivers;
@@ -29,7 +31,7 @@ class KV extends Database
    /**
     * @param array<string,mixed>|Config $config
     */
-   public function __construct (array|Config $config = [])
+   public function __construct (#[SensitiveParameter] array|Config $config = [])
    {
       parent::__construct($config, Drivers::class);
    }

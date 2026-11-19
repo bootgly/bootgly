@@ -30,12 +30,18 @@ use function substr;
 use function time;
 use function trim;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
+use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header as HeaderBase;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header\Cookies;
 
 
 class Header extends HeaderBase
 {
+   use Redactable;
+
+
    private const int CONTENT_LENGTH = 1;
    private const int TRANSFER_ENCODING = 2;
    /**
@@ -48,6 +54,11 @@ class Header extends HeaderBase
       . "\x7F";
 
    // * Data
+   /**
+    * The built header block — masked whole in a debug dump: it carries the
+    * credential fields and the queued `Set-Cookie` lines.
+    */
+   #[Secret]
    public string $raw;
    // # Default Content-Type emitted by build() when no explicit Content-Type header is
    //   set (via set()/preset/prepare). A per-response value: reset every request by
@@ -57,7 +68,10 @@ class Header extends HeaderBase
    //   `dirty` flag, and the value is CRLF-stripped where it is serialized.
    public string $type = 'text/html; charset=UTF-8';
    // Fields
+   // ! Every field map below masks the credential fields
+   //   (`HTTP::SECRET_HEADERS`) in a debug dump; the line lists mask whole.
    /** @var array<string,string|true> */
+   #[Secret(HTTP::SECRET_HEADERS)]
    protected array $preset {
       get => $this->preset;
       set {
@@ -91,14 +105,17 @@ class Header extends HeaderBase
       }
    }
    /** @var array<string,string> */
+   #[Secret(HTTP::SECRET_HEADERS)]
    protected array $prepared;
    /** @var array<string,string> */
+   #[Secret(HTTP::SECRET_HEADERS)]
    protected array $fields;
 
    // * Metadata
    protected bool $sent;
    // Fields
    /** @var array<int,string> */
+   #[Secret]
    protected array $queued;
    // # Sticky per-response flag: queue() ran during this response. Unlike
    //   `$queued !== []`, it survives remove() emptying the queue — clean()
@@ -112,8 +129,10 @@ class Header extends HeaderBase
    //   route) reuses the cached result and skips re-sanitizing every request.
    //   Survives clean()/clone; deterministic, so reuse is security-equivalent.
    /** @var array<string,string> */
+   #[Secret(HTTP::SECRET_HEADERS)]
    private array $preparedRaw = [];
    /** @var array<string,string> */
+   #[Secret(HTTP::SECRET_HEADERS)]
    private array $preparedSanitized = [];
    // # Framing-source bitmasks. The current mask makes encoder ownership a
    //   zero-scan fast return for ordinary responses; prepared/preset masks
@@ -135,12 +154,16 @@ class Header extends HeaderBase
    //   that returns none. Cross-second falls through to rebuild the per-second Date.
    private string $builtType = '';
    /** @var array<string,string|bool> */
+   #[Secret(HTTP::SECRET_HEADERS)]
    private array $builtPreset = [];
    /** @var array<string,string> */
+   #[Secret(HTTP::SECRET_HEADERS)]
    private array $builtFields = [];
    /** @var array<string,string> */
+   #[Secret(HTTP::SECRET_HEADERS)]
    private array $builtPrepared = [];
    /** @var array<int,string> */
+   #[Secret]
    private array $builtQueued = [];
    /** @var array<string,true> */
    private array $builtMasked = [];

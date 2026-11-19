@@ -11,19 +11,30 @@
 namespace Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header;
 
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header\Cookie;
 
 
 abstract class Cookies
 {
+   use Redactable;
+
+
    // * Config
    public Header $Header;
 
    // ...
 
    // * Data
-   /** @var array<string> */
+   /**
+    * The `Set-Cookie` values appended to this response — masked whole in a
+    * debug dump (session ids and remember tokens travel here).
+    *
+    * @var array<string>
+    */
+   #[Secret]
    protected array $cookies;
 
    // * Metadata

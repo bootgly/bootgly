@@ -11,15 +11,26 @@
 namespace Bootgly\API\Security\Tokens;
 
 
+use SensitiveParameter;
+
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
+
+
 /**
  * Minted opaque token snapshot.
  *
  * `value` ("selector.verifier") is the only exposure of the raw secret —
- * stores persist the selector and the sha256 digest of the verifier.
+ * stores persist the selector and the sha256 digest of the verifier. It never
+ * shows in a debug dump or an exception trace.
  */
 class Token
 {
+   use Redactable;
+
+
    // * Data
+   #[Secret]
    public private(set) string $value;
    public private(set) string $selector;
    public private(set) string $user;
@@ -28,7 +39,7 @@ class Token
 
 
    public function __construct (
-      string $value,
+      #[SensitiveParameter] string $value,
       string $selector,
       string $user,
       null|Purposes $Purpose,

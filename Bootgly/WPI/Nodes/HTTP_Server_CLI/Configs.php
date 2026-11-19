@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
 use InvalidArgumentException;
+use SensitiveParameter;
 
 use Bootgly\ABI\Argument;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Configs as TCPConfigs;
@@ -72,7 +73,7 @@ class Configs extends TCPConfigs
       null|string $host = null,
       null|int $port = null,
       null|int $workers = null,
-      null|array $secure = null,
+      #[SensitiveParameter] null|array $secure = null,
       null|string $user = null,
       null|string $group = null,
       null|AutoTLS $AutoTLS = null,

@@ -68,6 +68,8 @@ final class Uploads
     * What a dump of the handle shows: nothing — its steps are bound to the disk, and the
     * disk holds the credentials.
     *
+    * Written by hand on purpose, instead of `Redactable`: nothing here is safe to list.
+    *
     * @return array<string,mixed>
     */
    public function __debugInfo (): array

@@ -23,6 +23,8 @@ use function strlen;
 use function substr;
 use Throwable;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI as Client;
@@ -30,8 +32,15 @@ use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
 
 
+/**
+ * The wire bytes of a client connection carry its credential headers, so a
+ * debug dump masks them.
+ */
 class Packages implements WPI\Connections\Packages
 {
+   use Redactable;
+
+
    // * Config
    // ...
 
@@ -47,7 +56,9 @@ class Packages implements WPI\Connections\Packages
    }
 
    // # IO
+   #[Secret]
    public string $output;
+   #[Secret]
    public string $input;
 
    // * Metadata

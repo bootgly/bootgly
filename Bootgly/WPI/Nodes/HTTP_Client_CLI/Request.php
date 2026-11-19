@@ -18,9 +18,10 @@ use function strcspn;
 use function strlen;
 use function strspn;
 use function strtolower;
-
 use InvalidArgumentException;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Raw\Body;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Raw\Header;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response;
@@ -28,8 +29,19 @@ use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response\Decoder;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response\Decoders\Decoder_;
 
 
+/**
+ * An HTTP client request: its request line, header fields and body, and the
+ * transport state of its dispatch.
+ *
+ * A debug dump never shows the memoized wire encoding, which carries the
+ * credential header lines (see `Raw\Header`), nor the response bytes still
+ * pending decode. The body is shown as it is.
+ */
 class Request
 {
+   use Redactable;
+
+
    // * Config
    // ...
 
@@ -87,6 +99,8 @@ class Request
       . "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F"
       . "\x20\x7F\\#";
    // | Transport
+   /** Response bytes read but not yet decoded — a head split across reads carries its `Set-Cookie`. */
+   #[Secret]
    public string $pendingBuffer;
    /** Connection state: 'idle' | 'waiting' | 'waiting-100-continue' | 'redirect' */
    public string $connectionState;
@@ -96,6 +110,7 @@ class Request
    public int $interims;
    // | Encoder
    /** Encoded wire bytes memoized for re-dispatch, or null when stale. */
+   #[Secret]
    public null|string $encoded;
    /** Origin host the memoized encoding was built for. */
    public null|string $encodedHost;

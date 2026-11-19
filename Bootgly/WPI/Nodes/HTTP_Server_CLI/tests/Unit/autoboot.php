@@ -137,5 +137,12 @@ return new Suite(
       '1.82-select_except_refusal',
       // # 1.3.x (reactor): the SSE timers of a worker come due on shared instants
       '1.83-sse_timer_phases',
+      // # 1.4.0: secrets stay out of debug dumps and exception traces
+      '1.84-response_dump_redaction',
+      '1.85-catcher_page_masks_credentials',
+      '1.86-cookie_trace_redaction',
+      // # 1.4.0: the HTTP/2 decoder's carried request bytes, header block
+      //   fragments and HPACK table never reach a debug dump
+      '1.87-http2_decoder_dump_redaction',
    ]
 );

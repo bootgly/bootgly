@@ -191,6 +191,7 @@ use Closure;
 use InvalidArgumentException;
 use LogicException;
 use RuntimeException;
+use SensitiveParameter;
 use Socket;
 use Throwable;
 
@@ -198,6 +199,8 @@ use const Bootgly\CLI;
 use Bootgly\ABI\Configs as Configuring;
 use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\Debugging\Data\Vars;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\ABI\Debugging\Shutdown;
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\ABI\IO\IPC\Pipe as IPCPipe;
@@ -242,6 +245,7 @@ class TCP_Server_CLI implements Servers
 {
    use Configurable;
    use Demotable;
+   use Redactable;
 
    // # Configs
    /** The Configs carrying the socket — host, port and workers. */
@@ -334,6 +338,7 @@ class TCP_Server_CLI implements Servers
    protected null|int $port;
    protected int $workers;
    /** @var array<string,mixed> */
+   #[Secret(['passphrase'])]
    protected null|array $secure; // Secure SSL/TLS Stream Context
    protected null|string $user = null;
    protected null|string $group = null;
@@ -3088,7 +3093,7 @@ class TCP_Server_CLI implements Servers
     * @param null|array<string,mixed> $hashes Expected
     *        SHA-256 digests from a fully validated credential generation.
     */
-   public function swap (array $secure, null|array $hashes = null): bool
+   public function swap (#[SensitiveParameter] array $secure, null|array $hashes = null): bool
    {
       if (
          $hashes !== null
@@ -3172,7 +3177,7 @@ class TCP_Server_CLI implements Servers
     *    credential:array{directory:string,files:array<int,string>,handles:array<int,resource>}
     * }
     */
-   private function seal (array $secure, null|array $hashes): null|array
+   private function seal (#[SensitiveParameter] array $secure, null|array $hashes): null|array
    {
       $certificate = $secure['local_cert'] ?? null;
       if (is_string($certificate) === false) {
@@ -3324,7 +3329,7 @@ class TCP_Server_CLI implements Servers
     *
     * @return resource|false
     */
-   private function persist (string $file, string $contents)
+   private function persist (string $file, #[SensitiveParameter] string $contents)
    {
       // 0666 & ~0266 = 0400. The writable descriptor can still receive the
       // verified bytes, while no pathname-based chmod race is introduced.
@@ -3394,7 +3399,7 @@ class TCP_Server_CLI implements Servers
     *
     * @param array<string,mixed> $secure
     */
-   private function probe (array $secure, string $certificate): bool
+   private function probe (#[SensitiveParameter] array $secure, string $certificate): bool
    {
       $ServerContext = stream_context_create(['ssl' => $secure]);
       $ClientContext = stream_context_create([

@@ -50,9 +50,12 @@ use function substr;
 use function trim;
 use DateTimeImmutable;
 use InvalidArgumentException;
+use SensitiveParameter;
 use Throwable;
 use WeakReference;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Events\Scheduler;
@@ -73,9 +76,14 @@ use Bootgly\ADI\Databases\SQL\Operation;
 
 /**
  * PostgreSQL Protocol 3.0 implementation.
+ *
+ * Debug dumps mask the backend's cancellation key.
  */
 class PostgreSQL extends Driver
 {
+   use Redactable;
+
+
    /**
     * The SCRAM iteration floor a downgraded session accepts — PostgreSQL's
     * default and RFC 7677's minimum (§4): a cheaper count makes the proof as
@@ -106,6 +114,7 @@ class PostgreSQL extends Driver
    /** @var array<string,bool|array<int,int>> */
    public private(set) array $statements = [];
    public private(set) int $backendProcess = 0;
+   #[Secret]
    public private(set) int $backendSecret = 0;
    /** @var array<string,string> */
    public private(set) array $parameters = [];
@@ -1447,7 +1456,7 @@ class PostgreSQL extends Driver
    /**
     * Identify this connection with backend cancellation keys.
     */
-   public function identify (int $process, int $secret): self
+   public function identify (int $process, #[SensitiveParameter] int $secret): self
    {
       $this->backendProcess = $process;
       $this->backendSecret = $secret;

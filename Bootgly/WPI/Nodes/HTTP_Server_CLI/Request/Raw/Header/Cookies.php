@@ -18,6 +18,8 @@ use function is_array;
 use function preg_split;
 use function trim;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Bodies;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Bodies\Refusal;
@@ -26,6 +28,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 
 final class Cookies
 {
+   use Redactable;
+
+
    // * Config
    // ...
 
@@ -38,7 +43,13 @@ final class Cookies
     * cookies keep, and a parse that does not fit is refused.
     */
    public null|Bodies $Bodies = null;
-   /** @var array<int, array<string, string>> */
+   /**
+    * The parsed cookies — masked whole in a debug dump (session ids and
+    * remember tokens travel here).
+    *
+    * @var array<int, array<string, string>>
+    */
+   #[Secret]
    public protected(set) array $cookies {
       get {
          if (isSet($this->cookies) === false) {

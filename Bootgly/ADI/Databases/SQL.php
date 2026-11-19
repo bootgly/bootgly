@@ -20,6 +20,7 @@ use BackedEnum;
 use Closure;
 use Fiber;
 use RuntimeException;
+use SensitiveParameter;
 use Stringable;
 use Throwable;
 use WeakMap;
@@ -77,7 +78,7 @@ class SQL extends Database implements Awaiting, Querying
     *
     * @param array<string,mixed>|Config $config
     */
-   public function __construct (array|Config $config = [])
+   public function __construct (#[SensitiveParameter] array|Config $config = [])
    {
       // * Config
       $Config = $config instanceof Config

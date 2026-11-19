@@ -67,6 +67,7 @@ use const Bootgly\WPI;
 use Bootgly\ABI\Code\__String\Path;
 use Bootgly\ABI\Data\Language;
 use Bootgly\ABI\Debugging\Data\Throwables;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Events\Cancelling;
 use Bootgly\ACI\Events\Contextualizing;
@@ -125,6 +126,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Sealing;
 class Response extends Server\Response
 {
    use Raw;
+   use Redactable;
 
 
    // * Config

@@ -36,6 +36,9 @@ return new Suite(
       '5.6-pong_coalescing',
       '5.7-handshake_head_cap',
       // # 1.3.x: the supervisor and the one-shot deadlines ride the client loop — one timer owner
-      '5.8-session_timer_owner'
+      '5.8-session_timer_owner',
+      // # 1.4.x: the upgrade credentials never reach a debug dump nor a stack trace
+      '7.1-redaction_dumps',
+      '7.2-redaction_traces'
    ]
 );

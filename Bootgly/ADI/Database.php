@@ -11,6 +11,7 @@
 namespace Bootgly\ADI;
 
 
+use SensitiveParameter;
 use Throwable;
 
 use Bootgly\ADI\Database\Config;
@@ -51,7 +52,7 @@ abstract class Database
     * @param array<string,mixed>|Config $config
     * @param class-string<Drivers> $drivers
     */
-   public function __construct (array|Config $config = [], string $drivers = Drivers::class)
+   public function __construct (#[SensitiveParameter] array|Config $config = [], string $drivers = Drivers::class)
    {
       // * Config
       $this->Config = $config instanceof Config

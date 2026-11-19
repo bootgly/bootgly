@@ -54,5 +54,9 @@ return new Suite(
       '8.5-storage-trace-options',
       '7.8-s3-fake-presign-headers',
       '8.6-s3-signer-headers',
+      // # 1.4.0: the credentials stay out of debug dumps and stack traces
+      '8.7-storage-dump-redaction',
+      '8.8-s3-send-trace',
+      '8.9-storage-frames-trace',
    ]
 );

@@ -21,6 +21,7 @@ use function sha1;
 use function str_starts_with;
 use function strlen;
 use InvalidArgumentException;
+use SensitiveParameter;
 
 use Bootgly\ADI\Database\Config;
 
@@ -125,8 +126,12 @@ class Authentication
 
    /**
     * Mix a hashed password with its plugin mask (byte-wise XOR).
+    *
+    * Both stay out of a stack trace: the hash answers either plugin's
+    * challenge as the password would, and the mask recovers it from the
+    * scramble on the wire.
     */
-   private function mix (string $hashed, string $mask): string
+   private function mix (#[SensitiveParameter] string $hashed, #[SensitiveParameter] string $mask): string
    {
       $length = strlen($hashed);
       $mixed = '';

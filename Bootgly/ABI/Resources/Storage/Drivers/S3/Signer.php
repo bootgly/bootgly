@@ -31,6 +31,9 @@ use function usort;
 use InvalidArgumentException;
 use SensitiveParameter;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
+
 
 /**
  * AWS Signature Version 4 for S3 and S3-compatible storage (MinIO, Cloudflare R2, Wasabi).
@@ -50,10 +53,14 @@ use SensitiveParameter;
  * encoded and sorted here.
  *
  * Credentials are opaque: a wrong or empty key or secret is not refused, it yields a
- * signature the service rejects. Nothing this class throws or returns carries the secret.
+ * signature the service rejects. Nothing this class throws or returns carries the secret,
+ * and a debug dump of it shows the secret, the session token and the signing key masked.
  */
 final class Signer
 {
+   use Redactable;
+
+
    /** The signing algorithm, as it is named on the wire. */
    public const string ALGORITHM = 'AWS4-HMAC-SHA256';
    /** The payload hash of a request whose body is not covered by the signature. */
@@ -81,13 +88,16 @@ final class Signer
    public private(set) string $service;
 
    // * Data
+   #[Secret]
    private string $secret;
+   #[Secret]
    private string $token;
 
    // * Metadata
    /** The date stamp (`Ymd`) the cached signing key belongs to. */
    private string $day = '';
    /** The signing key of `$day` (raw bytes) — derived once per day, not once per request. */
+   #[Secret]
    private string $derived = '';
 
 
@@ -221,6 +231,7 @@ final class Signer
     * @param string $host The wire `Host`.
     * @param string $path The percent-encoded request path, starting with `/`.
     * @param array<int|string,int|string> $query Raw query parameters (`['partNumber' => 3, 'uploadId' => '…']`).
+    *    Sensitive: the session token (`X-Amz-Security-Token`) joins it before it is encoded.
     * @param int $expires Lifetime in seconds, 1..`Signer::LIFETIME`.
     * @param array<string,string> $headers The headers the request must send, besides `Host`.
     * @param null|int $time Unix time of the signature (now when null).
@@ -233,7 +244,7 @@ final class Signer
       string $method,
       string $host,
       string $path,
-      array $query,
+      #[SensitiveParameter] array $query,
       int $expires,
       array $headers = [],
       null|int $time = null
@@ -286,29 +297,14 @@ final class Signer
    }
 
    /**
-    * What a dump of the signer shows: its scope, never the secret, the session token or
-    * the derived signing key.
-    *
-    * @return array<string,string>
-    */
-   public function __debugInfo (): array
-   {
-      // :
-      return [
-         'key' => $this->key,
-         'region' => $this->region,
-         'service' => $this->service,
-      ];
-   }
-
-   /**
     * The canonical query string: names and values percent-encoded per RFC 3986
     * (`rawurlencode`), sorted by encoded name, then by encoded value; a parameter without a
     * value keeps its `=` (`uploads=`).
     *
-    * @param array<int|string,int|string> $query Raw query parameters.
+    * @param array<int|string,int|string> $query Raw query parameters. Sensitive: `presign()`
+    *    passes the session token (`X-Amz-Security-Token`) through here.
     */
-   public static function encode (array $query): string
+   public static function encode (#[SensitiveParameter] array $query): string
    {
       $pairs = [];
       foreach ($query as $name => $value) {

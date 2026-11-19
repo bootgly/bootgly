@@ -45,5 +45,9 @@ return new Suite(
       '1.11-config-clock',
       // # 1.1.0: job files are written through File->replace()
       '1.12-file-write-replace',
+      // # 1.4.0: the Redis password stays out of debug dumps and stack traces
+      '1.13-config-dump',
+      '1.14-config-trace',
+      '4.5-redis-auth-trace',
    ]
 );

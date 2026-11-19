@@ -11,6 +11,8 @@
 namespace Bootgly\WPI;
 
 
+use SensitiveParameter;
+
 use Bootgly\ACI\Queues\Config;
 use Bootgly\ACI\Queues\Handler;
 use Bootgly\ACI\Queues\Job;
@@ -35,7 +37,7 @@ class Queues
     *
     * @param array<string,mixed>|Config $config Queue configuration.
     */
-   public static function boot (array|Config $config = []): Messenger
+   public static function boot (#[SensitiveParameter] array|Config $config = []): Messenger
    {
       // :
       return self::$Messenger = new Messenger($config);

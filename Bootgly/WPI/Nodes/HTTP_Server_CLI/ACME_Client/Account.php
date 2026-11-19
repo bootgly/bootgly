@@ -51,6 +51,7 @@ use function unlink;
 use InvalidArgumentException;
 use JsonException;
 use RuntimeException;
+use SensitiveParameter;
 
 use Bootgly\API\Security\JWT\Key;
 use Bootgly\API\Security\JWT\Segments;
@@ -381,7 +382,7 @@ class Account
    }
 
    /** Atomically replace one private account-state file with mode 0600. */
-   private function persist (string $file, string $contents): void
+   private function persist (string $file, #[SensitiveParameter] string $contents): void
    {
       if ($this->contain($file) === false) {
          throw new RuntimeException(

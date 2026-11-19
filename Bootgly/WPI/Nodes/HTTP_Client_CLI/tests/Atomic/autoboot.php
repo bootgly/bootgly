@@ -96,5 +96,9 @@ return new Suite(
       //   a write-stalled h2 connection is closed on timeout, never pooled
       '11.1-h2-control_flood',
       '11.2-h2-timeout_stalled_close',
+      // # 1.4.x: the credential headers, the encodings, the wire buffers and the
+      //   TLS passphrase never reach a debug dump nor a stack trace
+      '12.1-redaction_dumps',
+      '12.2-redaction_traces',
    ]
 );

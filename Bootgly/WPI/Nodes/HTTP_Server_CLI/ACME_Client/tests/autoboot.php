@@ -34,5 +34,8 @@ return new Suite(
       // A retired owner must republish, and collection must survive both an
       // interrupted legacy removal and a glob-unsafe storage path.
       '5.8-swaps_lifecycle',
+      // # 1.4.0: secrets stay out of debug dumps and exception traces
+      '6.1-csr_dump_redaction',
+      '6.2-key_trace_redaction',
    ]
 );

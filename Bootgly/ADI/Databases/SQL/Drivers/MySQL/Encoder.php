@@ -28,6 +28,7 @@ use function strlen;
 use function substr;
 use DateTimeInterface;
 use InvalidArgumentException;
+use SensitiveParameter;
 
 use Bootgly\ADI\Database\Config;
 use Bootgly\ADI\Databases\SQL\Drivers\MySQL\Capabilities;
@@ -71,8 +72,11 @@ class Encoder
 
    /**
     * Encode a MySQL client packet.
+    *
+    * The payload stays out of a stack trace: it may be the password or the
+    * scramble derived from it.
     */
-   public function encode (string $message, mixed $payload = null, int $sequence = 0): string
+   public function encode (string $message, #[SensitiveParameter] mixed $payload = null, int $sequence = 0): string
    {
       return match ($message) {
          self::SSL => $this->secure($payload, $sequence),
@@ -88,8 +92,11 @@ class Encoder
 
    /**
     * Frame one payload into wire packets, splitting at the 16 MB boundary.
+    *
+    * The payload stays out of a stack trace: an authentication packet's is
+    * the password or the scramble derived from it.
     */
-   public function frame (string $payload, int $sequence = 0): string
+   public function frame (#[SensitiveParameter] string $payload, int $sequence = 0): string
    {
       $size = strlen($payload);
 
@@ -139,7 +146,7 @@ class Encoder
    /**
     * Encode a HandshakeResponse41 packet.
     */
-   private function respond (mixed $payload, int $sequence): string
+   private function respond (#[SensitiveParameter] mixed $payload, int $sequence): string
    {
       if (
          is_array($payload) === false
@@ -182,7 +189,7 @@ class Encoder
    /**
     * Encode a raw authentication continuation packet.
     */
-   private function reply (mixed $payload, int $sequence): string
+   private function reply (#[SensitiveParameter] mixed $payload, int $sequence): string
    {
       if (is_string($payload) === false) {
          throw new InvalidArgumentException('MySQL authentication payload must be a string.');

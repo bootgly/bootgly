@@ -81,4 +81,20 @@ interface HTTP
    ];
 
    public const string RESPONSE_DATE_RFC = 'D, d M Y H:i:s \G\M\T';
+
+   /**
+    * The header fields that carry a credential, lowercased: never shown in a
+    * dump, a log or the debug page — `#[Secret(HTTP::SECRET_HEADERS)]` on a
+    * header holder masks them at any letter case. A credential under another
+    * header name is the application's to mask.
+    */
+   public const array SECRET_HEADERS = [
+      'authorization',
+      'proxy-authorization',
+      'cookie',
+      'set-cookie',
+      'x-csrf-token',
+      'x-api-key',
+      'x-auth-token',
+   ];
 }

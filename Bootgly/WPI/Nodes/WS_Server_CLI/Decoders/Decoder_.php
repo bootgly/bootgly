@@ -11,6 +11,8 @@
 namespace Bootgly\WPI\Nodes\WS_Server_CLI\Decoders;
 
 
+use SensitiveParameter;
+
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Endpoints\Servers\Packages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCP_Packages;
@@ -22,7 +24,14 @@ use Bootgly\WPI\Nodes\WS_Server_CLI\Session;
 
 class Decoder_ extends Decoders
 {
-   public function decode (Packages $Package, string $buffer, int $size): States
+   /**
+    * Decode the HTTP/1.1 upgrade head and answer the handshake.
+    *
+    * The buffer is the raw head — its `Authorization` and `Cookie` lines
+    * included — and the guards, the upgrade predicate and the HTTP fallback
+    * run under this frame: it never reaches a stack trace.
+    */
+   public function decode (Packages $Package, #[SensitiveParameter] string $buffer, int $size): States
    {
       /** @var TCP_Packages $Package */
       // ? Parse the HTTP/1.1 upgrade head — reuses the HTTP framing parser.

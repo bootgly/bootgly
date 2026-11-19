@@ -21,6 +21,7 @@ use function openssl_sign;
 use function openssl_verify;
 use OpenSSLAsymmetricKey;
 use RuntimeException;
+use SensitiveParameter;
 
 
 /**
@@ -67,8 +68,11 @@ class Signer
 
    /**
     * Verify compact JWT data with a key.
+    *
+    * Sensitive: `$signature` with `$data` rebuilds the bearer token — a trace
+    * never shows it.
     */
-   public function check (string $data, string $signature, Key $Key): null|Failures
+   public function check (string $data, #[SensitiveParameter] string $signature, Key $Key): null|Failures
    {
       $material = $Key->Material;
       if ($Key->algorithm === 'HS256') {

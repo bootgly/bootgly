@@ -23,5 +23,10 @@ return new Suite(
       '2.2-pool_capacity',
       '2.3-pool_health',
       '3.1-writing_accounting',
+      // # 1.4.x: the TLS passphrase never reaches a debug dump nor a stack trace
+      '4.1-redaction_dumps',
+      '4.2-redaction_traces',
+      // # 1.4.x: the wire buffers of a connection never reach a debug dump
+      '4.3-redaction_buffers',
    ]
 );

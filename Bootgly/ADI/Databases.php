@@ -12,6 +12,7 @@ namespace Bootgly\ADI;
 
 
 use InvalidArgumentException;
+use SensitiveParameter;
 
 use Bootgly\ADI\Database;
 use Bootgly\ADI\Databases\SQL;
@@ -70,7 +71,7 @@ class Databases
     *
     * @param array<string,mixed> $config
     */
-   public function create (string $paradigm, array $config = []): Database
+   public function create (string $paradigm, #[SensitiveParameter] array $config = []): Database
    {
       $class = $this->resolve($paradigm);
 

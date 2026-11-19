@@ -64,11 +64,13 @@ use Generator;
 use InvalidArgumentException;
 use LogicException;
 use RuntimeException;
+use SensitiveParameter;
 use Throwable;
 use WeakMap;
 
 use Bootgly\ABI\Configs as Configuring;
 use Bootgly\ABI\Data\URI;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Logs\Data\Display;
@@ -286,6 +288,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     *    body:string
     * }>
     */
+   #[Secret]
    private WeakMap $Encodings;
    // # Parked drain (adopted reactor)
    /** @var null|resource Episode notifier read end — the parked Fiber waits on it. */
@@ -2976,7 +2979,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     *
     * @return bool True if tests completed.
     */
-   public static function test (int $port = 9999, null|array $secure = null): bool
+   public static function test (int $port = 9999, #[SensitiveParameter] null|array $secure = null): bool
    {
       Display::show(Display::NONE);
 
@@ -3153,7 +3156,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     *
     * @return void
     */
-   protected static function testing (int $port, null|array $secure = null): void
+   protected static function testing (int $port, #[SensitiveParameter] null|array $secure = null): void
    {
       Display::show(Display::MESSAGE);
 

@@ -17,6 +17,7 @@ use function str_replace;
 use function str_starts_with;
 use function strpbrk;
 use InvalidArgumentException;
+use SensitiveParameter;
 
 
 /**
@@ -29,8 +30,11 @@ class Encoder
 {
    /**
     * Encode a command line: `VERB[ argument]\r\n`.
+    *
+    * The argument may carry AUTH credentials (`PLAIN <blob>`, `XOAUTH2
+    * <blob>`), so a stack trace never shows it.
     */
-   public function encode (string $verb, string $argument = ''): string
+   public function encode (string $verb, #[SensitiveParameter] string $argument = ''): string
    {
       // ? Guard: no CR/LF/NUL may reach the wire through a command element
       if (

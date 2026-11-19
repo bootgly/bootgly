@@ -55,6 +55,7 @@ use function umask;
 use function unlink;
 use InvalidArgumentException;
 use RuntimeException;
+use SensitiveParameter;
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Committing;
@@ -104,7 +105,7 @@ class File implements Committing
       $this->directory = self::configure(static::$path);
    }
 
-   public function read (string $sessionId): string|false
+   public function read (#[SensitiveParameter] string $sessionId): string|false
    {
       $revision = null;
 
@@ -112,7 +113,7 @@ class File implements Committing
    }
 
    public function fetch (
-      string $sessionId,
+      #[SensitiveParameter] string $sessionId,
       null|string &$revision = null,
    ): string|false
    {
@@ -130,7 +131,10 @@ class File implements Committing
       return $this->unpack($record, $revision);
    }
 
-   public function write (string $sessionId, string $sessionData): bool
+   public function write (
+      #[SensitiveParameter] string $sessionId,
+      #[SensitiveParameter] string $sessionData
+   ): bool
    {
       $revision = null;
 
@@ -138,8 +142,8 @@ class File implements Committing
    }
 
    public function commit (
-      string $sessionId,
-      string $sessionData,
+      #[SensitiveParameter] string $sessionId,
+      #[SensitiveParameter] string $sessionData,
       null|string &$revision,
    ): bool
    {
@@ -147,8 +151,8 @@ class File implements Committing
    }
 
    private function store (
-      string $sessionId,
-      string $sessionData,
+      #[SensitiveParameter] string $sessionId,
+      #[SensitiveParameter] string $sessionData,
       null|string &$revision,
       bool $conditional,
    ): bool
@@ -224,14 +228,14 @@ class File implements Committing
    }
 
    /** Encode one revision inside the HMAC-authenticated record body. */
-   private static function pack (string $sessionData, string $revision): string
+   private static function pack (#[SensitiveParameter] string $sessionData, string $revision): string
    {
       return self::RECORD_VERSION . $revision . $sessionData;
    }
 
    /** Decode a versioned record, or derive a stable revision for a legacy one. */
    private function unpack (
-      string $record,
+      #[SensitiveParameter] string $record,
       null|string &$revision = null,
    ): string|false
    {
@@ -271,7 +275,7 @@ class File implements Committing
    }
 
    /** Read and authenticate one opened record; optionally remove expiry. */
-   private function load (string $file, bool $remove): string|false
+   private function load (#[SensitiveParameter] string $file, bool $remove): string|false
    {
 
       // ! Owner-owned legacy 0644 files inside the already verified 0700
@@ -316,7 +320,7 @@ class File implements Committing
       return $payload !== '' ? $payload : false;
    }
 
-   public function touch (string $sessionId): bool
+   public function touch (#[SensitiveParameter] string $sessionId): bool
    {
       $file = $this->locate($sessionId);
       if ($file === '') {
@@ -345,7 +349,7 @@ class File implements Committing
       }
    }
 
-   public function revoke (string $sessionId, string $revision): bool
+   public function revoke (#[SensitiveParameter] string $sessionId, string $revision): bool
    {
       $file = $this->locate($sessionId);
       if ($file === '') {
@@ -386,7 +390,7 @@ class File implements Committing
       }
    }
 
-   public function destroy (string $sessionId): bool
+   public function destroy (#[SensitiveParameter] string $sessionId): bool
    {
       $file = $this->locate($sessionId);
       if ($file === '') {
@@ -457,7 +461,7 @@ class File implements Committing
    // ---
 
    /** Resolve a validated session ID against the current static configuration. */
-   protected static function resolve (string $sessionId): string
+   protected static function resolve (#[SensitiveParameter] string $sessionId): string
    {
       if (preg_match('/^[a-f0-9]{32,64}$/', $sessionId) !== 1) {
          return '';
@@ -480,7 +484,7 @@ class File implements Committing
    }
 
    /** Resolve a validated session ID inside this handler's pinned directory. */
-   private function locate (string $sessionId): string
+   private function locate (#[SensitiveParameter] string $sessionId): string
    {
       $this->activate();
 
@@ -729,7 +733,7 @@ class File implements Committing
     *
     * @param resource $Handle
     */
-   private static function persist (mixed $Handle, string $data): bool
+   private static function persist (mixed $Handle, #[SensitiveParameter] string $data): bool
    {
       $length = strlen($data);
       $offset = 0;
@@ -750,7 +754,7 @@ class File implements Committing
     *
     * @return resource|false
     */
-   private static function open (string $path, bool $repair = false): mixed
+   private static function open (#[SensitiveParameter] string $path, bool $repair = false): mixed
    {
       $before = self::inspect($path, $repair ? null : 0600);
       if ($before === false) {
@@ -795,7 +799,7 @@ class File implements Committing
     *
     * @return array<int|string,int>|false
     */
-   private static function inspect (string $path, null|int $mode): array|false
+   private static function inspect (#[SensitiveParameter] string $path, null|int $mode): array|false
    {
       clearstatcache(true, $path);
       $state = @lstat($path);
@@ -821,7 +825,7 @@ class File implements Committing
     * @param array<int|string,int>|null $before
     */
    private static function verify (
-      string $path,
+      #[SensitiveParameter] string $path,
       mixed $Handle,
       null|int $mode,
       null|array $before = null
@@ -856,7 +860,7 @@ class File implements Committing
     *
     * @param array<int|string,int> $state
     */
-   private static function compare (string $path, array $state): bool
+   private static function compare (#[SensitiveParameter] string $path, array $state): bool
    {
       clearstatcache(true, $path);
       $current = @lstat($path);

@@ -16,18 +16,32 @@ use function is_array;
 use function is_string;
 use function preg_match;
 use function strtolower;
-
 use InvalidArgumentException;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
+use Bootgly\WPI\Modules\HTTP;
 
+
+/**
+ * The header fields of an HTTP client request and their raw block.
+ *
+ * A debug dump never shows the credential fields (`HTTP::SECRET_HEADERS`)
+ * nor the raw block, which carries them.
+ */
 class Header
 {
+   use Redactable;
+
+
    // * Config
    // ...
 
    // * Data
    /** @var array<string,string|array<int,string>> */
+   #[Secret(HTTP::SECRET_HEADERS)]
    public array $fields;
+   #[Secret]
    public string $raw;
 
    // * Metadata

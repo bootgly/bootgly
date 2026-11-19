@@ -12,6 +12,7 @@ namespace Bootgly\ACI\Mail\SMTP_Client;
 
 
 use function base64_encode;
+use SensitiveParameter;
 
 
 /**
@@ -32,8 +33,11 @@ enum Mechanisms: string
     * by the caller.
     * XOAuth2: `base64("user=<username>\x01auth=Bearer <secret>\x01\x01")`
     * where `$secret` is the bearer token.
+    *
+    * `$secret` (the password or the bearer token) is never shown in a stack
+    * trace.
     */
-   public function encode (string $username, string $secret): string
+   public function encode (string $username, #[SensitiveParameter] string $secret): string
    {
       // :
       return match ($this) {

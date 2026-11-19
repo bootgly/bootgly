@@ -47,7 +47,10 @@ use Closure;
 use InvalidArgumentException;
 use JsonException;
 use RuntimeException;
+use SensitiveParameter;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\ABI\Resources\Cache as Storage;
 use Bootgly\ABI\Resources\Cache\Atomic;
 use Bootgly\ABI\Resources\Cache\Drivers\File;
@@ -74,12 +77,20 @@ use Bootgly\ABI\Resources\Cache\Drivers\Shared;
  */
 class Vault implements Cache
 {
+   use Redactable;
+
+
    // * Config
    public private(set) string $path;
    public private(set) string $prefix;
    public private(set) Storage $Storage;
 
    // * Data
+   /**
+    * The HMAC secret — given, or loaded from the per-host secret file on first
+    * use (`''` until then). A debug dump shows it redacted.
+    */
+   #[Secret]
    private string $secret = '';
    /**
     * Active transaction lock.
@@ -102,7 +113,8 @@ class Vault implements Cache
     * @param string $prefix Storage key prefix.
     * @param null|string $secret Shared HMAC secret (>= 32 bytes); null derives
     * a per-host secret file — allowed only for the host-local `file`,
-    * `memory` and `shared` drivers.
+    * `memory` and `shared` drivers. A sensitive parameter: exception traces
+    * never carry it.
     * @throws InvalidArgumentException When the prefix is empty or holds a
     * directory separator, the secret is shorter than 32 bytes, the driver is
     * not atomic, or an injected backend other hosts can reach (`redis`, a
@@ -112,7 +124,7 @@ class Vault implements Cache
    public function __construct (
       null|string|Storage $storage = null,
       string $prefix = 'jwt_',
-      null|string $secret = null
+      #[SensitiveParameter] null|string $secret = null
    )
    {
       // ?

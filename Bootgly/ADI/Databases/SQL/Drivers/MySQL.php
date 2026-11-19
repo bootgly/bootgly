@@ -590,12 +590,17 @@ class MySQL extends Driver
          ) & $server;
 
          $auth = $this->Authentication->scramble($plugin, $nonce);
-         fwrite($socket, $this->Encoder->encode(Encoder::RESPONSE, [
+         // ! Suppressed and checked: a failed write never throws with the
+         //   authentication packet in the frame of PHP's own fwrite()
+         $written = @fwrite($socket, $this->Encoder->encode(Encoder::RESPONSE, [
             'capabilities' => $capabilities,
             'auth' => $auth,
             'plugin' => $plugin,
             'config' => $this->Config,
          ], $Message->sequence + 1));
+         if ($written === false) {
+            return $Operation->fail('MySQL cancel authentication failed.');
+         }
 
          // @@ Authentication — fast paths only
          while (true) {
@@ -627,7 +632,10 @@ class MySQL extends Driver
                $plugin = substr($payload, 1, $stop - 1);
                $nonce = rtrim(substr($payload, $stop + 1), "\0");
                $auth = $this->Authentication->scramble($plugin, $nonce);
-               fwrite($socket, $this->Encoder->encode(Encoder::AUTH, $auth, $Message->sequence + 1));
+               $written = @fwrite($socket, $this->Encoder->encode(Encoder::AUTH, $auth, $Message->sequence + 1));
+               if ($written === false) {
+                  return $Operation->fail('MySQL cancel authentication failed.');
+               }
 
                continue;
             }
@@ -641,7 +649,10 @@ class MySQL extends Driver
          }
 
          // @ KILL QUERY — advisory; the main operation resolves on its own socket
-         fwrite($socket, $this->Encoder->encode(Encoder::QUERY, "KILL QUERY {$this->thread}"));
+         $written = @fwrite($socket, $this->Encoder->encode(Encoder::QUERY, "KILL QUERY {$this->thread}"));
+         if ($written === false) {
+            return $Operation;
+         }
          $Message = $this->pull($socket, $Decoder, $Queue);
 
          // ? Only an OK means the server took the kill. Refused, the command

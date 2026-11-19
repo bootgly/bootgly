@@ -19,7 +19,10 @@ use function json_encode;
 use InvalidArgumentException;
 use JsonException;
 use RuntimeException;
+use SensitiveParameter;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\API\Security\JWT\Failures;
 use Bootgly\API\Security\JWT\Header;
 use Bootgly\API\Security\JWT\Key;
@@ -43,13 +46,18 @@ use Bootgly\API\Security\JWT\Verification;
  */
 class JWT
 {
+   use Redactable;
+
+
    // * Config
    /**
       * Backwards-compatible key material mirror for legacy HS256 consumers.
       *
       * Asymmetric JWT instances expose `null`; RS256 callers should use `Key`
-      * objects instead of treating RSA material as a shared secret.
+      * objects instead of treating RSA material as a shared secret. A debug
+      * dump shows it redacted.
     */
+   #[Secret]
    public private(set) null|string $secret;
 
    // * Data
@@ -99,7 +107,7 @@ class JWT
     *
     * @throws InvalidArgumentException When the algorithm or key is unsafe.
     */
-   public function __construct (#[\SensitiveParameter] string|KeyResolver $secret, string $algorithm = 'HS256')
+   public function __construct (#[SensitiveParameter] string|KeyResolver $secret, string $algorithm = 'HS256')
    {
       // * Data
       $this->algorithm = $algorithm;
@@ -253,8 +261,10 @@ class JWT
 
    /**
     * Inspect a compact JWT and return a typed verification result.
+    *
+    * The token is a sensitive parameter: exception traces never carry it.
     */
-   public function inspect (string $token, null|Policies $Policies = null): Verification
+   public function inspect (#[SensitiveParameter] string $token, null|Policies $Policies = null): Verification
    {
       // ! Segments
       $parts = explode('.', $token);
@@ -337,9 +347,11 @@ class JWT
    /**
     * Verify a compact JWT and return trusted claims.
     *
+    * The token is a sensitive parameter: exception traces never carry it.
+    *
     * @return array<string,mixed>|null
     */
-   public function verify (string $token): null|array
+   public function verify (#[SensitiveParameter] string $token): null|array
    {
       $Verification = $this->inspect($token);
 

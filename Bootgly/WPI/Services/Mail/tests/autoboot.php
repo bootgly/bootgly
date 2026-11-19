@@ -15,5 +15,7 @@ return new Suite(
    suiteName: __NAMESPACE__,
    tests: [
       '1.1-messenger',
+      // # 1.4.0: secrets stay out of debug dumps and exception traces
+      '1.2-boot_trace_redaction',
    ]
 );

@@ -23,6 +23,8 @@ use function preg_match;
 use InvalidArgumentException;
 use RuntimeException;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\API\Environment\Configs\Config;
 use Bootgly\API\Environment\Configs\Schema;
@@ -44,16 +46,22 @@ use Bootgly\API\Environment\Configs\Scopes;
  * `Config`; `Configs::get()` is intentionally scope-only.
  *
  * Security: `<scope>.Config.php` is trusted PHP code executed with `require`.
- * See `docs/TRUST_BOUNDARY.md`.
+ * See `docs/TRUST_BOUNDARY.md`. The local `.env` map never shows in a debug
+ * dump of the loader; a value a scope binds is held — and dumped — by its
+ * `Config` node.
  */
 class Configs
 {
+   use Redactable;
+
+
    // * Config
    public protected(set) string $basedir;
 
    // * Data
    public Scopes $Scopes;
-   /** @var array<string,string> */
+   /** @var array<string,string> Every `.env` value of the scope being loaded. */
+   #[Secret]
    private array $variables = [];
    /** @var array<string,array<string,true>> */
    private array $allowed = [];

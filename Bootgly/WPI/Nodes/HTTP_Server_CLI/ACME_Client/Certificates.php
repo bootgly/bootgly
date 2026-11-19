@@ -83,6 +83,7 @@ use InvalidArgumentException;
 use JsonException;
 use OpenSSLCertificateSigningRequest;
 use RuntimeException;
+use SensitiveParameter;
 use Throwable;
 
 
@@ -321,8 +322,8 @@ class Certificates
       string $generation,
       string $certificate,
       null|string $key,
-      string $certificatePEM,
-      string $keyPEM,
+      #[SensitiveParameter] string $certificatePEM,
+      #[SensitiveParameter] string $keyPEM,
       string $certificateHash,
       null|string $keyHash,
       bool $bootstrap,
@@ -540,7 +541,7 @@ class Certificates
     *                                   be covered by the leaf (empty skips
     *                                   the coverage check).
     */
-   public function install (string $fullchain, string $key, array $domains = []): void
+   public function install (string $fullchain, #[SensitiveParameter] string $key, array $domains = []): void
    {
       if (strlen($fullchain) > self::MAX_CERTIFICATE_BYTES || strlen($key) > self::MAX_KEY_BYTES) {
          throw new RuntimeException('ACME install rejected an oversized certificate chain or private key.');
@@ -830,7 +831,7 @@ class Certificates
     *
     * @return array<int,string>
     */
-   private function split (string $bundle, bool $combined = false): array
+   private function split (#[SensitiveParameter] string $bundle, bool $combined = false): array
    {
       $pattern = '/-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----\s*/s';
       $count = preg_match_all($pattern, $bundle, $matches);
@@ -950,7 +951,7 @@ class Certificates
    }
 
    /** Create one new regular file with its mode set before any bytes. */
-   private function write (string $file, string $contents, int $mode): void
+   private function write (string $file, #[SensitiveParameter] string $contents, int $mode): void
    {
       if ($this->contain($file) === false) {
          throw new RuntimeException("ACME storage file `{$file}` is outside the safe boundary.");

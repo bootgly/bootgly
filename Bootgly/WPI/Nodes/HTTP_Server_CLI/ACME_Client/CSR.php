@@ -29,6 +29,8 @@ use function unlink;
 use OpenSSLCertificateSigningRequest;
 use RuntimeException;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 use Bootgly\API\Security\JWT\Segments;
 
 
@@ -41,6 +43,9 @@ use Bootgly\API\Security\JWT\Segments;
  */
 class CSR
 {
+   use Redactable;
+
+
    // * Config
    /**
     * SAN domain set; `domains[0]` is the Common Name.
@@ -54,8 +59,10 @@ class CSR
 
    // * Metadata
    /**
-    * The certificate private key PEM (fresh per CSR).
+    * The certificate private key PEM (fresh per CSR) — masked in a debug
+    * dump, which never runs this hook.
     */
+   #[Secret]
    public private(set) string $key {
       get {
          if (isSet($this->key) === false) {

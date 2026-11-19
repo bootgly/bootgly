@@ -26,6 +26,7 @@ use function str_contains;
 use function strlen;
 use function strtolower;
 use InvalidArgumentException;
+use SensitiveParameter;
 
 use Bootgly\ADI\Databases\SQL\Config;
 
@@ -64,8 +65,11 @@ class Encoder
 
    /**
     * Encode a PostgreSQL frontend message.
+    *
+    * The payload stays out of a stack trace: it may be the password, the
+    * SCRAM proof or the cancellation key.
     */
-   public function encode (string $message, mixed $payload = null): string
+   public function encode (string $message, #[SensitiveParameter] mixed $payload = null): string
    {
       return match ($message) {
          self::STARTUP => $this->start($payload),
@@ -133,7 +137,7 @@ class Encoder
    /**
     * Encode a CancelRequest packet.
     */
-   private function cancel (mixed $payload): string
+   private function cancel (#[SensitiveParameter] mixed $payload): string
    {
       if (is_array($payload) === false || is_int($payload['process'] ?? null) === false || is_int($payload['secret'] ?? null) === false) {
          throw new InvalidArgumentException('PostgreSQL CancelRequest payload must contain process and secret integers.');
@@ -170,7 +174,7 @@ class Encoder
    /**
     * Encode a PasswordMessage.
     */
-   private function authenticate (mixed $payload): string
+   private function authenticate (#[SensitiveParameter] mixed $payload): string
    {
       if (is_string($payload) === false) {
          throw new InvalidArgumentException('PostgreSQL password payload must be a string.');
@@ -201,7 +205,7 @@ class Encoder
    /**
     * Encode a SASLResponse message.
     */
-   private function reply (mixed $payload): string
+   private function reply (#[SensitiveParameter] mixed $payload): string
    {
       if (is_string($payload) === false) {
          throw new InvalidArgumentException('PostgreSQL SASL response payload must be a string.');

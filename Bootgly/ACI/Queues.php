@@ -11,6 +11,8 @@
 namespace Bootgly\ACI;
 
 
+use SensitiveParameter;
+
 use Bootgly\ACI\Queues\Config;
 use Bootgly\ACI\Queues\Drivers;
 use Bootgly\ACI\Queues\Queue;
@@ -36,9 +38,9 @@ class Queues
 
 
    /**
-    * @param array<string,mixed>|Config $config
+    * @param array<string,mixed>|Config $config The options or a prepared Config — never shown in a stack trace.
     */
-   public function __construct (array|Config $config = [])
+   public function __construct (#[SensitiveParameter] array|Config $config = [])
    {
       // * Config
       $this->Config = $config instanceof Config

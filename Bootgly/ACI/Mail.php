@@ -11,6 +11,8 @@
 namespace Bootgly\ACI;
 
 
+use SensitiveParameter;
+
 use Bootgly\ACI\Mail\Config;
 use Bootgly\ACI\Mail\Message;
 use Bootgly\ACI\Mail\Receipt;
@@ -35,9 +37,9 @@ class Mail
 
 
    /**
-    * @param array<string,mixed>|Config $config
+    * @param array<string,mixed>|Config $config The options or a prepared Config — never shown in a stack trace.
     */
-   public function __construct (array|Config $config = [])
+   public function __construct (#[SensitiveParameter] array|Config $config = [])
    {
       // * Config
       $this->Config = $config instanceof Config ? $config : new Config($config);

@@ -12,9 +12,12 @@ namespace Bootgly\WPI\Interfaces\TCP_Client_CLI;
 
 
 use ArgumentCountError;
+use SensitiveParameter;
 
 use Bootgly\ABI\Argument;
 use Bootgly\ABI\Configs as Configuring;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
 
 
 /**
@@ -27,9 +30,15 @@ use Bootgly\ABI\Configs as Configuring;
  * a positional `new Configs('127.0.0.1', 8080)` is rejected by the engine
  * (and flagged by static analysis) before it can silently bind the wrong
  * values.
+ *
+ * The `passphrase` of the `secure` context never reaches a debug dump nor a
+ * stack trace of its constructor.
  */
 class Configs implements Configuring
 {
+   use Redactable;
+
+
    // * Config
    /** Domain name or IP address to connect to. */
    public private(set) string $host;
@@ -38,6 +47,7 @@ class Configs implements Configuring
    /** Number of worker processes to fork. */
    public private(set) int $workers;
    /** @var null|array<string,mixed> Secure SSL/TLS Stream Context options. */
+   #[Secret(['passphrase'])]
    public private(set) null|array $secure;
 
 
@@ -52,7 +62,7 @@ class Configs implements Configuring
       null|string $host = null,
       null|int $port = null,
       int $workers = 0,
-      null|array $secure = null
+      #[SensitiveParameter] null|array $secure = null
    )
    {
       // ? Required — the guard slot forces every parameter to be optional, so

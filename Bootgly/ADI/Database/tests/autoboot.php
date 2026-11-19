@@ -190,5 +190,9 @@ return new Suite(
       '7.42-postgresql_bytea_formats',
       // # 1.2.0: TLS `verify`/`name` flags read the strict boolean caster
       '1.5-config_secure_flag_forms',
+      // # 1.4.0: secrets stay out of debug dumps and exception traces
+      '11.1-redaction_dumps',
+      '11.2-redaction_config_traces',
+      '11.3-redaction_wire_traces',
    ]
 );

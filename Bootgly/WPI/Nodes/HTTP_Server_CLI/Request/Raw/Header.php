@@ -21,11 +21,17 @@ use function strtolower;
 use function substr;
 use function trim;
 
+use Bootgly\ABI\Debugging\Data\Vars\Redactable;
+use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
+use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header\Cookies;
 
 
 class Header
 {
+   use Redactable;
+
+
    // * Config
    // ... inherited
 
@@ -41,13 +47,21 @@ class Header
     * CPU). External reads (`$Header->fields`) fall back to `__get`, which
     * keeps the lazy `build()` semantics.
     *
+    * A debug dump masks the credential fields (`HTTP::SECRET_HEADERS`).
+    *
     * @var array<string, string|array<int,string>>
     */
+   #[Secret(HTTP::SECRET_HEADERS)]
    protected array $fields;
    // ! `protected(set)` (not readonly): the per-connection Request reuse
    //   (`Request::assume()`) re-populates these on every served request —
    //   readonly would pin the first request's head forever. External
    //   immutability is preserved by the asymmetric visibility.
+   /**
+    * The raw header block — masked whole in a debug dump: it carries the
+    * credential fields too.
+    */
+   #[Secret]
    public protected(set) string $raw;
 
    // * Metadata

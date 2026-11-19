@@ -11,6 +11,8 @@
 namespace Bootgly\WPI\Services\Mail;
 
 
+use SensitiveParameter;
+
 use Bootgly\ACI\Mail;
 use Bootgly\ACI\Mail\Config;
 use Bootgly\ACI\Mail\Message;
@@ -40,7 +42,7 @@ class Messenger
     *
     * @param array<string,mixed>|Config|Mail $config Mail (SMTP) config array, a prepared Config, or an existing mailer.
     */
-   public function __construct (array|Config|Mail $config = [])
+   public function __construct (#[SensitiveParameter] array|Config|Mail $config = [])
    {
       // * Data
       $this->Mail = $config instanceof Mail ? $config : new Mail($config);

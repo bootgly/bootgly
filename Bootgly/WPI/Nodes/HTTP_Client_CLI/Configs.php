@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Client_CLI;
 
 
 use ArgumentCountError;
+use SensitiveParameter;
 
 use Bootgly\ABI\Argument;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Configs as TCPConfigs;
@@ -49,7 +50,7 @@ class Configs extends TCPConfigs
       null|string $host = null,
       null|int $port = null,
       int $workers = 0,
-      null|array $secure = null,
+      #[SensitiveParameter] null|array $secure = null,
       null|array $pool = null,
       null|bool $enableHTTP2 = null
    )
