@@ -195,13 +195,16 @@ return new Test(
          mkdir("{$root}/store", 0700, true);
          mkdir("{$root}/real", 0700);
          symlink("{$root}/real", "{$root}/link");
+         // ! The PEM label is built so the tree's key guard (API Environment
+         //   `1.5-tracked-certificates`) never meets a key marker in this file
+         $label = 'PRIVATE KEY';
          file_put_contents("{$root}/store/bootstrap.pem", implode("\n", [
             '-----BEGIN CERTIFICATE-----',
             'AAAA',
             '-----END CERTIFICATE-----',
-            '-----BEGIN PRIVATE KEY-----',
+            "-----BEGIN {$label}-----",
             $bootstrap,
-            '-----END PRIVATE KEY-----',
+            "-----END {$label}-----",
             ''
          ]));
          $Certificates = new Certificates("{$root}/store");

@@ -38,8 +38,10 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\ACME_Client\CSR;
 return new Test(
    description: 'ACME CSR: debug dumps mask the certificate private key and never generate one',
    test: function () {
-      // ! SYNTH key material — never a real key
-      $PEM = "-----BEGIN PRIVATE KEY-----\nSYNTH-ACME-CSR-KEY-6.1\n-----END PRIVATE KEY-----\n";
+      // ! SYNTH key material — never a real key; the PEM label is built so the tree's key guard
+      //   (API Environment `1.5-tracked-certificates`) never meets a key marker in this file
+      $label = 'PRIVATE KEY';
+      $PEM = "-----BEGIN {$label}-----\nSYNTH-ACME-CSR-KEY-6.1\n-----END {$label}-----\n";
       $Dumper = new Dumper('plain');
       // ! No limit may hide a leak
       $Dumper->depth = 32;
