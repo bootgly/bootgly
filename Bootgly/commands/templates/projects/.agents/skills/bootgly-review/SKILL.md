@@ -93,6 +93,8 @@ git diff HEAD | grep -niE '^\+.*(password|passwd|secret|token|api_?key)'
 ```
 
 A hit blocks when a credential is written into code or config instead of bound to an environment key.
+So does a class storing one without `Redactable` + `#[Secret]` on that property, a parameter carrying
+one without `#[SensitiveParameter]` (resolver closures too), or such a URL shown or logged raw.
 
 **Never guessed** — Workflow_pipelines.md › Think before coding: find every Bootgly class, method,
 named argument, enum case and config key the change uses in the pinned source under

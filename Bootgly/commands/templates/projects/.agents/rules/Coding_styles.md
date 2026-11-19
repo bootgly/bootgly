@@ -3,10 +3,9 @@
 ## Checked by `bootgly lint check`
 
 - **SHOULD** — Run `bootgly lint check` from the project (`--fix` rewrites what it can) and keep it
-  clean. It enforces what `projects/bootgly.Lint.php` enables — by default every rule: imports of
-  global constants and functions, nullable types (`null|Type`), no constructor property promotion,
-  one space before a declaration's parameter list, single-verb method names, the casing of object and
-  acronym names, and property sections. Its report says how to fix each issue. A rule you must break
+  clean. It enforces what `projects/bootgly.Lint.php` enables — by default every rule: global imports,
+  `null|Type`, no constructor promotion, declaration spacing, single-verb methods, object and acronym
+  casing, property sections. Its report says how to fix each issue. A rule you must break
   is waived in that file with a reason (an exemption), never ignored.
 - **SHOULD** — Global classes are imported too (`use DateTime;`): lint checks only constants and
   functions. A file without a namespace (a route set, a test, the `.Project.php`) imports nothing.

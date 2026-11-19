@@ -1,8 +1,8 @@
 # Architecture principles
 
 Bootgly serves two platforms from one core through two interfaces: **CLI** (Command Line Interface)
-gives rise to the **Console** platform — console applications — and **WPI** (Web Programming
-Interface) to the **Web** platform — web (HTTP) servers. A project picks its interface with
+gives rise to the **Console** platform and **WPI** (Web Programming Interface) to the **Web**
+platform — HTTP servers. A project picks its interface with
 `projects create <Name> --interfaces=CLI|WPI`; the optional `Console/` and `Web/` platform packages add
 opinionated extras on top.
 
@@ -49,7 +49,7 @@ opinionated extras on top.
   returns it.
 - **RECOMMEND** — Expose state in this order: an asymmetric-visibility property
   (`public private(set)`), then a property hook for computed, aliased or lazy state (a get-only hook
-  is already read-only: declare it plain `public`; a lazy hook that stores into its property pairs with
-  `public private(set)`), then a method — only when real behaviour exists.
+  is plain `public`; a lazy hook storing into its property is `public private(set)`), then a method —
+  only when real behaviour exists.
 - **RECOMMEND** — Prefer the simplest, lowest-overhead design at equal clarity; never trade clarity,
   security or a framework contract for speed.

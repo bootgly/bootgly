@@ -53,6 +53,9 @@
 
 - **MUST** — Never hard-code credentials: bind them to environment keys with `Config`
   (`->bind(key: 'DB_PASSWORD', default: '')`), and never commit a `configs/**/.env` file.
+- **MUST** — Keep secrets out of dumps and traces: a class storing one uses the `Redactable` trait
+  with `#[Secret]` on that property; a parameter carrying one (resolver closures too) takes
+  `#[SensitiveParameter]`; show or log a credential-bearing URL only through `URI::redact()`.
 - **SHOULD** — Commit only when asked; an approval covers that commit only; never push unless asked.
 - **RECOMMEND** — Follow the project's commit convention; with none, use Conventional Commits
   (`feat(cart): add item quantities`).
