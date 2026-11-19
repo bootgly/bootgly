@@ -10,21 +10,30 @@
 
 // Bootgly CI — announcement of a stable release on Bootgly's social channels.
 //
-// Reads the release `TAG` from the GitHub API, builds one short English message
-// from its notes — the `> Focus:` line and what `## Changes` lists — and posts
-// it on every network named in `NETWORKS`. A network that fails, or whose
+// Builds one short English message and posts it on every network named in
+// `NETWORKS`:
+//   PATCH        from the release notes: the `> Focus:` line and the bold
+//                leads of `## Changes`, listed as Fixes, with the release link.
+//   MINOR/MAJOR  from the release post on the blog (`POST`, its slug), once the
+//                website serves it: its summary and, like the post, Features,
+//                Improvements and Fixes, with the post and release links.
+// A MINOR/MAJOR release event posts nothing: the publication of its blog post
+// dispatches its announcement, the only one. A network that fails, or whose
 // secret is not set, does not stop the next one; the run fails at the end when
 // any did. `DRY_RUN` (any non-empty value) prints each payload instead of
 // posting it, and needs no secret.
 //
 // Environment:
 //   TAG                  release tag, `vX.Y.Z` (a pre-release is refused)
+//   POST                 slug of the release post on bootgly.com/blog (MINOR/MAJOR)
+//   WAIT                 seconds to wait for the website to serve POST (default: 900)
 //   NETWORKS             comma-separated: telegram, discord
 //   DRY_RUN              non-empty: print, never post
 //   GITHUB_REPOSITORY    owner/name (default: bootgly/bootgly)
+//   GITHUB_EVENT_NAME    set by GitHub Actions (`release` on a published release)
 //   GH_TOKEN             optional GitHub token (raises the API rate limit)
-//   TELEGRAM_BOT_TOKEN   token of a bot that is an administrator of TELEGRAM_CHAT
-//   TELEGRAM_CHAT        channel username or id (default: @bootgly)
+//   TELEGRAM_BOT_TOKEN   token of a bot allowed to post in TELEGRAM_CHAT
+//   TELEGRAM_CHAT        channel or group username, or id (default: @bootgly)
 //   DISCORD_WEBHOOK_URL  webhook of the Discord announcements channel
 
 
@@ -84,54 +93,167 @@ function request (
 }
 
 /**
- * Extracts the focus line and the list of changes from release notes.
+ * Cleans Markdown for line-based reading: LF line breaks, no fenced code block
+ * (a `## ` inside one is not a heading), links reduced to their text outside
+ * code spans.
  *
- * A MINOR or MAJOR release groups its changes under `###` headings (the
- * catch-all `Also` is left out); a PATCH release lists them as bullets led by
- * a bold sentence — a bold label (`**Removed:**`) or an upgrade note
- * (`**Upgrading from …**`) is not a change.
+ * A fence follows CommonMark, as the website renders the post: up to 3 spaces
+ * of indent, a backtick fence's info string has no backtick (` ```x``` ` is a
+ * code span), and it closes on a line of the same character at least as long.
+ * A fence that never closes is kept rather than swallowing the sections after
+ * it. A code span is kept as is; a link, whose text may hold code spans or a
+ * lone backtick but no bracket, becomes its text (atomic groups: linear on any
+ * input).
+ */
+function clean (string $markdown): string
+{
+   $markdown = str_replace("\r\n", "\n", $markdown);
+   $markdown = preg_replace(
+      '/^ {0,3}(?:(`{3,})[^`\n]*|(~{3,})[^\n]*)\n.*?^ {0,3}(?:\1`*|\2~*)[ \t]*$/ms',
+      '',
+      $markdown
+   ) ?? $markdown;
+
+   // :
+   return preg_replace_callback(
+      '/(`[^`\n]+`)|!?\[((?>`[^`\n]+`|[^\[\]`\n]+|`)*+)\]\((?>[^()\s]+|\([^()\s]*\))*+(?:\s+"[^"\n]*")?\)/',
+      static fn (array $match): string => $match[1] !== '' ? $match[1] : $match[2],
+      $markdown
+   ) ?? $markdown;
+}
+
+/**
+ * Collects the bold leads of the top-level bullets of a Markdown section.
  *
- * @return array{focus: string, changes: list<string>}
+ * A bold label (`**Removed:**`) or an upgrade note (`**Upgrading from …**`) is
+ * not a change; a `**` inside a code span never ends a lead.
+ *
+ * @return list<string>
+ */
+function collect (string $section): array
+{
+   $leads = [];
+
+   preg_match_all('/^- \*\*((?:`[^`]*`|[^`*]|\*(?!\*))+)\*\*/m', $section, $matches);
+   // @@
+   foreach ($matches[1] as $lead) {
+      $lead = rtrim($lead, ' .');
+      if (str_ends_with($lead, ':') || str_starts_with($lead, 'Upgrading')) {
+         continue;
+      }
+      $leads[] = $lead;
+   }
+
+   // :
+   return $leads;
+}
+
+/**
+ * Splits Markdown into its `## ` sections, keyed by heading.
+ *
+ * @return array<string,string>
+ */
+function divide (string $markdown): array
+{
+   $sections = [];
+
+   preg_match_all('/^## (.+?)[ \t]*\n(.*?)(?=^## |\z)/ms', $markdown, $matches, PREG_SET_ORDER);
+   // @@
+   foreach ($matches as $match) {
+      $sections[$match[1]] ??= $match[2];
+   }
+
+   // :
+   return $sections;
+}
+
+/**
+ * Extracts the summary and the fixes from the notes of a PATCH release.
+ *
+ * @return array{string, list<array{string, list<string>}>}
  */
 function parse (string $notes): array
 {
    // ! GitHub stores release bodies with CRLF line breaks
-   $notes = str_replace("\r\n", "\n", $notes);
+   $notes = clean($notes);
    $focus = '';
-   $changes = [];
 
    // @
    if (preg_match('/^> Focus: \*\*(.+?)\*\*[ \t]*$/m', $notes, $matches) === 1) {
       $focus = trim($matches[1]);
    }
+   $fixes = collect(divide($notes)['Changes'] ?? '');
 
-   if (preg_match('/^## Changes[ \t]*\n(.*?)(?=^## |\z)/ms', $notes, $matches) === 1) {
-      $section = $matches[1];
+   // :
+   return [$focus, $fixes !== [] ? [['🐛 Fixes', cap($fixes, 8)]] : []];
+}
 
-      preg_match_all('/^### (.+?)[ \t]*$/m', $section, $headings);
-      // @@
-      foreach ($headings[1] as $heading) {
-         if (strcasecmp($heading, 'Also') !== 0) {
-            $changes[] = $heading;
-         }
-      }
+/**
+ * Outlines a release post as the website serves it in Markdown: its summary,
+ * the titles of its Features, each Improvements subsection with its leads, and
+ * the leads of its Fixes.
+ *
+ * @return array{string, list<array{string, list<string>}>}
+ */
+function outline (string $post): array
+{
+   // ! The served Markdown opens with the title, then the description quoted
+   $post = clean($post);
+   $summary = '';
+   if (preg_match('/^> (.+?)[ \t]*$/m', $post, $matches) === 1) {
+      $summary = $matches[1];
+   }
+   $parts = divide($post);
+   $sections = [];
 
-      // ? No heading: a PATCH release
-      if ($changes === []) {
-         preg_match_all('/^- \*\*((?:`[^`]*`|[^`*]|\*(?!\*))+)\*\*/m', $section, $leads);
-         // @@
-         foreach ($leads[1] as $lead) {
-            $lead = rtrim($lead, ' .');
-            if (str_ends_with($lead, ':') || str_starts_with($lead, 'Upgrading')) {
-               continue;
-            }
-            $changes[] = $lead;
-         }
-      }
+   // @ Features: one line per feature
+   preg_match_all('/^### (.+?)[ \t]*$/m', $parts['Features'] ?? '', $matches);
+   if ($matches[1] !== []) {
+      $sections[] = ['✨ Features', cap($matches[1], 8)];
+   }
+
+   // @ Improvements: one line per area (`Performance: …`)
+   $improvements = [];
+   preg_match_all('/^### (.+?)[ \t]*\n(.*?)(?=^### |\z)/ms', $parts['Improvements'] ?? '', $matches, PREG_SET_ORDER);
+   // @@
+   foreach ($matches as $match) {
+      $leads = implode(', ', collect($match[2]));
+      $improvements[] = $leads !== '' ? "{$match[1]}: {$leads}" : $match[1];
+   }
+   if ($improvements !== []) {
+      $sections[] = ['⚡ Improvements', $improvements];
+   }
+
+   // @ Fixes: the first ones, then a pointer to the rest
+   $fixes = collect($parts['Fixes'] ?? '');
+   if ($fixes !== []) {
+      $sections[] = ['🐛 Fixes', cap($fixes, 3)];
    }
 
    // :
-   return ['focus' => $focus, 'changes' => $changes];
+   return [$summary, $sections];
+}
+
+/**
+ * Caps a list at `$limit` lines: past it, `$limit - 1` items and a pointer to the rest (never "1 more").
+ *
+ * @param list<string> $items
+ *
+ * @return list<string>
+ */
+function cap (array $items, int $limit): array
+{
+   // ?:
+   if (count($items) <= $limit) {
+      return $items;
+   }
+
+   $hidden = count($items) - ($limit - 1);
+   $items = array_slice($items, 0, $limit - 1);
+   $items[] = "…and {$hidden} more";
+
+   // :
+   return $items;
 }
 
 /**
@@ -166,8 +288,11 @@ function escape (string $text): string
 
 // ! Environment
 $tag = (string) getenv('TAG');
+$post = (string) getenv('POST');
+$wait = (int) (getenv('WAIT') ?: 900);
 $repository = (string) getenv('GITHUB_REPOSITORY');
 $repository = $repository !== '' ? $repository : 'bootgly/bootgly';
+$event = (string) getenv('GITHUB_EVENT_NAME');
 $networks = array_values(array_unique(array_filter(array_map('trim', explode(',', (string) getenv('NETWORKS'))))));
 $dry = (string) getenv('DRY_RUN') !== '';
 $supported = ['telegram', 'discord'];
@@ -187,6 +312,31 @@ if ($networks === [] || $unknown !== []) {
    report('error', "NETWORKS must list some of: {$listed}.");
    exit(1);
 }
+if ($post !== '' && preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/D', $post) !== 1) {
+   report('error', "POST must be a blog post slug, got '{$post}'.");
+   exit(1);
+}
+
+$kind = match (true) {
+   (int) $version[3] > 0 => 'patch',
+   (int) $version[2] > 0 => 'minor',
+   default => 'major',
+};
+// ? A PATCH release has no blog post; a MINOR/MAJOR one is announced from it
+if ($kind === 'patch' && $post !== '') {
+   report('error', "{$tag} is a patch release: it is announced from its notes, without POST.");
+   exit(1);
+}
+if ($kind !== 'patch' && $post === '') {
+   // ?: Its post's publication announces it
+   if ($event === 'release') {
+      report('notice', "{$tag} is a {$kind} release: its blog post announces it. If the post was published before this release, its Announce run failed: re-run its failed jobs (past 30 days, dispatch this workflow with the tag and the post).");
+      exit(0);
+   }
+
+   report('error', "{$tag} is a {$kind} release: name its blog post in POST.");
+   exit(1);
+}
 
 // ---
 
@@ -202,77 +352,100 @@ if ($token !== '') {
 }
 [$status, $response, $error] = request('GET', "https://api.github.com/repos/{$repository}/releases/tags/{$tag}", $headers);
 $release = json_decode($response, true);
+// ! A post published before its release: this run announces it once re-run
+$later = $post !== '' ? ' Publish it as a stable release, then re-run the failed jobs of this run.' : '';
 if ($status !== 200 || is_array($release) === false) {
-   report('error', "Release {$tag} of {$repository} not found (HTTP {$status}) {$error}");
+   $cause = trim("HTTP {$status} {$error}");
+   report('error', "Release {$tag} of {$repository} not found ({$cause}).{$later}");
    exit(1);
 }
 // ? The tag says stable; the release must say it too
 if (($release['draft'] ?? true) !== false || ($release['prerelease'] ?? true) !== false) {
-   report('error', "Release {$tag} is a draft or a pre-release: only stable releases are announced.");
+   report('error', "Release {$tag} is a draft or a pre-release: only stable releases are announced.{$later}");
    exit(1);
 }
-
 $URL = $release['html_url'] ?? null;
 $URL = is_string($URL) ? $URL : "https://github.com/{$repository}/releases/tag/{$tag}";
-$notes = $release['body'] ?? null;
-['focus' => $focus, 'changes' => $changes] = parse(is_string($notes) ? $notes : '');
-$kind = match (true) {
-   (int) $version[3] > 0 => 'patch',
-   (int) $version[2] > 0 => 'minor',
-   default => 'major',
-};
-$upgrade = "bootgly kit upgrade {$tag}";
 
-// ! At most 8 changes; past that, 7 and a pointer to the rest (never "1 more")
-$shown = array_slice($changes, 0, count($changes) > 8 ? 7 : 8);
-$hidden = count($changes) - count($shown);
+// @ Content
+if ($post === '') {
+   $notes = $release['body'] ?? null;
+   [$summary, $sections] = parse(is_string($notes) ? $notes : '');
+   $link = $URL;
+}
+else {
+   // ! A push to the website deploys in minutes: wait until it serves the post
+   $link = "https://bootgly.com/blog/{$post}/";
+   $deadline = time() + $wait;
+   // @@
+   while (true) {
+      [$status, $markdown, $error] = request('GET', "{$link}index.md", ['User-Agent: bootgly-announce']);
+      if ($status === 200 && str_starts_with($markdown, '# ')) {
+         break;
+      }
+      if (time() >= $deadline) {
+         $cause = trim("HTTP {$status} {$error}");
+         report('error', "The website did not serve {$link} within {$wait} s ({$cause}). Once it serves the post (a failed deploy fixed by a later push is not dispatched again), re-run this failed job.");
+         exit(1);
+      }
+      sleep(30);
+   }
+   [$summary, $sections] = outline($markdown);
+   if ($sections === []) {
+      report('error', "{$link} has no Features, Improvements or Fixes to announce.");
+      exit(1);
+   }
+}
+$upgrade = "bootgly kit upgrade {$tag}";
 
 // ---
 
 // @ Messages
-// # Telegram (HTML parse mode, 4096 characters)
+// # Telegram (HTML parse mode, 4096 characters): the preview shows the post,
+//   or the release when there is no post
 $lines = ["🚀 <b>Bootgly {$tag} is out</b> — a {$kind} release"];
-if ($focus !== '') {
+if ($summary !== '') {
    $lines[] = '';
-   $lines[] = escape($focus);
+   $lines[] = escape($summary);
 }
-if ($shown !== []) {
+// @@
+foreach ($sections as [$title, $items]) {
    $lines[] = '';
-   $lines[] = "<b>What's new</b>";
-   // @@
-   foreach ($shown as $change) {
-      $escaped = escape($change);
+   $lines[] = "<b>{$title}</b>";
+   foreach ($items as $item) {
+      $escaped = escape($item);
       $lines[] = "• {$escaped}";
-   }
-   if ($hidden > 0) {
-      $lines[] = "• …and {$hidden} more in the notes";
    }
 }
 $lines[] = '';
 $lines[] = "Upgrade: <code>{$upgrade}</code>";
-$lines[] = "Release notes: {$URL}";
+if ($post !== '') {
+   $lines[] = "📝 Blog: {$link}";
+}
+$lines[] = "📦 Release notes: {$URL}";
 $telegram = implode("\n", $lines);
 
-// # Discord (message content, 2000 characters): the release link at the end
-//   unfurls into GitHub's release card, like a link posted by hand
-$lines = ["🚀 **Bootgly {$tag} is out** — a {$kind} release", ''];
-if ($focus !== '') {
-   $lines[] = $focus;
+// # Discord (message content, 2000 characters): the first link unfurls into
+//   its card, like a link posted by hand; `<…>` keeps the release link a link
+$lines = ["🚀 **Bootgly {$tag} is out** — a {$kind} release"];
+if ($summary !== '') {
    $lines[] = '';
+   $lines[] = $summary;
 }
-if ($shown !== []) {
-   $lines[] = "**What's new**";
-   // @@
-   foreach ($shown as $change) {
-      $lines[] = "• {$change}";
-   }
-   if ($hidden > 0) {
-      $lines[] = "• …and {$hidden} more in the notes";
-   }
+// @@
+foreach ($sections as [$title, $items]) {
    $lines[] = '';
+   $lines[] = "**{$title}**";
+   foreach ($items as $item) {
+      $lines[] = "• {$item}";
+   }
 }
+$lines[] = '';
 $lines[] = "Upgrade: `{$upgrade}`";
-$lines[] = $URL;
+$lines[] = $post !== '' ? "📝 {$link}" : "📦 {$URL}";
+if ($post !== '') {
+   $lines[] = "📦 Release notes: <{$URL}>";
+}
 $discord = implode("\n", $lines);
 
 // ? Limits: refuse rather than post a cut message
@@ -297,7 +470,7 @@ foreach ($networks as $network) {
             'chat_id' => $chat,
             'text' => $telegram,
             'parse_mode' => 'HTML',
-            'link_preview_options' => ['url' => $URL],
+            'link_preview_options' => ['url' => $link],
          ];
          $valid = preg_match('/^\d+:[\w-]+$/D', $secret) === 1
             && preg_match('/^(@\w{5,32}|-?\d+)$/D', $chat) === 1;
@@ -353,14 +526,14 @@ foreach ($networks as $network) {
 // ---
 
 // @ Summary
-$summary = (string) getenv('GITHUB_STEP_SUMMARY');
-if ($summary !== '') {
+$file = (string) getenv('GITHUB_STEP_SUMMARY');
+if ($file !== '') {
    $rows = "### Announcement of {$tag}\n\n| Network | Result |\n|---|---|\n";
    // @@
    foreach ($results as $network => $result) {
       $rows .= "| {$network} | {$result} |\n";
    }
-   file_put_contents($summary, $rows, FILE_APPEND);
+   file_put_contents($file, $rows, FILE_APPEND);
 }
 
 // :

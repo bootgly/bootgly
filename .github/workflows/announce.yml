@@ -1,21 +1,31 @@
 name: Announce (social networks)
 
 # Announces every STABLE release of bootgly/bootgly on Bootgly's social
-# channels: one short English message built from the release notes (the
-# `> Focus:` line and what `## Changes` lists) with the link to them.
+# channels, in one short English message:
+#   PATCH        when the release is published — from its notes (the `> Focus:`
+#                line and the bold leads of `## Changes`, listed as Fixes).
+#   MINOR/MAJOR  when its blog post goes live — bootgly/bootgly_website
+#                dispatches this workflow with the tag and the post's slug, and
+#                the message follows the post (Features, Improvements, Fixes)
+#                with the post and release links. The release event itself
+#                posts nothing for them. A post published before its release
+#                is stable, or not served within 15 minutes (a failed deploy),
+#                fails the job: once the release is out and the post is live,
+#                "Re-run failed jobs" announces it.
 # Pre-releases (-beta.N, -rc.N) are never announced; `released` also fires when
 # a pre-release is promoted to stable, and never for a pre-release.
 #
 # Networks and their repository secrets:
-#   telegram — TELEGRAM_BOT_TOKEN: a bot that is an administrator of @bootgly
-#              allowed to post messages.
+#   telegram — TELEGRAM_BOT_TOKEN: a bot allowed to post in @bootgly.
 #   discord  — DISCORD_WEBHOOK_URL: the webhook of the announcements channel.
 # Each network is a job of its own: a missing secret or a failed post fails
 # that job only, and "Re-run failed jobs" retries only the networks that
 # failed (a post that timed out after the network accepted it is posted again).
 #
-# A manual dispatch announces a given tag — a dry run by default, which prints
-# each payload and posts nothing.
+# A manual dispatch announces a given tag (and post, for MINOR/MAJOR) — a dry
+# run by default, which prints each payload and posts nothing.
+
+run-name: Announce ${{ github.event.release.tag_name || inputs.tag }}
 
 on:
   release:
@@ -25,6 +35,10 @@ on:
       tag:
         description: 'Stable release tag to announce (e.g. v1.3.0).'
         required: true
+      post:
+        description: 'Slug of its post on bootgly.com/blog (MINOR/MAJOR only, e.g. whats-new-in-bootgly-1-3).'
+        required: false
+        default: ''
       network:
         description: 'Network to post on.'
         type: choice
@@ -52,7 +66,9 @@ jobs:
       (github.event_name == 'workflow_dispatch' ||
       (!github.event.release.prerelease && !contains(github.event.release.tag_name, '-')))
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # ! A post is announced right after its push to the website: the script
+    #   waits up to 15 minutes for the deploy to serve it.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -76,6 +92,7 @@ jobs:
       - name: Announce
         env:
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          POST: ${{ inputs.post }}
           NETWORKS: ${{ matrix.network }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
           GH_TOKEN: ${{ github.token }}
