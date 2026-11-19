@@ -130,5 +130,6 @@ return new Suite(
       '7.3.4-Coverage-Changes_fetch',
       '7.3.5-Coverage-paths_and_changes',
       '7.3.6-Coverage-runner_honesty_and_gate',
+      '2.0.2-Advanced_API-snapshots-file_storage',
    ]
 );

@@ -40,6 +40,7 @@ use function substr;
 use function unlink;
 
 use Bootgly\ABI\Code\__String\Controls;
+use Bootgly\ABI\Data\URI;
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\ACI\Tests\Temporaries;
 use Bootgly\ACI\VCS;
@@ -54,9 +55,11 @@ use Bootgly\ACI\VCS;
  * Part A — a fake `git` prints fixed hostile lines, built here byte by byte:
  * OSC 52, CSI with SGR, C1 OSC/ST/CSI in UTF-8, BEL/BS/VT/FF/DEL, a progress
  * line repainted by CR, a TAB-separated line, invalid UTF-8
- * (`x\x9B2J caf\xC3\xA9 \xFF`) and a NUL-separated record. Each line reaches
- * the callback as `Controls::escape(mb_scrub($line, 'UTF-8'), "\t")` — nothing
- * a terminal would obey, TAB raw, the stray bytes `?` — while `$output`,
+ * (`x\x9B2J caf\xC3\xA9 \xFF`), a NUL-separated record and a URL with its
+ * credentials, as git repeats a token-as-user URL when it cannot prompt. Each line reaches
+ * the callback as `Controls::escape(URI::redact(mb_scrub($line, 'UTF-8')), "\t")`
+ * — nothing a terminal would obey, TAB raw, the stray bytes `?`, a URL's
+ * credentials (`https://<token>@host`) gone — while `$output`,
  * `query()` and a callback-less `execute()` keep every byte, NUL included.
  *
  * Part B — real git, with the user's configuration channels shut and a
@@ -140,6 +143,7 @@ return new Test(
             "col1\tcol2",
             "x\x9B2J caf\xC3\xA9 \xFF",
             implode("\0", $record),
+            "fatal: could not read Password for 'https://SYNTHTOK71@127.0.0.1': terminal prompts disabled",
          ];
          // ! What each line must show — written out, not computed
          $visible = [
@@ -151,6 +155,7 @@ return new Test(
             "col1\tcol2",
             "x?2J caf\u{E9} ?",
             implode('\u0000', $record),
+            "fatal: could not read Password for 'https://127.0.0.1': terminal prompts disabled",
          ];
          $raw = implode("\n", [...$hostile, '']);
          file_put_contents("{$base}/payload", $raw);
@@ -176,10 +181,15 @@ return new Test(
          yield assert(
             assertion: $received === $visible
                && $received === array_map(
-                  static fn (string $line): string => Controls::escape(mb_scrub(str_replace("\r", '', $line), 'UTF-8'), "\t"),
+                  static fn (string $line): string => Controls::escape(URI::redact(mb_scrub(str_replace("\r", '', $line), 'UTF-8')), "\t"),
                   $hostile
                ),
-            description: 'each line reaches the callback as Controls::escape(mb_scrub($line, \'UTF-8\'), "\t") — OSC 52, CSI, SGR, C1, BEL, BS, VT, FF, DEL and NUL as visible escapes (`\u001b]52;…\u0007`, `\u009d`, `\b`, `\u0000`), a progress carriage return dropped'
+            description: 'each line reaches the callback as Controls::escape(URI::redact(mb_scrub($line, \'UTF-8\')), "\t") — OSC 52, CSI, SGR, C1, BEL, BS, VT, FF, DEL and NUL as visible escapes (`\u001b]52;…\u0007`, `\u009d`, `\b`, `\u0000`), a progress carriage return dropped'
+         );
+         yield assert(
+            assertion: ($received[8] ?? null) === "fatal: could not read Password for 'https://127.0.0.1': terminal prompts disabled"
+               && str_contains($streamed, 'https://SYNTHTOK71@127.0.0.1') === true,
+            description: 'a URL git repeats with its credentials reaches the callback without them, while $output keeps it as git wrote it'
          );
          yield assert(
             assertion: count($received) === count($hostile) && $Live($received) === [],

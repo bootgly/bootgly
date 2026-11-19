@@ -49,6 +49,12 @@ abstract class Snapshot implements Asserting
    //  which readonly forbids outside the declaring class)
    public protected(set) bool $captured = false;
    public protected(set) bool $restored = false;
+   /**
+    * Whether the last restore found a snapshot it could not restore — one
+    * that does not decode, or holds what it may not load. `assert()` then
+    * fails and keeps it as it is: only a missing snapshot is captured anew.
+    */
+   public protected(set) bool $refused = false;
 
 
    public function __construct (null|string $name = null)
@@ -94,6 +100,10 @@ abstract class Snapshot implements Asserting
       $snapshot = $this->key;
 
       $this->restore($snapshot, $actual);
+      // ? A snapshot that exists but does not restore fails — never captured over
+      if ($this->refused === true) {
+         return false;
+      }
 
       $assertion = $actual === $expected;
 
@@ -102,7 +112,9 @@ abstract class Snapshot implements Asserting
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
       return new Fallback(
-         'Failed asserting that the snapshot value is equal to the expected value.',
+         $this->refused === true
+            ? 'Failed restoring the snapshot: it does not decode, or holds a class it may not load.'
+            : 'Failed asserting that the snapshot value is equal to the expected value.',
          [
             'actual' => $actual,
             'expected' => $expected

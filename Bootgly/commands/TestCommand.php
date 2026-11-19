@@ -3255,10 +3255,21 @@ class TestCommand extends Command
          }
       }
 
-      // ! Reproduction command (from the received CLI options)
+      // ! Reproduction command (from the received CLI options) — a value stays only under a
+      //   name the runner (`Configs::parse()`) or the case's options declare, shaped like a
+      //   setting, under a name that does not name a credential; any other value — an
+      //   unknown option's, a token, a URL, a path — is redacted
+      $declared = ['opponents', 'runner', 'loads', 'output', 'format', 'results', ...array_keys($Options->schema)];
       $command = "bootgly test benchmark {$caseName}";
       foreach ($options as $name => $value) {
-         $command .= $value === true ? " --{$name}" : " --{$name}={$value}";
+         $value = match (true) {
+            $value === true => null,
+            in_array((string) $name, $declared, true) === true
+               && preg_match('/key|token|secret|pass|auth|credential|cookie|session|dsn/i', (string) $name) === 0
+               && preg_match('/\A[\w.,:*+-]{1,64}\z/', (string) $value) === 1 => (string) $value,
+            default => '<redacted>'
+         };
+         $command .= $value === null ? " --{$name}" : " --{$name}={$value}";
       }
 
       // ! Non-swept config from the first round's .marks metadata

@@ -58,6 +58,8 @@ use RuntimeException;
 use SplFileInfo;
 use stdClass;
 
+use Bootgly\ABI\Data\URI;
+
 
 /**
  * Build the versioned, integrity-indexed record for one benchmark invocation.
@@ -344,11 +346,17 @@ final class Manifest
          // ! Persist option names for diagnosis, but deny their values by
          //   default. Reproducible benchmark values live in the validated
          //   selection/config sections; argv can also contain unknown options.
-         if (preg_match('#[a-z][a-z0-9+.-]*://[^/\s:@]+:[^@\s/]+@#i', $argument) === 1) {
+         // ! A URL with userinfo (a token alone is one too) goes whole — only
+         //   an option or KEY name before its `://` is kept
+         if (URI::redact($argument) !== $argument) {
+            $opening = strpos($argument, '://');
             $equals = strpos($argument, '=');
-            $redacted[] = $equals === false
-               ? '<redacted-uri>'
-               : substr($argument, 0, $equals + 1) . '<redacted-uri>';
+            $name = $equals !== false && $opening !== false && $equals < $opening
+               ? substr($argument, 0, $equals)
+               : '';
+            $redacted[] = preg_match('/\A(?:--?[A-Za-z0-9][A-Za-z0-9._-]*|[A-Za-z_][A-Za-z0-9_.-]*)\z/', $name) === 1
+               ? "{$name}=<redacted-uri>"
+               : '<redacted-uri>';
             continue;
          }
          if (preg_match('/\A(--?[A-Za-z0-9][A-Za-z0-9._-]*)=.*/', $argument, $matches) === 1) {

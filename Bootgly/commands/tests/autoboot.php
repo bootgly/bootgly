@@ -93,5 +93,7 @@ return new Suite(
       '9.2-project-stop-retirees',
       // # lint check: bootgly.Lint.php paths, rules, exemptions; deprecated wrappers
       '10.4-lint-check-config',
+      // # test benchmark: the report's reproduction command redacts credentials
+      '12.1-test-benchmark-command-redact',
    ]
 );

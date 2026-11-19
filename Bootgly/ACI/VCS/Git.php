@@ -13,6 +13,7 @@ namespace Bootgly\ACI\VCS;
 
 use const PATH_SEPARATOR;
 use function array_intersect;
+use function class_exists;
 use function count;
 use function explode;
 use function fclose;
@@ -38,6 +39,7 @@ use Closure;
 use RuntimeException;
 
 use Bootgly\ABI\Code\__String\Controls;
+use Bootgly\ABI\Data\URI;
 
 
 /**
@@ -52,7 +54,8 @@ use Bootgly\ABI\Code\__String\Controls;
  * combined output and exit status stay readable on the instance. A callback
  * sees each line as text to show on a UTF-8 terminal — not UTF-8 → `?`, a
  * carriage return dropped, every other control character but TAB escaped
- * visibly — while `$output` keeps the raw bytes, for parsing.
+ * visibly, the userinfo of every URL in it removed — while `$output` keeps
+ * the raw bytes, for parsing.
  * Transfers run under the network deadline and the transport allow-list
  * (`transfer()`), and a caller value is never read as an option: `--` ends
  * option parsing before it, or a value shaped like an option is refused
@@ -104,8 +107,10 @@ final class Git
    /**
     * Combined stdout + stderr of the last `execute()` — its last `TAIL` bytes when a callback streamed it.
     *
-    * Raw — data to parse, not text to show: git relays text a remote wrote, so
-    * display it only through `Controls::escape(mb_scrub($text, 'UTF-8'))`.
+    * Raw — data to parse, not text to show: git relays text a remote wrote,
+    * and its messages repeat a remote's URL with its credentials (a token in
+    * `https://<token>@host/`), so display it only through
+    * `Controls::escape(URI::redact(mb_scrub($text, 'UTF-8')))`.
     */
    public private(set) string $output = '';
    /** Exit status of the last `execute()`. */
@@ -162,8 +167,10 @@ final class Git
     * @param null|Closure $Callback Receives each output line as it arrives, without its break —
     *                               safe to write to a UTF-8 terminal: UTF-8 (a stray byte is `?`),
     *                               a carriage return dropped (progress repainting), every other
-    *                               control character but TAB escaped visibly. Markup is not defused:
-    *                               `write()` the line, or `Escaped::scrub()` it before `render()`.
+    *                               control character but TAB escaped visibly, and the userinfo of
+    *                               every URL in it removed (`URI::redact()`) — a URL a single read
+    *                               cuts in two keeps its halves. Markup is not defused: `write()`
+    *                               the line, or `Escaped::scrub()` it before `render()`.
     * @param array<string,string> $variables Set on the child, over the caller's environment.
     *
     * @return int The exit status — `126` when the process could not start.
@@ -186,6 +193,12 @@ final class Git
       $environment = [...$environment, ...$variables];
 
       $this->output = '';
+      // ! What the stream runs is resident before git does: a checkout replaces the
+      //   files it would autoload from (a kit's swap runs out of the tree it replaces)
+      if ($Callback !== null) {
+         class_exists(Controls::class);
+         class_exists(URI::class);
+      }
 
       // @ One pipe for both streams — nothing to drain out of order
       $pipes = [];
@@ -222,9 +235,10 @@ final class Git
 
             // ! Shown, never obeyed: git relays text a remote wrote — the sideband,
             //   a tag name, a submodule path — so the line reaches the callback as
-            //   UTF-8 with every control character but the tab escaped visibly;
+            //   UTF-8 with every control character but the tab escaped visibly,
+            //   and without the credentials git repeats from a remote's URL;
             //   `$output` keeps the bytes
-            $Callback(Controls::escape(mb_scrub(str_replace("\r", '', rtrim($line, "\n")), 'UTF-8'), "\t"));
+            $Callback(Controls::escape(URI::redact(mb_scrub(str_replace("\r", '', rtrim($line, "\n")), 'UTF-8')), "\t"));
          }
       }
       if ($Callback !== null && strlen($this->output) > self::TAIL) {

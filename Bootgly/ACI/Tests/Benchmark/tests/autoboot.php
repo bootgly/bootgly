@@ -86,5 +86,6 @@ return new Suite(
       // Retention — raw telemetry leaves memory once its sidecars are written
       '6.23.1-result-strip-raw_telemetry',
       '6.23.2-command-retain-round_aggregates',
+      '6.15.3-manifest-redact-credential_uris',
    ],
 );

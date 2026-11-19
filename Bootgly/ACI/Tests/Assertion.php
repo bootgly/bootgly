@@ -211,6 +211,11 @@ class Assertion extends Expectations
       $this->actual = $actual;
       $this->expected = $expected;
       $this->using = $using;
+      // ? A snapshot restored into the Assertion that is there but does not restore fails it —
+      //   the value under test never stands in for the one it holds
+      if ($this->Snapshot->refused === true) {
+         $this->fail($this->Snapshot->fail($actual, $expected, self::$verbosity));
+      }
       // * Metadata
       // expectations
       // ?! Expectations
@@ -269,6 +274,12 @@ class Assertion extends Expectations
 
          if ($using instanceof Snapshot) {
             $using->assert($actual, $expected);
+
+            // ? A snapshot that is there but does not restore fails the expectation, whatever
+            //   its modifiers — the value under test never stands in for the one it holds
+            if ($using->refused === true) {
+               $this->fail($using->fail($actual, $expected, self::$verbosity));
+            }
          }
 
          // # Assertion
