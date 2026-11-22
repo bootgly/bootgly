@@ -1,7 +1,7 @@
 # Naming conventions
 
-`bootgly lint check` flags multi-word method names and lowercase object or acronym names — the
-rules below are what it cannot judge.
+`bootgly lint check` flags method names that are not one base-form verb and lowercase object or
+acronym names — the rest is what it cannot judge.
 
 ## Methods
 

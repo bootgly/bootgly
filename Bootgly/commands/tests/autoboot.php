@@ -93,5 +93,7 @@ return new Suite(
       '9.2-project-stop-retirees',
       // # lint check: bootgly.Lint.php paths, rules, exemptions; deprecated wrappers
       '10.4-lint-check-config',
+      // # lint stub: a project's suite fixtures are excluded at any depth
+      '10.5-lint-stub-excludes',
    ]
 );
