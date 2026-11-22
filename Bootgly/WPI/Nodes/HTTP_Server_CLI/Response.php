@@ -1737,6 +1737,29 @@ class Response extends Server\Response
    }
 
    /**
+    * Announce that the connection closes after this generation's answer
+    * (RFC 9112 §9.6).
+    *
+    * The deferred twin of the encoder's connection-management block, which a
+    * deferred response never reaches. Called only for a request that asked
+    * to close over HTTP/1.x, before its answer is encoded: an HTTP/1.1 answer
+    * says `Connection: close`, as the synchronous path does. The transport
+    * close itself is armed only once that answer is committed to the wire —
+    * see `loop()`: `closeAfterWrite` stops `reading()` before a pipelined
+    * request when the answer is written while the request that asked is
+    * still being read (inline completion), backlog or not; `closeAfterDrain`
+    * is the backstop of a deferral that parked without a hold, which no
+    * other path closes (an inline write is closed by `reading()`, a held
+    * one by the hold observer).
+    */
+   private static function close (self $Response): void
+   {
+      if ($Response->Request?->protocol === 'HTTP/1.1') {
+         $Response->Header->set('Connection', 'close');
+      }
+   }
+
+   /**
     * Persist the snapshot's Session before this generation's wire is built.
     *
     * The synchronous cycle saved the session in `Encoder_::encode()` before
@@ -1789,6 +1812,7 @@ class Response extends Server\Response
          $length = null;
          $buffer = '';
          $selected = false;
+         $closing = false;
 
          try {
             // @ Execute user work (may call Fiber::suspend()) — a second
@@ -1822,6 +1846,15 @@ class Response extends Server\Response
 
                // ? Guard: socket may have closed while the Fiber was suspended.
                if (is_resource($Package->Connection->Socket)) {
+                  // @ Connection management (RFC 9112 §9.6): the encoder's
+                  //   own block never runs for a deferred response — close
+                  //   after this answer, before a pipelined request is read
+                  $Snapshot = $Response->Request;
+                  $closing = $Snapshot !== null && $Snapshot->closeConnection && $Snapshot->stream === 0;
+                  if ($closing) {
+                     self::close($Response);
+                  }
+
                   $buffer = $Response->encode($Package, $length);
 
                   if ($Response->cache !== 0) {
@@ -1840,6 +1873,13 @@ class Response extends Server\Response
                $selected = true;
 
                if (is_resource($Package->Connection->Socket)) {
+                  // ! Armed only now: a throw before this point may still be
+                  //   answered by a boundary that hands the connection off
+                  if ($closing) {
+                     $Package->closeAfterDrain = true;
+                     $Package->closeAfterWrite = true;
+                  }
+
                   $Package->writing(
                      $Package->Connection->Socket,
                      length: $length,
@@ -1953,6 +1993,13 @@ class Response extends Server\Response
 
                   $encoded = is_resource($Package->Connection->Socket) === false;
                   if ($encoded === false) {
+                     // @ Connection management, as the success path above
+                     $Snapshot = $Response->Request;
+                     $closing = $Snapshot !== null && $Snapshot->closeConnection && $Snapshot->stream === 0;
+                     if ($closing) {
+                        self::close($Errored);
+                     }
+
                      try {
                         $buffer = $Errored->encode($Package, $length);
                         $encoded = true;
@@ -1970,6 +2017,11 @@ class Response extends Server\Response
                      $Exchange?->finish($Errored);
 
                      if (is_resource($Package->Connection->Socket)) {
+                        if ($closing) {
+                           $Package->closeAfterDrain = true;
+                           $Package->closeAfterWrite = true;
+                        }
+
                         try {
                            $Package->writing(
                               $Package->Connection->Socket,
