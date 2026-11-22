@@ -37,7 +37,7 @@ return new Lint(
    excludes: [
       '**/vendor/**',
       '**/node_modules/**',
-      '**/tests/fixtures/**',
+      '**/tests/**/fixtures/**',
    ],
    rules: [
       Rules::Imports,

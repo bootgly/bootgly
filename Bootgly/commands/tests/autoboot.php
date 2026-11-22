@@ -95,5 +95,7 @@ return new Suite(
       '10.4-lint-check-config',
       // # test benchmark: the report's reproduction command redacts credentials
       '12.1-test-benchmark-command-redact',
+      // # lint stub: a project's suite fixtures are excluded at any depth
+      '10.5-lint-stub-excludes',
    ]
 );

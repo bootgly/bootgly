@@ -103,12 +103,13 @@ named argument, enum case and config key the change uses in the pinned source un
 ## 3. SHOULD checks — fix or explain
 
 - **Lint-backed** (`Coding_styles.md`, `Naming_conventions.md`): everything `bootgly lint check`
-  enforces — imports, `null|Type`, no constructor promotion, declaration spacing, multi-word method
-  names, object and acronym casing, property sections — all from step 4.
+  enforces — imports, `null|Type`, no constructor promotion, declaration spacing, method names
+  that are not one base-form verb, object and acronym casing, property sections — all from step 4.
 - **By eye**, on the touched lines only:
-  - a method name is one verb in base form — lint only catches multi-word names; nouns
-    (`status()`), states and past forms (`loaded()`) you flag yourself; `-ing` only for a method
-    that IS a loop;
+  - a method name is one verb in base form — lint flags multi-word names and the nouns, plurals,
+    adjectives, predicates and past forms its word list knows; you flag a noun it lets through,
+    an `-ing` name (lint always passes it) on a method that is not a loop, a missing object
+    context (`HTML->render()`, not `renderHTML()`) and a generic verb (`process()`);
   - each property sits in the right section (Config, Data, Metadata) — lint checks that it has one;
   - interpolation over concatenation; Semantic Commenting markers only where a comment is useful;
   - no trivial getter wrapping a property; no package competing with a native component unless
