@@ -25,6 +25,7 @@ use function is_file;
 use function is_string;
 use function microtime;
 use function spl_object_id;
+use function str_repeat;
 use function stream_set_blocking;
 use function stream_socket_pair;
 use Fiber;
@@ -47,6 +48,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
  * spec's slot still routes. Every deferral here suspends once before it reads
  * the request or writes the Session: the synchronous cycle ends at that first
  * `wait()`, which is exactly when the live per-connection Request is scrubbed.
+ * The `/deferred/inline` routes are the exception: they never suspend.
  */
 final class Routes
 {
@@ -323,6 +325,26 @@ final class Routes
             if ($Fiber !== null) {
                Cancellation::fetch($Fiber)?->cancel();
             }
+         });
+      }, GET);
+      // @ A deferral that never suspends: its work completes inline, inside
+      //   the cycle still reading its request, and answers its `tag`
+      yield $Router->route('/deferred/inline', static function (Request $Request, Response $Response) {
+         return $Response->defer(static function (Response $Response, Request $Snapshot): void {
+            $Response->JSON->send(['tag' => $Snapshot->queries['tag'] ?? '']);
+         });
+      }, GET);
+      // @ The inline twin with a body larger than the socket buffers take in
+      //   one write (8 MB): the answer leaves a backlog
+      yield $Router->route('/deferred/inline/large', static function (Request $Request, Response $Response) {
+         return $Response->defer(static function (Response $Response): void {
+            $Response(body: str_repeat('x', 8_000_000));
+         });
+      }, GET);
+      // @ The inline twin that throws: the Catcher answers it
+      yield $Router->route('/deferred/inline/throw', static function (Request $Request, Response $Response) {
+         return $Response->defer(static function (Response $Response): void {
+            throw new RuntimeException('deferred-inline-throw');
          });
       }, GET);
 

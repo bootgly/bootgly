@@ -101,6 +101,13 @@ return new Suite(
       '6.3-sse_handoff_discards_held_bytes',
       '6.4-connection_close_ends_pipeline',
       '6.5-abandoned_deferral_closes',
-      '6.6-second_park_answered_after_another_connection'
+      '6.6-second_park_answered_after_another_connection',
+      // ENC-1: a deferral honours `Connection: close` — inline completion
+      //   included — as the synchronous answer does (appended last)
+      '7.1-inline_close_ends_pipeline',
+      '7.2-inline_close_under_backpressure',
+      '7.3-inline_throw_close',
+      '7.4-parked_close_carries_header',
+      '7.5-inline_keep_alive_stays_open'
    ]
 );
