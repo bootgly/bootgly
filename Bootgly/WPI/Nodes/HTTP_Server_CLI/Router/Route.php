@@ -40,6 +40,16 @@ class Route
     * @var array<Middleware>
     */
    public array $Middlewares = [];
+   /**
+    * Whether the last match written into this Route stored route params —
+    * the next resolve() then scrubs them before a static or catch-all
+    * dispatch. It lives on the Route, beside the Params it describes, so the
+    * per-segment swap of a deferred generation's Route state carries it too.
+    *
+    * @internal Written by the Router and the deferred-response swap only:
+    *           an application that clears it skips the next scrub.
+    */
+   public bool $parameterized = false;
    public string $base {
       get {
          $WPI = WPI;

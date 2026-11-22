@@ -75,6 +75,7 @@ use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\API\Workables\Server as SAPI;
+use Bootgly\API\Workables\Server\Middleware;
 use Bootgly\WPI\Endpoints\Servers\Ownership;
 use Bootgly\WPI\Events\Cancellation;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
@@ -108,6 +109,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\XML as XMLResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Timeout;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Recovering;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Route;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Route\Params;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Sealing;
 
 
@@ -202,7 +204,13 @@ class Response extends Server\Response
     */
    private null|self $Owner;
    private bool $capturing;
-   /** @var array<int,array{Request:Request,Response:self,Router:Router,Route:Route}> */
+   /**
+    * One entry per bound Fiber segment: the ambient HTTP context and the
+    * request state the Router's one Route held before bind() installed this
+    * generation's.
+    *
+    * @var array<int,array{Request:Request,Response:self,Router:Router,Params:Params,path:string,Middlewares:array<Middleware>,parameterized:bool}>
+    */
    private array $Contexts;
    // # State (sets)
    public bool $chunked;
@@ -1589,8 +1597,12 @@ class Response extends Server\Response
          return null;
       }
 
-      // ! Route chain (outermost first, as folded), then the global stack
-      $RouteMiddlewares = $Response->Route->Middlewares ?? [];
+      // ! Route chain (outermost first, as folded), then the global stack.
+      //   loop() runs only inside a bound segment, so the Router's Route
+      //   holds this generation's live state — routing inside the segment
+      //   publishes and clears the chain there; the generation's own Route
+      //   catches up only at unbind()
+      $RouteMiddlewares = $Response->Router->Route->Middlewares ?? [];
       $GlobalMiddlewares = isset(SAPI::$Middlewares) ? SAPI::$Middlewares->stack : [];
 
       // @@ Innermost → outermost
@@ -1648,8 +1660,12 @@ class Response extends Server\Response
          return;
       }
 
-      // ! Route chain (outermost first, as folded), then the global stack
-      $RouteMiddlewares = $Response->Route->Middlewares ?? [];
+      // ! Route chain (outermost first, as folded), then the global stack.
+      //   loop() runs only inside a bound segment, so the Router's Route
+      //   holds this generation's live state — routing inside the segment
+      //   publishes and clears the chain there; the generation's own Route
+      //   catches up only at unbind()
+      $RouteMiddlewares = $Response->Router->Route->Middlewares ?? [];
       $GlobalMiddlewares = isset(SAPI::$Middlewares) ? SAPI::$Middlewares->stack : [];
 
       // @@ Innermost → outermost
@@ -2175,6 +2191,13 @@ class Response extends Server\Response
    /**
     * Install this deferred response's admitted HTTP context for one Fiber
     * execution segment. The scheduler pairs every call with unbind().
+    *
+    * The Router keeps one Route object for the worker's life: every route
+    * handler is bound to it at registration. So the generation's Route state
+    * (params, path, middleware chain) is swapped INTO that object for the
+    * segment, never the object itself — a handler reached from deferred work
+    * (behind a middleware that deferred, or registered while the Router was
+    * warmed inside a deferral) reads this request's state, not another's.
     */
    private function bind (): void
    {
@@ -2187,22 +2210,36 @@ class Response extends Server\Response
       }
 
       $WPI = WPI;
+      $Current = $Router->Route;
       $this->Contexts[] = [
          'Request' => $WPI->Request,
          'Response' => $WPI->Response,
          'Router' => $WPI->Router,
-         'Route' => $Router->Route,
+         'Params' => $Current->Params,
+         'path' => $Current->path,
+         'Middlewares' => $Current->Middlewares,
+         'parameterized' => $Current->parameterized,
       ];
 
       $WPI->Request = $Request;
       $WPI->Response = $this;
       $WPI->Router = $Router;
-      $Router->Route = $Route;
+      // ! Install the generation's Route state into the Router's one Route
+      $Current->Params = $Route->Params;
+      $Current->path = $Route->path;
+      $Current->Middlewares = $Route->Middlewares;
+      $Current->parameterized = $Route->parameterized;
    }
 
    /**
     * Restore the ambient HTTP context that preceded the current Fiber
     * execution segment.
+    *
+    * Routing inside the segment (a global middleware deferred ahead of the
+    * Router) writes the path, params and chain through the Router's one
+    * Route: that state is written back into the generation's Route first,
+    * so the next segment — and a nested defer() cloning it — resumes with
+    * what this one routed.
     */
    private function unbind (): void
    {
@@ -2214,7 +2251,20 @@ class Response extends Server\Response
 
       $Router = $this->Router;
       if ($Router !== null) {
-         $Router->Route = $Context['Route'];
+         $Current = $Router->Route;
+         // ! Write back what this segment wrote through the Router's Route
+         $Route = $this->Route;
+         if ($Route !== null) {
+            $Route->Params = $Current->Params;
+            $Route->path = $Current->path;
+            $Route->Middlewares = $Current->Middlewares;
+            $Route->parameterized = $Current->parameterized;
+         }
+         // ! Restore the state the segment found
+         $Current->Params = $Context['Params'];
+         $Current->path = $Context['path'];
+         $Current->Middlewares = $Context['Middlewares'];
+         $Current->parameterized = $Context['parameterized'];
       }
 
       $WPI = WPI;
@@ -2382,7 +2432,10 @@ class Response extends Server\Response
          $Reflection = new ReflectionFunction($work);
          $BoundRoute = $Reflection->getClosureThis();
          if ($BoundRoute instanceof Route) {
-            $WorkRoute = $BoundRoute === $RouterRoute
+            // ! Work bound to the Router's Route — or, from deferred work,
+            //   to this generation's Route (an earlier defer() bound it
+            //   there) — takes the new generation's Route
+            $WorkRoute = $BoundRoute === $RouterRoute || $BoundRoute === $this->Route
                ? $Route
                : clone $BoundRoute;
             $work = $work->bindTo($WorkRoute, $WorkRoute) ?? $work;

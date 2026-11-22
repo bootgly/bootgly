@@ -12,7 +12,8 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests;
 
 
 /**
- * Deferred — entity root for the deferred-work spec entities (Routes).
+ * Deferred — entity root for the deferred-work spec entities (Barrier,
+ * Boundary, Deferrer, Routes, Sealer).
  */
 class Deferred
 {
