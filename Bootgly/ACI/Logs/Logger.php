@@ -77,16 +77,22 @@ class Logger extends Logs
     * rebuild a line break, a `-` and a scrubbed `@x` rebuild a reset. Control characters are
     * escaped visibly by the formatters themselves.
     *
+    * Under `Display::NONE` the local `Stream` handlers (the terminal, by default) stay silent;
+    * every other local handler (`File`, `Syslog`, `Memory`, `Pipe`) keeps writing, and the global
+    * sinks and the live tap are fed as always.
+    *
     * @param string|array<string,mixed> ...$args One or more `level: message` pairs, plus optional `context: [...]`.
     * @return bool True once the records are dispatched (or suppressed by display mode).
     * @throws InvalidArgumentException On positional args, unknown level, missing level, or invalid value types.
     */
    public function log (string|array ...$args): bool
    {
-      // ? Nothing to do — display off, this logger isn't global (or no sinks), and no live tap
+      // ? Nothing to do — display off, no local handler but streams, this logger isn't global
+      //   (or no sinks), and no live tap
       if (
          Display::$segments === Display::NONE
          && self::$Tap === null
+         && $this->Handlers->unmuted === 0
          && ($this->global === false || self::$Sinks === null)
       ) {
          return true;
@@ -130,9 +136,18 @@ class Logger extends Logs
          $Record = new Record($Level, $this->channel, $message, $context);
          $Record = $this->Processors->process($Record);
 
-         // @ Local handlers (skipped when display is suppressed, e.g. Monitor mode)
+         // @ Local handlers — with the display off (Monitor mode, MCP stdio) the `Stream`
+         //   handlers stay silent; a file, the system logger, memory or a pipe keeps writing
          if (Display::$segments !== Display::NONE) {
             $this->Handlers->handle($Record);
+         }
+         else if ($this->Handlers->unmuted > 0) {
+            // @@ Every handler but a `Stream`
+            foreach ($this->Handlers->Handlers as $Handler) {
+               if ($Handler instanceof Stream === false) {
+                  $Handler->handle($Record);
+               }
+            }
          }
          // @ Global sinks — opt-in per logger (persistent, e.g. a file)
          if ($this->global === true) {

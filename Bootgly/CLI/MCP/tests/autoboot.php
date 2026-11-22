@@ -30,5 +30,6 @@ return new Suite(
       '1.3-mcp-stdio-bounds',
       '1.4-mcp-stdio-construction',
       '1.5-mcp-stdio-leaks',
+      '1.6-mcp-stdio-loggers',
    ]
 );
