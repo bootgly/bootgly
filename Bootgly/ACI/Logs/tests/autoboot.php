@@ -57,5 +57,7 @@ return new Suite(
       // # 1.0.x (LOGS-1, LOGS-9, LOGS-14, LOGS-15): rotation under the append lock
       '7.2-file-rotation-lock',
       '7.3-file-rotation-policy',
+      // # 1.3.x (LOGS-3): Display::NONE mutes only the Stream handlers
+      '2.3-logger-display-none',
    ]
 );

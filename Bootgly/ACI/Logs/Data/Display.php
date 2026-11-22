@@ -16,7 +16,7 @@ class Display
    // * Config
    // @ Segments the Line formatter prints, as bitmask flags combined with show().
    //   `message` is the only content segment; the others annotate it around the line.
-   public const int NONE      = 0;       // print nothing (the local stdout sink stays silent)
+   public const int NONE      = 0;       // print nothing (the local `Stream` handlers stay silent)
    public const int MESSAGE   = 1 << 0;  // the message text
    public const int TIMESTAMP = 1 << 1;  // [ISO-8601 timestamp]
    public const int CHANNEL   = 1 << 2;  // channel name
@@ -31,7 +31,8 @@ class Display
     * Choose which segments the Line formatter prints, replacing the current selection.
     *
     * Combine flags freely: `Display::show(Display::MESSAGE, Display::TIMESTAMP, Display::CHANNEL)`.
-    * Called with no arguments (or `Display::NONE`) it silences the local stdout output.
+    * Called with no arguments (or `Display::NONE`) it silences every local `Stream` handler (the
+    * terminal, by default); a logger's other handlers (a file, the system logger…) keep writing.
     *
     * @param int ...$segments Segment flags to enable (`Display::*`).
     */

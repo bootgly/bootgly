@@ -73,7 +73,7 @@ return new Test(
          description: 'each level emits its own record, in order, sharing the context'
       );
 
-      // # DISPLAY_NONE suppresses output entirely
+      // # DISPLAY_NONE silences a Stream handler
       Display::show(Display::NONE);
       $silent = fopen('php://temp', 'rb+');
       $Silent = new Logger('x');
@@ -86,7 +86,7 @@ return new Test(
 
       yield assert(
          assertion: stream_get_contents($silent) === '',
-         description: 'DISPLAY_NONE suppresses all output'
+         description: 'DISPLAY_NONE silences a Stream handler'
       );
 
       // # Global sinks: opt-in per logger ($global), fan out to all sinks even under DISPLAY_NONE

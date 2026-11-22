@@ -17,6 +17,11 @@
  * (`flush`: flush and end the buffers; `exit`: end the process mid-call;
  * `memory`: die of memory exhaustion mid-call). `MCP_STDIO_DISPLAY` sets
  * `display_errors` at runtime, as written (the `-d` parser trims it).
+ * `MCP_STDIO_LOG` makes the tool log through a fresh logger, as kit clients
+ * do (`break`: a record ending in a line break; `inline`: one without;
+ * `flip`: turn the display back on after logging, as a client stopping
+ * does; `untap`: clear the live tap after logging, as `@log off` does).
+ * `MCP_STDIO_FILE` adds a `File` handler on that path to the logger.
  */
 
 // ! Classes only — the stdio process boots nothing that could write to stdout
@@ -28,6 +33,9 @@ spl_autoload_register(static function (string $class): void {
    }
 });
 
+use Bootgly\ACI\Logs\Data\Display;
+use Bootgly\ACI\Logs\Handlers\File;
+use Bootgly\ACI\Logs\Logger;
 use Bootgly\API\RPC;
 use Bootgly\CLI\MCP;
 
@@ -40,6 +48,23 @@ $Server = new RPC\MCP(
    ],
    Caller: static function (string $name, array $arguments, mixed $context): array {
       echo "a stray echo from the tool\n";
+
+      // # Logging (a kit client's lazy logger: the default `Stream` handler on stdout)
+      $log = getenv('MCP_STDIO_LOG');
+      if ($log !== false) {
+         $Logger = new Logger(channel: 'Kit');
+         $file = getenv('MCP_STDIO_FILE');
+         if ($file !== false) {
+            $Logger->Handlers->push(new File($file));
+         }
+         $Logger->log(warning: $log === 'inline' ? 'Starting Client... ' : 'Unable to connect!@.;');
+         if ($log === 'flip') {
+            Display::show(Display::MESSAGE);
+         }
+         else if ($log === 'untap') {
+            Logger::$Tap = null;
+         }
+      }
 
       // # Escape attempts
       $leak = getenv('MCP_STDIO_LEAK');

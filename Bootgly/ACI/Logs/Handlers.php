@@ -13,6 +13,7 @@ namespace Bootgly\ACI\Logs;
 
 use Bootgly\ACI\Logs\Data\Levels;
 use Bootgly\ACI\Logs\Data\Record;
+use Bootgly\ACI\Logs\Handlers\Stream;
 
 
 class Handlers
@@ -20,6 +21,10 @@ class Handlers
    // * Data
    /** @var array<int,Handler> */
    public protected(set) array $Handlers = [];
+
+   // * Metadata
+   /** How many handlers keep writing under `Display::NONE`: every one but a `Stream`. */
+   public protected(set) int $unmuted = 0;
 
 
    /**
@@ -36,6 +41,9 @@ class Handlers
       }
 
       $this->Handlers[] = $Handler;
+      if ($Handler instanceof Stream === false) {
+         $this->unmuted++;
+      }
 
       return $this;
    }

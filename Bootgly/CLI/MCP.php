@@ -42,6 +42,10 @@ use function substr;
 use function trim;
 use InvalidArgumentException;
 
+use Bootgly\ACI\Logs\Data\Display;
+use Bootgly\ACI\Logs\Formatters\Line;
+use Bootgly\ACI\Logs\Handlers\Stream;
+use Bootgly\ACI\Logs\Logger;
 use Bootgly\API\RPC;
 
 
@@ -61,8 +65,20 @@ use Bootgly\API\RPC;
  *   captured and moved to stderr, the channel of every diagnostic: on the
  *   process's own stdout, the capture cannot be removed, errors PHP
  *   displays are displayed on stderr (hidden ones stay hidden), and output
- *   printed after `serving()` returns lands on stderr too. Loggers writing straight
- *   to the `STDOUT` stream are not captured: point them at `STDERR`.
+ *   printed after `serving()` returns lands on stderr too.
+ * - Loggers write to stderr while serving: the display is off
+ *   (`Display::NONE`, so every logger's `Stream` handlers — stdout by
+ *   default — stay silent) and every record reaches stderr through the live
+ *   tap (`Logger::$Tap`, replaced while serving); a logger's other handlers (a
+ *   file, the system logger…) keep writing. Both are set again after each
+ *   call and restored when `serving()` returns — but a call that turns the
+ *   display back on (`Display::show()`) and then logs still writes those
+ *   records to stdout, and so does a worker a client forks (it turns the
+ *   display on in the child, on the stdout it inherited): run clients
+ *   without workers in a stdio process. A global sink (`Logger::$Sinks`) is
+ *   fed whatever the display says: never build one on `STDOUT` here.
+ *   `CLI\Terminal\Output` writes to `STDOUT` by default and is not captured:
+ *   point it at `STDERR`.
  * - A line longer than `line` bytes is discarded and answered with
  *   Invalid Request (`id: null`).
  * - End of stdin ends the loop cleanly (exit status `0`); stdout closed by
@@ -97,6 +113,8 @@ final class MCP
    // * Metadata
    /** The output-buffer level of the capture while serving. */
    private int $level = 0;
+   /** The live tap that carries every log record to stderr while serving. */
+   private Stream $Tap;
 
 
    /**
@@ -135,6 +153,9 @@ final class MCP
       $this->input = $input;
       $this->output = $output;
       $this->error = $error;
+
+      // * Metadata
+      $this->Tap = new Stream($error, new Line(Display::MESSAGE | Display::CHANNEL | Display::SEVERITY | Display::CONTEXT));
    }
 
    /**
@@ -172,6 +193,11 @@ final class MCP
          PHP_OUTPUT_HANDLER_CLEANABLE | PHP_OUTPUT_HANDLER_FLUSHABLE | ($guarded ? 0 : PHP_OUTPUT_HANDLER_REMOVABLE)
       );
       $this->level = ob_get_level();
+      // ! Log records never reach the protocol: display off, every record on stderr
+      $segments = Display::$segments;
+      $Tap = Logger::$Tap;
+      Display::$segments = Display::NONE;
+      Logger::$Tap = $this->Tap;
 
       try {
          // @@ One message per line
@@ -214,6 +240,9 @@ final class MCP
          if ($guarded === false && ob_get_level() === $this->level) {
             ob_end_flush();
          }
+         // @ The display and the live tap as they were before serving
+         Display::$segments = $segments;
+         Logger::$Tap = $Tap;
       }
 
       // : End of input
@@ -221,7 +250,8 @@ final class MCP
    }
 
    /**
-    * Answer one message, moving whatever the call printed to stderr.
+    * Answer one message, moving whatever the call printed — and whatever it
+    * logs — to stderr.
     */
    private function answer (string $message): null|string
    {
@@ -245,6 +275,10 @@ final class MCP
                @fwrite($this->error, "{$noise}\n");
             }
          }
+         // @ A call that turned the display on (a client or server starting)
+         //   or replaced the tap leaves neither for the next one
+         Display::$segments = Display::NONE;
+         Logger::$Tap = $this->Tap;
       }
    }
 
