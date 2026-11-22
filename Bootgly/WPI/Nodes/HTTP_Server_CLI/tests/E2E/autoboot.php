@@ -536,6 +536,8 @@ return new Suite(
          // @ SSE sub-second Tick on the loop's recurring timers (appended last)
          '3.11-sse_tick_subsecond',
          '3.12-sse_tick_stops_on_peer_close',
+         // @ ENC-7: a request that asked to close never seeds the route cache (appended last)
+         '2.17-route_cache_skips_close_request',
       ],
       'Router/' => [
          '1.1-route_callback-closure',

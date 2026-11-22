@@ -1343,7 +1343,9 @@ class Response extends Server\Response
     * Consumes the per-request `cache` TTL stamp (set by the Router dispatcher
     * wrapper) and stores only when the exchange is safely cacheable: GET over
     * HTTP/1.1, status 200, plain identity body, no credentials on the request
-    * and no cookies on the response.
+    * and no cookies on the response. A request that asked to close never
+    * stores: its wire carries `Connection: close`, which every keep-alive hit
+    * would replay.
     */
    public function stash (string $buffer): void
    {
@@ -1367,6 +1369,7 @@ class Response extends Server\Response
          || $Request === null
          || $Request->method !== 'GET'
          || $Request->protocol !== 'HTTP/1.1'
+         || $Request->closeConnection
          || $this->code !== 200
          || $this->stream || $this->chunked || $this->encoded
       ) {
