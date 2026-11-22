@@ -80,6 +80,13 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\SSE;
  * `initialize` calls cannot hold the store for the whole TTL. Each call reaches
  * the application's closures with the request (`Request`) as their
  * `$context`, and runs as deferred work: a tool may await asynchronous I/O.
+ *
+ * The principal is read synchronously, on arrival. An authentication that
+ * must wait for I/O (a token stored in a database) runs in a route
+ * middleware that defers first and sets the identity on the deferral's
+ * Request snapshot — the unchanged `Authentication` middleware, run inside
+ * that deferral — or in a handler that defers and invokes the transport
+ * from inside.
  */
 final class MCP
 {

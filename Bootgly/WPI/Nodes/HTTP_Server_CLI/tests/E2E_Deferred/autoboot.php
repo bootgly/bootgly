@@ -108,6 +108,18 @@ return new Suite(
       '7.2-inline_close_under_backpressure',
       '7.3-inline_throw_close',
       '7.4-parked_close_carries_header',
-      '7.5-inline_keep_alive_stays_open'
+      '7.5-inline_keep_alive_stays_open',
+      // RTR-18: a handler reached from deferred work reads its own request's
+      //   Route state — behind a deferring route or global middleware, on a
+      //   Router warmed inside a deferral, across wait() and nested defer()
+      //   (appended last)
+      '8.1-route_middleware_deferral_reads_own_params',
+      '8.2-global_middleware_deferral_reads_own_params',
+      '8.3-router_warmed_in_deferral_reads_own_params',
+      '8.4-deferred_routing_state_survives_wait',
+      '8.5-deferred_routing_chain_survives_wait',
+      '8.6-deferred_static_route_scrubs_params',
+      '8.7-nested_deferral_binds_generation_route',
+      '8.8-deferred_routing_chain_settles_once'
    ]
 );

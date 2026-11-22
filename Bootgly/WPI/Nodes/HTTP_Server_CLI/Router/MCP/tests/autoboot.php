@@ -104,5 +104,10 @@ return new Suite(
       '1.10-construction',
       '1.11-store_capacity',
       '1.12-stream_slots',
+      // Authentication that may defer: the unchanged Authentication
+      //   middleware inside a route middleware's deferral, and the nested
+      //   handoff from the handler
+      '1.13-deferred_authentication',
+      '1.14-nested_handoff',
    ]
 );

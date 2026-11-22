@@ -98,10 +98,6 @@ class Router
    /** Fast flag — set true iff any dynamic route was registered. */
    private bool $hasDynamic = false;
    private null|Closure $CatchAllCache = null;
-   // ? Whether the previous request's match wrote route params — static and
-   //   catch-all dispatches then skip the per-request scrub entirely (the
-   //   same mostly-false-branch shape as `Response::$scoped`).
-   private bool $parameterized = false;
    /** @var array<array{prefix:string,handler:callable,methods:array<string>,Middlewares:array<Middleware>}> */
    private array $pendingGroups = [];
    private null|string $groupPrefix = null;
@@ -465,10 +461,12 @@ class Router
       $URL = $URI === '/' ? '' : $Request->URL;
       $Route->path = $URI === '/' ? '/' : $URL;
       // ? Scrub only after a request that actually wrote params — static
-      //   traffic never pays the call frame + array write.
-      if ($this->parameterized) {
+      //   traffic never pays the call frame + array write
+      //   (`Route::$parameterized`, the same mostly-false-branch shape as
+      //   `Response::$scoped`).
+      if ($Route->parameterized) {
          $Route->Params->set([]);
-         $this->parameterized = false;
+         $Route->parameterized = false;
       }
 
       // 1. Static route lookup — O(1)
@@ -613,7 +611,7 @@ class Router
                      $Route = $this->Route;
                      $Route->path = $URL;
                      $Route->Params->set($pv);
-                     $this->parameterized = true;
+                     $Route->parameterized = true;
                   }
                   else {
                      // @ Complex route: regex matching
@@ -646,7 +644,7 @@ class Router
                         }
                      }
                      $Route->Params->set($pv);
-                     $this->parameterized = true;
+                     $Route->parameterized = true;
                   }
 
                   return $this->complete(($entry['dispatcher'])($Request, $Response), $Response);
