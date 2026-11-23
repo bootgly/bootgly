@@ -237,10 +237,11 @@ return new Test(
       $root = "{$base}/root";
       $outside = "{$base}/outside";
       $loud = "{$base}/loud";
-      // ! Locked only around the walks, so a killed run never leaves a tree
-      //   that cannot be removed
+      // ! Locked only around the walks: a run killed inside that window leaves
+      //   a reservation `Temporaries::sweep()` cannot remove
       $locks = [
          "{$root}/tmp/locked" => 0000,
+         "{$loud}/Planted/listless" => 0111,
          "{$loud}/Planted/locked" => 0000,
          "{$loud}/Planted/searchless" => 0444,
       ];
@@ -271,6 +272,8 @@ return new Test(
          // ! Named: directories the walk cannot list or traverse
          mkdir("{$loud}/Planted/searchless", 0755, true);
          file_put_contents("{$loud}/Planted/searchless/foreign.pem", $certificate);
+         // ! Not named: a link to a locked directory is listed, never judged as one
+         symlink("{$loud}/Planted/locked", "{$loud}/Planted/pointer");
          // @@ Every lock, the pruned one included
          foreach ($locks as $lock => $mode) {
             if (is_dir($lock) === false) {
@@ -372,11 +375,11 @@ return new Test(
 
       $listed = json_encode($loudUnreadable);
       yield (new Assertion(
-         description: 'Directories the walk cannot list or traverse are named, and nothing behind them is read',
+         description: 'Directories the walk cannot list or traverse are named (a link to one is not), and nothing behind them is read',
          fallback: "The walk did not report its unreadable directories: {$listed}"
       ))
          ->expect([$loudUnreadable, $loudForeign])
-         ->to->be([['Planted/locked', 'Planted/searchless'], []])
+         ->to->be([['Planted/listless', 'Planted/locked', 'Planted/searchless'], []])
          ->assert();
    }
 );
