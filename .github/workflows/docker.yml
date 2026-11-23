@@ -9,8 +9,8 @@ name: Docker (build + push)
 # documented in the "Resolve version and tags" step. Pre-releases (-beta.N,
 # -rc.N) publish their exact version plus a moving channel alias only; they
 # never move a moving alias. A stable release moves an alias only when it is the
-# highest published stable that alias covers, so a maintenance release (1.3.2
-# after 1.4.0) never takes `1` back.
+# highest published stable that alias covers, so a maintenance release of an
+# older major (1.9.2 after 2.0.0) never takes `2` back.
 
 on:
   release:
@@ -169,8 +169,8 @@ jobs:
             MINOR="${V%.*}"
             # ! "Published" = this repository's `vX.Y.Z` tags on origin, read
             #   from the remote (the checkout above is a shallow single tag).
-            #   A maintenance release (1.3.2 after 1.4.0) moves `1.3` but not
-            #   `1`; a re-dispatch of an older patch moves neither.
+            #   A maintenance release (1.9.2 after 2.0.0) moves `1.9` and `1`
+            #   only; a re-dispatch of an older patch moves neither.
             REMOTE="$(git -C bootgly ls-remote --tags --refs origin)"
             PUBLISHED="$(printf '%s\n' "$REMOTE" \
               | sed -n -E "s#^[0-9a-f]+[[:space:]]+refs/tags/v($N\.$N\.$N)\$#\1#p" \
@@ -326,8 +326,8 @@ jobs:
       #   harness builds.
       #
       # ? Only the highest published stable rebuilds the harness: its images
-      #   are moving tags (one per contender), so a maintenance release (1.3.2
-      #   after 1.4.0) would roll every one of them back, and a pre-release
+      #   are moving tags (one per contender), so a maintenance release (1.9.2
+      #   after 2.0.0) would roll every one of them back, and a pre-release
       #   would benchmark unreleased code.
       - name: Trigger bootgly_benchmarks rebuild
         if: steps.version.outputs.dry == 'false' && steps.version.outputs.newest == 'true'
