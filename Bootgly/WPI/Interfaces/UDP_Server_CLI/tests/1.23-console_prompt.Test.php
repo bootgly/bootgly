@@ -159,11 +159,7 @@ PHP;
             }
          }
       };
-      /**
-       * Whether $Condition holds within $seconds, draining meanwhile. It is
-       * checked once more past the deadline: a pause of this runner never
-       * fails a condition that came true during it.
-       */
+      /** Whether $Condition holds within $seconds, draining meanwhile. */
       $Until = static function (callable $Condition, float $seconds, array $Pipes, string &$output) use ($Drain): bool {
          $deadline = hrtime(true) + (int) ($seconds * 1e9);
          do {
@@ -173,9 +169,8 @@ PHP;
             }
             usleep(1_000);
          } while (hrtime(true) < $deadline);
-         $Drain($Pipes, $output);
 
-         return $Condition();
+         return false;
       };
       /** Whether the master process still runs. */
       $Running = static fn ($Process): bool => is_resource($Process) && proc_get_status($Process)['running'];
@@ -258,7 +253,7 @@ PHP;
          fwrite($Pipes[0], "monitor\nstop\n");
          $Until(static fn (): bool => false, 1.0, $Pipes, $output);
          // @ Monitor → Interactive
-         $master > 0 && posix_kill($master, SIGTSTP);
+         posix_kill($master, SIGTSTP);
          $Observed['the piped stop after monitor exits 0'] = $Until(static fn (): bool => $Running($Process) === false, 4.0, $Pipes, $output)
             && proc_get_status($Process)['exitcode'] === 0;
       }
@@ -288,7 +283,6 @@ PHP;
 
       // @ Terminal: worker deaths and stop/resume signals need no keystroke
       $Observed = [];
-      $Delays = ['answer' => '-', 'exit' => '-'];
       [$Process, $Pipes, $master, $port, $output] = $Start('pty');
       try {
          // # Every worker killed 2 ms apart
@@ -316,7 +310,7 @@ PHP;
          fwrite($Pipes[0], "pause\n");
          $Until(static fn (): bool => false, 1.0, $Pipes, $output);
          $mark = strlen($output);
-         $master > 0 && posix_kill($master, SIGCONT);
+         posix_kill($master, SIGCONT);
          $Observed['SIGCONT resumes'] = $Until(static function () use (&$output, $mark): bool {
             return str_contains(substr($output, $mark), 'Resuming');
          }, 1.5, $Pipes, $output);
@@ -329,43 +323,19 @@ PHP;
 
             return array_diff($Live, $Before) !== [];
          }, 1.5, $Pipes, $output);
-         // ! The master answers the stop at once (its 'Stopping' line, within
-         //   one dispatch); its exit then waits for terminate() to collect the
-         //   workers — the replacement may still be booting, which a loaded
-         //   host stretches past any tight bound. The exit is awaited as an
-         //   event, bounded from the SIGTERM under terminate()'s 5 s SIGKILL
-         //   fallback, so every worker must leave on its own SIGTERM. The
-         //   delays the runner observed appear in the description (human
-         //   view only), never in the verdict.
-         $mark = strlen($output);
-         $sent = hrtime(true);
-         $master > 0 && posix_kill($master, SIGTERM);
-         $answered = $Until(static function () use (&$output, $mark): bool {
-            return str_contains(substr($output, $mark), 'Stopping');
-         }, 0.4, $Pipes, $output);
-         $Delays['answer'] = intdiv(hrtime(true) - $sent, 1_000_000);
-         $exited = $Until(
-            static fn (): bool => $Running($Process) === false,
-            max(0.0, 4.5 - (hrtime(true) - $sent) / 1e9),
-            $Pipes,
-            $output
-         );
-         $Delays['exit'] = intdiv(hrtime(true) - $sent, 1_000_000);
-         $Observed['a stop during a refork is answered at once'] = $replaced && $answered;
-         $Observed['a stop during a refork ends the master by itself'] = $replaced
-            && $exited
-            && proc_get_status($Process)['exitcode'] === 0;
+         posix_kill($master, SIGTERM);
+         $Observed['a stop during a refork is honoured at once'] = $replaced
+            && $Until(static fn (): bool => $Running($Process) === false, 0.4, $Pipes, $output);
       }
       finally {
          $Observed['group clean'] = $Finish($Process, $Pipes, $master, $port);
       }
-      yield new Assertion(description: "on a terminal, deaths are reforked and stop/resume signals are honoured without a keystroke (a stop during a refork: answered in {$Delays['answer']} ms, master gone in {$Delays['exit']} ms)")
+      yield new Assertion(description: 'on a terminal, deaths are reforked and stop/resume signals are honoured without a keystroke')
          ->expect($Observed, Op::Identical, [
             'a burst of deaths is reforked' => true,
             'a revived worker exiting keeps the terminal raw' => true,
             'SIGCONT resumes' => true,
-            'a stop during a refork is answered at once' => true,
-            'a stop during a refork ends the master by itself' => true,
+            'a stop during a refork is honoured at once' => true,
             'group clean' => true,
          ])
          ->assert();
@@ -528,7 +498,7 @@ PHP;
 
             return count($Live) === 4 && $Zombies === [] && array_diff($Live, $Before) !== [];
          }, 1.5, $Pipes, $output);
-         $master > 0 && posix_kill($master, SIGINT);
+         posix_kill($master, SIGINT);
          $Observed['SIGINT stops'] = $Until(static fn (): bool => $Running($Process) === false, 1.5, $Pipes, $output)
             && proc_get_status($Process)['exitcode'] === 0;
       }

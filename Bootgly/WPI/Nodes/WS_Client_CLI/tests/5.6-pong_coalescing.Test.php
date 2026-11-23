@@ -25,12 +25,7 @@ use Bootgly\WPI\Nodes\WS_Client_CLI\Session;
  *
  * The peer is a forked mock (ext-sockets, SO_RCVBUF 2048) driven in lock-step
  * with the real client through a socket pair: the mock sends TEXT commands,
- * the client answers on the pair with one-byte signals. The floods go in
- * windows that each fit the client's drained receive buffer, so no write
- * waits for the client to run; every wait ends on an event and is bounded
- * only by a hang guard — a starved or paused runner delays the exchange,
- * only a wedged one fails it. So no rate is pinned: a client that keeps
- * reading and answering, however slowly, passes; one that stops fails.
+ * the client answers on the pair with one-byte signals.
  */
 return new Test(
    description: 'It should coalesce PONG answers while output is backpressured and keep close ordering',
@@ -40,12 +35,6 @@ return new Test(
       $last = sprintf('%0125d', $pings - 1);
       $empties = intdiv(2_097_152, 2);
       $big = str_repeat('0123456789abcdef', 16_384);
-      // ! Hang guard of every event wait, and of the client's watchdog (seconds)
-      $hang = 30.0;
-      // ! Flood window: a whole window fits the client's drained receive buffer
-      $window = 16_384;
-      $windows = intdiv($pings + intdiv($window, 127) - 1, intdiv($window, 127))
-         + intdiv($empties, intdiv($window, 2));
 
       $Evidence = [
          'error' => '',
@@ -56,7 +45,6 @@ return new Test(
          'c' => null,
          'd' => null,
          'e' => null,
-         'idle' => null,
          'events' => [],
          'max' => ['a' => 0, 'b' => 0, 'd' => 0],
          'heap' => 0,
@@ -101,11 +89,9 @@ return new Test(
                'empties' => 0,
                'b' => ['pongs' => 0, 'last' => null, 'other' => []],
                'c' => ['pongs' => [], 'answers' => 0, 'elapsed' => null, 'drain' => []],
-               'd' => ['pongs' => 0, 'held' => 0, 'after' => 0, 'carried' => null, 'owed' => null, 'last' => null, 'other' => []],
+               'd' => ['pongs' => 0, 'held' => 0, 'after' => 0, 'last' => null, 'other' => []],
                'e' => ['frames' => [], 'eof' => false],
                'signals' => '',
-               'windows' => 0,
-               'slowest' => 0,
                'error' => '',
             ];
             // ! Bytes of a frame split across two collections
@@ -114,7 +100,6 @@ return new Test(
             try {
                /** One-byte client signal on the control pair, within `$limit` seconds. */
                $Await = static function (string $signal, float $limit) use ($Control, &$report): void {
-                  $started = hrtime(true);
                   $Read = [$Control];
                   $Write = null;
                   $Except = null;
@@ -122,17 +107,13 @@ return new Test(
                   if (stream_select($Read, $Write, $Except, $seconds, (int) (($limit - $seconds) * 1_000_000)) !== 1) {
                      throw new RuntimeException("no '{$signal}' signal from the client");
                   }
-                  $report['slowest'] = max($report['slowest'], intdiv(hrtime(true) - $started, 1_000_000));
                   $got = (string) fread($Control, 1);
-                  // ! A window acknowledgement is counted, every other signal kept in order
-                  $signal === 'M' && $got === 'M'
-                     ? $report['windows']++
-                     : $report['signals'] .= $got;
+                  $report['signals'] .= $got;
                   if ($got !== $signal) {
                      throw new RuntimeException("expected the '{$signal}' signal, got '{$got}'");
                   }
                };
-               /** Write every byte (blocking; SO_SNDTIMEO only detects a wedge). */
+               /** Write every byte (blocking, bounded by SO_SNDTIMEO). */
                $Send = static function (Socket $Peer, string $data): void {
                   $offset = 0;
                   $length = strlen($data);
@@ -218,20 +199,8 @@ return new Test(
                         continue;
                      }
                      if (hrtime(true) / 1e9 - $quiet >= $idle) {
-                        // ? Quiet by this process's clock: a pause of the mock
-                        //   itself is not a quiet peer — poll once more first
-                        $Read = [$Peer];
-                        if (@socket_select($Read, $Write, $Except, 0) > 0) {
-                           continue;
-                        }
                         break;
                      }
-                  }
-
-                  // ? A gated collect that ran out waiting for its event: the
-                  //   exchange is wedged — end the run here, not after every leg
-                  if ($Until !== null && $Until() === false) {
-                     throw new RuntimeException("an awaited frame never came within {$limit} s");
                   }
 
                   return false;
@@ -241,7 +210,7 @@ return new Test(
                $Ready = [$Listener];
                $Write = null;
                $Except = null;
-               if (socket_select($Ready, $Write, $Except, (int) $hang) !== 1) {
+               if (socket_select($Ready, $Write, $Except, 5) !== 1) {
                   throw new RuntimeException('the client never dialed');
                }
                $Peer = socket_accept($Listener);
@@ -251,7 +220,7 @@ return new Test(
                $report['accepted'] = true;
                socket_set_option($Peer, SOL_SOCKET, SO_RCVBUF, 2048);
                socket_set_option($Peer, SOL_SOCKET, SO_SNDTIMEO, ['sec' => 5, 'usec' => 0]);
-               socket_set_option($Peer, SOL_SOCKET, SO_RCVTIMEO, ['sec' => (int) $hang, 'usec' => 0]);
+               socket_set_option($Peer, SOL_SOCKET, SO_RCVTIMEO, ['sec' => 5, 'usec' => 0]);
 
                // @ Upgrade
                $request = '';
@@ -268,25 +237,19 @@ return new Test(
                $Send($Peer, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {$accept}\r\n\r\n");
                $report['handshake'] = true;
 
-               // # (a) 8 MiB of counter PINGs; the mock never reads. Each window
-               //   ends with a 'mark' TEXT: the next window waits for the client
-               //   to have decoded it (its 'M' signal), so its receive buffer is
-               //   drained and the next write never waits for the client
-               $mark = $Text('mark');
-               $per = intdiv($window, 127);
+               // # (a) 8 MiB of counter PINGs; the mock never reads
                $batch = '';
                for ($index = 0; $index < $pings; $index++) {
                   $counter = sprintf('%0125d', $index);
                   $batch .= "\x89\x7D{$counter}";
-                  if (($index + 1) % $per === 0 || $index === $pings - 1) {
-                     $Send($Peer, "{$batch}{$mark}");
+                  if (strlen($batch) >= 65_024 || $index === $pings - 1) {
+                     $Send($Peer, $batch);
                      $batch = '';
-                     $Await('M', $hang);
                   }
                   $report['pings']++;
                }
                $Send($Peer, $Text('flood-end'));
-               $Await('A', $hang);
+               $Await('A', 8.0);
 
                // # (b) Drain: every PONG until the one answering the last PING
                $Collect(
@@ -300,21 +263,16 @@ return new Test(
                         $report['b']['other'][] = $opcode;
                      }
                   },
-                  $hang,
+                  5.0,
                   0.3,
                   static function () use (&$report, $last): bool {
                      return $report['b']['last'] === $last;
                   }
                );
 
-               // # (c) A PING on an idle queue is answered at once: between the
-               //   TEXTs around it in the same write, the client's kernel took
-               //   exactly its 15-byte PONG, nothing is parked, its output is empty
-               $arm = $Text('idle-arm');
-               $check = $Text('idle-check');
+               // # (c) A PING on an idle queue is answered at once
                $started = hrtime(true);
-               $Send($Peer, "{$arm}\x89\x09idle-ping{$check}");
-               $Await('I', $hang);
+               $Send($Peer, "\x89\x09idle-ping");
                $Collect(
                   $Peer,
                   static function (int $opcode, string $payload) use (&$report, $started): void {
@@ -326,7 +284,7 @@ return new Test(
                         $report['c']['elapsed'] ??= intdiv(hrtime(true) - $started, 1_000_000);
                      }
                   },
-                  $hang,
+                  1.0,
                   0.2,
                   static function () use (&$report): bool {
                      return $report['c']['pongs'] !== [];
@@ -334,7 +292,7 @@ return new Test(
                );
                // @ ...and a later backpressured send that drains ships no stale PONG
                $Send($Peer, $Text('send-big'));
-               $Await('B', $hang);
+               $Await('B', 5.0);
                $Collect(
                   $Peer,
                   static function (int $opcode, string $payload) use (&$report, $big): void {
@@ -345,35 +303,23 @@ return new Test(
                         ? ($payload === $big ? 'binary' : 'binary-corrupt')
                         : "opcode-{$opcode}";
                   },
-                  $hang,
+                  5.0,
                   0.3,
                   static function () use (&$report): bool {
                      return $report['c']['drain'] !== [];
                   }
                );
 
-               // # (d) 2 MiB of empty PINGs; the mock never reads (windowed as in a)
+               // # (d) 2 MiB of empty PINGs; the mock never reads
                $Send($Peer, $Text('flood2-start'));
-               $per = intdiv($window, 2);
-               $chunk = str_repeat("\x89\x00", $per);
-               for ($sent = 0; $sent < $empties; $sent += $per) {
-                  $Send($Peer, "{$chunk}{$mark}");
-                  $Await('M', $hang);
-                  $report['empties'] += $per;
+               $chunk = str_repeat("\x89\x00", 32_768);
+               for ($sent = 0; $sent < $empties; $sent += 32_768) {
+                  $Send($Peer, $chunk);
+                  $report['empties'] += 32_768;
                }
                $Send($Peer, $Text('flood2-end'));
-               $Await('D', $hang);
-               // ! The client's counts then: the bytes still queued in its output
-               //   and the bytes its kernel accepted during this leg. The kernels
-               //   carry every complete PONG of the latter; the queued bytes
-               //   complete the rest, and one more answers the parked PING
-               $counts = '';
-               while (strlen($counts) < 16 && is_string($digits = fread($Control, 16 - strlen($counts))) && $digits !== '') {
-                  $counts .= $digits;
-               }
-               $report['d']['carried'] = intdiv((int) substr($counts, 8, 8), 6);
-               $report['d']['owed'] = intdiv((int) substr($counts, 0, 8) + 5, 6) + 1;
-               // @ The client holds its loop: drain exactly what the kernels carry (counted, never timed)...
+               $Await('D', 8.0);
+               // @ The client holds its loop: drain only what the kernels already carry...
                $OnEmpty = static function (string $phase) use (&$report): Closure {
                   return static function (int $opcode, string $payload) use (&$report, $phase): void {
                      if ($opcode === 0x0A) {
@@ -386,25 +332,20 @@ return new Test(
                      }
                   };
                };
-               $Collect($Peer, $OnEmpty('held'), $hang, 0.3, static function () use (&$report): bool {
-                  return $report['d']['held'] >= $report['d']['carried'];
-               });
-               // @ ...then release it: the queued tail drains and the parked PING is
-               //   answered — awaited by count, then a quiet window shows any extra
+               $Collect($Peer, $OnEmpty('held'), 3.0, 0.3);
+               // @ ...then release it: the queued tail drains and the parked PING is answered
                fwrite($Control, 'G');
-               $Collect($Peer, $OnEmpty('after'), $hang, 0.3, static function () use (&$report): bool {
-                  return $report['d']['after'] >= $report['d']['owed'];
-               });
+               $Collect($Peer, $OnEmpty('after'), 5.0, 0.3);
 
                // # (e) send, send (backpressured), PING, send, PING, close
                $Send($Peer, $Text('send-two'));
-               $Await('E', $hang);
+               $Await('E', 5.0);
                $third = $Text('send-third');
                $Send($Peer, "\x89\x06e-ping{$third}");
-               $Await('T', $hang);
+               $Await('T', 5.0);
                $close = $Text('close-now');
                $Send($Peer, "\x89\x06f-ping{$close}");
-               $Await('C', $hang);
+               $Await('C', 5.0);
                $report['e']['eof'] = $Collect(
                   $Peer,
                   static function (int $opcode, string $payload) use (&$report, $big): void {
@@ -425,8 +366,8 @@ return new Test(
                         default => "opcode-{$opcode}",
                      };
                   },
-                  $hang,
-                  $hang
+                  5.0,
+                  5.0
                );
 
                socket_close($Peer);
@@ -456,19 +397,11 @@ return new Test(
             port: (int) $port,
             heartbeatInterval: 0,
             compression: false,
-            handshakeTimeout: (int) $hang
+            handshakeTimeout: 5
          ));
-
-         // ! Count the bytes the kernel accepts: leg (d) reports them to the mock
-         $Connections = $Client->Connections;
-         $Connections->stats = true;
 
          $phase = 'a';
          $baseline = 0;
-         $accepted = 0;
-         $armed = 0;
-         // ! Last progress of the exchange (a message handled), for the watchdog
-         $progress = hrtime(true);
          $Client->on(Events::Connected, static function (Session $Session) use (&$baseline): void {
             $baseline = memory_get_usage();
 
@@ -483,14 +416,10 @@ return new Test(
          });
          $Client->on(
             Events::MessageReceived,
-            static function (Session $Session, Message $Message) use (&$Evidence, &$phase, &$baseline, &$progress, &$accepted, &$armed, $Client, $Connections, $Control, $big, $hang): void {
-               $progress = hrtime(true);
+            static function (Session $Session, Message $Message) use (&$Evidence, &$phase, &$baseline, $Control, $big): void {
                $output = strlen($Session->Connection->output);
 
                switch ($Message->payload) {
-                  case 'mark':
-                     fwrite($Control, 'M');
-                     break;
                   case 'flood-end':
                      $Evidence['max']['a'] = max($Evidence['max']['a'], $output);
                      $Evidence['a'] = [
@@ -503,18 +432,6 @@ return new Test(
                      $phase = 'b';
                      fwrite($Control, 'A');
                      break;
-                  case 'idle-arm':
-                     $armed = $Connections->written;
-                     break;
-                  case 'idle-check':
-                     // ! The idle PING just before this frame: answered, not parked
-                     $Evidence['idle'] = [
-                        'pong' => $Session->pong ?? null,
-                        'output' => $output,
-                        'written' => $Connections->written - $armed,
-                     ];
-                     fwrite($Control, 'I');
-                     break;
                   case 'send-big':
                      $Session->send($big, binary: true);
                      $Evidence['c'] = ['output' => strlen($Session->Connection->output)];
@@ -522,19 +439,17 @@ return new Test(
                      break;
                   case 'flood2-start':
                      $phase = 'd';
-                     $accepted = $Client->Connections->written;
                      break;
                   case 'flood2-end':
                      // ! The parked state before the drain: an empty payload, a queued tail
                      $Evidence['max']['d'] = max($Evidence['max']['d'], $output);
-                     $accepted = $Client->Connections->written - $accepted;
-                     $Evidence['d'] = ['output' => $output, 'kernel' => $accepted, 'pong' => $Session->pong ?? null, 'go' => ''];
+                     $Evidence['d'] = ['output' => $output, 'pong' => $Session->pong ?? null, 'go' => ''];
                      $phase = 'e';
-                     fwrite($Control, sprintf('D%08d%08d', $output, $accepted));
+                     fwrite($Control, 'D');
 
                      // @@ Hold the loop until the mock drained the kernel buffers
-                     //    (hang-guarded; a timer SIGALRM may interrupt the select)
-                     $deadline = hrtime(true) + (int) ($hang * 1e9);
+                     //    (bounded; a timer SIGALRM may interrupt the select)
+                     $deadline = hrtime(true) + 5_000_000_000;
                      while ($Evidence['d']['go'] === '' && hrtime(true) < $deadline) {
                         $Read = [$Control];
                         $Write = null;
@@ -543,8 +458,6 @@ return new Test(
                            $Evidence['d']['go'] = (string) fread($Control, 1);
                         }
                      }
-                     // ! The hold is progress too: the watchdog restarts from its release
-                     $progress = hrtime(true);
                      break;
                   case 'send-two':
                      // ! After the drain, nothing may stay parked
@@ -586,28 +499,19 @@ return new Test(
          };
          $Client->Event->defer((int) hrtime(true) + 5_000_000, $Sample);
 
-         // ! Watchdog — a wedged exchange fails an assertion, never the runner. It
-         //   trips on a lack of progress (no message handled for $hang s), never
-         //   on the total time: a starved or paused runner only delays the run
-         $Watch = null;
-         $Watch = static function () use (&$Watch, &$Evidence, &$progress, $Client, $hang): void {
-            if (hrtime(true) - $progress < (int) ($hang * 1e9)) {
-               $Client->Event->defer((int) hrtime(true) + 1_000_000_000, $Watch);
-
-               return;
-            }
+         // ! Guard — a stuck exchange fails an assertion, never the runner
+         $Client->Event->defer((int) hrtime(true) + 9_000_000_000, static function () use (&$Evidence, $Client): void {
             $Evidence['guard'] = true;
             $Client->Session?->disconnect();
             $Client->Session?->Connection->close();
             $Client->Event->destroy();
-         };
-         $Client->Event->defer((int) hrtime(true) + 1_000_000_000, $Watch);
+         });
 
          // @ Run the real client until the graceful close tears the loop down
          $Client->connect('/');
 
-         // @@ Collect the mock report (hang-guarded; a timer SIGALRM may interrupt the select)
-         $deadline = hrtime(true) + (int) ($hang * 1e9);
+         // @@ Collect the mock report (bounded; a timer SIGALRM may interrupt the select)
+         $deadline = hrtime(true) + 3_000_000_000;
          while ($Evidence['mock'] === null && hrtime(true) < $deadline) {
             $Read = [$Control];
             $Write = null;
@@ -667,8 +571,7 @@ return new Test(
             && ($mock['handshake'] ?? false) === true
             && ($mock['pings'] ?? 0) === $pings
             && ($mock['empties'] ?? 0) === $empties
-            && ($mock['windows'] ?? 0) === $windows
-            && ($mock['signals'] ?? '') === 'AIBDETC',
+            && ($mock['signals'] ?? '') === 'ABDETC',
          description: 'the mock must run every leg in lock-step with the client: ' . json_encode($brief)
       );
       yield assert(
@@ -691,7 +594,7 @@ return new Test(
       yield assert(
          assertion: ($mock['c']['pongs'] ?? null) === ['idle-ping']
             && ($mock['c']['answers'] ?? 0) === 1
-            && $Evidence['idle'] === ['pong' => null, 'output' => 0, 'written' => 15]
+            && ($mock['c']['elapsed'] ?? PHP_INT_MAX) < 500
             && ($Evidence['c']['output'] ?? 0) > 0
             && ($mock['c']['drain'] ?? null) === ['binary'],
          description: '(c) a PING on an idle queue must be answered at once, and a later drained send must ship no stale PONG: '
@@ -704,7 +607,6 @@ return new Test(
             && $Evidence['d']['pong'] === ''
             && $Evidence['d']['go'] === 'G'
             && ($mock['d']['pongs'] ?? PHP_INT_MAX) < intdiv($empties, 50)
-            && ($mock['d']['held'] ?? -1) === intdiv((int) ($Evidence['d']['kernel'] ?? -1), 6)
             && ($mock['d']['after'] ?? 0) === $tail + 1
             && ($mock['d']['last'] ?? null) === ''
             && ($mock['d']['other'] ?? null) === []
