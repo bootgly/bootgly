@@ -120,6 +120,11 @@ return new Suite(
       '8.5-deferred_routing_chain_survives_wait',
       '8.6-deferred_static_route_scrubs_params',
       '8.7-nested_deferral_binds_generation_route',
-      '8.8-deferred_routing_chain_settles_once'
+      '8.8-deferred_routing_chain_settles_once',
+      // RTR-19: an entry a handler writes into the route params lives for
+      //   its request only — another client's static request never reads
+      //   it, routed synchronously or inside a deferral (appended last)
+      '9.1-static_writer_params_stay_with_their_request',
+      '9.2-deferred_routing_scrubs_static_writer_params'
    ]
 );

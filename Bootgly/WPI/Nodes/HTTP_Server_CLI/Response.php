@@ -209,7 +209,7 @@ class Response extends Server\Response
     * request state the Router's one Route held before bind() installed this
     * generation's.
     *
-    * @var array<int,array{Request:Request,Response:self,Router:Router,Params:Params,path:string,Middlewares:array<Middleware>,parameterized:bool}>
+    * @var array<int,array{Request:Request,Response:self,Router:Router,Params:Params,path:string,Middlewares:array<Middleware>}>
     */
    private array $Contexts;
    // # State (sets)
@@ -2218,7 +2218,6 @@ class Response extends Server\Response
          'Params' => $Current->Params,
          'path' => $Current->path,
          'Middlewares' => $Current->Middlewares,
-         'parameterized' => $Current->parameterized,
       ];
 
       $WPI->Request = $Request;
@@ -2228,7 +2227,6 @@ class Response extends Server\Response
       $Current->Params = $Route->Params;
       $Current->path = $Route->path;
       $Current->Middlewares = $Route->Middlewares;
-      $Current->parameterized = $Route->parameterized;
    }
 
    /**
@@ -2258,13 +2256,11 @@ class Response extends Server\Response
             $Route->Params = $Current->Params;
             $Route->path = $Current->path;
             $Route->Middlewares = $Current->Middlewares;
-            $Route->parameterized = $Current->parameterized;
          }
          // ! Restore the state the segment found
          $Current->Params = $Context['Params'];
          $Current->path = $Context['path'];
          $Current->Middlewares = $Context['Middlewares'];
-         $Current->parameterized = $Context['parameterized'];
       }
 
       $WPI = WPI;

@@ -144,5 +144,8 @@ return new Suite(
       // # 1.4.0: the HTTP/2 decoder's carried request bytes, header block
       //   fragments and HPACK table never reach a debug dump
       '1.87-http2_decoder_dump_redaction',
+      // # 1.4.0: an entry a handler writes into the route params lives for
+      //   its request only
+      '1.88-router_handler_params_scrub',
    ]
 );

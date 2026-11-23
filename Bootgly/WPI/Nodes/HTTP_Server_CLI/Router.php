@@ -437,10 +437,28 @@ class Router
    /**
     * Resolve the current request from the route cache.
     *
+    * On a warm Router it first empties the Route's `Params`, so no entry the
+    * previous request left there reaches this one.
+    *
     * @return Response|false|null null = cache miss (no catch-all), false = router paused, Response = matched
     */
    public function resolve (): Response|false|null
    {
+      // ! Per-request Route state — the Router keeps one Route, one Params
+      //   map, for the worker's life. Nothing the last request left there
+      //   reaches this one: a dynamic match's params, an entry a handler
+      //   wrote (by assignment, by appending through the by-reference read,
+      //   through a reference) or a key a read inserted; static and
+      //   catch-all matches dispatch from the cache without touching the
+      //   map. Unconditional, because a handler's write raises no flag;
+      //   ahead of the paused return, so a paused Router holds no request's
+      //   params. A cold Router keeps the map: its pending groups still read
+      //   the constraint regexes pre-set there when warm() flattens them.
+      $Route = $this->Route;
+      if ($this->cached) {
+         $Route->Params->set([]);
+      }
+
       if ($this->active === false) {
          return false;
       }
@@ -451,23 +469,10 @@ class Router
       $method = $Request->method;
       $Response = $WPI->Response;
 
-      // ! Per-request Route state — static and catch-all matches dispatch
-      //   straight from the cache without touching the Route, so params from
-      //   a previous dynamic match must never leak into this request; the
-      //   regex path also appends duplicate params onto whatever is stored
-      $Route = $this->Route;
       // ! One URL property-hook read per request — the hook memoizes _URL,
       //   but each read still pays the hook frame.
       $URL = $URI === '/' ? '' : $Request->URL;
       $Route->path = $URI === '/' ? '/' : $URL;
-      // ? Scrub only after a request that actually wrote params — static
-      //   traffic never pays the call frame + array write
-      //   (`Route::$parameterized`, the same mostly-false-branch shape as
-      //   `Response::$scoped`).
-      if ($Route->parameterized) {
-         $Route->Params->set([]);
-         $Route->parameterized = false;
-      }
 
       // 1. Static route lookup — O(1)
       if ($URI === '/') {
@@ -611,7 +616,6 @@ class Router
                      $Route = $this->Route;
                      $Route->path = $URL;
                      $Route->Params->set($pv);
-                     $Route->parameterized = true;
                   }
                   else {
                      // @ Complex route: regex matching
@@ -644,7 +648,6 @@ class Router
                         }
                      }
                      $Route->Params->set($pv);
-                     $Route->parameterized = true;
                   }
 
                   return $this->complete(($entry['dispatcher'])($Request, $Response), $Response);
