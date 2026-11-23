@@ -8,7 +8,9 @@ name: Docker (build + push)
 # Tags follow "version is the axis, variant is the suffix" — see the tag scheme
 # documented in the "Resolve version and tags" step. Pre-releases (-beta.N,
 # -rc.N) publish their exact version plus a moving channel alias only; they
-# never move a moving alias.
+# never move a moving alias. A stable release moves an alias only when it is the
+# highest published stable that alias covers, so a maintenance release (1.3.2
+# after 1.4.0) never takes `1` back.
 
 on:
   release:
@@ -23,6 +25,21 @@ on:
         description: 'Republish an ALREADY PUBLISHED exact version tag (destructive: it changes what that tag means for everyone who pinned it).'
         required: false
         default: 'false'
+      dry_run:
+        description: 'Resolve and report the image tags only: no login, no build, no push, no benchmarks dispatch.'
+        type: boolean
+        required: false
+        default: false
+
+# ! Publishes run one at a time, in order: a run resolves the aliases from the
+#   tags published when it starts, so two overlapping releases could otherwise
+#   push in the opposite order and move an alias back. `queue: max` keeps every
+#   waiting run (the default keeps one and cancels the others). A dry run gets
+#   a group of its own, so it never waits behind or delays a real publish.
+concurrency:
+  group: ${{ inputs.dry_run && format('docker-dry-run-{0}', github.run_id) || 'docker-publish' }}
+  cancel-in-progress: false
+  queue: max
 
 jobs:
   build:
@@ -83,19 +100,32 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           INPUT_VERSION: ${{ inputs.version }}
           RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          # ? `inputs` is empty on a release: that is a real publish.
+          DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
         run: |
           set -euo pipefail
+          # ! Written first, before any path can stop this step: every step that
+          #   logs in, builds or pushes runs only when it reads exactly `false`.
+          case "${DRY_RUN:-}" in
+            true|false) ;;
+            *)
+              echo "::error::dry_run must be true or false (got '${DRY_RUN:-}')."
+              exit 1
+              ;;
+          esac
+          echo "dry=$DRY_RUN" >> "$GITHUB_OUTPUT"
+
           V="${RELEASE_TAG:-${INPUT_VERSION:-}}"
           V="${V#v}"
           if [ -z "$V" ]; then
             echo "::error::No version resolved (provide the 'version' input on manual dispatch)."
             exit 1
           fi
-          echo "value=$V" >> "$GITHUB_OUTPUT"
 
           # ! Tag scheme — the version IS the tag; this image has one variant:
           #
-          #     stable 1.2.3 → 1.2.3  1.2  1
+          #     stable 1.2.3 → 1.2.3  1.2  1   (each alias only when 1.2.3 is
+          #                                     the highest stable it covers)
           #     pre-release  → 1.0.0-rc.1  rc
           #
           # ! NO `latest` here. This image is the INGREDIENT: `docker run -it
@@ -103,11 +133,33 @@ jobs:
           #   framework-only image — that is the very bug this restructure
           #   exists to fix. `latest` belongs to bootgly/bootgly.kit.
           #
-          # ? A pre-release must NEVER move the major/minor aliases either.
-          PRERELEASE="${RELEASE_PRERELEASE:-false}"
-          case "$V" in *-*) PRERELEASE=true ;; esac
+          # ? The version string alone decides stable vs pre-release, and it must
+          #   be one of the two shapes: anything else (`1.2`, `2.0.0-1`) would
+          #   otherwise publish a numeric alias or a channel named like a version.
+          N='(0|[1-9][0-9]*)'
+          STABLE_RE="^$N\.$N\.$N\$"
+          PRERELEASE_RE="^$N\.$N\.$N-(alpha|beta|rc)(\.$N)?\$"
+          if [[ "$V" =~ $STABLE_RE ]]; then
+            PRERELEASE=false
+          elif [[ "$V" =~ $PRERELEASE_RE ]]; then
+            PRERELEASE=true
+          else
+            echo "::error::'$V' is neither X.Y.Z nor X.Y.Z-<alpha|beta|rc>[.N]."
+            exit 1
+          fi
+          # ? A pre-release must NEVER move the major/minor aliases either — and a
+          #   release ticked "pre-release" with a stable version is a mistake to
+          #   stop, not a channel to make up from the version's digits.
+          if [ "${RELEASE_PRERELEASE:-false}" = "true" ] && [ "$PRERELEASE" = "false" ]; then
+            echo "::error::Release v$V is marked pre-release but its version has no pre-release suffix."
+            exit 1
+          fi
+          echo "value=$V" >> "$GITHUB_OUTPUT"
 
           REPO=bootgly/bootgly
+          # ! `newest` = the highest published stable of all: the only version
+          #   the benchmark images (moving tags per contender) may be rebuilt on.
+          NEWEST=false
           if [ "$PRERELEASE" = "true" ]; then
             CHANNEL="${V#*-}"      # 1.0.0-beta.1 → beta.1
             CHANNEL="${CHANNEL%%.*}" # beta.1      → beta
@@ -115,17 +167,52 @@ jobs:
           else
             MAJOR="${V%%.*}"
             MINOR="${V%.*}"
-            TAGS="$REPO:$V"$'\n'"$REPO:$MINOR"$'\n'"$REPO:$MAJOR"
+            # ! "Published" = this repository's `vX.Y.Z` tags on origin, read
+            #   from the remote (the checkout above is a shallow single tag).
+            #   A maintenance release (1.3.2 after 1.4.0) moves `1.3` but not
+            #   `1`; a re-dispatch of an older patch moves neither.
+            REMOTE="$(git -C bootgly ls-remote --tags --refs origin)"
+            PUBLISHED="$(printf '%s\n' "$REMOTE" \
+              | sed -n -E "s#^[0-9a-f]+[[:space:]]+refs/tags/v($N\.$N\.$N)\$#\1#p" \
+              | sort -u -V)"
+            echo "published stable tags:"; echo "$PUBLISHED"
+            # ? A tag list that collapsed (wrong remote, empty answer) must not
+            #   read as "this version is the highest": fail closed.
+            COUNT="$(grep -c . <<< "$PUBLISHED" || true)"
+            if [ "$COUNT" -lt 2 ]; then
+              echo "::error::Only $COUNT published stable tag(s) visible on origin — refusing to decide the moving aliases."
+              exit 1
+            fi
+            if ! grep -qxF "$V" <<< "$PUBLISHED"; then
+              echo "::error::Tag v$V is not on origin — cannot place it among the published versions."
+              exit 1
+            fi
+            # highest <major|''> <minor|''> → the highest published X.Y.Z in that range
+            highest () {
+              awk -F. -v x="$1" -v y="$2" '(x == "" || $1 == x) && (y == "" || $2 == y)' <<< "$PUBLISHED" \
+                | sort -V | tail -n 1
+            }
+            TAGS="$REPO:$V"
+            if [ "$(highest "$MAJOR" "${MINOR#*.}")" = "$V" ]; then
+              TAGS+=$'\n'"$REPO:$MINOR"
+            fi
+            if [ "$(highest "$MAJOR" '')" = "$V" ]; then
+              TAGS+=$'\n'"$REPO:$MAJOR"
+            fi
+            if [ "$(highest '' '')" = "$V" ]; then
+              NEWEST=true
+            fi
           fi
 
           {
             echo "prerelease=$PRERELEASE"
+            echo "newest=$NEWEST"
             echo "tags<<TAGS_EOF"
             echo "$TAGS"
             echo "TAGS_EOF"
           } >> "$GITHUB_OUTPUT"
 
-          echo "Resolved version: $V (prerelease: $PRERELEASE)"
+          echo "Resolved version: $V (prerelease: $PRERELEASE, newest stable: $NEWEST, dry run: $DRY_RUN)"
           echo "tags:"; echo "$TAGS"
 
       # ? An exact version tag is IMMUTABLE — it names the code of one published
@@ -142,18 +229,28 @@ jobs:
       #   pull token this step mints (100 per 6h per IP — a shared GitHub runner
       #   hits it). `curl -s` reports success on both, so an unrecognised code
       #   must stop the run rather than be read as "free".
+      #
+      # ? A dry run reports what this guard would decide instead of stopping.
       - name: Refuse to overwrite a published version tag
         if: inputs.overwrite != 'true'
         env:
           VERSION: ${{ steps.version.outputs.value }}
+          DRY: ${{ steps.version.outputs.dry }}
         run: |
           set -euo pipefail
+          refuse () {
+            if [ "$DRY" = "true" ]; then
+              echo "::notice::Dry run — a real run would stop here: $1"
+              exit 0
+            fi
+            echo "::error::$1"
+            exit 1
+          }
           TOKEN="$(curl -fsSL \
             'https://auth.docker.io/token?service=registry.docker.io&scope=repository:bootgly/bootgly:pull' \
             | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')"
           if [ -z "$TOKEN" ]; then
-            echo "::error::Could not obtain a registry pull token — cannot prove bootgly/bootgly:$VERSION is free."
-            exit 1
+            refuse "Could not obtain a registry pull token — cannot prove bootgly/bootgly:$VERSION is free."
           fi
           CODE="$(curl -s -o /dev/null -w '%{http_code}' \
             -H "Authorization: Bearer $TOKEN" \
@@ -166,30 +263,32 @@ jobs:
               echo "bootgly/bootgly:$VERSION is free."
               ;;
             200)
-              echo "::error::bootgly/bootgly:$VERSION is already published. An exact version tag is immutable — cut a new version, or dispatch again with overwrite=true if you really mean to replace what that tag hands every user."
-              exit 1
+              refuse "bootgly/bootgly:$VERSION is already published. An exact version tag is immutable — cut a new version, or dispatch again with overwrite=true if you really mean to replace what that tag hands every user."
               ;;
             *)
-              echo "::error::The registry answered $CODE for bootgly/bootgly:$VERSION — that proves neither free nor taken, so this run stops instead of guessing."
-              exit 1
+              refuse "The registry answered $CODE for bootgly/bootgly:$VERSION — that proves neither free nor taken, so this run stops instead of guessing."
               ;;
           esac
 
       # ! QEMU first: buildx bootstraps its builder and snapshots the platform
       #   list, so binfmt has to be registered before it runs.
       - name: Set up QEMU (cross-platform build)
+        if: steps.version.outputs.dry == 'false'
         uses: docker/setup-qemu-action@v3
 
       - name: Setup Docker Buildx
+        if: steps.version.outputs.dry == 'false'
         uses: docker/setup-buildx-action@v4
 
       - name: Login to Docker Hub
+        if: steps.version.outputs.dry == 'false'
         uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push the framework image
+        if: steps.version.outputs.dry == 'false'
         uses: docker/build-push-action@v7
         with:
           context: bootgly
@@ -221,10 +320,17 @@ jobs:
       #   Actions:write authenticates and then 403s on the dispatch.
       #   https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens
       #
-      # ! The base is the EXACT version tag. This repo publishes no moving
-      #   alias at all, so there is nothing else to name — and `$V` always
-      #   exists and always names the image this very run just pushed.
+      # ! The base is the EXACT version tag: `$V` always exists and always
+      #   names the image this very run just pushed, while a moving alias may
+      #   not have moved (a maintenance release) or may move again before the
+      #   harness builds.
+      #
+      # ? Only the highest published stable rebuilds the harness: its images
+      #   are moving tags (one per contender), so a maintenance release (1.3.2
+      #   after 1.4.0) would roll every one of them back, and a pre-release
+      #   would benchmark unreleased code.
       - name: Trigger bootgly_benchmarks rebuild
+        if: steps.version.outputs.dry == 'false' && steps.version.outputs.newest == 'true'
         env:
           GH_TOKEN: ${{ secrets.BENCHMARKS_DISPATCH_TOKEN }}
           VERSION: ${{ steps.version.outputs.value }}
@@ -235,3 +341,12 @@ jobs:
           fi
           printf '{"event_type":"framework-release","client_payload":{"version":"%s","base":"bootgly/bootgly:%s"}}' "$VERSION" "$VERSION" > payload.json
           gh api repos/bootgly/bootgly_benchmarks/dispatches --method POST --input payload.json
+
+      # ? A real publish (release event) that skipped the steps above must not
+      #   finish green: the gate reads the dry flag in its positive form, so a
+      #   missing flag skips publishing — and lands here.
+      - name: Refuse a release run that published nothing
+        if: github.event_name != 'workflow_dispatch' && steps.version.outputs.dry != 'false'
+        run: |
+          echo "::error::This release run resolved no 'dry=false' flag, so nothing was published."
+          exit 1

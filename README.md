@@ -85,7 +85,7 @@ CLI tooling runs natively — use Docker for everything else.
 - PHP 8.4+ ⚠️
 - Opcache + JIT enabled (+50% performance) 👍
 
-> 🐳 **Docker:** `docker run -it bootgly/bootgly.kit` gives you the whole kit — framework, Console and Web — ready to create and run projects. `latest` and the `1` / `1.x` aliases follow the stable line; pin an exact version (`bootgly/bootgly.kit:<version>`) for a build that never moves. This repository publishes `bootgly/bootgly`, the framework image you build your own on — it is always pulled by an explicit tag (`<version>`, `1.x`, `1`; never `latest`); see the [`Dockerfile`](Dockerfile) and the [Docker guide][DOCKER_GUIDE].
+> 🐳 **Docker:** `docker run -it bootgly/bootgly.kit` gives you the whole kit — framework, Console and Web — ready to create and run projects. `latest` and the `1` / `1.<minor>` aliases follow the highest stable they cover (a maintenance release moves only the aliases it is still the highest for); pin an exact version (`bootgly/bootgly.kit:<version>`) for a build that never moves. This repository publishes `bootgly/bootgly`, the framework image you build your own on — it is always pulled by an explicit tag (`<version>`, `1.<minor>`, `1`; never `latest`); see the [`Dockerfile`](Dockerfile) and the [Docker guide][DOCKER_GUIDE].
 
 #### PHP Packages
 
