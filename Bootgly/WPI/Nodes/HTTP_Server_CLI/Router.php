@@ -16,7 +16,6 @@ use const T_FUNCTION;
 use function array_fill;
 use function array_intersect;
 use function array_keys;
-use function array_splice;
 use function array_values;
 use function count;
 use function explode;
@@ -36,6 +35,7 @@ use function rtrim;
 use function serialize;
 use function spl_object_id;
 use function str_ends_with;
+use function strlen;
 use function strpos;
 use function substr;
 use function substr_count;
@@ -69,6 +69,12 @@ class Router
       'slug'     => '[a-zA-Z0-9_-]+',
       'uuid'     => '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}',
    ];
+   // # Middleware comparison
+   /**
+    * The largest PHP file, in bytes, whose declarations `tally()` counts: a
+    * closure declared in a larger one is another one.
+    */
+   private const int SOURCE_LIMIT = 262144;
 
    // * Data
    // # Status
@@ -1279,8 +1285,8 @@ class Router
     *   extending it, and a lazy object not initialized yet, whose state
     *   the properties do not show: those are the same instance only;
     * - closures: the same instance, or the same declaration — alone on
-    *   its line of a file — with the same called class, scope, bound
-    *   object and captured variables.
+    *   its line of a file of `SOURCE_LIMIT` bytes at most — with the same
+    *   called class, scope, bound object and captured variables.
     * Values are compared this way all the way down, 16 levels at most
     * (deeper is another one); an object pair met again — a cycle, or one
     * shared below both — counts as the same.
@@ -1369,8 +1375,11 @@ class Router
    }
    /**
     * How many functions and closures are declared on line `$line` of the
-    * PHP file `$file` — 0 when it is not a readable file (`eval()`'d code).
-    * Each file is read once per warm-up.
+    * PHP file `$file` — 0 when it is not a readable file (`eval()`'d code)
+    * or is larger than `SOURCE_LIMIT`: its tokens cost the worker tens to
+    * a couple of hundred times its size in memory (~58 MB for a dense file
+    * at the limit). Each file is read once per warm-up, at most one byte
+    * past the limit.
     */
    private function tally (string $file, int $line): int
    {
@@ -1380,13 +1389,16 @@ class Router
          // ? A file gone or unreadable since it was loaded: no declaration
          //   to count, so the closure is another one
          try {
-            $source = is_file($file) ? @file_get_contents($file) : false;
+            $source = is_file($file)
+               ? @file_get_contents($file, false, null, 0, self::SOURCE_LIMIT + 1)
+               : false;
          }
          catch (Throwable) {
             // ? Out of reach since it was loaded (`open_basedir`)
             $source = false;
          }
-         if ($source !== false) {
+         // ? Larger than the limit: no declaration to count either
+         if ($source !== false && strlen($source) <= self::SOURCE_LIMIT) {
             // @@ Each `function` / `fn` keyword, by the line it starts on
             foreach (token_get_all($source) as $Token) {
                if (is_array($Token) && ($Token[0] === T_FUNCTION || $Token[0] === T_FN)) {
@@ -1409,7 +1421,13 @@ class Router
     * same when `compare()` finds them so — the same instance, or one built
     * again the same way —: a configuration that differs is another
     * Middleware, kept beside it. Each one of `$Own` stands for one of
-    * `$Kept` at most.
+    * `$Kept` at most: the first one, in its order, still free.
+    *
+    * A kept one is compared with the free ones of `$Own` of its class only
+    * — `compare()` finds no other the same —, and the list is laid out
+    * once: a registration costs a pass over the kept ones, each compared
+    * with the free own ones of its class, not a copy of the list per kept
+    * one put back.
     *
     * @param array<Middleware> $Kept
     * @param array<Middleware> $Own
@@ -1418,16 +1436,22 @@ class Router
     */
    private function merge (array $Kept, array $Own): array
    {
-      // ! This attempt's own, each not yet standing for a kept one
-      $Merged = array_values($Own);
-      $free = array_fill(0, count($Merged), true);
+      // ! This attempt's own, by class, each not yet standing for a kept one
+      $Own = array_values($Own);
+      $classes = [];
+      foreach ($Own as $index => $Middleware) {
+         $classes[$Middleware::class][] = $index;
+      }
+      $free = array_fill(0, count($Own), true);
+      // ! The kept ones put back ahead of each own one (the last: after all)
+      $Back = [];
       $cursor = 0;
 
       // @@ Put back what this attempt lacks, in its place
       foreach ($Kept as $Middleware) {
-         foreach ($Merged as $index => $Current) {
+         foreach ($classes[$Middleware::class] ?? [] as $index) {
             $pairs = [];
-            if ($free[$index] && $this->compare($Current, $Middleware, $pairs)) {
+            if ($free[$index] && $this->compare($Own[$index], $Middleware, $pairs)) {
                $free[$index] = false;
                $cursor = max($cursor, $index + 1);
 
@@ -1435,9 +1459,23 @@ class Router
             }
          }
 
-         array_splice($Merged, $cursor, 0, [$Middleware]);
-         array_splice($free, $cursor, 0, [false]);
-         $cursor++;
+         $Back[$cursor][] = $Middleware;
+      }
+      // ?: Nothing to put back: this attempt's own, as they are
+      if ($Back === []) {
+         return $Own;
+      }
+
+      // @@ Lay this attempt's own out, each after what goes back ahead of it
+      $Merged = [];
+      foreach ($Own as $index => $Middleware) {
+         foreach ($Back[$index] ?? [] as $Put) {
+            $Merged[] = $Put;
+         }
+         $Merged[] = $Middleware;
+      }
+      foreach ($Back[count($Own)] ?? [] as $Put) {
+         $Merged[] = $Put;
       }
 
       // :

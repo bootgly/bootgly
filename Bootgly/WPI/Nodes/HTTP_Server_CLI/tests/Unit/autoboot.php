@@ -147,5 +147,8 @@ return new Suite(
       // # 1.4.0: an entry a handler writes into the route params lives for
       //   its request only
       '1.88-router_handler_params_scrub',
+      // # 1.4.0: a cold Router merges what it keeps in a pass, and never
+      //   reads a large file to compare a closure
+      '1.89-router_cold_merge_cost',
    ]
 );
