@@ -317,29 +317,43 @@ class S3 extends Resource implements Scheduling
     * an empty read before its end fails the write, never a truncated object.
     *
     * A failed part, a failed completion or a throw on the way (the deferral's `Timeout`) aborts
-    * the upload before the call returns or the throw leaves it, waiting `ABORT` seconds at most —
-    * a throw during the completion leaves its outcome unknown; an upload whose abort fails, or
-    * that a request destroyed while it waits (its client left) opened, is left to the next claims
-    * of a resource of this disk in the worker. A completion whose answer is lost is judged by the
-    * store: an upload still listed fails and is aborted; else an object at the key that the parts
-    * make (`Reader::fold()`), of the written size and headers, is a success; else it fails with
-    * its outcome unknown.
+    * the upload before the call returns or the throw leaves it, within `ABORT` seconds to connect
+    * and `ABORT` to be answered. After a throw that lands once the call runs (the deferral's
+    * `Timeout`) — whose budget and bodies are given back at once —, `$Failure` says what it left
+    * of the object: null only when the store shows it stored (a completion the store took before
+    * the throw: one more `HeadObject`, bounded like the abort), else nothing stored or its outcome
+    * unknown (a single PUT in flight, or a completion the store did not abort or will not show).
+    * An upload whose abort fails, or that a request destroyed while it waits (its client left)
+    * opened, is left to the next claims of a resource of this disk in the worker. A completion
+    * whose answer is lost is judged by the store: an upload still listed fails and is aborted;
+    * else an object at the key that the parts make (`Reader::fold()`), of the written size and
+    * headers, is a success; else it fails with its outcome unknown.
     *
     * @param string $path The object path, inside the disk's root.
     * @param mixed $source A string, or a readable stream (a local file: reading it blocks).
     * @param array<string,mixed> $options `type` (Content-Type) and `meta` (a `x-amz-meta-*` map).
     *
-    * @throws LogicException When called outside a live deferred context, or while another one owns this resource.
+    * @throws LogicException When called outside a live deferred context, or while another one owns this resource
+    *    — thrown before the call runs: `$Failure` is left as it was.
     */
    public function write (string $path, mixed $source, array $options = []): bool
    {
-      $this->own();
+      $claimed = $this->own();
       $this->enter();
       // ! The upload this call opened and has not closed yet: [key, id]
       $open = null;
       // ! The aborts it had here: one once tried (a destroyed request tries none)
       $tries = 0;
+      // ! What a throw cuts: the single PUT in flight, or the completion — `[parts, size, headers]`
+      //   — whose outcome the store holds
+      $storing = false;
+      $completing = null;
+      $key = $path;
       try {
+         // @ The context's first call aborts the uploads left open: a throw there is this write's
+         if ($claimed === true) {
+            $this->sweep();
+         }
          $key = $this->Writer->locate($path);
 
          // ?
@@ -356,6 +370,7 @@ class S3 extends Resource implements Scheduling
             if ($this->reserve(strlen($source)) === false) {
                return $this->fail("S3 write {$key}: the worker's in-flight budget ({$this->budget} bytes) cannot take " . strlen($source) . ' more bytes');
             }
+            $storing = true;
 
             return $this->store($key, $source, $extra);
          }
@@ -383,6 +398,7 @@ class S3 extends Resource implements Scheduling
          // ?: A stream of one part — a single PUT
          if ($peek === '') {
             $this->refund($this->held - strlen($first));
+            $storing = true;
 
             return $this->store($key, $first, $extra);
          }
@@ -414,7 +430,7 @@ class S3 extends Resource implements Scheduling
                $chunk = $this->take($source, $offset, $this->part - strlen($carry));
                if ($chunk === false) {
                   $this->fail('S3 multipart: source stream read error');
-                  $open = $this->terminate($open) ? null : $open;
+                  $open = $this->terminate($open) > 0 ? null : $open;
                   $tries = 1;
 
                   return false;
@@ -426,7 +442,7 @@ class S3 extends Resource implements Scheduling
                }
                if (++$number > Uploads::PARTS) {
                   $this->fail('S3 multipart: more than ' . Uploads::PARTS . " parts at a part size of {$this->part} bytes");
-                  $open = $this->terminate($open) ? null : $open;
+                  $open = $this->terminate($open) > 0 ? null : $open;
                   $tries = 1;
 
                   return false;
@@ -443,7 +459,7 @@ class S3 extends Resource implements Scheduling
             $bodies = [];
             if ($Failure !== null) {
                $this->record($Failure);
-               $open = $this->terminate($open) ? null : $open;
+               $open = $this->terminate($open) > 0 ? null : $open;
                $tries = 1;
 
                return false;
@@ -454,19 +470,22 @@ class S3 extends Resource implements Scheduling
          $completion = $this->Writer->join($ETags);
          if ($completion instanceof Failure) {
             $this->record($completion);
-            $open = $this->terminate($open) ? null : $open;
+            $open = $this->terminate($open) > 0 ? null : $open;
             $tries = 1;
 
             return false;
          }
+         $completing = [$ETags, $total, $extra];
          $concluded = $this->conclude($key, $id, $completion, $ETags, $total, $extra);
-         // ? Not completed, or not shown gone: abort it (harmless to a completed upload)
+         // ? Not completed, or not shown gone: abort it (harmless to a completed upload) — the
+         //   completion stays the one a throw during that abort is judged by
          if ($concluded === false) {
-            $open = $this->terminate($open) ? null : $open;
+            $open = $this->terminate($open) > 0 ? null : $open;
             $tries = 1;
 
             return false;
          }
+         $completing = null;
          // ! Completed — or its outcome unknown with the upload gone: nothing left to abort
          $open = null;
          if ($concluded === null) {
@@ -477,18 +496,29 @@ class S3 extends Resource implements Scheduling
          return true;
       }
       catch (Throwable $Throwable) {
-         // ? A throw while parts were in flight (the deferral's Timeout): nothing stays in
-         //   flight, then the open upload is aborted on this Fiber, still live — within `ABORT`
-         //   seconds, or left to the next claim
+         // ? A throw while requests were in flight (the deferral's Timeout): nothing stays in
+         //   flight and its budget is given back with the bodies it held, then the open upload is
+         //   aborted on this Fiber, still live — within the `ABORT` bounds, or left to the next claim
          $this->Client->abort();
-         if ($open !== null) {
-            $tries = 1;
-            try {
-               $open = $this->terminate($open) ? null : $open;
+         unset($bodies, $chunk, $first);
+         $this->refund();
+         $aborted = 0;
+         try {
+            if ($open !== null) {
+               $tries = 1;
+               $aborted = $this->terminate($open);
+               $open = $aborted > 0 ? null : $open;
             }
-            catch (Throwable) {
-               // ? Left to the next claim (below)
-            }
+
+            // @ What the throw left of the object, on `$Failure`
+            $this->settle($key, $storing, $completing, $aborted);
+         }
+         catch (Throwable) {
+            // ? Cut again: the upload is left to the next claim (below), and the outcome is
+            //   what the store may already hold
+            $this->record(new Failure(0, '', Kinds::Transport, $storing === true || $completing !== null
+               ? "S3 write {$key}: cut while the store took the object — its outcome is unknown"
+               : "S3 write {$key}: cut before the object was completed — nothing stored"));
          }
 
          throw $Throwable;
@@ -516,7 +546,9 @@ class S3 extends Resource implements Scheduling
     */
    public function read (string $path, int $offset = 0, null|int $length = null): string|false
    {
-      $this->own();
+      if ($this->own() === true) {
+         $this->sweep();
+      }
       $this->enter();
       try {
          $key = $this->Writer->locate($path);
@@ -556,7 +588,9 @@ class S3 extends Resource implements Scheduling
     */
    public function delete (string $path): bool
    {
-      $this->own();
+      if ($this->own() === true) {
+         $this->sweep();
+      }
       $this->enter();
       try {
          [$code, $headers, $body] = $this->send('DELETE', $this->Writer->locate($path), [], '', [], self::ANSWER);
@@ -580,7 +614,9 @@ class S3 extends Resource implements Scheduling
     */
    public function check (string $path): bool
    {
-      $this->own();
+      if ($this->own() === true) {
+         $this->sweep();
+      }
       $this->enter();
       try {
          $key = $this->Writer->locate($path);
@@ -611,7 +647,9 @@ class S3 extends Resource implements Scheduling
     */
    private function open (string $path, array $options): string|false
    {
-      $this->own();
+      if ($this->own() === true) {
+         $this->sweep();
+      }
       $this->enter();
       try {
          $key = $this->Writer->target($path);
@@ -666,7 +704,9 @@ class S3 extends Resource implements Scheduling
     */
    private function put (string $path, string $id, int $part, string $body): string|false
    {
-      $this->own();
+      if ($this->own() === true) {
+         $this->sweep();
+      }
       $this->enter();
       try {
          // ?
@@ -711,7 +751,9 @@ class S3 extends Resource implements Scheduling
     */
    private function enumerate (string $path, string $id): array|false
    {
-      $this->own();
+      if ($this->own() === true) {
+         $this->sweep();
+      }
       $this->enter();
       try {
          // ?
@@ -770,7 +812,9 @@ class S3 extends Resource implements Scheduling
     */
    private function close (string $path, string $id, array $parts): bool
    {
-      $this->own();
+      if ($this->own() === true) {
+         $this->sweep();
+      }
       $this->enter();
       try {
          // ?
@@ -800,7 +844,9 @@ class S3 extends Resource implements Scheduling
     */
    private function cancel (string $path, string $id): bool
    {
-      $this->own();
+      if ($this->own() === true) {
+         $this->sweep();
+      }
       $this->enter();
       try {
          // ?
@@ -880,10 +926,10 @@ class S3 extends Resource implements Scheduling
    }
 
    /**
-    * Claim this resource for the running deferred context; the first claim of a context aborts
-    * the uploads a destroyed request of this disk left open.
+    * Claim this resource for the running deferred context: true when this call made the claim
+    * (the context's first), whose caller then aborts the uploads left open (`sweep()`).
     */
-   private function own (): void
+   private function own (): bool
    {
       $Fiber = Fiber::getCurrent();
 
@@ -894,7 +940,7 @@ class S3 extends Resource implements Scheduling
 
       // ?: Already claimed by this context
       if ($this->Fiber === $Fiber) {
-         return;
+         return false;
       }
 
       // ? One context at a time
@@ -917,8 +963,17 @@ class S3 extends Resource implements Scheduling
          $this->release();
       });
 
-      // @ Up to `DRAIN` uploads of this disk a destroyed request left open: aborted now; one
-      //   whose abort fails or is cut goes back to the list
+      // :
+      return true;
+   }
+
+   /**
+    * Abort up to `DRAIN` uploads of this disk left open — by a destroyed request, or whose abort
+    * failed; one whose abort fails or is cut goes back to the list. Run by a context's first
+    * call; inside `write()`'s `try`, so a throw cutting it there is the write's.
+    */
+   private function sweep (): void
+   {
       $Orphans = [];
       foreach (self::$Orphans as $index => $Orphan) {
          if (count($Orphans) >= self::DRAIN) {
@@ -934,7 +989,7 @@ class S3 extends Resource implements Scheduling
             // ! Counted before it is sent: a cut abort is a try too
             $Orphans[0][3]++;
             [, $key, $id, $tries] = $Orphans[0];
-            $settled = $this->terminate([$key, $id]);
+            $settled = $this->terminate([$key, $id]) > 0;
             array_shift($Orphans);
             if ($settled === false) {
                $this->abandon([$key, $id], $tries);
@@ -1297,17 +1352,8 @@ class S3 extends Resource implements Scheduling
          $open = $Listed->status !== 404 || $Listed->code !== 'NoSuchUpload';
       }
 
-      // @ Is the object at the key the one these parts make?
-      $expected = Reader::fold($parts);
-      [$code, $fields, $body] = $this->send('HEAD', $key, [], '', [], self::ANSWER);
-      $matched = Reader::judge(Operations::HeadObject, $code, $fields, $body, "S3 HEAD {$key}") === null
-         && $this->pick($fields, 'etag') !== null
-         && strtolower(trim((string) $this->pick($fields, 'etag'))) === $expected
-         && ($total === null || $this->pick($fields, 'content-length') === (string) $total);
-      foreach ($extra ?? [] as $name => $value) {
-         $matched = $matched && $this->pick($fields, strtolower($name)) === $value;
-      }
-      if ($matched === true) {
+      // ?: The object at the key is the one these parts make
+      if ($this->confirm($key, $parts, $total, $extra) === true) {
          return true;
       }
 
@@ -1316,6 +1362,88 @@ class S3 extends Resource implements Scheduling
 
       // :
       return $open === true ? false : null;
+   }
+
+   /**
+    * Whether the object at the key is the one these parts make (`HeadObject`): its ETag is the
+    * one they fold into (`Reader::fold()`), its size, when known, is `$total` and its headers,
+    * when known, are `$extra`. False when the store shows it differs or is missing (`404`); null
+    * when the store will not show it (no answer, or a refusal).
+    *
+    * @param array<int|string,mixed> $parts The parts, by part number (`[number => ['etag' => ...]]`).
+    * @param null|array<string,string> $extra The headers the upload was created with.
+    */
+   private function confirm (string $key, array $parts, null|int $total = null, null|array $extra = null): null|bool
+   {
+      $expected = Reader::fold($parts);
+      [$code, $fields, $body] = $this->send('HEAD', $key, [], '', [], self::ANSWER);
+      $Failure = Reader::judge(Operations::HeadObject, $code, $fields, $body, "S3 HEAD {$key}");
+      // ?: Not shown
+      if ($Failure !== null) {
+         return $Failure->status === 404 ? false : null;
+      }
+      $matched = $this->pick($fields, 'etag') !== null
+         && strtolower(trim((string) $this->pick($fields, 'etag'))) === $expected
+         && ($total === null || $this->pick($fields, 'content-length') === (string) $total);
+      foreach ($extra ?? [] as $name => $value) {
+         $matched = $matched && $this->pick($fields, strtolower($name)) === $value;
+      }
+
+      // :
+      return $matched;
+   }
+
+   /**
+    * Record what a throw out of `write()` left of the object: no failure when the store shows it
+    * stored — a completion the store took before the throw; one the completion recorded is
+    * cleared —, else a failure saying nothing was
+    * stored (no completion was sent, or the store aborted the upload and shows no such object:
+    * missing or another one) or that the outcome is unknown (a single PUT in flight, or a
+    * completion the store did not abort or will not show). The store is asked within `ABORT`
+    * seconds to connect and `ABORT` to be answered.
+    *
+    * @param bool $storing Whether a single PUT was in flight.
+    * @param null|array{0:array<int|string,mixed>,1:int,2:array<string,string>} $completing The
+    *    completion in flight: `[parts, size, headers]`.
+    * @param int $aborted The status of the answer that settled the upload's abort; 0 when none did.
+    */
+   private function settle (string $key, bool $storing, null|array $completing, int $aborted): void
+   {
+      // ?: No completion was sent
+      if ($completing === null) {
+         $this->record(new Failure(0, '', Kinds::Transport, $storing === true
+            ? "S3 write {$key}: cut while the store took the object — its outcome is unknown"
+            : "S3 write {$key}: cut before the object was completed — nothing stored"));
+
+         return;
+      }
+
+      // @ Is the object the completion makes at the key?
+      [$parts, $total, $extra] = $completing;
+      $timeout = $this->Client->timeout;
+      $connectTimeout = $this->Client->connectTimeout;
+      $this->Client->timeout = min($this->timeout, self::ABORT);
+      $this->Client->connectTimeout = min($this->connectTimeout, self::ABORT);
+      try {
+         $stored = $this->confirm($key, $parts, $total, $extra);
+      }
+      finally {
+         $this->Client->timeout = $timeout;
+         $this->Client->connectTimeout = $connectTimeout;
+      }
+      // ?: Stored — the throw cut only the store's answer: what the completion recorded before
+      //   (a lost answer, an unknown outcome) is settled
+      if ($stored === true) {
+         $this->Failure = null;
+         $this->error = '';
+
+         return;
+      }
+
+      // :
+      $this->record(new Failure(0, '', Kinds::Transport, ($aborted === 200 || $aborted === 204) && $stored === false
+         ? "S3 complete multipart {$key}: cut before the store answered — the upload was aborted, nothing stored"
+         : "S3 complete multipart {$key}: cut before the store answered — the completion's outcome is unknown"));
    }
 
    /**
@@ -1334,14 +1462,14 @@ class S3 extends Resource implements Scheduling
 
    /**
     * Abort an upload a write opened, with nothing of it in flight, within `ABORT` seconds to
-    * connect and `ABORT` to be answered; true when it is settled — the store says it is gone, or
-    * refuses the abort for good (`FINAL`: the same request would be refused again, and the
-    * bucket's lifecycle rule is the backstop). Records nothing (the failure that led here is the
-    * call's).
+    * connect and `ABORT` to be answered; the status of the answer when it is settled — the store
+    * aborted it (`200`, `204`), says it is gone (`404`), or refuses the abort for good (`FINAL`:
+    * the same request would be refused again, and the bucket's lifecycle rule is the backstop) —,
+    * else 0. Records nothing (the failure that led here is the call's).
     *
     * @param array{0:string,1:string} $open `[key, upload id]`.
     */
-   private function terminate (array $open): bool
+   private function terminate (array $open): int
    {
       [$URI, $headers] = $this->sign('DELETE', $open[0], ['uploadId' => $open[1]], '', []);
 
@@ -1361,6 +1489,6 @@ class S3 extends Resource implements Scheduling
       $Failure = Reader::judge(Operations::AbortMultipartUpload, $Answer->code, $Answer->headers, $Answer->body, "S3 abort multipart {$open[0]}");
 
       // :
-      return $Failure === null || in_array($Failure->code, self::FINAL, true);
+      return $Failure === null || in_array($Failure->code, self::FINAL, true) ? $Answer->code : 0;
    }
 }
