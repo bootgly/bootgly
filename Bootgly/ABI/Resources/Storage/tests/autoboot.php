@@ -58,5 +58,14 @@ return new Suite(
       '8.7-storage-dump-redaction',
       '8.8-s3-send-trace',
       '8.9-storage-frames-trace',
+      // # 1.4.0: a part sent by the server, and the failure of each call
+      '7.9-s3-fake-uploads-put',
+      '7.10-s3-fake-failures',
+      '7.11-s3-fake-failures-fibers',
+      '8.10-s3-writer-offline',
+      '8.11-s3-reader-answers',
+      '8.12-s3-failure-redaction',
+      '7.12-storage-events-preserve',
+      '8.13-s3-answer-head-offline',
    ]
 );

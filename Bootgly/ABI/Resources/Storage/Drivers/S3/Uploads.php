@@ -12,6 +12,7 @@ namespace Bootgly\ABI\Resources\Storage\Drivers\S3;
 
 
 use Closure;
+use LogicException;
 
 
 /**
@@ -21,10 +22,12 @@ use Closure;
  * The handle is stateless: an upload spans several requests, so every step takes the object
  * path and the upload id `create()` returned, and the id travels through the client. The
  * flow is `create()` once, `sign()` per part (the client `PUT`s each part to the URL it
- * gets), `list()` to see what the bucket holds, then `complete()` — or `abort()`.
+ * gets) — or `put()` per part the server sends itself — `list()` to see what the bucket holds,
+ * then `complete()` — or `abort()`.
  *
  * Every step runs inside the disk's root prefix, like any other driver operation, and
- * fails like one: it returns `false` and leaves the reason on the driver's `$error`.
+ * fails like one: it returns `false` and leaves the reason on the driver's `$error`, and the
+ * failure (status, the store's code, kind) on the driver's `$Failure`.
  */
 final class Uploads
 {
@@ -42,6 +45,8 @@ final class Uploads
    private Closure $Complete;
    /** @var Closure(string, string): bool */
    private Closure $Abort;
+   /** @var null|Closure(string, string, int, string): (string|false) */
+   private null|Closure $Put;
 
 
    /**
@@ -53,8 +58,17 @@ final class Uploads
     * @param Closure(string, string): (array<int,array{etag:string,size:int}>|false) $List
     * @param Closure(string, string, array<int,array{etag:string,size?:int}>): bool $Complete
     * @param Closure(string, string): bool $Abort
+    * @param null|Closure(string, string, int, string): (string|false) $Put The `put()` step; a handle
+    *    built without it refuses `put()`.
     */
-   public function __construct (Closure $Create, Closure $Sign, Closure $List, Closure $Complete, Closure $Abort)
+   public function __construct (
+      Closure $Create,
+      Closure $Sign,
+      Closure $List,
+      Closure $Complete,
+      Closure $Abort,
+      null|Closure $Put = null
+   )
    {
       // * Data
       $this->Create = $Create;
@@ -62,6 +76,7 @@ final class Uploads
       $this->List = $List;
       $this->Complete = $Complete;
       $this->Abort = $Abort;
+      $this->Put = $Put;
    }
 
    /**
@@ -112,6 +127,33 @@ final class Uploads
    {
       // :
       return ($this->Sign)($path, $id, $part, $expires, $headers);
+   }
+
+   /**
+    * Upload one part of that upload from the server (UploadPart) and return its ETag, as the
+    * store sent it (quoted) — the value `complete()` takes; false on failure.
+    *
+    * The body is held in memory and hashed whole (the signature binds it): a part costs about
+    * its size once more while it is sent. Every part but the last must be at least 5 MiB — the
+    * store refuses a smaller one only at `complete()` (`EntityTooSmall` on `$S3->Failure->code`) —
+    * and Cloudflare R2 also wants every part but the last to have the same size. A part sent
+    * again replaces the earlier one, so a failed part is safe to retry; `complete()` is not.
+    *
+    * @param string $id The upload id `create()` returned.
+    * @param int $part The part number, 1..`Uploads::PARTS`.
+    * @param string $body The bytes of the part, at most 5 GiB.
+    *
+    * @throws LogicException When the handle was built without a `put()` step.
+    */
+   public function put (string $path, string $id, int $part, string $body): string|false
+   {
+      // ?
+      if ($this->Put === null) {
+         throw new LogicException('S3 Uploads: this handle was built without a put() step.');
+      }
+
+      // :
+      return ($this->Put)($path, $id, $part, $body);
    }
 
    /**

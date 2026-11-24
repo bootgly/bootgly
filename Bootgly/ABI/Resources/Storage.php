@@ -100,11 +100,15 @@ class Storage
     */
    public function write (string $path, $source, array $options = []): bool
    {
-      $written = $this->open()->write($path, $source, $options);
+      $Driver = $this->open();
+      $written = $Driver->write($path, $source, $options);
 
-      // @ Events — guarded so a no-listener write stays zero-allocation
+      // @ Events — guarded so a no-listener write stays zero-allocation; a listener that calls the
+      //   disk again leaves the outcome of this write as it was
       $Emitter = Emitter::$Instance;
-      $Emitter->check(Events::Written) && $Emitter->emit(Events::Written, $path, $written);
+      if ($Emitter->check(Events::Written) === true) {
+         $Driver->preserve(static fn () => $Emitter->emit(Events::Written, $path, $written));
+      }
 
       // :
       return $written;
@@ -117,11 +121,14 @@ class Storage
     */
    public function read (string $path, $sink): bool
    {
-      $read = $this->open()->read($path, $sink);
+      $Driver = $this->open();
+      $read = $Driver->read($path, $sink);
 
-      // @ Events — guarded so a no-listener read stays zero-allocation
+      // @ Events — guarded so a no-listener read stays zero-allocation; the outcome is preserved
       $Emitter = Emitter::$Instance;
-      $Emitter->check(Events::Read) && $Emitter->emit(Events::Read, $path, $read);
+      if ($Emitter->check(Events::Read) === true) {
+         $Driver->preserve(static fn () => $Emitter->emit(Events::Read, $path, $read));
+      }
 
       // :
       return $read;
@@ -132,11 +139,14 @@ class Storage
     */
    public function delete (string $path): bool
    {
-      $deleted = $this->open()->delete($path);
+      $Driver = $this->open();
+      $deleted = $Driver->delete($path);
 
-      // @ Events — guarded so a no-listener delete stays zero-allocation
+      // @ Events — guarded so a no-listener delete stays zero-allocation; the outcome is preserved
       $Emitter = Emitter::$Instance;
-      $Emitter->check(Events::Deleted) && $Emitter->emit(Events::Deleted, $path, $deleted);
+      if ($Emitter->check(Events::Deleted) === true) {
+         $Driver->preserve(static fn () => $Emitter->emit(Events::Deleted, $path, $deleted));
+      }
 
       // :
       return $deleted;

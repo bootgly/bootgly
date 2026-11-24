@@ -12,6 +12,7 @@ namespace Bootgly\ABI\Resources\Storage;
 
 
 use function rtrim;
+use Closure;
 use SensitiveParameter;
 
 use Bootgly\ABI\Debugging\Data\Vars\Redactable;
@@ -49,6 +50,10 @@ abstract class Driver
     * a NUL byte, say — fails through the same channel. Exposed so a higher layer can log
     * it — ABI drivers cannot depend on the ACI logger (forward-only layering), so
     * failures are surfaced here instead.
+    *
+    * One per disk: every Fiber that uses the disk writes the same `$error`, so code that shares
+    * a disk across Fibers reads the outcome of its own call from the return value, or from a
+    * driver's per-Fiber failure where it has one (`$Failure` on S3).
     */
    public protected(set) string $error = '';
 
@@ -123,6 +128,31 @@ abstract class Driver
     * Remove every entry under a directory, keeping the directory itself.
     */
    abstract public function clear (string $path = ''): bool;
+
+   /**
+    * Run `$Work` — code that may call this disk again, such as the listeners of a Storage event —
+    * and give the disk back the outcome of the call made before it: `$error` reads after `$Work`
+    * what it read before, whatever the calls inside `$Work` left. The calls inside `$Work` read
+    * their own outcome while it runs.
+    *
+    * `$error` is shared by every Fiber on the disk: when `$Work` suspends its Fiber and another
+    * Fiber fails a call meanwhile, the restore puts back the earlier text over it — the return
+    * value and a per-Fiber failure (`$Failure` on S3) stay each Fiber's own.
+    *
+    * @param Closure(): mixed $Work
+    */
+   public function preserve (Closure $Work): void
+   {
+      $error = $this->error;
+
+      // @
+      try {
+         $Work();
+      }
+      finally {
+         $this->error = $error;
+      }
+   }
 
    /**
     * Record the reason for a failed operation and return the bool failure value, so a
