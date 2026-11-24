@@ -16,11 +16,13 @@ use function usleep;
 use InvalidArgumentException;
 use RuntimeException;
 
+use const Bootgly\WPI;
 use Bootgly\ABI\Events\Emission;
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\API\Endpoints\Server\Modes;
+use Bootgly\WPI\Events\Cancellation;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Bodies;
@@ -30,6 +32,10 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_Testing;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Authenticating;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Authentication;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Authentication\Bearer;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Deferred\Routes;
 
 
 return new Suite(
@@ -70,9 +76,29 @@ return new Suite(
       // ! ENC-12 over h2: the Received gate is armed once, by the case that
       //   needs it (the last one)
       $armed = false;
+      // ! The deferring mode of Authentication over h2: a Bearer lookup
+      //   that suspends — longer for alice than for bob
+      $Mode = new Authentication(new Authenticating(new Bearer(
+         Resolver: static function (string $token, Request $Request): mixed {
+            $identity = ['tok-alice' => 'alice', 'tok-bob' => 'bob'][$token] ?? null;
+            $WPI = WPI;
+            Routes::park($WPI->Response, $identity === 'alice' ? 0.4 : 0.1);
+
+            return $identity;
+         }
+      )), deferred: true, timeout: 3);
       $HTTP_Server_CLI->on(
          Events::RequestReceived,
-         function ($Request, Response $Response) use (&$hooked, &$holdHooks, &$capSent, &$capHooks, &$armed): Response {
+         function ($Request, Response $Response) use (&$hooked, &$holdHooks, &$capSent, &$capHooks, &$armed, $Mode): Response {
+            if ($Request->URI === '/auth-mode') {
+               return $Mode->process($Request, $Response, static function (Request $Request, Response $Response): Response {
+                  $Generation = Cancellation::fetch($Request);
+                  $snapshot = $Generation !== null && $Generation->check() === false ? 'yes' : 'no';
+
+                  return $Response->send("identity={$Request->identity};snapshot={$snapshot}");
+               });
+            }
+
             if ($Request->URI === '/h2-s4-large') {
                return $Response->upload('statics/h2-s4-large.bin', close: false);
             }
@@ -300,6 +326,9 @@ return new Suite(
       '6.10-code_1xx_rejected',
       '6.11-json_refusal_stream',
       // # 1.0.x (ENC-12): a throwing Received listener refuses its h2 stream alone, never the connection
-      '6.12-received_refusal_stream'
+      '6.12-received_refusal_stream',
+      // # 1.4.0: the deferring mode of Authentication — two streams, two
+      //   identities, each resolved on its own snapshot while the other waits
+      '6.13-authentication_mode_streams'
    ]
 );

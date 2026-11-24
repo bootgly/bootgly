@@ -19,6 +19,7 @@ use function count;
 use function crc32;
 use function defined;
 use function explode;
+use function get_debug_type;
 use function hash;
 use function hash_equals;
 use function in_array;
@@ -32,7 +33,6 @@ use function min;
 use function preg_match;
 use function random_bytes;
 use function rtrim;
-use function serialize;
 use function str_contains;
 use function strlen;
 use function strtolower;
@@ -40,11 +40,13 @@ use function time;
 use function trim;
 use Closure;
 use InvalidArgumentException;
+use LogicException;
 use RuntimeException;
 
 use Bootgly\ABI\Resources\Cache;
 use Bootgly\API\RPC;
 use Bootgly\API\Security\Identity;
+use Bootgly\WPI\Events\Cancellation;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\SSE;
@@ -81,12 +83,15 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\SSE;
  * the application's closures with the request (`Request`) as their
  * `$context`, and runs as deferred work: a tool may await asynchronous I/O.
  *
- * The principal is read synchronously, on arrival. An authentication that
- * must wait for I/O (a token stored in a database) runs in a route
- * middleware that defers first and sets the identity on the deferral's
- * Request snapshot — the unchanged `Authentication` middleware, run inside
- * that deferral — or in a handler that defers and invokes the transport
- * from inside.
+ * The principal is read on arrival from `Request->identity`: an `Identity`
+ * with an id, a non-empty string or an int binds the session; `null` is
+ * anonymous; any other value is answered `500` before a session opens. An
+ * authentication that must wait for I/O (a token stored in a database) runs
+ * in the deferring mode of the `Authentication` middleware
+ * (`new Authentication($Authenticating, deferred: true)`): the guards resolve
+ * on the deferral's Request snapshot and the transport runs inside that
+ * deferral, without deferring again. A handler that defers and invokes the
+ * transport from inside works the same way.
  */
 final class MCP
 {
@@ -280,8 +285,8 @@ final class MCP
          return $Response;
       }
 
-      // :
-      return $Response->defer(function (Response $Response, Request $Request) use ($payload, $initializing, $principal, $mode): void {
+      // !
+      $work = function (Response $Response, Request $Request) use ($payload, $initializing, $principal, $mode): void {
          $answer = $this->Server->handle($payload, $Request);
 
          // @ A successful `initialize` opens a session
@@ -322,7 +327,20 @@ final class MCP
          // :
          $Response->Header->set('Content-Type', 'application/json');
          $Response->send($answer);
-      });
+      };
+
+      // ?: Already inside a running deferral (the Request is its snapshot —
+      //    behind the deferring `Authentication`): the work runs here, with
+      //    no second snapshot of the request
+      $Generation = Cancellation::fetch($Request);
+      if ($Generation !== null && $Generation->check() === false) {
+         $work($Response, $Request);
+
+         return $Response;
+      }
+
+      // :
+      return $Response->defer($work);
    }
 
    /**
@@ -674,9 +692,16 @@ final class MCP
    }
 
    /**
-    * The fingerprint of the authenticated principal a session is bound to
-    * (`Request->identity`: an `Identity` by its id, a scalar by its value,
-    * anything else by its serialized form; none = anonymous).
+    * The fingerprint of the authenticated principal a session is bound to:
+    * `Request->identity` as an `Identity` with a non-empty id, a non-empty
+    * string or an int; none (`null`) = anonymous.
+    *
+    * Any other identity — an empty string, `true`, an array, another object,
+    * an `Identity` with an empty id — is a wiring error of the guard that
+    * exposed it, not a client error: it is refused before any session is
+    * opened or resumed (answered `500`).
+    *
+    * @throws LogicException When the identity cannot name a principal.
     */
    private function identify (Request $Request): string
    {
@@ -685,13 +710,18 @@ final class MCP
 
       $principal = match (true) {
          $identity === null => 'anonymous',
-         $identity instanceof Identity => "identity:{$identity->id}",
-         is_string($identity), is_int($identity) => "value:{$identity}",
+         $identity instanceof Identity && $identity->id !== '' => "identity:{$identity->id}",
+         is_string($identity) && $identity !== '', is_int($identity) => "value:{$identity}",
          default => null
       };
+      // ? Only the identity's type is named — never its value (it may carry
+      //   personal data or claims, and the message reaches logs)
       if ($principal === null) {
-         $serialized = serialize($identity);
-         $principal = "serialized:{$serialized}";
+         $type = $identity instanceof Identity ? 'an Identity with an empty id' : get_debug_type($identity);
+
+         throw new LogicException(
+            "MCP sessions bind to an Identity with an id, a non-empty string or an int; the request identity is {$type}."
+         );
       }
 
       // :

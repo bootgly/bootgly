@@ -105,6 +105,22 @@ class Basic extends Guard
    }
 
    /**
+    * Tell whether the request carries well-formed Basic credentials — the
+    * `Authorization` header parse `authenticate()` starts with, without
+    * resolving them.
+    */
+   public function detect (object $Request): bool
+   {
+      // ? Missing HTTP authentication parser.
+      if (method_exists($Request, 'authenticate') === false) {
+         return false;
+      }
+
+      // :
+      return $Request->authenticate() instanceof Credentials;
+   }
+
+   /**
     * Challenge the client with `WWW-Authenticate: Basic`.
     */
    public function challenge (object $Response): object

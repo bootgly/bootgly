@@ -72,6 +72,27 @@ abstract class Guard
    abstract public function challenge (object $Response): object;
 
    /**
+    * Tell whether the request may carry this guard's credentials, without
+    * I/O and without authenticating it.
+    *
+    * The deferring mode of `Authentication` asks every guard before it
+    * defers: when none detects credentials, the request is denied at once —
+    * the invitation challenge, no deferral, no body captured. `false` must
+    * mean "certainly no credentials for this guard"; anything uncertain
+    * answers `true`, the default, so a guard that does not override this
+    * method always defers. The built-in guards override it from the request
+    * head (header, cookie) only.
+    *
+    * A subclass that declared its own `detect()` before 1.4.0 must rename it
+    * or match this signature.
+    */
+   public function detect (object $Request): bool
+   {
+      // :
+      return true;
+   }
+
+   /**
     * Apply a protocol-aware authentication challenge when supported.
     */
    protected function respond (object $Response, Method $Method): object

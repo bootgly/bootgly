@@ -12,8 +12,10 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Authentication;
 
 
 use function is_object;
+use function is_string;
 use function method_exists;
 
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session as Store;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Authenticating\Guard;
 
 
@@ -82,6 +84,45 @@ class Session extends Guard
       $this->expose($Request, 'identity', $identity);
 
       return true;
+   }
+
+   /**
+    * Tell whether the request may carry a session identity, without I/O.
+    *
+    * A Session already built for this request (`sessioned`) is answered
+    * exactly — the identity key holds a value other than `null`/`false`,
+    * as `authenticate()` requires; otherwise the request must carry a
+    * non-empty session cookie (`Request\Session::$name`). The Session is
+    * never built here: building it reads the session store.
+    */
+   public function detect (object $Request): bool
+   {
+      // ?: A Session already built for this request — answer from it
+      if (($Request->sessioned ?? false) === true) {
+         $Session = $Request->Session ?? null;
+         if (
+            is_object($Session) === false
+            || method_exists($Session, 'check') === false
+            || method_exists($Session, 'get') === false
+            || $Session->check($this->key) === false
+         ) {
+            return false;
+         }
+
+         $identity = $Session->get($this->key);
+
+         return $identity !== null && $identity !== false;
+      }
+
+      // ! Session cookie.
+      $Cookies = $Request->Cookies ?? null;
+      if (is_object($Cookies) === false || method_exists($Cookies, 'get') === false) {
+         return false;
+      }
+      $cookie = $Cookies->get(Store::$name);
+
+      // :
+      return is_string($cookie) && $cookie !== '';
    }
 
    /**

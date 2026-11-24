@@ -123,6 +123,23 @@ class Remember extends Guard
    }
 
    /**
+    * Tell whether the request carries a remember cookie — read from the
+    * request head only: the Session and the `Trust` store are not touched.
+    */
+   public function detect (object $Request): bool
+   {
+      // ! Remember cookie.
+      $Cookies = $Request->Cookies ?? null;
+      if (is_object($Cookies) === false || method_exists($Cookies, 'get') === false) {
+         return false;
+      }
+      $cookie = $Cookies->get(static::$name);
+
+      // :
+      return is_string($cookie) && $cookie !== '';
+   }
+
+   /**
     * Reject unauthorized requests without an HTTP auth challenge.
     */
    public function challenge (object $Response): object

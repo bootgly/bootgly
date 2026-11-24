@@ -109,5 +109,9 @@ return new Suite(
       //   handoff from the handler
       '1.13-deferred_authentication',
       '1.14-nested_handoff',
+      // The deferring mode of Authentication in front of the transport,
+      //   which runs inline inside it; the identity shapes a session binds to
+      '1.15-authentication_mode_in_front',
+      '1.16-identity_shapes',
    ]
 );

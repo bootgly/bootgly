@@ -49,5 +49,7 @@ return new Suite(
       '8.3-trusted_proxy_strategies',
       // # 1.4.0: secrets stay out of debug dumps and exception traces
       '9.3-csrf_trace_redaction',
+      // # 1.4.0: the deferring mode of Authentication (synchronous half)
+      '11.6-authentication_deferred_mode',
    ]
 );

@@ -728,5 +728,10 @@ return new Suite(
       // deferral is charged its generation, so neither pipelining, h2c
       // streams nor many connections exhaust the worker.
       '103.06-deferred_pipeline_holds',
+      // # 1.4.0: the deferring mode of Authentication
+      // A bogus credential defers once — one snapshot charged to the worker
+      // budget, for no longer than the mode's bound — and a request without
+      // credentials is answered at once, uncharged.
+      '104.01-authentication_deferred_bogus_credentials_cost',
    ],
 );

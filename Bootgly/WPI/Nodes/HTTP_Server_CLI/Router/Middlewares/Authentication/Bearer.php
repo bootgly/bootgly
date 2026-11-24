@@ -191,6 +191,17 @@ class Bearer extends Guard
    }
 
    /**
+    * Tell whether the request carries a Bearer token (a resolved `$token`
+    * or an `Authorization: Bearer …` header) — the extraction
+    * `authenticate()` starts with, without resolving the token.
+    */
+   public function detect (object $Request): bool
+   {
+      // :
+      return $this->extract($Request) !== '';
+   }
+
+   /**
     * Challenge the client with `WWW-Authenticate: Bearer`.
     *
     * A request that carries no Bearer token at all (no `Authorization`

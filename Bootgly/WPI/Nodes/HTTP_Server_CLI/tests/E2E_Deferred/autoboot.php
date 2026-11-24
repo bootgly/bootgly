@@ -125,6 +125,15 @@ return new Suite(
       //   its request only — another client's static request never reads
       //   it, routed synchronously or inside a deferral (appended last)
       '9.1-static_writer_params_stay_with_their_request',
-      '9.2-deferred_routing_scrubs_static_writer_params'
+      '9.2-deferred_routing_scrubs_static_writer_params',
+      // 1.4.0: the deferring mode of `Authentication` — guards resolve on
+      //   the deferral snapshot, a credential-less request is answered
+      //   synchronously, the guard chain is bounded (appended last)
+      '10.1-authentication_mode_resolves_on_snapshot',
+      '10.2-authentication_mode_bounds_the_guard_chain',
+      '10.3-stacked_authentication_modes_share_one_snapshot',
+      '10.4-authentication_mode_nests_under_foreign_deferral',
+      '10.5-authentication_mode_carries_rotated_cookies_on_error',
+      '10.6-authentication_mode_keeps_secure_headers'
    ]
 );

@@ -14,9 +14,12 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares;
 use Closure;
 
 use Bootgly\API\Workables\Server\Middleware;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Sealing;
 
 
-class SecureHeaders implements Middleware
+class SecureHeaders implements Middleware, Sealing
 {
    // * Config
    public private(set) string $contentSecurityPolicy;
@@ -52,6 +55,36 @@ class SecureHeaders implements Middleware
       // @ Pass through to handler first
       $Response = $next($Request, $Response);
 
+      // @ One pass serves both cycles — a deferred generation runs it at
+      //   settlement (`seal()`), against the Response chosen for the wire
+      $this->stamp($Response);
+
+      // :
+      return $Response;
+   }
+
+   /**
+    * Set the security headers on a deferred Response about to be serialized
+    * — the post-`$next()` half `process()` could not apply to the deferred
+    * copy, on every answer chosen for the wire (the work's, an error
+    * boundary's or the Catcher's).
+    *
+    * @param Request $Request The generation's captured Request snapshot.
+    * @param Response $Response The Response chosen for the wire.
+    */
+   public function seal (Request $Request, Response $Response): void
+   {
+      $this->stamp($Response);
+   }
+
+   /**
+    * Set the security headers — the shared half of both cycles, typed loosely
+    * because the synchronous unit tests hand doubles.
+    *
+    * @param Response $Response
+    */
+   private function stamp (object $Response): void
+   {
       // @ Set security headers
       $Response->Header->set('X-Content-Type-Options', 'nosniff'); // @phpstan-ignore-line
       $Response->Header->set('X-Frame-Options', 'SAMEORIGIN'); // @phpstan-ignore-line
@@ -63,11 +96,8 @@ class SecureHeaders implements Middleware
       if ($this->hsts) {
          $Response->Header->set( // @phpstan-ignore-line
             'Strict-Transport-Security',
-            'max-age=' . $this->hstsMaxAge . '; includeSubDomains'
+            "max-age={$this->hstsMaxAge}; includeSubDomains"
          );
       }
-
-      // :
-      return $Response;
    }
 }
