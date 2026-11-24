@@ -2748,7 +2748,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    public function request (
       string $method = 'GET',
       string $URI = '/',
-      array $headers = [],
+      #[SensitiveParameter] array $headers = [],
       mixed $body = null
    ): self|Response
    {

@@ -16,6 +16,7 @@ use Fiber;
 use InvalidArgumentException;
 use LogicException;
 use RuntimeException;
+use SensitiveParameter;
 
 use Bootgly\WPI\Events\Cancellation;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
@@ -197,7 +198,7 @@ class HTTP extends Resource implements Scheduling
    public function request (
       string $method = 'GET',
       string $URI = '/',
-      array $headers = [],
+      #[SensitiveParameter] array $headers = [],
       mixed $body = null
    ): Response
    {

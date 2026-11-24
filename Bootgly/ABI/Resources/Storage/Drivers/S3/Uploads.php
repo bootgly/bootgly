@@ -26,13 +26,19 @@ use LogicException;
  * then `complete()` — or `abort()`.
  *
  * Every step runs inside the disk's root prefix, like any other driver operation, and
- * fails like one: it returns `false` and leaves the reason on the driver's `$error`, and the
- * failure (status, the store's code, kind) on the driver's `$Failure`.
+ * fails like one: it returns `false` and leaves the reason on its owner's `$error`, and the
+ * failure (status, the store's code, kind) on its owner's `$Failure` — the owner is the S3 driver
+ * (`$S3->Uploads`) or the HTTP server's S3 response resource (`$Response->S3->Uploads`), each
+ * building the handle from its own steps.
  */
 final class Uploads
 {
    /** The most parts one upload holds, and the highest part number. */
    public const int PARTS = 10000;
+   /** The smallest size of a part but the last (5 MiB): the store refuses a smaller one at completion. */
+   public const int MINIMUM = 5 * 1024 * 1024;
+   /** The largest size of a part (5 GiB). */
+   public const int MAXIMUM = 5 * 1024 * 1024 * 1024;
 
    // * Data
    /** @var Closure(string, array<string,mixed>): (string|false) */
@@ -50,8 +56,8 @@ final class Uploads
 
 
    /**
-    * Bind the handle to the driver's multipart steps (the driver builds it — an application
-    * reads it from `$S3->Uploads`).
+    * Bind the handle to its owner's multipart steps (the owner builds it — an application reads
+    * it from `$S3->Uploads` or `$Response->S3->Uploads`).
     *
     * @param Closure(string, array<string,mixed>): (string|false) $Create
     * @param Closure(string, string, int, int, array<array-key,mixed>): (string|false) $Sign
@@ -135,7 +141,7 @@ final class Uploads
     *
     * The body is held in memory and hashed whole (the signature binds it): a part costs about
     * its size once more while it is sent. Every part but the last must be at least 5 MiB — the
-    * store refuses a smaller one only at `complete()` (`EntityTooSmall` on `$S3->Failure->code`) —
+    * store refuses a smaller one only at `complete()` (`EntityTooSmall` on the owner's `$Failure->code`) —
     * and Cloudflare R2 also wants every part but the last to have the same size. A part sent
     * again replaces the earlier one, so a failed part is safe to retry; `complete()` is not.
     *

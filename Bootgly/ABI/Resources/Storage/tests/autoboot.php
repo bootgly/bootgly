@@ -67,5 +67,7 @@ return new Suite(
       '8.12-s3-failure-redaction',
       '7.12-storage-events-preserve',
       '8.13-s3-answer-head-offline',
+      // # 1.4.0: the ETag a lost completion is judged by
+      '8.14-s3-reader-fold',
    ]
 );

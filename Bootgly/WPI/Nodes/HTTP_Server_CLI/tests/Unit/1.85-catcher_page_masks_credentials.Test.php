@@ -32,7 +32,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 /**
  * The development debug page lists the request headers. Every credential
  * field (`HTTP::SECRET_HEADERS`: Authorization, Proxy-Authorization, Cookie,
- * Set-Cookie, X-CSRF-Token, X-API-Key, X-Auth-Token) shows as the dump mask, never its value, while the other
+ * Set-Cookie, X-CSRF-Token, X-API-Key, X-Auth-Token, X-Amz-Security-Token) shows as the dump mask, never its value, while the other
  * fields still show.
  *
  * The values carry a random suffix: the page also shows a source excerpt of
@@ -52,6 +52,7 @@ return new Test(
          'x-csrf-token' => "SYNTH-PAGE-CSRF-{$suffix}",
          'x-api-key' => "SYNTH-PAGE-API-KEY-{$suffix}",
          'x-auth-token' => "SYNTH-PAGE-AUTH-TOKEN-{$suffix}",
+         'x-amz-security-token' => "SYNTH-PAGE-AMZ-SECURITY-TOKEN-{$suffix}",
       ];
       $visible = "visible-page-field-{$suffix}";
 
@@ -65,6 +66,7 @@ return new Test(
          "X-CSRF-Token: {$values['x-csrf-token']}",
          "X-Api-Key: {$values['x-api-key']}",
          "X-AUTH-TOKEN: {$values['x-auth-token']}",
+         "X-Amz-Security-Token: {$values['x-amz-security-token']}",
          'Accept: text/html',
          "X-Visible: {$visible}",
          ''

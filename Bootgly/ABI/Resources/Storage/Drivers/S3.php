@@ -83,7 +83,6 @@ class S3 extends Driver
    private const int ANSWER = 32 * 1024 * 1024; // a buffered (XML) answer never legitimately gets near this
    private const int ERROR = 64 * 1024;         // an S3 error document is a few hundred bytes
    private const int HEAD = 64 * 1024;          // the status line and headers of one answer
-   private const int MAXIMUM = 5 * 1024 * 1024 * 1024; // the largest part S3 accepts (5 GiB)
    private const int CHUNK = 1024 * 1024;       // a request body is written in slices this large
    /** The response overrides a presigned read may carry (GetObject `response-*`). */
    private const array OVERRIDES = [
@@ -1248,7 +1247,7 @@ class S3 extends Driver
          if ($key === null) {
             return $this->fail('S3 upload part: an object path is required');
          }
-         if (strlen($body) > self::MAXIMUM) {
+         if (strlen($body) > Uploads::MAXIMUM) {
             return $this->fail('S3 upload part: a part is at most 5 GiB');
          }
 

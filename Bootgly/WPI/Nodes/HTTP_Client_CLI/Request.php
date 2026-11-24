@@ -19,6 +19,7 @@ use function strlen;
 use function strspn;
 use function strtolower;
 use InvalidArgumentException;
+use SensitiveParameter;
 
 use Bootgly\ABI\Debugging\Data\Vars\Redactable;
 use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
@@ -240,7 +241,7 @@ class Request
    public function __invoke (
       string $method = 'GET',
       string $URI = '/',
-      array $headers = [],
+      #[SensitiveParameter] array $headers = [],
       mixed $body = null
    ): self
    {

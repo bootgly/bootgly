@@ -12,11 +12,16 @@ namespace Bootgly\ABI\Resources\Storage\Drivers\S3;
 
 
 use const LIBXML_NONET;
+use function count;
+use function hex2bin;
 use function in_array;
 use function is_array;
+use function is_string;
+use function ksort;
 use function libxml_clear_errors;
 use function libxml_use_internal_errors;
 use function ltrim;
+use function md5;
 use function preg_match;
 use function preg_replace;
 use function simplexml_load_string;
@@ -281,6 +286,41 @@ final class Reader
 
       // :
       return $last === $expected ? $last - $first + 1 : 0;
+   }
+
+   /**
+    * The ETag S3 gives the object a Multipart Upload of these parts completes into —
+    * `"<MD5 of the parts' binary MD5s, in part order>-<number of parts>"` — to tell, when the
+    * answer to a completion was lost, whether the object at the key is the one these parts make.
+    * Null when it cannot be computed: no parts, more than `PARTS`, or a part ETag that is not 32
+    * hex digits. A store whose part ETags are not the parts' MD5s (SSE-KMS, SSE-C, some S3-compatible
+    * stores) may still give 32 hex digits: the fold is then computed, and the object's ETag never
+    * matches it.
+    *
+    * @param array<int|string,mixed> $parts Keyed by part number, as `Writer::join()` takes them
+    *    (`[number => ['etag' => ...]]`).
+    */
+   public static function fold (array $parts): null|string
+   {
+      // ?
+      if ($parts === [] || count($parts) > self::PARTS) {
+         return null;
+      }
+      ksort($parts);
+
+      $digests = '';
+      foreach ($parts as $part) {
+         $value = is_array($part) === true ? ($part['etag'] ?? null) : null;
+         $etag = is_string($value) === true ? strtolower(trim($value, '" ')) : '';
+         // ?
+         if (preg_match('/^[0-9a-f]{32}$/D', $etag) !== 1) {
+            return null;
+         }
+         $digests .= (string) hex2bin($etag);
+      }
+
+      // :
+      return '"' . md5($digests) . '-' . count($parts) . '"';
    }
 
    /**

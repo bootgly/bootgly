@@ -6,11 +6,21 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\tests\E2E_Deferred;
 use const BOOTGLY_ROOT_DIR;
 use function define;
 use function defined;
+use function fake_skip;
+use function wipe;
 
+use Bootgly\ABI\Resources\Storage;
+use Bootgly\ABI\Resources\Storage\tests\fixtures\S3 as Fake;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Tests\Suite;
+use Bootgly\ACI\Tests\Temporaries;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\S3;
+
+
+require_once BOOTGLY_ROOT_DIR . 'Bootgly/ABI/Resources/Storage/tests/disk.php';
+require_once BOOTGLY_ROOT_DIR . 'Bootgly/ABI/Resources/Storage/tests/fixtures/S3.php';
 
 
 return new Suite(
@@ -27,6 +37,25 @@ return new Suite(
 
       HTTP_Server_CLI::pretest($Suite, 'E2E_Deferred');
 
+      // ! The local S3 fake behind the `S3` response resource (the cases script its delays
+      //   through `$GLOBALS['BOOTGLY_E2E_DEFERRED_S3']`, inherited by the worker on fork)
+      $base = null;
+      $Fake = null;
+      $Resources = [];
+      if (fake_skip() === false) {
+         $base = Temporaries::reserve('wpi-e2e-deferred-s3');
+         $Fake = Fake::start($base);
+         $GLOBALS['BOOTGLY_E2E_DEFERRED_S3'] = $Fake;
+         $Resources['S3'] = S3::provide(
+            new Storage(['default' => 'files', 'disks' => ['files' => ['driver' => 's3'] + $Fake->configure()]]),
+            part: 5 * 1024 * 1024,
+            budget: 10 * 1024 * 1024,
+            concurrency: 2,
+            timeout: 5,
+            connectTimeout: 2
+         );
+      }
+
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: Modes::Test);
       $HTTP_Server_CLI->configure(new HTTP_Server_CLI\Configs(
          host: '0.0.0.0',
@@ -37,7 +66,7 @@ return new Suite(
          port: 8104,
          workers: 1,
          health: '/health'
-      ));
+      ), new HTTP_Server_CLI\Response\Configs(Resources: $Resources));
 
       $HTTP_Server_CLI->start();
 
@@ -48,6 +77,11 @@ return new Suite(
       $HTTP_Server_CLI->Process->stopping = true;
       $HTTP_Server_CLI->Process->Children->terminate();
       $HTTP_Server_CLI->Process->State->clean();
+
+      $Fake?->stop();
+      if ($base !== null) {
+         wipe($base);
+      }
 
       return true;
    },
@@ -134,6 +168,10 @@ return new Suite(
       '10.3-stacked_authentication_modes_share_one_snapshot',
       '10.4-authentication_mode_nests_under_foreign_deferral',
       '10.5-authentication_mode_carries_rotated_cookies_on_error',
-      '10.6-authentication_mode_keeps_secure_headers'
+      '10.6-authentication_mode_keeps_secure_headers',
+      // 1.4.0: S3 from a request handler — a deferral parked on the store
+      //   leaves the worker answering, under the in-flight budget too
+      //   (appended last)
+      '11.1-s3_resource_parks_while_worker_answers'
    ]
 );

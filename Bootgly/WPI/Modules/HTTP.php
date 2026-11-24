@@ -96,5 +96,6 @@ interface HTTP
       'x-csrf-token',
       'x-api-key',
       'x-auth-token',
+      'x-amz-security-token',
    ];
 }

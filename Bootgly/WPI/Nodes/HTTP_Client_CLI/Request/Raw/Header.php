@@ -17,6 +17,7 @@ use function is_string;
 use function preg_match;
 use function strtolower;
 use InvalidArgumentException;
+use SensitiveParameter;
 
 use Bootgly\ABI\Debugging\Data\Vars\Redactable;
 use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
@@ -71,7 +72,7 @@ class Header
     *
     * @throws InvalidArgumentException If name or value is invalid.
     */
-   public function set (string $name, string $value): void
+   public function set (string $name, #[SensitiveParameter] string $value): void
    {
       $this->validate($name, $value);
 
@@ -111,7 +112,7 @@ class Header
     *
     * @throws InvalidArgumentException If name or value is invalid.
     */
-   public function append (string $name, string $value): void
+   public function append (string $name, #[SensitiveParameter] string $value): void
    {
       $this->validate($name, $value);
 
@@ -178,7 +179,7 @@ class Header
     *
     * @throws InvalidArgumentException If name or value is invalid.
     */
-   protected function validate (string $name, string $value): void
+   protected function validate (string $name, #[SensitiveParameter] string $value): void
    {
       // @ RFC 9110: token = 1*tchar
       // tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." /

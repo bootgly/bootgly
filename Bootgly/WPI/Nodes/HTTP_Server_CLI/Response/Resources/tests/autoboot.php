@@ -41,5 +41,12 @@ return new Suite(
       '1.18-releasable_builtins',
       // # 1.3.x (recurring reactor timers): the SSE Tick interval on a loop with recurring timers and on one without
       '1.19-sse_tick_interval',
+      // # 1.4.x: S3 from a request handler
+      '1.20-s3_resource',
+      '1.21-s3_resource_overlap',
+      '1.22-s3_resource_cancel',
+      '1.23-s3_resource_secrets',
+      '1.24-s3_resource_signature',
+      '1.25-s3_resource_recovery',
    ]
 );

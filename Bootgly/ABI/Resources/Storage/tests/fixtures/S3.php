@@ -175,6 +175,8 @@ final class S3
    private int $PID = 0;
    /** The process that started the server — the only one that stops it. */
    private int $owner;
+   /** Seconds the answer being built is held back (the server child only). */
+   private float $hold = 0.0;
 
 
    private function __construct (string $directory, string $bucket, int $page, int $parts, bool $equal)
@@ -382,7 +384,8 @@ final class S3
    /**
     * Scripts a failure for the next `$times` calls of `$operation` (`PutObject`, `GetObject`,
     * `UploadPart`, `ListParts`, ...): an S3 `<Error>` under `$status` — 200 keeps the status,
-    * 0 drops the connection with no answer — or, when `$raw` is given, that response verbatim,
+    * 0 drops the connection with no answer, -1 handles the request and then drops the connection
+    * (its effect stays, its answer is lost) — or, when `$raw` is given, that response verbatim,
     * followed by `$pad` bytes of white space (an oversized answer).
     */
    public function inject (
@@ -418,6 +421,32 @@ final class S3
       fclose($Handle);
    }
 
+   /**
+    * Holds back the answer to the next `$times` calls of `$operation` for `$seconds`, without
+    * blocking the other connections (the held one answers nothing else meanwhile). The request
+    * is handled — and logged — when it arrives; only its answer waits.
+    */
+   public function delay (string $operation, float $seconds, int $times = 1): void
+   {
+      $Handle = fopen("{$this->directory}faults.json", 'c+');
+      if ($Handle === false) {
+         throw new RuntimeException('S3 fixture: cannot open the faults file');
+      }
+      flock($Handle, LOCK_EX);
+      $faults = json_decode((string) stream_get_contents($Handle), associative: true);
+      $faults = is_array($faults) === true ? $faults : [];
+      $faults[] = [
+         'operation' => $operation,
+         'delay' => $seconds,
+         'times' => $times,
+      ];
+      ftruncate($Handle, 0);
+      rewind($Handle);
+      fwrite($Handle, (string) json_encode($faults));
+      flock($Handle, LOCK_UN);
+      fclose($Handle);
+   }
+
    // # Server (the forked child)
    /**
     * @param resource $Server
@@ -429,12 +458,90 @@ final class S3
       /** @var array<int,string> $buffers */
       $buffers = [];
 
+      /** @var array<int,array{0:float,1:resource,2:string,3:bool}> $Held Answers held back: [due, socket, response, close] by socket id */
+      $Held = [];
+
+      // ! Answer every complete request in a socket's buffer; stop at a held answer (the
+      //   connection is answered in order) or a closed connection
+      $answer = function ($Socket) use (&$Peers, &$buffers, &$Held): void {
+         $id = (int) $Socket;
+         // @@
+         while (isset($buffers[$id]) === true && isset($Held[$id]) === false) {
+            $end = strpos($buffers[$id], "\r\n\r\n");
+            if ($end === false) {
+               break;
+            }
+            $request = self::parse(substr($buffers[$id], 0, $end));
+            $length = (int) ($request['headers']['content-length'] ?? 0);
+            if (strlen($buffers[$id]) < $end + 4 + $length) {
+               break;
+            }
+            $request['body'] = substr($buffers[$id], $end + 4, $length);
+            $buffers[$id] = substr($buffers[$id], $end + 4 + $length);
+
+            $this->hold = 0.0;
+            try {
+               $response = $this->handle($request);
+            }
+            catch (Throwable $Throwable) {
+               $response = self::fail(500, 'InternalError', "Fixture error: {$Throwable->getMessage()}");
+            }
+
+            $close = $response === null
+               || strtolower($request['headers']['connection'] ?? '') === 'close'
+               || $request['protocol'] === 'HTTP/1.0';
+            // ?: Held back — answered when due, without blocking the other connections
+            if ($response !== null && $this->hold > 0) {
+               $Held[$id] = [microtime(true) + $this->hold, $Socket, $response, $close];
+
+               break;
+            }
+            if ($response !== null) {
+               $close = self::write($Socket, $response) === false || $close;
+            }
+            if ($close === true) {
+               @fclose($Socket);
+               unset($Peers[$id], $buffers[$id]);
+
+               break;
+            }
+         }
+      };
+
       // @@ Until SIGTERM, or until the test process is gone
       while (posix_getppid() === $parent) {
-         $read = [$Server, ...$Peers];
+         // @ Release the held answers that are due, then go on with their connections
+         $now = microtime(true);
+         foreach ($Held as $id => [$due, $Socket, $response, $close]) {
+            if ($due > $now) {
+               continue;
+            }
+            unset($Held[$id]);
+            $close = self::write($Socket, $response) === false || $close;
+            if ($close === true) {
+               @fclose($Socket);
+               unset($Peers[$id], $buffers[$id]);
+
+               continue;
+            }
+            $answer($Socket);
+         }
+
+         $read = [$Server];
+         foreach ($Peers as $id => $Peer) {
+            if (isset($Held[$id]) === false) {
+               $read[] = $Peer;
+            }
+         }
          $write = null;
          $except = null;
-         if (@stream_select($read, $write, $except, 1) === false || $read === []) {
+         // ! Wake for the earliest held answer, else once a second
+         $wait = 1.0;
+         foreach ($Held as [$due]) {
+            $wait = min($wait, max(0.0, $due - microtime(true)));
+         }
+         $seconds = (int) $wait;
+         if (@stream_select($read, $write, $except, $seconds, (int) (($wait - $seconds) * 1_000_000)) === false || $read === []) {
             continue;
          }
 
@@ -462,40 +569,7 @@ final class S3
             }
             $buffers[$id] .= $chunk;
 
-            // @@ Every complete request in the buffer
-            while (true) {
-               $end = strpos($buffers[$id], "\r\n\r\n");
-               if ($end === false) {
-                  break;
-               }
-               $request = self::parse(substr($buffers[$id], 0, $end));
-               $length = (int) ($request['headers']['content-length'] ?? 0);
-               if (strlen($buffers[$id]) < $end + 4 + $length) {
-                  break;
-               }
-               $request['body'] = substr($buffers[$id], $end + 4, $length);
-               $buffers[$id] = substr($buffers[$id], $end + 4 + $length);
-
-               try {
-                  $response = $this->handle($request);
-               }
-               catch (Throwable $Throwable) {
-                  $response = self::fail(500, 'InternalError', "Fixture error: {$Throwable->getMessage()}");
-               }
-
-               $close = $response === null
-                  || strtolower($request['headers']['connection'] ?? '') === 'close'
-                  || $request['protocol'] === 'HTTP/1.0';
-               if ($response !== null) {
-                  $close = self::write($Socket, $response) === false || $close;
-               }
-               if ($close === true) {
-                  @fclose($Socket);
-                  unset($Peers[$id], $buffers[$id]);
-
-                  break;
-               }
-            }
+            $answer($Socket);
          }
       }
    }
@@ -542,6 +616,10 @@ final class S3
          };
       }
 
+      // # A scripted delay of the answer (held back by the serving loop)
+      $delay = $this->consume($operation, true);
+      $this->hold = $delay !== null ? (float) $delay['delay'] : 0.0;
+
       // # Auth, then the operation
       [$auth, $problem] = $this->verify($request, $path, $pairs, $query);
       $response = match (true) {
@@ -567,7 +645,9 @@ final class S3
    {
       // # Scripted faults
       $fault = $this->consume($operation);
-      if ($fault !== null) {
+      // ! Handled, then its answer lost
+      $lost = $fault !== null && $fault['raw'] === null && $fault['status'] === -1;
+      if ($fault !== null && $lost === false) {
          // ?: A verbatim response
          if (is_string($fault['raw']) === true) {
             return (string) base64_decode($fault['raw']) . str_repeat(' ', (int) ($fault['pad'] ?? 0));
@@ -597,8 +677,7 @@ final class S3
          }
       }
 
-      // :
-      return match ($operation) {
+      $response = match ($operation) {
          'ListObjectsV2' => $this->browse($query),
          'CreateMultipartUpload' => $this->initiate($key, $type, $meta),
          'UploadPart' => $this->upload($key, $query['uploadId'], $query['partNumber'], $request['body']),
@@ -610,6 +689,9 @@ final class S3
          'HeadObject', 'GetObject' => $this->get($key, $headers['range'] ?? null, $head),
          default => $this->erase($key)
       };
+
+      // :
+      return $lost === true ? null : $response;
    }
 
    /**
@@ -1162,11 +1244,11 @@ final class S3
    }
 
    /**
-    * Takes one use of the first fault scripted for this operation.
+    * Takes one use of the first fault (or, with `$delay`, the first delay) scripted for this operation.
     *
-    * @return null|array{operation:string,status:int,code:string,message:string,times:int,raw:null|string}
+    * @return null|array{operation:string,status:int,code:string,message:string,times:int,raw:null|string,pad?:int,delay?:float}
     */
-   private function consume (string $operation): null|array
+   private function consume (string $operation, bool $delay = false): null|array
    {
       $Handle = fopen("{$this->directory}faults.json", 'c+');
       if ($Handle === false) {
@@ -1178,7 +1260,7 @@ final class S3
 
       $taken = null;
       foreach ($faults as $index => $fault) {
-         if (($fault['operation'] ?? '') === $operation && ($fault['times'] ?? 0) > 0) {
+         if (($fault['operation'] ?? '') === $operation && ($fault['times'] ?? 0) > 0 && isset($fault['delay']) === $delay) {
             $taken = $fault;
             $faults[$index]['times']--;
 
