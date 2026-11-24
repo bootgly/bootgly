@@ -2481,38 +2481,46 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    /**
     * Run the event loop until all pending requests complete.
     *
+    * Ends batch mode (`batch()`) on every way out — with nothing to drain, and
+    * when a throw cuts the wait, as a deferral `Timeout` delivered into a parked
+    * Fiber does. The
+    * interrupted batch's requests stay pending: the next `request()` or
+    * `drain()` waits for them too, unless `abort()` drops them first.
+    *
     * @return void
     */
    public function drain (): void
    {
-      // ? Nothing to drain
-      if (
-         $this->pendingRequests === []
-         && $this->pendingStreams === []
-         && $this->Queue === []
-         && $this->retrying === 0
-         && $this->dialing === 0
-      ) {
-         return;
+      try {
+         // ? Nothing to drain
+         if (
+            $this->pendingRequests === []
+            && $this->pendingStreams === []
+            && $this->Queue === []
+            && $this->retrying === 0
+            && $this->dialing === 0
+         ) {
+            return;
+         }
+
+         // @ Adopted reactor: park the calling Fiber instead of pumping the
+         //   host loop (BG-13)
+         if ($this->owned === false) {
+            $this->parking();
+
+            return;
+         }
+
+         // @ Re-arm the persistent reactor (a previous drain may have stopped it)
+         $this->Event->loop = true; // @phpstan-ignore-line (property on the Select impl)
+         $this->Event->loop();
       }
-
-      // @ Adopted reactor: park the calling Fiber instead of pumping the
-      //   host loop (BG-13)
-      if ($this->owned === false) {
-         $this->parking();
-
-         // @ Reset for next batch of requests
+      finally {
+         // @ Reset for next batch of requests — on every exit: an empty drain,
+         //   and a throw (a deferral `Timeout` delivered into the parked Fiber)
+         //   that cuts the wait
          $this->batching = false;
-
-         return;
       }
-
-      // @ Re-arm the persistent reactor (a previous drain may have stopped it)
-      $this->Event->loop = true; // @phpstan-ignore-line (property on the Select impl)
-      $this->Event->loop();
-
-      // @ Reset for next batch of requests
-      $this->batching = false;
    }
    /**
     * Abandon every queued, in-flight and retrying request and close every

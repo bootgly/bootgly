@@ -100,5 +100,8 @@ return new Suite(
       //   TLS passphrase never reach a debug dump nor a stack trace
       '12.1-redaction_dumps',
       '12.2-redaction_traces',
+      // # 1.4.x: a throw into a parked drain() (a deferral `Timeout`) ends the
+      //   batch — the next request() is sent, never returned empty
+      '8.6-embedded-drain_throw',
    ]
 );
