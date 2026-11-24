@@ -310,7 +310,8 @@ class S3 extends Resource implements Scheduling
     * Upload when it is larger than one part).
     *
     * A multipart write reserves its parts in the worker's in-flight budget before it reads the
-    * first one and holds them until it ends, so it is refused at its start — never halfway; it
+    * first one and holds them until its last part answered — then only the completion body,
+    * while the store joins the parts —, so it is refused at its start — never halfway; it
     * never takes the budget's last part (when the budget holds two), which a write of one part
     * or less (a stream's first part, until a second shows) may take. Its parts travel up to
     * `concurrency` at a time; the next ones leave when that group answered. A stream must block:
@@ -475,6 +476,11 @@ class S3 extends Resource implements Scheduling
 
             return false;
          }
+         // ! Every part answered: their slots go back, and the completion body — far smaller than
+         //   one part, so it always fits what was just given back — is what the write holds while
+         //   the store joins the parts
+         $this->refund();
+         $this->reserve(strlen($completion));
          $completing = [$ETags, $total, $extra];
          $concluded = $this->conclude($key, $id, $completion, $ETags, $total, $extra);
          // ? Not completed, or not shown gone: abort it (harmless to a completed upload) — the

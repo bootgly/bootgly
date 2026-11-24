@@ -14,6 +14,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Tests\S3;
 use function array_column;
 use function array_count_values;
 use function assert;
+use function count;
 use function fake_skip;
 use function fclose;
 use function fopen;
@@ -25,7 +26,6 @@ use function round;
 use function str_repeat;
 use function var_export;
 use function wipe;
-
 use RuntimeException;
 
 use Bootgly\ABI\Resources\Storage\Drivers\S3\Failure\Kinds;
@@ -155,6 +155,38 @@ return new Test(
                && $Holder->result === true
                && measure() === 0,
             description: 'Under a budget of one part one write holds the whole budget, found: ' . var_export([$held, $During->result, $Holder->result], true)
+         );
+
+         // # A write waiting for its completion has nothing in flight but the completion body:
+         //   its part slots are back, and another large write goes meanwhile
+         $Fake->delay('CompleteMultipartUpload', 3.0);
+         $Joining = launch(static fn (): bool => $S3->write('big/joining.bin', $bytes));
+         $joining = null;
+         $Meanwhile = null;
+         spin($Rig, [$Joining], 10.0, static function (float $elapsed) use ($Fake, $Joining, $Second, $bytes, &$joining, &$Meanwhile): void {
+            $Operations = array_column($Fake->log(), 'operation');
+            if (
+               $Meanwhile === null
+               && $Joining->Fiber?->isSuspended() === true
+               && ($Operations[count($Operations) - 1] ?? '') === 'CompleteMultipartUpload'
+            ) {
+               $joining = measure();
+               $Meanwhile = launch(static fn (): array => [$Second->write('big/meanwhile.bin', $bytes), $Second->error]);
+            }
+         });
+         if ($Meanwhile !== null) {
+            spin($Rig, [$Meanwhile], 10.0);
+         }
+         yield assert(
+            assertion: $joining !== null
+               && $joining > 0
+               && $joining < $MiB
+               && $Meanwhile?->result === [true, '']
+               && $Joining->result === true
+               && $Fake->fetch('big/joining.bin') === $bytes
+               && $Fake->fetch('big/meanwhile.bin') === $bytes
+               && measure() === 0,
+            description: 'A write waiting for its completion holds only its body, and a large write goes meanwhile, found: ' . var_export([$joining, $Meanwhile?->result, $Joining->result], true)
          );
       }
       finally {
