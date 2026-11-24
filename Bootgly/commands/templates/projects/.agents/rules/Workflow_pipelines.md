@@ -46,8 +46,10 @@
   with: without it, `show`, `logs` and `stop` read the default storage and find nothing. `sudo` drops it
   (put `env BOOTGLY_STORAGE_DIR=…` right after `sudo`), a `docker exec` needs its own `-e` unless the
   container was created with it, and a service needs its unit's `Environment=` line.
-- **MUST** — Found a framework bug? Work around it in the project and draft the report for the user
-  to file upstream — never patch `Bootgly/` or file it yourself.
+- **MUST** — Never leave a defect you found only in chat or a note: fix it in the change, or record it,
+  reproduced, where the project tracks its issues (ask where when it has none) — a documented caveat
+  does not close it. Found a framework bug? Work around it in the project and draft the report for the
+  user to file upstream — never patch `Bootgly/` or file it yourself.
 
 ## Secrets and commits
 

@@ -122,8 +122,8 @@ return new Test(
 
       // @ The context budget: every agent session loads all of it
       yield assert(
-         assertion: $size <= 19000 && strlen($entry) <= 2000,
-         description: "the rules stay within 19000 bytes ({$size}) and the entry point within 2000 (" . strlen($entry) . ')'
+         assertion: $size <= 19500 && strlen($entry) <= 2000,
+         description: "the rules stay within 19500 bytes ({$size}) and the entry point within 2000 (" . strlen($entry) . ')'
       );
 
       // @ No CLAUDE.md among the templates: one would stop Claude Code from
