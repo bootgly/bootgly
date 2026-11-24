@@ -5,9 +5,8 @@ acronym names — the rest is what it cannot judge.
 
 ## Methods
 
-- **SHOULD** — A method name is one verb in its base form: `boot()`, `render()`, `fetch()`, `check()` —
-  never a noun, a state (`status()`, `loaded()`) or a past form. Magic methods and names imposed by an
-  interface or a framework contract are exempt.
+- **SHOULD** — A method name is one verb in its base form, even where lint's word list misses the noun or
+  state (`status()`, `exists()`). Magic methods and names an interface or a contract imposes are exempt.
 - **SHOULD** — A method that IS a loop or continuous process takes the `-ing` form: `reading()`,
   `routing()`, `monitoring()`. One discrete action keeps the base form.
 - **SHOULD** — Put the specificity in the object, not in the name: `HTML->render()`, not `renderHTML()` —
@@ -18,9 +17,8 @@ acronym names — the rest is what it cannot judge.
 
 ## Properties and variables
 
-- **SHOULD** — Object instances and collections of objects start uppercase (`$Request`, `$Posts`);
-  acronyms are uppercase even for scalars (`$SQL`, `$URL`). The framework's own signatures use this
-  casing — route and controller callbacks receive `$Request`, `$Response` and `$Router`.
+- **SHOULD** — A local collection of objects starts uppercase too (`$Posts = [$Post]`): lint types only
+  properties, parameters and `new` assignments. Callbacks receive `$Request`, `$Response` and `$Router`.
 
 ## Entities
 

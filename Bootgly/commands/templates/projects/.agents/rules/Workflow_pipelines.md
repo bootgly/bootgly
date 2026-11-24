@@ -31,10 +31,10 @@
   repository, an error) — stop and ask.
 - **MUST** — Update the kit only with `bootgly kit upgrade` or `kit downgrade` — never `git pull`, never
   `git submodule update --remote`.
-- **MUST** — Never edit `Bootgly/`, `Console/` or `Web/`; never edit `projects/Bootgly.projects.php`,
-  `projects/AGENTS.md`, `projects/.agents/rules/` or the `bootgly-*` skills and their
-  `projects/.claude/skills/` links — the tooling rewrites them (the `bootgly-` prefix is reserved); never
-  edit the kit's own `AGENTS.md` — a changed tracked file blocks the next `kit upgrade`.
+- **MUST** — Never edit `projects/Bootgly.projects.php`, `projects/AGENTS.md`, `projects/.agents/rules/`
+  or the `bootgly-*` skills and their `projects/.claude/skills/` links — the tooling rewrites them (the
+  `bootgly-` prefix is reserved); never edit the kit's own `AGENTS.md` — a changed tracked file blocks
+  the next `kit upgrade`.
 - **MUST** — Never create a `CLAUDE.md` in the kit root or in `projects/` (and never run `/init` there):
   its presence stops Claude Code from reading these `AGENTS.md` files. If a client cannot read `AGENTS.md`
   natively, a `CLAUDE.md` holding only `@AGENTS.md` is the one exception. A project of yours that wants
@@ -49,7 +49,7 @@
 - **MUST** — Never leave a defect you found only in chat or a note: fix it in the change, or record it,
   reproduced, where the project tracks its issues (ask where when it has none) — a documented caveat
   does not close it. Found a framework bug? Work around it in the project and draft the report for the
-  user to file upstream — never patch `Bootgly/` or file it yourself.
+  user to file upstream — never file it yourself.
 
 ## Secrets and commits
 

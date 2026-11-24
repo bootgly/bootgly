@@ -1,7 +1,7 @@
 # Extensibility
 
 A project may extend or improve a Bootgly core or platform piece before upstream ships it: a proposal
-ready to move, never a patch to `Bootgly/`, `Console/` or `Web/` (see *Architecture principles*).
+ready to move, never a patch to the pinned framework (see *Architecture principles*).
 
 ## Placement
 
