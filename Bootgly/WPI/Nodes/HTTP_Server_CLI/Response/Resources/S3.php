@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources;
 
 
+use function array_key_first;
 use function array_shift;
 use function count;
 use function feof;
@@ -93,6 +94,8 @@ class S3 extends Resource implements Scheduling
    private const int ANSWER = 1024 * 1024;
    /** The most uploads left open by a destroyed request that one worker remembers. */
    private const int ORPHANS = 64;
+   /** The most uploads created through `$Uploads` whose headers one worker remembers for their completion. */
+   private const int HEADERS = 256;
    /** The most of them one claim aborts: an unrelated request pays for no more. */
    private const int DRAIN = 2;
    /** The aborts one of them gets before the worker forgets it (the bucket's lifecycle rule is the backstop). */
@@ -161,6 +164,14 @@ class S3 extends Resource implements Scheduling
     * @var array<int,array{0:Writer,1:string,2:string,3:int}>
     */
    private static array $Orphans = [];
+   /**
+    * The headers `Uploads->create()` sent, by upload id — `[Writer, headers]` — until the upload
+    * is completed or aborted through a resource of the same disk in the worker (the oldest go past
+    * `HEADERS`): what `Uploads->complete()` checks a lost completion's object against.
+    *
+    * @var array<string,array{0:Writer,1:array<string,string>}>
+    */
+   private static array $Headers = [];
 
 
    /**
@@ -668,8 +679,18 @@ class S3 extends Resource implements Scheduling
             return $this->fail("S3 create multipart {$key}: {$extra} in the options");
          }
 
+         $id = $this->initiate($key, $extra);
+         // @ Remember its headers for its completion
+         if ($id !== false) {
+            unset(self::$Headers[$id]);
+            if (count(self::$Headers) >= self::HEADERS) {
+               unset(self::$Headers[array_key_first(self::$Headers)]);
+            }
+            self::$Headers[$id] = [$this->Writer, $extra];
+         }
+
          // :
-         return $this->initiate($key, $extra);
+         return $id;
       }
       finally {
          $this->leave();
@@ -812,7 +833,9 @@ class S3 extends Resource implements Scheduling
    }
 
    /**
-    * `Uploads::complete()` — join the parts into the object.
+    * `Uploads::complete()` — join the parts into the object. A lost answer is judged like a
+    * write's (`conclude()`), against the headers the upload was created with when it was created
+    * through a resource of this disk in the worker; else against its parts alone.
     *
     * @param array<int|string,mixed> $parts `[partNumber => ['etag' => ...]]`.
     */
@@ -837,8 +860,18 @@ class S3 extends Resource implements Scheduling
             return $this->fail('S3 complete multipart: an object path is required');
          }
 
+         // ! The headers it was created with, when created through a resource of this disk in the
+         //   worker: a lost completion's object is checked against them too
+         $Known = self::$Headers[$id] ?? null;
+         $extra = $Known !== null && $Known[0] === $this->Writer ? $Known[1] : null;
+
+         $completed = $this->conclude($key, $id, $completion, $parts, null, $extra) === true;
+         if ($completed === true) {
+            unset(self::$Headers[$id]);
+         }
+
          // :
-         return $this->conclude($key, $id, $completion, $parts) === true;
+         return $completed;
       }
       finally {
          $this->leave();
@@ -867,9 +900,13 @@ class S3 extends Resource implements Scheduling
 
          [$code, $headers, $body] = $this->send('DELETE', $key, ['uploadId' => $id], '', [], self::ANSWER);
          $Failure = Reader::judge(Operations::AbortMultipartUpload, $code, $headers, $body, "S3 abort multipart {$key}");
+         if ($Failure !== null) {
+            return $this->record($Failure);
+         }
+         unset(self::$Headers[$id]);
 
          // :
-         return $Failure === null ? true : $this->record($Failure);
+         return true;
       }
       finally {
          $this->leave();

@@ -515,6 +515,35 @@ return new Test(
                && $Fake->fetch('fail/stutter.bin') === null,
             description: 'An empty read before the end, once the upload is open, fails the write and aborts it, found: ' . var_export([$Job->result, $after], true)
          );
+
+         // # `Uploads->complete()` judges a lost completion by the headers `Uploads->create()` sent:
+         //   an older object of the same bytes with other headers is not the one completed
+         $Job = launch(static function () use ($S3, $Writer, $Fake): array {
+            // ! The older object: `same` as `text/old`, one part
+            $id = $S3->Uploads->create('handle/same.bin', ['type' => 'text/old']);
+            $ETag = $S3->Uploads->put('handle/same.bin', (string) $id, 1, 'same');
+            $old = $S3->Uploads->complete('handle/same.bin', (string) $id, [1 => ['etag' => $ETag]]);
+
+            // @ The same bytes as `text/new`: the upload is aborted elsewhere, then its completion's
+            //   answer is lost (the replay too)
+            $id = (string) $S3->Uploads->create('handle/same.bin', ['type' => 'text/new']);
+            $ETag = $S3->Uploads->put('handle/same.bin', $id, 1, 'same');
+            (new ReflectionMethod(S3::class, 'terminate'))->invoke($S3, [$Writer->locate('handle/same.bin'), $id]);
+            $Fake->inject('CompleteMultipartUpload', 0, times: 2);
+            $new = $S3->Uploads->complete('handle/same.bin', $id, [1 => ['etag' => $ETag]]);
+
+            return [$old, $new, $S3->error];
+         });
+         spin($Rig, [$Job], 20.0);
+         yield assert(
+            assertion: is_array($Job->result)
+               && $Job->result[0] === true
+               && $Job->result[1] === false
+               && str_contains((string) $Job->result[2], 'outcome is unknown')
+               && ($Fake->describe('handle/same.bin')['type'] ?? null) === 'text/old'
+               && $faults() === [],
+            description: 'A lost completion over an identical object with other headers is not a success, found: ' . var_export([$Job->result, $Fake->describe('handle/same.bin')['type'] ?? null], true)
+         );
       }
       finally {
          ($Rig->restore)();
