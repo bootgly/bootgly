@@ -835,7 +835,8 @@ class S3 extends Resource implements Scheduling
    /**
     * `Uploads::complete()` — join the parts into the object. A lost answer is judged like a
     * write's (`conclude()`), against the headers the upload was created with when it was created
-    * through a resource of this disk in the worker; else against its parts alone.
+    * through a resource of this disk in the worker; else the outcome is unknown (false): its parts
+    * alone cannot tell the completed object from an older one of the same bytes.
     *
     * @param array<int|string,mixed> $parts `[partNumber => ['etag' => ...]]`.
     */
@@ -1348,10 +1349,11 @@ class S3 extends Resource implements Scheduling
     * answers. A lost answer — or a `NoSuchUpload`, what a replay of a completion the store handled
     * gets — is judged by the store: an upload still listed was not completed; else the object at
     * the key is the completed one when its ETag is the one the parts fold into (`Reader::fold()`),
-    * its size, when known, is `$total` and its headers, when known, are `$extra`.
+    * its size, when known, is `$total` and its headers are `$extra`. Without `$extra` (headers not
+    * known) no object is taken as the completed one: the outcome is unknown.
     *
     * @param array<int|string,mixed> $parts The parts, by part number (`[number => ['etag' => ...]]`).
-    * @param null|array<string,string> $extra The headers the upload was created with.
+    * @param null|array<string,string> $extra The headers the upload was created with; null when not known.
     */
    private function conclude (string $key, string $id, string $completion, array $parts, null|int $total = null, null|array $extra = null): null|bool
    {
@@ -1395,8 +1397,8 @@ class S3 extends Resource implements Scheduling
          $open = $Listed->status !== 404 || $Listed->code !== 'NoSuchUpload';
       }
 
-      // ?: The object at the key is the one these parts make
-      if ($this->confirm($key, $parts, $total, $extra) === true) {
+      // ?: The object at the key is the one these parts make — never shown without its headers
+      if ($extra !== null && $this->confirm($key, $parts, $total, $extra) === true) {
          return true;
       }
 

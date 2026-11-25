@@ -445,14 +445,14 @@ return new Test(
             $Terminate->invoke($S3, [$key, $id]);
             $Fake->seed('lost/old.bin', 'OLD');
             $Fake->inject('CompleteMultipartUpload', 0, times: 2);
-            $old = [$Conclude->invoke($S3, $key, $id, $completion, $ETags, 3), $S3->error];
+            $old = [$Conclude->invoke($S3, $key, $id, $completion, $ETags, 3, []), $S3->error];
 
             // ! An object whose ETag is the parts' fold: a success only at the written size
             $sized = [];
             foreach ([3, 4] as $length) {
                $Fake->inject('CompleteMultipartUpload', 0, times: 2);
                $Fake->inject('HeadObject', 200, raw: "HTTP/1.1 200 OK\r\nETag: " . Reader::fold($ETags) . "\r\nContent-Length: {$length}\r\nConnection: close\r\n\r\n");
-               $sized[$length] = $Conclude->invoke($S3, $key, $id, $completion, $ETags, 3);
+               $sized[$length] = $Conclude->invoke($S3, $key, $id, $completion, $ETags, 3, []);
             }
             file_put_contents($scripted, '[]');
 
@@ -543,6 +543,39 @@ return new Test(
                && ($Fake->describe('handle/same.bin')['type'] ?? null) === 'text/old'
                && $faults() === [],
             description: 'A lost completion over an identical object with other headers is not a success, found: ' . var_export([$Job->result, $Fake->describe('handle/same.bin')['type'] ?? null], true)
+         );
+
+         // # An upload created elsewhere (here, another disk's resource): `Uploads->complete()` does
+         //   not know its headers, so a lost completion's outcome stays unknown
+         $Elsewhere = new S3(new Writer('', $Fake->configure()), part: 5 * $MiB, budget: 10 * $MiB, timeout: 10, connectTimeout: 2);
+         $Elsewhere->schedule($Rig->park);
+         $Job = launch(static function () use ($S3, $Elsewhere, $Writer, $Fake): array {
+            // @ The same bytes as `text/new`, aborted elsewhere, its completion's answer lost
+            $id = (string) $Elsewhere->Uploads->create('handle/same.bin', ['type' => 'text/new']);
+            $ETag = $S3->Uploads->put('handle/same.bin', $id, 1, 'same');
+            (new ReflectionMethod(S3::class, 'terminate'))->invoke($S3, [$Writer->locate('handle/same.bin'), $id]);
+            $Fake->inject('CompleteMultipartUpload', 0, times: 2);
+            $raced = [$S3->Uploads->complete('handle/same.bin', $id, [1 => ['etag' => $ETag]]), $S3->error];
+
+            // @ A completion the store took, its answer lost: unknown as well, never a false success
+            $id = (string) $Elsewhere->Uploads->create('handle/taken.bin', ['type' => 'text/new']);
+            $ETag = $S3->Uploads->put('handle/taken.bin', $id, 1, 'taken');
+            $Fake->inject('CompleteMultipartUpload', -1);
+            $taken = [$S3->Uploads->complete('handle/taken.bin', $id, [1 => ['etag' => $ETag]]), $S3->error];
+
+            return [$raced, $taken];
+         });
+         spin($Rig, [$Job], 20.0);
+         yield assert(
+            assertion: is_array($Job->result)
+               && $Job->result[0][0] === false
+               && str_contains((string) $Job->result[0][1], 'outcome is unknown')
+               && ($Fake->describe('handle/same.bin')['type'] ?? null) === 'text/old'
+               && $Job->result[1][0] === false
+               && str_contains((string) $Job->result[1][1], 'outcome is unknown')
+               && $Fake->fetch('handle/taken.bin') === 'taken'
+               && $faults() === [],
+            description: 'A lost completion of an upload whose headers are not known has an unknown outcome, found: ' . var_export([$Job->result, $Fake->describe('handle/same.bin')['type'] ?? null], true)
          );
       }
       finally {
