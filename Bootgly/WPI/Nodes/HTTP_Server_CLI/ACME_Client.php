@@ -11,22 +11,15 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
-use const DNS_A;
-use const DNS_AAAA;
 use const FILTER_FLAG_GLOBAL_RANGE;
 use const FILTER_VALIDATE_IP;
-use const SOCK_STREAM;
 use function array_unique;
 use function array_values;
 use function ctype_digit;
-use function dns_get_record;
 use function filter_var;
-use function function_exists;
-use function gethostbynamel;
 use function hrtime;
 use function implode;
 use function in_array;
-use function inet_ntop;
 use function inet_pton;
 use function intdiv;
 use function is_array;
@@ -40,11 +33,8 @@ use function min;
 use function ord;
 use function parse_url;
 use function preg_match;
-use function socket_addrinfo_explain;
-use function socket_addrinfo_lookup;
 use function str_contains;
 use function str_ends_with;
-use function str_repeat;
 use function str_starts_with;
 use function strlen;
 use function strtolower;
@@ -55,6 +45,7 @@ use function usleep;
 use InvalidArgumentException;
 use Throwable;
 
+use Bootgly\ABI\IO\Resolver;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\ACME_Client\Account;
@@ -128,6 +119,8 @@ class ACME_Client
     * The ACME account driving every signed request.
     */
    public private(set) Account $Account;
+   /** The system resolver every approved host is resolved through. */
+   private Resolver $Resolver;
 
    // * Metadata
    private null|Directory $Directory = null;
@@ -154,6 +147,8 @@ class ACME_Client
       bool $allowPrivate = false
    )
    {
+      $this->Resolver = new Resolver;
+
       $target = $this->parse($directory);
       if ($target === null) {
          throw new InvalidArgumentException(
@@ -723,14 +718,14 @@ class ACME_Client
          if (str_ends_with($given, ']') === false) {
             return null;
          }
-         $host = $this->normalize(substr($given, 1, -1));
+         $host = Resolver::normalize(substr($given, 1, -1));
          if ($host === null || str_contains($host, ':') === false) {
             return null;
          }
          $lookup = $host;
       }
       else {
-         $host = $this->normalize($given);
+         $host = Resolver::normalize($given);
          if ($host === null) {
             $absolute = str_ends_with($given, '.');
             if (str_ends_with($given, '.')) {
@@ -783,25 +778,6 @@ class ACME_Client
       ];
    }
 
-   /** Canonicalize an IPv4/IPv6 literal, including IPv4-mapped IPv6. */
-   private function normalize (string $IP): null|string
-   {
-      $packed = @inet_pton($IP);
-      if ($packed === false) {
-         return null;
-      }
-      if (
-         strlen($packed) === 16
-         && substr($packed, 0, 12) === str_repeat("\0", 10) . "\xff\xff"
-      ) {
-         $packed = substr($packed, 12);
-      }
-
-      $normalized = inet_ntop($packed);
-
-      return is_string($normalized) ? $normalized : null;
-   }
-
    /**
     * Enforce exact configured-origin policy without resolving DNS.
     *
@@ -831,56 +807,12 @@ class ACME_Client
          return $this->addresses[$origin];
       }
 
-      $literal = $this->normalize($host);
-      $addresses = $literal === null ? [] : [$literal];
-      if ($literal === null) {
-         $resolved = false;
-         if (function_exists('socket_addrinfo_lookup')) {
-            try {
-               $AddressInfos = @socket_addrinfo_lookup($host, null, [
-                  'ai_socktype' => SOCK_STREAM,
-               ]);
-            }
-            catch (Throwable) {
-               $AddressInfos = false;
-            }
-            foreach (is_array($AddressInfos) ? $AddressInfos : [] as $AddressInfo) {
-               $explained = socket_addrinfo_explain($AddressInfo);
-               $IP = $explained['ai_addr']['sin_addr']
-                  ?? ($explained['ai_addr']['sin6_addr'] ?? null);
-               if (is_string($IP)) {
-                  $addresses[] = $IP;
-               }
-            }
-            $resolved = true;
-         }
-         if ($resolved === false) {
-            $IPv4 = @gethostbynamel($host);
-            foreach (is_array($IPv4) ? $IPv4 : [] as $IP) {
-               $addresses[] = $IP;
-            }
-
-            $records = @dns_get_record($host, DNS_A | DNS_AAAA);
-            foreach (is_array($records) ? $records : [] as $record) {
-               $IP = $record['ip'] ?? ($record['ipv6'] ?? null);
-               if (is_string($IP)) {
-                  $addresses[] = $IP;
-               }
-            }
-         }
+      $addresses = $this->Resolver->resolve($host);
+      if ($addresses === null) {
+         throw new ProtocolException(
+            "ACME authority `{$host}` resolved to an invalid address."
+         );
       }
-
-      $normalized = [];
-      foreach ($addresses as $IP) {
-         $address = $this->normalize($IP);
-         if ($address === null) {
-            throw new ProtocolException(
-               "ACME authority `{$host}` resolved to an invalid address."
-            );
-         }
-         $normalized[] = $address;
-      }
-      $addresses = array_values(array_unique($normalized));
       if ($addresses === []) {
          throw new ConnectionException(
             "ACME authority `{$host}` could not be resolved."

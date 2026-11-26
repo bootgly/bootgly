@@ -11,22 +11,15 @@
 namespace Bootgly\API\Security\JWT;
 
 
-use const DNS_AAAA;
 use const FILTER_FLAG_GLOBAL_RANGE;
 use const FILTER_VALIDATE_IP;
 use const JSON_BIGINT_AS_STRING;
 use const JSON_THROW_ON_ERROR;
 use const PHP_INT_MAX;
 use const PREG_SET_ORDER;
-use const SOCK_STREAM;
 use function array_slice;
-use function array_unique;
-use function array_values;
-use function dns_get_record;
 use function file_get_contents;
 use function filter_var;
-use function function_exists;
-use function gethostbynamel;
 use function hrtime;
 use function http_clear_last_response_headers;
 use function http_get_last_response_headers;
@@ -44,11 +37,7 @@ use function ord;
 use function parse_url;
 use function preg_match;
 use function preg_match_all;
-use function rtrim;
-use function socket_addrinfo_explain;
-use function socket_addrinfo_lookup;
 use function str_contains;
-use function str_ends_with;
 use function strcasecmp;
 use function stream_context_create;
 use function stream_context_set_option;
@@ -66,6 +55,7 @@ use Bootgly\ABI\Clock;
 use Bootgly\ABI\Data\URI;
 use Bootgly\ABI\Debugging\Data\Vars\Redactable;
 use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
+use Bootgly\ABI\IO\Resolver;
 use Bootgly\API\Security\JWT\Remote\Response;
 
 
@@ -168,6 +158,8 @@ class Remote implements KeyResolver
    private null|Cache $Cache = null;
    private null|KeySet $Keys = null;
    private int $ttl;
+   /** The system resolver every hop is resolved through. */
+   private Resolver $Resolver;
    public private(set) null|Failures $failure = null;
    public private(set) string $message = '';
    public private(set) int $status = 0;
@@ -243,6 +235,7 @@ class Remote implements KeyResolver
 
       // * Data
       $this->Fetcher = $Fetcher === null ? null : Closure::fromCallable($Fetcher);
+      $this->Resolver = new Resolver;
    }
 
    /**
@@ -808,77 +801,22 @@ class Remote implements KeyResolver
     * Resolve one host to its canonical IP addresses — once per hop: the native
     * fetch dials one of these literals and never resolves the name again.
     *
-    * An IP literal is returned canonical without a lookup (an IPv4-mapped
-    * IPv6 address as its IPv4 address). Overridable by a subclass — a test
-    * models DNS answers through it.
+    * The system resolver's ladder (`Bootgly\ABI\IO\Resolver`): an IP
+    * literal is returned canonical without a lookup (an IPv4-mapped IPv6
+    * address as its IPv4 address). Overridable by a subclass — a test models
+    * DNS answers through it.
     *
     * @param string $host A registered name (a terminal dot kept) or an IP literal without brackets.
     *
     * @return array<int,string> Canonical addresses in resolver order (getaddrinfo's with ext-sockets;
     *    without it, the IPv4 answers first, then the absolute name's DNS AAAA records — a DNS round trip
-    *    outside the hop's `timeout`, none for `localhost`); empty when the host does not resolve.
+    *    outside the hop's `timeout`, none for `localhost`); empty when the host does not resolve or an
+    *    answer is not an address.
     */
    protected function discover (string $host): array
    {
-      // ? An IP literal needs no lookup
-      $literal = $this->normalize($host);
-      if ($literal !== null) {
-         return [$literal];
-      }
-
-      // @ The system resolver — the one PHP's own wrapper would have used
-      $addresses = [];
-      if (function_exists('socket_addrinfo_lookup')) {
-         try {
-            $AddressInfos = @socket_addrinfo_lookup($host, null, [
-               'ai_socktype' => SOCK_STREAM,
-            ]);
-         }
-         catch (Throwable) {
-            $AddressInfos = false;
-         }
-         foreach (is_array($AddressInfos) ? $AddressInfos : [] as $AddressInfo) {
-            $explained = socket_addrinfo_explain($AddressInfo);
-            $IP = $explained['ai_addr']['sin_addr']
-               ?? ($explained['ai_addr']['sin6_addr'] ?? null);
-            if (is_string($IP)) {
-               $addresses[] = $IP;
-            }
-         }
-      }
-      // ! Without ext-sockets: the system resolver's IPv4 answers (hosts
-      //   file included) first, then the name's DNS AAAA records — asked for
-      //   the absolute name (no search list), never for `localhost`
-      else {
-         $IPv4 = @gethostbynamel($host);
-         foreach (is_array($IPv4) ? $IPv4 : [] as $IP) {
-            $addresses[] = $IP;
-         }
-
-         $name = strtolower(rtrim($host, '.'));
-         if ($name !== 'localhost' && str_ends_with($name, '.localhost') === false) {
-            $records = @dns_get_record("{$name}.", DNS_AAAA);
-            foreach (is_array($records) ? $records : [] as $record) {
-               $IP = $record['ipv6'] ?? null;
-               if (is_string($IP)) {
-                  $addresses[] = $IP;
-               }
-            }
-         }
-      }
-
-      // ! An answer that is not an address voids the whole lookup
-      $normalized = [];
-      foreach ($addresses as $IP) {
-         $address = $this->normalize($IP);
-         if ($address === null) {
-            return [];
-         }
-         $normalized[] = $address;
-      }
-
       // :
-      return array_values(array_unique($normalized));
+      return $this->Resolver->resolve($host) ?? [];
    }
 
    /**
@@ -900,7 +838,7 @@ class Remote implements KeyResolver
     */
    protected function permit (string $IP): bool
    {
-      $address = $this->normalize($IP);
+      $address = Resolver::normalize($IP);
       $packed = $address === null ? false : @inet_pton($address);
       if ($address === null || $packed === false) {
          return false;
@@ -941,25 +879,6 @@ class Remote implements KeyResolver
 
       // @phpstan-ignore notIdentical.alwaysTrue (GLOBAL_RANGE is narrower than valid-IP)
       return filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_GLOBAL_RANGE) !== false;
-   }
-
-   /**
-    * Canonicalize an IPv4/IPv6 literal (an IPv4-mapped IPv6 address becomes
-    * its IPv4 address); null when the string is not one.
-    */
-   private function normalize (string $IP): null|string
-   {
-      $packed = @inet_pton($IP);
-      if ($packed === false) {
-         return null;
-      }
-      if (strlen($packed) === 16 && substr($packed, 0, 12) === "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff") {
-         $packed = substr($packed, 12);
-      }
-
-      $normalized = inet_ntop($packed);
-
-      return is_string($normalized) ? $normalized : null;
    }
 
    /**

@@ -37,5 +37,7 @@ return new Suite(
       // # 1.4.0: secrets stay out of debug dumps and exception traces
       '6.1-csr_dump_redaction',
       '6.2-key_trace_redaction',
+      // # 1.4.0: name resolution through the shared ABI ladder keeps every answer
+      '5.9-name_resolution',
    ]
 );

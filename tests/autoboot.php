@@ -264,5 +264,8 @@ return new Suites(
       'Bootgly/ABI/Syntax/Spacing/',
       'Bootgly/ABI/Syntax/Casing/',
       'Bootgly/ABI/Syntax/Sections/',
+      // # 1.4.0: the system's blocking name resolver shared by every synchronous dial
+      //   (appended last to keep every suite index above stable)
+      'Bootgly/ABI/IO/Resolver/',
    ]
 );

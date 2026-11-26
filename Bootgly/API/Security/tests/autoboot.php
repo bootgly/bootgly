@@ -90,5 +90,7 @@ return new Suite(
       '1.61-jwt_trace_redaction',
       '1.62-credentials_trace_redaction',
       '1.63-encrypter_key_sealed',
+      // # 1.4.0: name resolution through the shared ABI ladder keeps every answer
+      '1.64-jwt_remote_name_resolution',
    ]
 );
