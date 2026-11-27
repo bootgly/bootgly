@@ -10,7 +10,9 @@
 
 namespace Bootgly\WPI\Nodes;
 
+
 use const BOOTGLY_ROOT_DIR;
+use const PHP_INT_MAX;
 use const SIGTERM;
 use const STREAM_CRYPTO_METHOD_TLSv1_2_SERVER;
 use const STREAM_CRYPTO_METHOD_TLSv1_3_SERVER;
@@ -85,6 +87,7 @@ use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Pool;
 use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Modules\HTTP2\Errors;
+use Bootgly\WPI\Nodes\DNS_Client_CLI;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Configs;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Events;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request;
@@ -96,6 +99,7 @@ use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response\Decoders\Decoder_Chunked;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response\Decoders\Decoder_Waiting;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Session;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Tests\Suite\Test as E2ETest;
+
 
 class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 {
@@ -318,6 +322,9 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       // \
       parent::__construct($mode);
+
+      // @ Resolve names on the reactor (a parked lookup on a worker), never inside the socket call
+      $this->Resolution = new DNS_Client_CLI()->resolve(...);
 
       // @ Configure Logger
       $this->Logger = new Logger(channel: 'HTTP.Client.CLI');
@@ -1463,8 +1470,12 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       //   deadlines bound that wait. Its own window opens on dispatch (HCLI-6).
       if ($queued === false && $this->timeout > 0) {
          $responseDeadline = microtime(true) + $this->timeout;
-         $responseMonotonicDeadline = (int) hrtime(true)
-            + (int) ($this->timeout * 1_000_000_000);
+         // ! Never past the clock's last tick (a timeout beyond the int range of nanoseconds)
+         $nowMonotonic = (int) hrtime(true);
+         $span = $this->timeout * 1_000_000_000;
+         $responseMonotonicDeadline = $span < PHP_INT_MAX - $nowMonotonic
+            ? $nowMonotonic + (int) $span
+            : PHP_INT_MAX;
          $deadline = $deadline === null
             ? $responseDeadline
             : min($deadline, $responseDeadline);

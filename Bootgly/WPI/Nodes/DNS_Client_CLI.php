@@ -20,7 +20,6 @@ use function is_string;
 use function preg_match;
 use function rtrim;
 use function serialize;
-use function spl_object_id;
 use function str_contains;
 use function str_ends_with;
 use function str_starts_with;
@@ -45,6 +44,7 @@ use Bootgly\WPI\Nodes\DNS_Client_CLI\Answer\Outcomes;
 use Bootgly\WPI\Nodes\DNS_Client_CLI\Cache;
 use Bootgly\WPI\Nodes\DNS_Client_CLI\Configs;
 use Bootgly\WPI\Nodes\DNS_Client_CLI\Query;
+use Bootgly\WPI\Nodes\DNS_Client_CLI\Seams;
 use Bootgly\WPI\Nodes\DNS_Client_CLI\State;
 
 
@@ -144,14 +144,25 @@ final class DNS_Client_CLI
     * @param string $host A host name (one trailing dot: no search list) or an IP literal.
     * @param null|Closure $Wait The caller's wait bridge: with one, inside a Fiber, on a worker
     *    loop, the lookup parks instead of blocking.
+    * @param null|int $deadline The caller's deadline on the monotonic clock (`hrtime(true)`
+    *    nanoseconds): a parked lookup gives up there and returns `[]`; a blocking one cannot be cut.
+    * @param null|(Events&Loops&Scheduler) $Reactor The loop the caller runs on: a lookup parks only
+    *    when it is the worker's (or none is given); on another loop it blocks.
     *
     * @return list<string> Canonical addresses, ordered for dialing (at most 32 per family); `[]`
     *    when the name does not resolve (or is refused: empty, over 253 characters, a NUL byte,
     *    `%`, a stray bracket, an empty label or one over 63 characters).
     */
-   public function resolve (string $host, null|Closure $Wait = null): array
+   public function resolve (
+      string $host,
+      null|Closure $Wait = null,
+      null|int $deadline = null,
+      null|(Events & Loops & Scheduler) $Reactor = null
+   ): array
    {
       $now = Query::clock();
+      // ! The caller's deadline on the resolver's clock (seconds)
+      $until = $deadline === null ? null : $deadline / 1_000_000_000;
 
       // ? A bracketed IPv6 literal (never with a zone id)
       if (str_starts_with($host, '[') && str_ends_with($host, ']')) {
@@ -192,22 +203,32 @@ final class DNS_Client_CLI
          return $Precedence->order(['::1', '127.0.0.1'], $now);
       }
 
-      // ? Names only the system resolver answers, and lookups that cannot park
-      $parking = $Wait !== null && $this->Reactor !== null && Fiber::getCurrent() !== null;
+      // ? The caller's deadline passed already: nothing is asked, by any resolver
+      if ($until !== null && Query::clock() >= $until) {
+         return [];
+      }
+
+      // ? Names only the system resolver answers, and lookups that cannot park — a caller on
+      //   another loop than the worker's would wait on a driver nobody runs
+      $Worker = $this->Reactor;
+      $parking = $Wait !== null
+         && $Worker !== null
+         && ($Reactor === null || $Reactor === $Worker)
+         && Fiber::getCurrent() !== null;
       if (
          $parking === false
          || ($Settings->mDNS && ($name === 'local' || str_ends_with($name, '.local')))
          || ($Settings->myhostname && ($name === $Settings->hostname || in_array($name, ['_gateway', '_outbound'], true)))
          || preg_match('/(?:^|\.)(?:\d+|0x[0-9a-f]*)$/D', $name) === 1
       ) {
-         return $this->limit($State->climb($absolute ? "{$name}." : $name, $now));
+         return $this->limit($State->climb($absolute ? "{$name}." : $name, $now, negative: $Worker !== null));
       }
 
       // @ DNS, through the search list (glibc res_search)
       $dots = substr_count($name, '.');
       $tried = false;
       if ($dots >= $Settings->ndots || $absolute) {
-         [$addresses, $kind] = $this->find($State, $name, $Wait);
+         [$addresses, $kind] = $this->find($State, $name, $Wait, $until);
          if ($addresses !== [] || $absolute) {
             return $this->limit($Precedence->order($addresses, Query::clock()));
          }
@@ -221,7 +242,12 @@ final class DNS_Client_CLI
             continue;
          }
 
-         [$addresses, $kind] = $this->find($State, $candidate, $Wait);
+         // ? The caller's deadline passed: no further candidate
+         if ($until !== null && Query::clock() >= $until) {
+            return [];
+         }
+
+         [$addresses, $kind] = $this->find($State, $candidate, $Wait, $until);
          if ($addresses !== []) {
             return $this->limit($Precedence->order($addresses, Query::clock()));
          }
@@ -237,7 +263,12 @@ final class DNS_Client_CLI
 
       // @ The name as-is, if not tried yet
       if ($tried === false) {
-         [$addresses] = $this->find($State, $name, $Wait);
+         // ? The caller's deadline passed
+         if ($until !== null && Query::clock() >= $until) {
+            return [];
+         }
+
+         [$addresses] = $this->find($State, $name, $Wait, $until);
 
          return $this->limit($Precedence->order($addresses, Query::clock()));
       }
@@ -363,15 +394,15 @@ final class DNS_Client_CLI
          self::$Cache = new Cache();
       }
 
-      // ! One state per configuration: values, plus the identity of the seams it carries
+      // ! One state per configuration: values, plus what the seams it carries do (`Seams`)
       $Configs = $this->Configs;
       $fingerprint = serialize([
          $Configs->nameservers, $Configs->port, $Configs->search, $Configs->ndots,
          $Configs->timeout, $Configs->attempts, $Configs->rotate, $Configs->EDNS,
          $Configs->resolv, $Configs->hosts, $Configs->nsswitch, $Configs->environment,
          $Configs->hostname,
-         $Configs->Resolver === null ? null : spl_object_id($Configs->Resolver),
-         $Configs->Probe === null ? null : spl_object_id($Configs->Probe),
+         Seams::identify($Configs->Resolver),
+         Seams::identify($Configs->Probe),
       ]);
 
       $State = self::$States[$fingerprint] ?? null;
@@ -398,7 +429,7 @@ final class DNS_Client_CLI
     * @return array{list<string>, string} The addresses, and how the candidate ended:
     *    `ANSWERED`, `NODATA`, `NXDOMAIN`, `SERVFAIL`, `unreachable` or `failed`.
     */
-   private function find (State $State, string $name, Closure $Wait): array
+   private function find (State $State, string $name, Closure $Wait, null|float $until = null): array
    {
       $Cache = $State->Cache;
       $types = [DNS::TYPE_A, DNS::TYPE_AAAA];
@@ -422,7 +453,7 @@ final class DNS_Client_CLI
 
       $faults = [];
       if ($missing !== []) {
-         $Query = $this->ask($State, $name, $missing, $Wait);
+         $Query = $this->ask($State, $name, $missing, $Wait, $until);
          foreach ($missing as $type) {
             $Answer = $Query?->Answers[$type] ?? new Answer(Outcomes::Failed, $name);
             $faults[$type] = $Query === null ? 'local' : ($Query->faults[$type] ?? null);
@@ -478,7 +509,7 @@ final class DNS_Client_CLI
     * @return null|Query The settled query; `null` when this lookup could not wait for it (its own
     *    deadline, a bridge that stopped suspending, the reactor's refusal, too many in flight).
     */
-   private function ask (State $State, string $name, array $types, Closure $Wait): null|Query
+   private function ask (State $State, string $name, array $types, Closure $Wait, null|float $until = null): null|Query
    {
       $Reactor = $this->Reactor;
       if ($Reactor === null) {
@@ -491,7 +522,7 @@ final class DNS_Client_CLI
       }
 
       // @ Wait on the doorbell
-      $settled = $Query->await($Wait);
+      $settled = $Query->await($Wait, $until);
 
       return $settled ? $Query : null;
    }

@@ -86,5 +86,6 @@ return new Suite(
    // * Data
    tests: [
       '1.1-lookup_parks_while_worker_answers',
+      '1.2-dial_parks_while_worker_answers',
    ]
 );

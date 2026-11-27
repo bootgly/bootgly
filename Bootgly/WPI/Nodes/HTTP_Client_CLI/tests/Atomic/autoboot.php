@@ -103,5 +103,7 @@ return new Suite(
       // # 1.4.x: a throw into a parked drain() (a deferral `Timeout`) ends the
       //   batch — the next request() is sent, never returned empty
       '8.6-embedded-drain_throw',
+      // # 1.4.x: a response timeout beyond the nanosecond range is never an overflowed deadline
+      '13.1-response_timeout_range',
    ]
 );

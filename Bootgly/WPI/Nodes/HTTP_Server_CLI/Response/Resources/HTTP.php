@@ -33,11 +33,12 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource\Scheduling;
  * wait parks the deferred Fiber instead of pumping a private event loop, so
  * the worker keeps serving its other connections while the upstream answers.
  *
- * The dial parks too: opening the connection and the TLS handshake suspend
- * the deferred Fiber between readiness slices, so an unreachable upstream
- * costs the worker nothing but the dialing socket. Both legs are bounded by
- * `connectTimeout` alone — `timeout` arms only the response window, after
- * the connection is up. Every deferral dials afresh — no upstream connection
+ * The dial parks too: the host name's lookup (through `DNS_Client_CLI`),
+ * opening the connection and the TLS handshake suspend the deferred Fiber
+ * between readiness slices, so a slow nameserver or an unreachable upstream
+ * costs the worker nothing but a query and the dialing socket. All three are
+ * bounded by `connectTimeout` alone — `timeout` arms only the response
+ * window, after the connection is up. Every deferral dials afresh — no upstream connection
  * is reused across requests.
  *
  * Redirects are pinned to the configured upstream: a hop that changes the
@@ -97,7 +98,7 @@ class HTTP extends Resource implements Scheduling
     * @param array<string,mixed>|null $secure TLS stream context options (`[]` enables TLS with the defaults).
     * @param array<string,int>|null $pool Connection pool bounds inside one deferral: `['min' => N, 'max' => N]`.
     * @param int|float $timeout Response timeout in seconds (0 = no timeout).
-    * @param int|float $connectTimeout Connection timeout in seconds, per dial attempt — it alone bounds the dial AND the TLS handshake (0 = no timeout: a peer that accepts TCP but never negotiates keeps the deferred Fiber and its socket parked until the deferral's own generation is cancelled).
+    * @param int|float $connectTimeout Connection timeout in seconds, per dial attempt — it alone bounds the name's lookup, the dial AND the TLS handshake (0 = no timeout: a peer that accepts TCP but never negotiates keeps the deferred Fiber and its socket parked until the deferral's own generation is cancelled).
     * @param int $maxRedirects Maximum redirects to follow, within the upstream origin (0 = disabled).
     * @param int $maxRetries Maximum retries on connection/timeout failure (0 = disabled).
     * @param null|bool $enableHTTP2 HTTP/2 negotiation (null = ALPN when secure; true = also h2c; false = never).

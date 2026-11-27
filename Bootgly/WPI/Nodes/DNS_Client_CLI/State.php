@@ -36,7 +36,7 @@ use Bootgly\WPI\Events;
 final class State
 {
    // * Config
-   /** The configuration (held: the seams' identities stay unique while this state lives). */
+   /** The configuration (held: its seams and what they capture stay alive, so no object id in this state's key is reused while it lives). */
    public private(set) Configs $Configs;
    /** The process's answer cache (shared by every state). */
    public private(set) Cache $Cache;
@@ -164,9 +164,11 @@ final class State
    /**
     * Ask the system resolver (blocking), keeping its answer 5 seconds.
     *
+    * @param bool $negative Whether an unresolved name is kept too (on a worker loop).
+    *
     * @return list<string>
     */
-   public function climb (string $host, float $now): array
+   public function climb (string $host, float $now, bool $negative = true): array
    {
       $Entry = $this->ladder[$host] ?? null;
       if ($Entry !== null && $Entry[1] > $now) {
@@ -174,6 +176,12 @@ final class State
       }
 
       $addresses = array_values($this->Resolver->resolve($host) ?? []);
+      // ? Off a worker an unresolved name is not kept: the next call asks again (a transient
+      //   failure of the system resolver must not outlive it). On a worker it is, so a name that
+      //   does not resolve does not block every request
+      if ($addresses === [] && $negative === false) {
+         return [];
+      }
 
       // @ Keep it 5 seconds, at most 64 names
       if (count($this->ladder) >= 64) {

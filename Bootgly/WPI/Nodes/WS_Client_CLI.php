@@ -35,6 +35,7 @@ use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Modules\WS;
 use Bootgly\WPI\Modules\WS\Client;
+use Bootgly\WPI\Nodes\DNS_Client_CLI;
 use Bootgly\WPI\Nodes\WS_Client_CLI\Configs;
 use Bootgly\WPI\Nodes\WS_Client_CLI\Decoders\Decoder_;
 use Bootgly\WPI\Nodes\WS_Client_CLI\Decoders\Decoder_Framing;
@@ -125,6 +126,9 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
    {
       // \
       parent::__construct($mode);
+
+      // @ Resolve names on the reactor (a parked lookup on a worker), never inside the socket call
+      $this->Resolution = new DNS_Client_CLI()->resolve(...);
 
       // @ Configure Logger
       $this->Logger = new Logger(channel: 'WS.Client.CLI');

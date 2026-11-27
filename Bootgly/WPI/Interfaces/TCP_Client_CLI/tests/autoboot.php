@@ -28,5 +28,14 @@ return new Suite(
       '4.2-redaction_traces',
       // # 1.4.x: the wire buffers of a connection never reach a debug dump
       '4.3-redaction_buffers',
+      // # 1.4.x: a name is resolved before the dial, its addresses dialed in turn
+      '5.1-dial_literals',
+      '5.2-dial_names',
+      '5.3-dial_fallback',
+      '5.4-dial_budget',
+      '5.5-suspects',
+      '5.6-dial_tls',
+      '5.7-dial_parked',
+      '5.8-dial_edges',
    ]
 );

@@ -228,12 +228,17 @@ final class Query
     * Wait on the doorbell until the query settles or its deadline passes.
     *
     * @param Closure $Wait The caller's wait bridge (it parks the calling Fiber on a `Readiness`).
+    * @param null|float $until The caller's own deadline on `clock()`, in seconds: the wait ends at
+    *    the earlier of it and the query's deadline. The query itself keeps running for the others.
     *
-    * @return bool Whether the query settled; `false` past the deadline, when the bridge stopped
+    * @return bool Whether the query settled; `false` past either deadline, when the bridge stopped
     *    suspending, or when the reactor refused the doorbell.
     */
-   public function await (Closure $Wait): bool
+   public function await (Closure $Wait, null|float $until = null): bool
    {
+      // ! The caller may stop waiting before the query gives up
+      $limit = $until === null ? $this->deadline : min($this->deadline, $until);
+
       $this->waiters++;
       try {
          $stalled = 0;
@@ -252,9 +257,9 @@ final class Query
                return false;
             }
 
-            // ? Past the query's deadline
+            // ? Past the query's deadline, or the caller's
             $now = self::clock();
-            if ($now >= $this->deadline) {
+            if ($now >= $limit) {
                return false;
             }
 
@@ -272,7 +277,7 @@ final class Query
             $before = hrtime(true);
             try {
                // ! The reactor's deadlines are wall-clock: the monotonic slice is converted at the call
-               $Wait(Readiness::read($bell, microtime(true) + min($this->deadline - $now, 1.0)));
+               $Wait(Readiness::read($bell, microtime(true) + min($limit - $now, 1.0)));
             }
             catch (RuntimeException $Rejection) {
                // ? Only the selector's admission refusal is ours to absorb

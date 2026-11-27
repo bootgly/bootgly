@@ -12,8 +12,10 @@ namespace Bootgly\WPI\Interfaces;
 
 
 use const E_WARNING;
+use const INF;
 use const LOCK_EX;
 use const LOCK_NB;
+use const PHP_INT_MAX;
 use const PHP_SAPI;
 use const SIG_IGN;
 use const SIGALRM;
@@ -34,8 +36,13 @@ use const WUNTRACED;
 use function count;
 use function defined;
 use function fclose;
+use function hrtime;
+use function in_array;
+use function intdiv;
 use function is_resource;
+use function max;
 use function microtime;
+use function min;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
 use function pcntl_wait;
@@ -43,6 +50,8 @@ use function posix_getpid;
 use function register_shutdown_function;
 use function restore_error_handler;
 use function set_error_handler;
+use function str_contains;
+use function str_starts_with;
 use function stream_context_create;
 use function stream_socket_client;
 use function strpos;
@@ -50,6 +59,7 @@ use function time;
 use ArgumentCountError;
 use BackedEnum;
 use Closure;
+use Fiber;
 use InvalidArgumentException;
 use LogicException;
 use Throwable;
@@ -58,6 +68,7 @@ use Bootgly\ABI\Configs as Configuring;
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ABI\Debugging\Data\Vars\Redactable;
 use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
+use Bootgly\ABI\IO\Resolver;
 use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Events\Timer;
@@ -73,6 +84,8 @@ use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Commands;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Configs;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
+use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Faults;
+use Bootgly\WPI\Interfaces\TCP_Client_CLI\Suspects;
 
 
 class TCP_Client_CLI implements Clients
@@ -87,7 +100,7 @@ class TCP_Client_CLI implements Clients
    protected const array CONFIGS = [Configs::class];
 
    // * Config
-   /** TCP + TLS establishment budget in seconds (0 = unbounded). */
+   /** Establishment budget in seconds — the name's lookup (with `$Resolution`), the TCP connect and the TLS handshake (0 = unbounded). */
    public int|float $connectTimeout = 5;
    /**
     * Optional absolute request deadline (`microtime(true)` epoch seconds).
@@ -108,6 +121,23 @@ class TCP_Client_CLI implements Clients
          return $this->Logger;
       }
    }
+   /**
+    * Name resolution for the dial: `null` (the default) hands the configured
+    * host to the socket as given, and PHP resolves a name there, blocking.
+    *
+    * With a resolver, `connect()` resolves a host name first and dials its
+    * addresses (`tcp://{IP}:{port}`, an IPv6 one bracketed); the host stays the
+    * name everywhere else, and TLS still verifies it (`peer_name`). An IP
+    * literal is never resolved. The resolver receives the host, the wait
+    * bridge (only where the dial itself parks: an adopted reactor, `schedule()`,
+    * a Fiber — else `null`), the dial's deadline (`hrtime(true)` nanoseconds,
+    * `null` = unbounded) and the client's reactor; it returns the IP addresses
+    * to try, in order (`[]` = unresolved). `HTTP_Client_CLI` and `WS_Client_CLI`
+    * install `DNS_Client_CLI::resolve()`. Safe to replace between dials.
+    *
+    * @var null|Closure(string,null|Closure,null|int,Events&Loops&Scheduler):list<string>
+    */
+   public null|Closure $Resolution = null;
 
    // ! Event
    /** Reactor in use by THIS instance (each client owns its own by default). */
@@ -564,21 +594,39 @@ class TCP_Client_CLI implements Clients
    }
 
    /**
-    * Open connection with server / Connect with server
+    * Open the connection with the server.
+    *
+    * Without `$Resolution`, or for a host that is not a name (an IP literal,
+    * bracketed or not), the configured host is dialed as given. With it, the
+    * name is resolved first and its addresses are dialed in turn: an address
+    * that refuses, cannot be reached or stays silent through its share of the
+    * budget is a suspect for a while (`Suspects`) and the next one is tried;
+    * a TLS failure ends the dial. One budget — `connectTimeout`, `deadline`,
+    * `monotonicDeadline`, taken before the lookup — covers the lookup and the
+    * whole dial; each address's TCP stage gets the time left divided by the
+    * addresses left, at least 2 seconds, and the TLS handshake the remainder.
     *
     * @return resource|false
     */
    public function connect ()
    {
-      $error = false;
+      $Resolution = $this->Resolution;
+      $host = (string) $this->host;
 
-      try {
-         $contextOptions = [
+      // ? No resolver, or a host that is not a name: the configured host as given
+      if (
+         $Resolution === null
+         || $host === ''
+         || str_starts_with($host, '[')
+         || str_contains($host, ':')
+         || Resolver::normalize($host) !== null
+      ) {
+         $options = [
             'socket' => [
                // Setting this option to true will set SOL_TCP, NO_DELAY=1 appropriately,
                // thus disabling the TCP Nagle algorithm.
                'tcp_nodelay' => true,
-   
+
                // Used to specify the IP address (either IPv4 or IPv6) and/or the port number
                // that PHP will use to access the network. The syntax is ip:port for IPv4 addresses,
                // and [ip]:port for IPv6 addresses. Setting the IP or the port to 0 will
@@ -588,25 +636,197 @@ class TCP_Client_CLI implements Clients
          ];
          // @ Merge secure SSL/TLS context options
          if ( ! empty($this->secure) ) {
-            $contextOptions['ssl'] = $this->secure;
+            $options['ssl'] = $this->secure;
          }
 
-         $context = stream_context_create($contextOptions);
+         [$Socket, $bound] = $this->establish("tcp://{$this->host}:{$this->port}", $options, quiet: false);
+         if ($Socket === false) {
+            $this->Logger->log(warning: 'Unable to connect! Socket not created.@\\;');
+
+            return false;
+         }
+
+         $this->Socket = $Socket;
+
+         if ($bound === true) {
+            $this->Logger->log(warning: 'Unable to connect! Trying to connect in the future...@\\;');
+
+            // @ Add to Event loop to future connection (deadline-bounded)
+            $this->await($Socket);
+
+            return $Socket;
+         }
+
+         if ($this->Connections->connect() === false) {
+            $this->Logger->log(warning: 'Unable to establish the TCP/TLS connection before its deadline.@\\;');
+            return false;
+         }
+
+         return $Socket;
+      }
+
+      // ! One budget for the whole dial, taken before the lookup: the lookup spends it too
+      $now = microtime(true);
+      $nowMonotonic = (int) hrtime(true);
+      $deadline = $this->deadline;
+      $monotonicDeadline = $this->monotonicDeadline;
+      // ! A span ahead of now on the monotonic clock, never past its last tick (a far or infinite span)
+      $ahead = static function (float $seconds) use ($nowMonotonic): int {
+         $span = $seconds * 1_000_000_000;
+
+         return $span < PHP_INT_MAX - $nowMonotonic
+            ? $nowMonotonic + (int) $span
+            : PHP_INT_MAX;
+      };
+      if ($this->connectTimeout > 0) {
+         $deadline = min($deadline ?? INF, $now + $this->connectTimeout);
+         $monotonicDeadline = min($monotonicDeadline ?? PHP_INT_MAX, $ahead($this->connectTimeout));
+      }
+      // ! The lookup's deadline: the earlier of both clocks, on the monotonic one
+      $limit = $monotonicDeadline;
+      if ($deadline !== null) {
+         $limit = min($limit ?? PHP_INT_MAX, $ahead(max(0.0, $deadline - $now)));
+      }
+
+      // @ Resolve — outside any error handler or try: a throwable delivered into a parked
+      //   lookup (a cancelled deferral) unwinds the dial. The lookup parks only where the
+      //   dial itself would: an adopted reactor, a wait bridge, a Fiber
+      $Wait = $this->owned === false && $this->Wait !== null && Fiber::getCurrent() !== null
+         ? $this->Wait
+         : null;
+      $resolved = $Resolution($host, $Wait, $limit, $this->Event);
+
+      // ! Only IP literals are dialed, each once: anything else in the answer is dropped
+      $addresses = [];
+      foreach ($resolved as $entry) {
+         $address = Resolver::normalize($entry);
+         if ($address !== null && in_array($address, $addresses, true) === false) {
+            $addresses[] = $address;
+         }
+      }
+      // ? Unresolved, or the lookup spent the budget
+      if ($addresses === [] || ($limit !== null && (int) hrtime(true) >= $limit)) {
+         $this->Connections->errors['connection']++;
+         $reason = $addresses === [] ? 'the name did not resolve' : 'the lookup spent the budget';
+         $this->Logger->log(warning: "Unable to connect: {$reason}.@\\;");
+
+         return false;
+      }
+
+      // ! The order: fresh addresses with the families alternating (RFC 8305), then the suspects
+      $port = (int) $this->port;
+      [$fresh, $suspects] = Suspects::split($addresses, $port);
+      $addresses = [...$this->interleave($fresh), ...$suspects];
+
+      // ! TLS checks the configured name, never the address dialed
+      $options = [
+         'socket' => [
+            'tcp_nodelay' => true
+         ]
+      ];
+      if ($this->secure !== null) {
+         $options['ssl'] = $this->secure;
+         $options['ssl']['peer_name'] ??= $host;
+      }
+
+      // @@ Each address, until one connects or the budget is spent
+      $left = count($addresses);
+      foreach ($addresses as $address) {
+         $target = str_contains($address, ':')
+            ? "tcp://[{$address}]:{$port}"
+            : "tcp://{$address}:{$port}";
+
+         // ! This address's share: the time left over the addresses left, at least 2 seconds
+         $dialDeadline = null;
+         $dialMonotonicDeadline = null;
+         if ($limit !== null) {
+            $clock = (int) hrtime(true);
+            $remaining = max(0, $limit - $clock);
+            $share = min($remaining, max(2_000_000_000, intdiv($remaining, $left)));
+            $dialMonotonicDeadline = $clock + $share;
+            $dialDeadline = microtime(true) + $share / 1_000_000_000;
+         }
+         $left--;
+
+         [$Socket, $bound] = $this->establish($target, $options, quiet: true);
+         // ? Not even created, and the next address. An `errno` is the address's (no route): a
+         //   suspect. None means the socket itself could not be made — the process out of
+         //   descriptors or buffers, or a family it lacks — which no address is to blame for
+         if ($Socket === false) {
+            $this->Connections->errors['connection']++;
+            if (($this->error['code'] ?? 0) !== 0) {
+               Suspects::mark($address, $port);
+            }
+
+            continue;
+         }
+
+         $this->Socket = $Socket;
+
+         // ? Binding failed: the event loop completes this dial (one address)
+         if ($bound === true) {
+            $this->Logger->log(warning: 'Unable to connect! Trying to connect in the future...@\\;');
+            $this->await($Socket);
+
+            return $Socket;
+         }
+
+         // ?: Connected
+         if ($this->Connections->connect($deadline, $monotonicDeadline, $dialDeadline, $dialMonotonicDeadline)) {
+            Suspects::clear($address, $port);
+
+            return $Socket;
+         }
+
+         // ? Refused, or silent through its share: a suspect, and the next address
+         $Fault = $this->Connections->Fault;
+         if ($Fault === Faults::Refused || $Fault === Faults::Timeout) {
+            Suspects::mark($address, $port);
+
+            continue;
+         }
+
+         // ! Expired, a local fault or a failed handshake end the dial
+         break;
+      }
+
+      $this->Logger->log(warning: "Unable to establish the TCP/TLS connection to {$host}.@\\;");
+
+      return false;
+   }
+
+   /**
+    * Create the socket of one dial.
+    *
+    * @param string $target The dial target (`tcp://host:port`).
+    * @param array<string,mixed> $options The stream context options.
+    * @param bool $quiet Whether a failure warning is kept out of the error output.
+    *
+    * @return array{0:resource|false,1:bool} The socket (`false` when it was not created), and
+    *    whether binding the local address failed.
+    */
+   private function establish (string $target, array $options, bool $quiet): array
+   {
+      $bound = false;
+
+      try {
+         $context = stream_context_create($options);
 
          // @ Set custom handler error
          // function ($code, $message, $file, $line)
-         set_error_handler(function ($code, $message) use (&$error) {
+         set_error_handler(function ($code, $message) use (&$bound, $quiet) {
             if ($code === E_WARNING && strpos($message, 'stream_socket_client(): Failed to bind') !== false) {
-               $error = true;
+               $bound = true;
 
                return true;
             }
 
-            return false;
+            // ? A multi-address dial reports its own failure once
+            return $quiet && $code === E_WARNING && strpos($message, 'stream_socket_client()') !== false;
          });
 
          $Socket = stream_socket_client(
-            "tcp://{$this->host}:{$this->port}",
+            $target,
             $this->error['code'],
             $this->error['message'],
             timeout: 0,
@@ -621,29 +841,44 @@ class TCP_Client_CLI implements Clients
          restore_error_handler();
       }
 
-      if ($Socket === false) {
-         $this->Logger->log(warning: 'Unable to connect! Socket not created.@\\;');
+      // :
+      return [$Socket, $bound];
+   }
 
-         return false;
+   /**
+    * Alternate the address families, starting with the first address's (RFC 8305 §4).
+    *
+    * @param list<string> $addresses
+    *
+    * @return list<string>
+    */
+   private function interleave (array $addresses): array
+   {
+      $IPv6 = isSet($addresses[0]) && str_contains($addresses[0], ':');
+
+      $first = [];
+      $second = [];
+      foreach ($addresses as $address) {
+         if (str_contains($address, ':') === $IPv6) {
+            $first[] = $address;
+         }
+         else {
+            $second[] = $address;
+         }
       }
 
-      $this->Socket = $Socket;
-
-      if ($error === true) {
-         $this->Logger->log(warning: 'Unable to connect! Trying to connect in the future...@\\;');
-
-         // @ Add to Event loop to future connection (deadline-bounded)
-         $this->await($Socket);
-
-         return $Socket;
+      $alternated = [];
+      $count = max(count($first), count($second));
+      for ($index = 0; $index < $count; $index++) {
+         if (isSet($first[$index])) {
+            $alternated[] = $first[$index];
+         }
+         if (isSet($second[$index])) {
+            $alternated[] = $second[$index];
+         }
       }
 
-      if ($this->Connections->connect() === false) {
-         $this->Logger->log(warning: 'Unable to establish the TCP/TLS connection before its deadline.@\\;');
-         return false;
-      }
-
-      return $Socket;
+      return $alternated;
    }
 
    /**

@@ -13,6 +13,7 @@ namespace Bootgly\WPI\Interfaces\TCP_Client_CLI;
 
 use const INF;
 use const PHP_EOL;
+use const PHP_INT_MAX;
 use function fclose;
 use function hrtime;
 use function is_resource;
@@ -34,6 +35,7 @@ use Bootgly\WPI;
 use Bootgly\WPI\Connections\Packages;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI as Client;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
+use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Faults;
 
 
 class Connections implements WPI\Connections
@@ -62,6 +64,8 @@ class Connections implements WPI\Connections
    // @ Error
    /** @var array<string> */
    public array $error = [];
+   /** Why the last `connect()` failed — `null` after a success, or before any dial. */
+   public private(set) null|Faults $Fault = null;
    // @ Local
    /** @var array<int,Connection> */
    public array $Connections;
@@ -116,11 +120,36 @@ class Connections implements WPI\Connections
       $this->read = 0;         // Socket Reads in bytes
    }
 
-   // Open connection with server / Connect with server
-   public function connect (): bool
+   /**
+    * Complete the dial of the client's socket: wait until it is writable, then
+    * construct the connection (and run the TLS handshake when secure).
+    *
+    * Without arguments the budget is the client's own (`connectTimeout`,
+    * `deadline`, `monotonicDeadline`). A dial that tries several addresses
+    * passes the deadlines it computed once for the whole dial, and a shorter
+    * pair for the TCP stage of this address: the TLS handshake keeps the
+    * whole remainder. On failure `$Fault` says the stage it stopped at.
+    *
+    * @param null|float $deadline The dial's deadline (`microtime(true)` seconds); with
+    *    `$monotonicDeadline`, both `null` = the client's own budget.
+    * @param null|int $monotonicDeadline The dial's deadline (`hrtime(true)` nanoseconds).
+    * @param null|float $dialDeadline The TCP stage's deadline (`microtime(true)` seconds), at most the dial's.
+    * @param null|int $dialMonotonicDeadline The TCP stage's deadline (`hrtime(true)` nanoseconds).
+    *
+    * @return bool Whether the connection was established.
+    */
+   public function connect (
+      null|float $deadline = null,
+      null|int $monotonicDeadline = null,
+      null|float $dialDeadline = null,
+      null|int $dialMonotonicDeadline = null
+   ): bool
    {
+      $this->Fault = null;
+
       $Client = $this->Client;
       if ($Client === null) {
+         $this->Fault = Faults::Local;
          $this->errors['connection']++;
          return false;
       }
@@ -155,21 +184,29 @@ class Connections implements WPI\Connections
 
       if ($Socket === false || is_resource($Socket) === false) {
          $this->Logger->log(error: 'Socket connection is false or invalid!' . PHP_EOL);
+         $this->Fault = Faults::Local;
          $this->errors['connection']++;
          return false;
       }
 
       // ! ASYNC_CONNECT only creates the socket. Do not construct a logical
       // connection (or begin TLS) until TCP is writable and the peer name is
-      // available. One absolute deadline covers this wait and the handshake.
+      // available. One absolute deadline covers this wait and the handshake
+      // (a multi-address dial passes its own, computed once).
       $now = microtime(true);
       $nowMonotonic = (int) hrtime(true);
-      $deadline = $Client->deadline;
-      $monotonicDeadline = $Client->monotonicDeadline;
-      if ($Client->connectTimeout > 0) {
+      $given = $deadline !== null || $monotonicDeadline !== null;
+      if ($given === false) {
+         $deadline = $Client->deadline;
+         $monotonicDeadline = $Client->monotonicDeadline;
+      }
+      if ($given === false && $Client->connectTimeout > 0) {
          $connectDeadline = $now + $Client->connectTimeout;
-         $connectMonotonicDeadline = $nowMonotonic
-            + (int) ($Client->connectTimeout * 1_000_000_000);
+         // ! Never past the clock's last tick (a timeout beyond the int range of nanoseconds)
+         $span = $Client->connectTimeout * 1_000_000_000;
+         $connectMonotonicDeadline = $span < PHP_INT_MAX - $nowMonotonic
+            ? $nowMonotonic + (int) $span
+            : PHP_INT_MAX;
          $deadline = $deadline === null
             ? $connectDeadline
             : min($deadline, $connectDeadline);
@@ -182,32 +219,44 @@ class Connections implements WPI\Connections
          || ($monotonicDeadline !== null && $monotonicDeadline <= $nowMonotonic)
       ) {
          fclose($Socket);
+         $this->Fault = Faults::Expired;
          $this->errors['connection']++;
          return false;
       }
+      // ! The TCP stage: this address's share, never past the dial's own deadline
+      $dialDeadline = match (true) {
+         $dialDeadline === null => $deadline,
+         $deadline === null => $dialDeadline,
+         default => min($deadline, $dialDeadline),
+      };
+      $dialMonotonicDeadline = match (true) {
+         $dialMonotonicDeadline === null => $monotonicDeadline,
+         $monotonicDeadline === null => $dialMonotonicDeadline,
+         default => min($monotonicDeadline, $dialMonotonicDeadline),
+      };
 
       // @ Adopted reactor, owner Fiber: park on writability instead of blocking
       //   the worker (BG-13 S6). Reactor-stack code never dials (D4), so the
       //   blocking branch below is the self-driving client's own
       if ($Client->Wait !== null && $Client->owned === false && Fiber::getCurrent() !== null) {
-         $selected = $this->parking($Socket, $Client->Wait, $deadline, $monotonicDeadline) ? 1 : 0;
+         $selected = $this->parking($Socket, $Client->Wait, $dialDeadline, $dialMonotonicDeadline) ? 1 : 0;
       }
       else {
          do {
             $read = [];
             $write = [$Socket];
             $except = null;
-            if ($deadline === null && $monotonicDeadline === null) {
+            if ($dialDeadline === null && $dialMonotonicDeadline === null) {
                $selected = @stream_select($read, $write, $except, null);
             }
             else {
-               $remaining = $deadline === null
+               $remaining = $dialDeadline === null
                   ? INF
-                  : max(0.0, $deadline - microtime(true));
-               if ($monotonicDeadline !== null) {
+                  : max(0.0, $dialDeadline - microtime(true));
+               if ($dialMonotonicDeadline !== null) {
                   $remaining = min(
                      $remaining,
-                     max(0.0, ($monotonicDeadline - (int) hrtime(true)) / 1_000_000_000)
+                     max(0.0, ($dialMonotonicDeadline - (int) hrtime(true)) / 1_000_000_000)
                   );
                }
                $seconds = (int) $remaining;
@@ -218,15 +267,25 @@ class Connections implements WPI\Connections
             // while a finite caller deadline still bounds a persistent failure.
          } while (
             $selected === false
-            && ($deadline === null || microtime(true) < $deadline)
-            && ($monotonicDeadline === null || (int) hrtime(true) < $monotonicDeadline)
+            && ($dialDeadline === null || microtime(true) < $dialDeadline)
+            && ($dialMonotonicDeadline === null || (int) hrtime(true) < $dialMonotonicDeadline)
          );
       }
-      if (
-         $selected !== 1
-         || @stream_socket_get_name($Socket, true) === false
-      ) {
+      if ($selected !== 1) {
          fclose($Socket);
+         // ! A local fault (set by parking()) stays; otherwise the wait ran out — the dial's
+         //   whole budget, or only this address's share of it
+         $this->Fault ??= (
+            ($deadline !== null && microtime(true) >= $deadline)
+            || ($monotonicDeadline !== null && (int) hrtime(true) >= $monotonicDeadline)
+         ) ? Faults::Expired : Faults::Timeout;
+         $this->errors['connection']++;
+         return false;
+      }
+      // ? Writable without a peer: the address refused the connection
+      if (@stream_socket_get_name($Socket, true) === false) {
+         fclose($Socket);
+         $this->Fault = Faults::Refused;
          $this->errors['connection']++;
          return false;
       }
@@ -241,6 +300,8 @@ class Connections implements WPI\Connections
          $monotonicDeadline
       );
       if ($Connection->status !== Connection::STATUS_ESTABLISHED || ($secure && $Connection->encrypted === false)) {
+         // ! The peer vanished before its name could be read, or the handshake failed
+         $this->Fault = $secure && isSet($Connection->address) ? Faults::TLS : Faults::Refused;
          $this->errors['connection']++;
          return false;
       }
@@ -312,6 +373,7 @@ class Connections implements WPI\Connections
 
                // ? The reactor refused the socket (fd budget): the dial fails
                //   deterministically
+               $this->Fault = Faults::Local;
                $this->Logger->log(
                   warning: 'Parked dial aborted: selector admission rejected the socket.@\;'
                );
@@ -335,6 +397,7 @@ class Connections implements WPI\Connections
             //   hot-spin
             if ($writable === false && (int) hrtime(true) - $before < 100_000) {
                if (++$stalled >= 8) {
+                  $this->Fault = Faults::Local;
                   $this->Logger->log(
                      warning: 'Parked dial aborted: the wait bridge stopped suspending.@\;'
                   );

@@ -41,9 +41,14 @@ use Bootgly\ABI\IO\Resolver;
  * the system's.
  *
  * Lookups share their state (cache, queries in flight) per configuration:
- * equal values, and the same `Resolver` and `Probe` objects. Build a Configs
- * carrying either seam once and reuse it — a new seam object per request is
- * a new state per request.
+ * equal values, and seams that do the same thing (`Seams`): a `Probe` closure,
+ * or each source of a `Resolver`, counts by its code, its `$this` (or the
+ * class it was called on) and its captured values, so a Configs rebuilt per
+ * request with a seam from the same line shares the state. A seam that
+ * captures by reference or a wide array, holds a `static` variable, comes from
+ * `eval()`'d code or a file changed in or after the second the process started, or shares its
+ * first line with another closure counts by its object identity — a new one
+ * per request is a new state.
  *
  * Named arguments only: `$Named` is a guard slot no named call ever fills.
  */

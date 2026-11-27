@@ -42,5 +42,10 @@ return new Suite(
       '2.5-state',
       '3.1-reactor',
       '4.1-fork',
+      // # 1.4.x: the dial's bounds — its deadline, its loop
+      '3.2-bounds',
+      '3.3-dial_cancel',
+      // # 1.4.x: seams keyed by their code
+      '3.4-seams',
    ]
 );
