@@ -120,6 +120,8 @@ class Router implements WPI\Connections\Packages
          if (Connections::$stats) {
             Connections::$reads++;
             Connections::$read += $received;
+            Connections::$received += $received;
+            Connections::$arrivals++;
          }
 
          // @ Decode + respond

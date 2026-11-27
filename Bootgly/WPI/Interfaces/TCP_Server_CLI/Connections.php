@@ -13,6 +13,7 @@ namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 #use const PHP_EOL;
 
 
+use function array_fill_keys;
 use function count;
 use function explode;
 use function fclose;
@@ -92,6 +93,24 @@ class Connections implements WPI\Connections
    public static int $writes = 0;
    public static int $read = 0;
    public static int $written = 0;
+   // @ Totals — monotonic for the worker's life, read by the transport probe
+   //   (`collectors`): `stats reset` never zeroes them. Admission and
+   //   closing bump them on every path (one increment per connection); the
+   //   byte totals ride the `$stats` branches, so they move only while
+   //   `$stats` is on — the worker turns it on when collectors are on.
+   /** Connections registered since the worker booted (a `loop` shed included). */
+   public static int $accepted = 0;
+   /** Registered connections closed since the worker booted. */
+   public static int $closed = 0;
+   /** @var array<string,int> Connections refused, by reason (`REFUSALS`). */
+   public static array $refused = [
+      'accept' => 0, 'peer' => 0, 'blacklist' => 0, 'capacity' => 0,
+      'headroom' => 0, 'ip' => 0, 'handshakes' => 0, 'loop' => 0
+   ];
+   /** Bytes read from clients while `$stats` is on. */
+   public static int $received = 0;
+   /** Bytes written to clients while `$stats` is on. */
+   public static int $sent = 0;
    // @ Supervision
    //   The periodic checks of a worker's connections — the idle expiration,
    //   a WebSocket session's supervisor — ride one sweep, run once a second
@@ -109,6 +128,20 @@ class Connections implements WPI\Connections
    public const int STATUS_ESTABLISHED = 2;
    public const int STATUS_CLOSING = 4;
    public const int STATUS_CLOSED = 8;
+   /**
+    * Why a connection was refused: `accept` (the listener's accept failed —
+    * e.g. out of descriptors — or the accepted socket could not be set up),
+    * `peer` (the peer's address could not be read), `blacklist`,
+    * `capacity` (`maxConnections`), `headroom` (the selector's reserve),
+    * `ip` (`maxConnectionsPerIP`), `handshakes` (`maxPendingHandshakes`),
+    * `loop` (the event backend refused the socket — counted after the
+    * connection was registered, so it is also accepted and closed).
+    *
+    * @var list<string>
+    */
+   public const array REFUSALS = [
+      'accept', 'peer', 'blacklist', 'capacity', 'headroom', 'ip', 'handshakes', 'loop'
+   ];
 
    public Packages $Packages;
 
@@ -155,6 +188,12 @@ class Connections implements WPI\Connections
       self::$writes = 0;       // Socket Write count
       self::$read = 0;         // Socket Reads in bytes
       self::$written = 0;      // Socket Writes in bytes
+      // Totals — a fresh registry starts them again
+      self::$accepted = 0;
+      self::$closed = 0;
+      self::$refused = array_fill_keys(self::REFUSALS, 0);
+      self::$received = 0;
+      self::$sent = 0;
    }
    public function __get (string $name): mixed
    {
@@ -211,6 +250,27 @@ class Connections implements WPI\Connections
       }
 
       return true;
+   }
+   /**
+    * Name the ceiling `check()` refused `$ip` for: `capacity`, `headroom`
+    * or `ip`. Consulted only on that refusal.
+    */
+   private static function classify (string $ip): string
+   {
+      // ?:
+      if (
+         Server::$maxConnections > 0
+         && count(self::$Connections) >= Server::$maxConnections
+      ) {
+         return 'capacity';
+      }
+      // ?:
+      if (count(self::$Connections) >= Select::CAPACITY - min(max(0, Server::$headroom), Select::CAPACITY - 2)) {
+         return 'headroom';
+      }
+
+      // :
+      return 'ip';
    }
 
    // Accept connection from client / Open connection with client / Connect with client
@@ -299,6 +359,7 @@ class Connections implements WPI\Connections
          $Socket = @stream_socket_accept($this->Server->Socket, null);
          if ($Socket === false) {
             self::$errors['connection']++;
+            self::$refused['accept']++;
 
             return false;
          }
@@ -320,6 +381,7 @@ class Connections implements WPI\Connections
          }
 
          self::$errors['connection']++;
+         self::$refused['accept']++;
 
          return false;
       }
@@ -331,6 +393,7 @@ class Connections implements WPI\Connections
       $peer = @stream_socket_get_name($Socket, true);
       if ($peer === false) {
          self::$errors['connection']++;
+         self::$refused['peer']++;
          @fclose($Socket);
 
          return false;
@@ -339,6 +402,7 @@ class Connections implements WPI\Connections
       [$IP, $port] = Peer::parse($peer);
       if ($IP === '' || $port < 1 || $port > 65_535) {
          self::$errors['connection']++;
+         self::$refused['peer']++;
          @fclose($Socket);
 
          return false;
@@ -350,6 +414,7 @@ class Connections implements WPI\Connections
       }
       catch (Throwable) {
          self::$errors['connection']++;
+         self::$refused['accept']++;
          @fclose($Socket);
 
          return false;
@@ -358,6 +423,7 @@ class Connections implements WPI\Connections
       // @ Check connection
       if ( $Connection->check() === false ) {
          self::$errors['connection']++;
+         self::$refused['blacklist']++;
          $Connection->close();
          return false;
       }
@@ -367,6 +433,7 @@ class Connections implements WPI\Connections
       //   `check()` is once-per-accept; the per-request hot path is untouched.
       if ( self::check($Connection->ip) === false ) {
          self::$errors['connection']++;
+         self::$refused[self::classify($Connection->ip)]++;
          $Connection->close();
          return false;
       }
@@ -380,6 +447,7 @@ class Connections implements WPI\Connections
          && self::$pendingHandshakes >= max(1, Server::$maxPendingHandshakes)
       ) {
          self::$errors['connection']++;
+         self::$refused['handshakes']++;
          $Connection->close();
          return false;
       }
@@ -389,6 +457,9 @@ class Connections implements WPI\Connections
 
       // @ Set Connection
       self::$Connections[(int) $Socket] = $Connection;
+      // ! Counted where it is registered: whatever closes it from here on
+      //   (`Connection::close()`) counts it closed
+      self::$accepted++;
       // @ Track all admitted peers before crypto (balanced by close()).
       self::$ipConnections[$Connection->ip] =
          (self::$ipConnections[$Connection->ip] ?? 0) + 1;
@@ -404,6 +475,7 @@ class Connections implements WPI\Connections
       //   socket that is never registered would stay ESTABLISHED and unread forever
       if ($added === false) {
          self::$errors['connection']++;
+         self::$refused['loop']++;
          $this->close($Socket);
 
          return false;

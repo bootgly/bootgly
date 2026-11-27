@@ -623,6 +623,41 @@ return new Test(
             description: 'a one-shot that an earlier callback of the same pass cancelled does not run, on the wall clock and on the monotonic one, and cancel() answered true — observed: '
                . json_encode(['ran' => $ran, 'answers' => $answers, 'idle' => $idle])
          );
+
+         // @@ L) The due instant: each run receives the grid point it was due at
+         $Select = $reactor();
+         $Runs = [];
+         $ID = 0;
+         $ID = $Select->repeat(0.02, static function (int $due) use (&$Runs, &$ID, $Select, $Repeaters, $wait, $MS): void {
+            $Runs[] = [$due, (int) hrtime(true)];
+            // ! The first run holds its pass 15 ms past the next grid point,
+            //   already committed before the callback runs
+            if (count($Runs) === 1) {
+               $wait($Repeaters->getValue($Select)[$ID]['deadline'] + 15 * $MS);
+            }
+         });
+         $first = $Repeaters->getValue($Select)[$ID]['deadline'];
+         // ! The loop reaches the first point 50 ms (2.5 periods) late
+         $wait($first + 50 * $MS);
+         $tick->invoke($Select);
+         // ! Scheduled from the pass's clock, before the first run held it
+         $second = $Repeaters->getValue($Select)[$ID]['deadline'];
+         $tick->invoke($Select);
+         $Select->destroy();
+
+         yield assert(
+            assertion: count($Runs) === 2
+               && $Runs[0][0] === $first && $Runs[0][1] - $Runs[0][0] >= 50 * $MS
+               && $Runs[1][0] === $second && $second > $first + 50 * $MS
+               && ($second - $first) % (20 * $MS) === 0
+               && $Runs[1][1] - $Runs[1][0] >= 15 * $MS,
+            description: 'a late run receives the grid point it was due at, and the run after a pass held past the next point receives that point — observed: '
+               . json_encode([
+                  'runs' => count($Runs),
+                  'lates_ms' => array_map(static fn (array $Run): float => ($Run[1] - $Run[0]) / $MS, $Runs),
+                  'second_offset_ms' => ($second - $first) / $MS,
+               ])
+         );
       }
       finally {
          Throwables::$reporters = $Reporters;

@@ -150,5 +150,8 @@ return new Suite(
       // # 1.4.0: a cold Router merges what it keeps in a pass, and never
       //   reads a large file to compare a closure
       '1.89-router_cold_merge_cost',
+      // # 1.4.0: the Demo observability routes join a registry built before
+      //   them once, keeping the app's own telemetry
+      '1.90-demo_observability_registry',
    ]
 );

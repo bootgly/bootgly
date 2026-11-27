@@ -50,10 +50,20 @@ class Configs implements Configuring
    public private(set) int $connectionIdleTimeout;
    /** Maximum datagrams handled in one read-ready turn. */
    public private(set) int $maxDatagramsPerTick;
+   // # Observability
+   /**
+    * Register the transport and loop-lag probes in each worker: peers
+    * admitted, closed, active and refused by reason, bytes and datagrams
+    * received and sent, and how late the worker's event loop runs — on
+    * `Observability::$Instance`, built in the worker when none exists. Off,
+    * nothing is built.
+    */
+   public private(set) bool $collectors;
 
 
    /**
     * @param Argument $Named Guard slot — never pass it; it only rejects positional calls.
+    * @param bool $collectors Register the transport and loop-lag probes in each worker.
     *
     * @throws ArgumentCountError When `host`, `port` or `workers` is missing.
     * @throws InvalidArgumentException When a ceiling/timeout is negative or the batch is below one.
@@ -69,6 +79,7 @@ class Configs implements Configuring
       int $maxConnectionsPerIP = 256,
       int $connectionIdleTimeout = 30,
       int $maxDatagramsPerTick = 64,
+      bool $collectors = false,
    )
    {
       // ? Required — the guard slot forces every parameter to be optional, so
@@ -98,6 +109,8 @@ class Configs implements Configuring
       $this->maxConnectionsPerIP = $maxConnectionsPerIP;
       $this->connectionIdleTimeout = $connectionIdleTimeout;
       $this->maxDatagramsPerTick = $maxDatagramsPerTick;
+      // # Observability
+      $this->collectors = $collectors;
    }
 
    /** Validate the security boundaries carried by any exact Configs instance. */

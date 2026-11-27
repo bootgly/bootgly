@@ -79,5 +79,7 @@ return new Suite(
       '1.29-worker_signal_owner',
       // # 1.3.x: a UDP server logs to the exceptions channel what it catches and survives
       '1.30-exceptions_reporter',
+      // # 1.4.x (collectors): peer totals, rollback and refusals by reason, zero cost when off
+      '1.31-collectors',
    ]
 );

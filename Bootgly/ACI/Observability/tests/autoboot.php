@@ -47,5 +47,9 @@ return new Suite(
       '10.2-merge-guards',
       // # Durable writes — dump() through File->replace()
       '11.1-dump-replace',
+      // # Probes — transport and loop lag; same-name merge; pid at collect time
+      '12.1-probe-transport',
+      '12.2-probe-lag',
+      '12.3-collect-merge',
    ]
 );

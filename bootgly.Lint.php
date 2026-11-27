@@ -20,6 +20,7 @@ $method = 'Public API until 2.0: renaming the method breaks its callers and over
 $writable = 'Public API until 2.0: restricting the write breaks code that assigns it';
 $relations = 'Test models whose relations the cases load by these names';
 $pending = 'Left to the in-flight coverage gate change that owns this file';
+$shared = 'Static, so PHP 8.4 gives it no asymmetric visibility: the transport\'s sibling classes bump this per-worker total';
 
 
 return new Lint(
@@ -409,6 +410,11 @@ return new Lint(
       new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/TCP_Server_CLI/Connections.php', reason: $writable, symbol: 'Connections::$stats'),
       new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/TCP_Server_CLI/Connections.php', reason: $writable, symbol: 'Connections::$writes'),
       new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/TCP_Server_CLI/Connections.php', reason: $writable, symbol: 'Connections::$written'),
+      new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/TCP_Server_CLI/Connections.php', reason: $shared, symbol: 'Connections::$accepted'),
+      new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/TCP_Server_CLI/Connections.php', reason: $shared, symbol: 'Connections::$closed'),
+      new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/TCP_Server_CLI/Connections.php', reason: $shared, symbol: 'Connections::$received'),
+      new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/TCP_Server_CLI/Connections.php', reason: $shared, symbol: 'Connections::$refused'),
+      new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/TCP_Server_CLI/Connections.php', reason: $shared, symbol: 'Connections::$sent'),
       new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/TCP_Server_CLI/Connections/Connection.php', reason: $writable, symbol: 'Connection::$encrypted'),
       new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/TCP_Server_CLI/Connections/Connection.php', reason: $writable, symbol: 'Connection::$handshakeTimer'),
       new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/TCP_Server_CLI/Connections/Connection.php', reason: $writable, symbol: 'Connection::$handshaking'),
@@ -466,6 +472,13 @@ return new Lint(
       new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/UDP_Server_CLI/Connections.php', reason: $writable, symbol: 'Connections::$stats'),
       new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/UDP_Server_CLI/Connections.php', reason: $writable, symbol: 'Connections::$writes'),
       new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/UDP_Server_CLI/Connections.php', reason: $writable, symbol: 'Connections::$written'),
+      new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/UDP_Server_CLI/Connections.php', reason: $shared, symbol: 'Connections::$accepted'),
+      new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/UDP_Server_CLI/Connections.php', reason: $shared, symbol: 'Connections::$arrivals'),
+      new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/UDP_Server_CLI/Connections.php', reason: $shared, symbol: 'Connections::$closed'),
+      new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/UDP_Server_CLI/Connections.php', reason: $shared, symbol: 'Connections::$departures'),
+      new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/UDP_Server_CLI/Connections.php', reason: $shared, symbol: 'Connections::$received'),
+      new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/UDP_Server_CLI/Connections.php', reason: $shared, symbol: 'Connections::$refused'),
+      new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/UDP_Server_CLI/Connections.php', reason: $shared, symbol: 'Connections::$sent'),
       new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/UDP_Server_CLI/Connections/Connection.php', reason: $writable, symbol: 'Connection::$encrypted'),
       new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/UDP_Server_CLI/Connections/Connection.php', reason: $writable, symbol: 'Connection::$started'),
       new Exemption(rule: Rules::Sections, path: 'Bootgly/WPI/Interfaces/UDP_Server_CLI/Connections/Connection.php', reason: $writable, symbol: 'Connection::$status'),

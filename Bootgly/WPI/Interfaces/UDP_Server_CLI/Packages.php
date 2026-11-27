@@ -358,6 +358,8 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          // Global
          Connections::$writes++;
          Connections::$written += $sent;
+         Connections::$sent += $sent;
+         Connections::$departures++;
          // Per peer
          if ((Connections::$Connections[$peer] ?? null) === $Connection) {
             $Connection->writes++;

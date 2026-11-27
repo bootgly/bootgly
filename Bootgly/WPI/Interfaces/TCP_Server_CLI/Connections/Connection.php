@@ -542,6 +542,7 @@ class Connection extends Packages
       //   and therefore not decremented.
       if ( isSet(Connections::$Connections[$this->id]) ) {
          unset(Connections::$Connections[$this->id]);
+         Connections::$closed++;
 
          if ($this->handshaking && Connections::$pendingHandshakes > 0) {
             Connections::$pendingHandshakes--;

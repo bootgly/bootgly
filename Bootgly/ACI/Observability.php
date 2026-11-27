@@ -62,15 +62,18 @@ class Observability
    /**
     * Gather a point-in-time snapshot from every instrument and collector.
     *
+    * Instruments first, then the collectors' metrics folded in by name
+    * (`Collectors::fold()`): an instrument and a collector that report the
+    * same metric name with the same type form one metric holding the series
+    * of both, an instrument's series winning over a collector's of the same
+    * labels; a collector's same-named metric of another type is dropped.
+    *
     * @return Snapshot
     */
    public function gather (): Snapshot
    {
       // ! Instruments first, then fold in collector sources by name
-      $metrics = $this->Metrics->read();
-      foreach ($this->Collectors->collect() as $name => $metric) {
-         $metrics[$name] = $metric;
-      }
+      $metrics = Collectors::fold($this->Metrics->read(), $this->Collectors->collect());
 
       // :
       return new Snapshot($metrics);

@@ -136,12 +136,14 @@ use RuntimeException;
 use Socket;
 use stdClass;
 use Throwable;
+use WeakMap;
 
 use const Bootgly\CLI;
 use Bootgly\ABI\Configs as Configuring;
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ABI\Debugging\Shutdown;
 use Bootgly\ACI\Events\Loops;
+use Bootgly\ACI\Events\Repeating;
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Events\Signalling;
 use Bootgly\ACI\Events\Timer;
@@ -149,6 +151,9 @@ use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Data\Record;
 use Bootgly\ACI\Logs\Handlers;
 use Bootgly\ACI\Logs\Logger;
+use Bootgly\ACI\Observability;
+use Bootgly\ACI\Observability\Probes\Lag;
+use Bootgly\ACI\Observability\Probes\Transport;
 use Bootgly\ACI\Process;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Endpoints\Server\Status;
@@ -223,11 +228,17 @@ class UDP_Server_CLI implements Servers
    public static null|Encoder $Encoder = null;
    /** @var array<string,true> */
    protected array $Events = [];
+   // # Collectors — set by the Configs (`collectors`). On, each worker
+   //   registers the transport and loop-lag probes on the observability
+   //   registry when it boots (`observe()`); off, nothing is built.
+   public static bool $collectors = false;
 
    // * Metadata
    // !
    /** @var resource */
    protected $Socket;
+   /** @var null|WeakMap<Observability,true> Registries this process's probes are registered on. */
+   private static null|WeakMap $Instrumented = null;
 
    public static Events & Loops & Scheduler $Event;
 
@@ -817,6 +828,8 @@ class UDP_Server_CLI implements Servers
             throw new RuntimeException('UDP server admission manager is unavailable.');
          }
          $Configure($this, $Connections, $Config);
+         // @ Collectors — assigned whole, so a later server never inherits it
+         self::$collectors = $Config->collectors;
 
          // ! The runtime identity is known from here on: install the log
          //   sinks — or withhold them from root — before any record
@@ -1674,6 +1687,54 @@ class UDP_Server_CLI implements Servers
    }
 
    /**
+    * Register this worker's transport and loop-lag probes on the
+    * observability registry — `Observability::$Instance`, built here when
+    * none exists — when collectors are on. Once per registry; with
+    * collectors off nothing is built: no registry, no instrument, no timer.
+    */
+   private function observe (): void
+   {
+      // ? Off
+      if (self::$collectors === false) {
+         return;
+      }
+
+      $Observability = Observability::$Instance ??= new Observability;
+      // ? Once per registry
+      self::$Instrumented ??= new WeakMap;
+      if (isSet(self::$Instrumented[$Observability])) {
+         return;
+      }
+      self::$Instrumented[$Observability] = true;
+
+      // @ Transport — live peers are the admitted ones still counted
+      $Active = Closure::bind(
+         static fn (): int => count(self::$Counted ?? []),
+         null,
+         Connections::class
+      );
+      new Transport(
+         Metrics: $Observability->Metrics,
+         Accepted: static fn (): int => Connections::$accepted,
+         Closed: static fn (): int => Connections::$closed,
+         Active: $Active,
+         Refused: static fn (string $reason): int => Connections::$refused[$reason] ?? 0,
+         reasons: Connections::REFUSALS,
+         Received: static fn (): int => Connections::$received,
+         Sent: static fn (): int => Connections::$sent,
+         labels: ['transport' => 'udp'],
+         Arrivals: static fn (): int => Connections::$arrivals,
+         Departures: static fn (): int => Connections::$departures
+      );
+
+      // @ Loop lag — only on a loop with recurring timers (else no timer)
+      $Loop = self::$Event;
+      if ($Loop instanceof Repeating) {
+         new Lag($Observability->Metrics, $Loop);
+      }
+   }
+
+   /**
     * The per-worker boot body: watchdog and fork hygiene, process title, log
     * display, socket instance, event registration and the event loop. Called
     * by both the initial fork and revive(), so a recovered worker is
@@ -1700,6 +1761,9 @@ class UDP_Server_CLI implements Servers
 
       // @ Create stream socket server
       $this->instance();
+
+      // @ Collectors (off: nothing is built)
+      $this->observe();
 
       // ? A socket the event backend refuses (FD_SETSIZE) is a worker that
       //   would never read: refuse service, as the TCP worker boot does

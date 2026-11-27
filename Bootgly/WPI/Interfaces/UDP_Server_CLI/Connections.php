@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Interfaces\UDP_Server_CLI;
 
 
+use function array_fill_keys;
 use function array_pop;
 use function count;
 use function explode;
@@ -27,6 +28,7 @@ use ReflectionProperty;
 use RuntimeException;
 use stdClass;
 use Throwable;
+use WeakMap;
 use WeakReference;
 
 use const Bootgly\CLI;
@@ -93,6 +95,27 @@ class Connections implements WPI\Connections
    public static int $writes;
    public static int $read;
    public static int $written;
+   // @ Totals — monotonic for the worker's life, read by the transport probe
+   //   (`collectors`): `stats reset` never zeroes them. A peer counts once
+   //   it is finally admitted, and closed only if it was counted.
+   /** Peers admitted since the manager was built. */
+   public static int $accepted = 0;
+   /** Admitted peers forgotten (closed or expired) since the manager was built. */
+   public static int $closed = 0;
+   /** @var array<string,int> Datagrams of new peers refused, by reason (`REFUSALS`). */
+   public static array $refused = [
+      'peer' => 0, 'blacklist' => 0, 'capacity' => 0, 'ip' => 0, 'rollback' => 0, 'budget' => 0
+   ];
+   /** Bytes of admitted peers' datagrams received. */
+   public static int $received = 0;
+   /** Bytes sent to peers. */
+   public static int $sent = 0;
+   /** Datagrams of admitted peers received. */
+   public static int $arrivals = 0;
+   /** Datagrams sent to peers. */
+   public static int $departures = 0;
+   /** @var null|WeakMap<object,true> Admission tokens of the peers counted in `$accepted` and still live. */
+   private static null|WeakMap $Counted = null;
    /** One central idle-supervisor task per worker; 0 while no peer is live. */
    private static int $timer = 0;
    /** Nominal interval owned by the current central task. */
@@ -147,6 +170,15 @@ class Connections implements WPI\Connections
    public const STATUS_ESTABLISHED = 2;
    public const STATUS_CLOSING = 4;
    public const STATUS_CLOSED = 8;
+   /**
+    * Why a new peer's datagram was refused: `peer` (unreadable address),
+    * `blacklist`, `capacity` (`maxConnections`), `ip`
+    * (`maxConnectionsPerIP`), `rollback` (the admission was undone before it
+    * completed), `budget` (the admission's bounded work ran out).
+    *
+    * @var list<string>
+    */
+   public const array REFUSALS = ['peer', 'blacklist', 'capacity', 'ip', 'rollback', 'budget'];
 
    // @ Event-loop payload — routes inbound datagrams to per-peer Connections.
    public Router $Router;
@@ -335,6 +367,15 @@ class Connections implements WPI\Connections
       self::$writes = 0;
       self::$read = 0;
       self::$written = 0;
+      // Totals — a fresh manager starts them again
+      self::$accepted = 0;
+      self::$closed = 0;
+      self::$refused = array_fill_keys(self::REFUSALS, 0);
+      self::$received = 0;
+      self::$sent = 0;
+      self::$arrivals = 0;
+      self::$departures = 0;
+      self::$Counted = new WeakMap;
 
       // @ Router (shared server-socket datagram dispatcher)
       $this->Router = new Router($Server, $this, $this->datagramBatch);
@@ -572,6 +613,11 @@ class Connections implements WPI\Connections
             || $this->check($IP) === false
          ) {
             self::$errors['connection']++;
+            self::$refused[match (true) {
+               $IP === '' || $port < 1 || $port > 65_535 => 'peer',
+               isSet(self::$blacklist[$IP]) => 'blacklist',
+               default => $this->classify($IP)
+            }]++;
             return null;
          }
 
@@ -584,6 +630,7 @@ class Connections implements WPI\Connections
          }
          catch (Throwable) {
             self::$errors['connection']++;
+            self::$refused['rollback']++;
             return null;
          }
          if ($this->authorize() === false) { // @phpstan-ignore identical.alwaysFalse
@@ -596,6 +643,7 @@ class Connections implements WPI\Connections
             isSet(self::$blacklist[$IP]) || $this->check($IP) === false // @phpstan-ignore identical.alwaysFalse
          ) {
             self::$errors['connection']++;
+            self::$refused[isSet(self::$blacklist[$IP]) ? 'blacklist' : $this->classify($IP)]++;
             return null;
          }
 
@@ -731,14 +779,21 @@ class Connections implements WPI\Connections
                // A later lifecycle touch retries the bounded supervisor.
             }
             self::$errors['connection']++;
+            self::$refused['rollback']++;
 
             return null;
          }
+
+         // @ Finally admitted: counted once, closed only through `settle()`
+         self::$Counted ??= new WeakMap;
+         self::$Counted[$Token] = true;
+         self::$accepted++;
 
          return $Connection;
       }
 
       self::$errors['connection']++;
+      self::$refused['budget']++;
 
       return null;
    }
@@ -881,6 +936,36 @@ class Connections implements WPI\Connections
       return true;
    }
 
+   /**
+    * Name the ceiling `check()` refused `$IP` for: `capacity` or `ip`.
+    * Consulted only on that refusal.
+    */
+   private function classify (string $IP): string
+   {
+      // ?:
+      if (
+         $this->peerCeiling > 0
+         && count(self::$Peers) >= $this->peerCeiling
+      ) {
+         return 'capacity';
+      }
+
+      // :
+      return 'ip';
+   }
+
+   /**
+    * Count one admitted peer closed: once, and only if its admission was
+    * counted (`$accepted`). Every removal of a peer tuple passes here.
+    */
+   private static function settle (object $Token): void
+   {
+      if (self::$Counted !== null && isSet(self::$Counted[$Token])) {
+         unset(self::$Counted[$Token]);
+         self::$closed++;
+      }
+   }
+
    /** Rebuild every derived admission counter from authoritative peer tuples. */
    private static function rebuild (): void
    {
@@ -892,6 +977,7 @@ class Connections implements WPI\Connections
       $minimumTimeout = 0;
       foreach ($Peers as $peer => $Peer) {
          if ($Peer[1]->get() instanceof Connection === false) {
+            self::settle($Peer[2]);
             unset($Peers[$peer]);
             continue;
          }
@@ -1193,6 +1279,7 @@ class Connections implements WPI\Connections
       self::unmark($Peer[2]);
       self::untrack($Peer[3]);
       unset(self::$Peers[$peer]);
+      self::settle($Peer[2]);
 
       $IP = $Peer[0];
       if (isSet(self::$IPConnections[$IP])) {

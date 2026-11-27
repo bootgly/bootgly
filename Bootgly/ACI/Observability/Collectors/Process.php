@@ -33,7 +33,15 @@ class Process extends Collector
 {
    // * Metadata
    private float $started;
-   private string $pid;
+   // @ The PID of the process collecting — read at each collection, so a
+   //   collector inherited across a fork labels the child's series
+   private string $pid {
+      get {
+         $pid = getmypid();
+
+         return $pid === false ? '0' : (string) $pid;
+      }
+   }
    // @ Real process uptime in seconds, derived from /proc — independent of when this collector was
    //   built. Reads /proc/self/stat field 22 (starttime, USER_HZ ticks since boot) + /proc/uptime;
    //   assumes USER_HZ = 100. Falls back to "since construction" when /proc is unavailable.
@@ -66,15 +74,12 @@ class Process extends Collector
 
 
    /**
-    * Capture the process start reference and PID for self-health sampling.
+    * Capture the process start reference for self-health sampling.
     */
    public function __construct ()
    {
       // * Metadata
       $this->started = microtime(true);
-
-      $pid = getmypid();
-      $this->pid = $pid === false ? '0' : (string) $pid;
    }
 
    /**

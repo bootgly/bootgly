@@ -78,5 +78,7 @@ return new Suite(
       '1.37-redaction-traces',
       // # 1.4.x: the wire buffers of a connection never reach a debug dump
       '1.38-redaction-buffers',
+      // # 1.4.x (collectors): transport totals, refusals by reason, zero cost when off
+      '1.39-collectors',
    ]
 );

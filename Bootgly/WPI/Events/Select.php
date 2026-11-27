@@ -427,6 +427,10 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
     * would otherwise wake the reactor on its own, and keep sharing them when
     * their interval is a whole multiple of the slack.
     *
+    * Each run receives the instant it was due at — the grid point, in
+    * monotonic `hrtime(true)` nanoseconds — so a callback can measure how
+    * late the loop reached it.
+    *
     * The id shares the id space of `defer()` and is cancelled with `cancel()`,
     * also from inside a callback (its own or another one's). A callback that
     * throws is reported through `Throwables::notify()` with
@@ -434,7 +438,8 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
     *
     * @param float $interval Seconds between runs; below `RESOLUTION` it is
     *    raised up to it.
-    * @param Closure():void $Callback Runs on the loop, outside any Fiber.
+    * @param Closure(int):void $Callback Runs on the loop, outside any Fiber,
+    *    with the monotonic nanosecond instant the run was due at.
     * @param float $slack Seconds the first run may be late, never early, to
     *    share its wakeups; zero keeps the grid anchored at registration.
     *    Below `RESOLUTION` it is raised up to it, above the interval it is
@@ -1679,6 +1684,9 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
             continue;
          }
 
+         // ! The grid point this run was due at, handed to the callback
+         $due = $deadline;
+
          // @ Next grid point — committed before the callback runs, so a
          //   callback that throws or re-enters keeps its schedule
          $interval = $Repeater['interval'];
@@ -1692,7 +1700,7 @@ class Select implements Events, Loops, Scheduler, Cancelling, Repeating, Signall
 
          $fired = true;
          try {
-            ($Repeater['Callback'])();
+            ($Repeater['Callback'])($due);
          }
          catch (Throwable $Throwable) {
             // @ Reported, and the schedule is kept: one failing callback

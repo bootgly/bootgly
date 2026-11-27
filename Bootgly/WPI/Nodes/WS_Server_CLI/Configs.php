@@ -86,6 +86,7 @@ class Configs extends TCPConfigs
     * @param int $maxRequests Dispatches after which a worker recycles (`0` = never) — see `TCP_Server_CLI\Configs`.
     * @param float $jitter Spread of each worker's limit, a fraction from `0` to `1`.
     * @param int|string $maxMemory Memory ceiling of a worker in bytes, or a size such as `"512M"`; `0` = none.
+    * @param bool $collectors Register the transport and loop-lag probes in each worker — see `TCP_Server_CLI\Configs`.
     *
     * @throws InvalidArgumentException When a recycling option is out of range (see `TCP_Server_CLI\Configs`).
     */
@@ -112,7 +113,8 @@ class Configs extends TCPConfigs
       null|Closure $Fallback = null,
       int $maxRequests = 0,
       float $jitter = 0.1,
-      int|string $maxMemory = 0
+      int|string $maxMemory = 0,
+      bool $collectors = false
    )
    {
       parent::__construct(
@@ -124,7 +126,8 @@ class Configs extends TCPConfigs
          group: $group,
          maxRequests: $maxRequests,
          jitter: $jitter,
-         maxMemory: $maxMemory
+         maxMemory: $maxMemory,
+         collectors: $collectors
       );
 
       // * Config

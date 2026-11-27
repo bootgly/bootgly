@@ -117,6 +117,9 @@ return new Project(
                host: '0.0.0.0',
                port: getenv('PORT') ? (int) getenv('PORT') : 8082,
                workers: getenv('BOOTGLY_WORKERS') ? (int) getenv('BOOTGLY_WORKERS') : max(1, (int) ((int)(exec('nproc 2>/dev/null') ?: 1) / 2)),
+               // ? A/B: BOOTGLY_COLLECTORS=1 registers the transport and loop-lag probes in each
+               //   worker, to measure their cost vs the OFF baseline
+               collectors: getenv('BOOTGLY_COLLECTORS') === '1',
             ),
             // new RequestConfigs(
             //    maxFileSize: 500 * 1024 * 1024, // 500 MB (default)

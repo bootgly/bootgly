@@ -28,18 +28,16 @@ use Bootgly\ACI\Observability\Data\Types;
 class Runtime extends Collector
 {
    // * Metadata
-   private string $pid;
+   // @ The PID of the process collecting — read at each collection, so a
+   //   collector inherited across a fork labels the child's series
+   private string $pid {
+      get {
+         $pid = getmypid();
 
-
-   /**
-    * Capture the PID used to label runtime series.
-    */
-   public function __construct ()
-   {
-      // * Metadata
-      $pid = getmypid();
-      $this->pid = $pid === false ? '0' : (string) $pid;
+         return $pid === false ? '0' : (string) $pid;
+      }
    }
+
 
    /**
     * Collect PHP runtime health: garbage collector, included files and OPcache (when enabled).

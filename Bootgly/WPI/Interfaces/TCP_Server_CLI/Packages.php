@@ -403,6 +403,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          // Global
          Connections::$reads++;
          Connections::$read += $received;
+         Connections::$received += $received;
          // Per client
          #Connections::$Connections[(int) $Socket]->reads++;
       }
@@ -727,6 +728,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
             if (Connections::$stats) {
                Connections::$writes++;
                Connections::$written += $sent;
+               Connections::$sent += $sent;
             }
 
             if ($this->closeAfterDrain) {
@@ -1367,6 +1369,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       if (Connections::$stats) {
          Connections::$writes++;
          Connections::$written += $written;
+         Connections::$sent += $written;
       }
    }
    /**

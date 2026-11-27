@@ -194,6 +194,7 @@ use RuntimeException;
 use SensitiveParameter;
 use Socket;
 use Throwable;
+use WeakMap;
 
 use const Bootgly\CLI;
 use Bootgly\ABI\Configs as Configuring;
@@ -214,6 +215,9 @@ use Bootgly\ACI\Logs\Data\Record;
 use Bootgly\ACI\Logs\Handlers;
 use Bootgly\ACI\Logs\Handlers\Pipe as PipeHandler;
 use Bootgly\ACI\Logs\Logger;
+use Bootgly\ACI\Observability;
+use Bootgly\ACI\Observability\Probes\Lag;
+use Bootgly\ACI\Observability\Probes\Transport;
 use Bootgly\ACI\Process;
 use Bootgly\ACI\Process\Events as Worker;
 use Bootgly\API\Endpoints\Server\Modes;
@@ -436,6 +440,13 @@ class TCP_Server_CLI implements Servers
    public static int $maxRequests = 0;
    public static float $jitter = 0.1;
    public static int $maxMemory = 0;
+   // # Collectors — set by the transport Configs (`collectors`). On, each
+   //   worker registers the transport and loop-lag probes on the
+   //   observability registry when it boots (`observe()`); off, nothing
+   //   is built and the hot paths gain no branch.
+   public static bool $collectors = false;
+   /** @var null|WeakMap<Observability,true> Registries this process's probes are registered on. */
+   private static null|WeakMap $Instrumented = null;
    /** @var array<string,true> */
    protected array $Events = [];
    // # Hooks — server lifecycle callbacks, set by the node `on()` overrides.
@@ -833,6 +844,8 @@ class TCP_Server_CLI implements Servers
          self::$maxRequests = $Config->maxRequests;
          self::$jitter = $Config->jitter;
          self::$maxMemory = $Config->maxMemory;
+         // @ Collectors — assigned whole, like the recycling limits
+         self::$collectors = $Config->collectors;
 
          // ? Root with no identity configured, inside a container: take the
          //   runtime account the kit image ships instead of running the workers
@@ -1599,6 +1612,9 @@ class TCP_Server_CLI implements Servers
          self::$Event->del($this->Socket, Select::EVENT_CONNECT);
       }
 
+      // @ Collectors (off: nothing is built)
+      $this->observe();
+
       // @ Per-worker wiring hook (e.g. WS cross-worker relay). Default: nothing.
       $this->wire($index);
 
@@ -1657,6 +1673,50 @@ class TCP_Server_CLI implements Servers
 
       // @ Close the stream socket server.
       $this->stop();
+   }
+
+   /**
+    * Register this worker's transport and loop-lag probes on the
+    * observability registry — `Observability::$Instance`, built here when
+    * none exists — when collectors are on. Once per registry; with
+    * collectors off nothing is built: no registry, no instrument, no timer.
+    */
+   private function observe (): void
+   {
+      // ? Off
+      if (self::$collectors === false) {
+         return;
+      }
+
+      // ! The byte totals ride the stats branches
+      Connections::$stats = true;
+
+      $Observability = Observability::$Instance ??= new Observability;
+      // ? Once per registry
+      self::$Instrumented ??= new WeakMap;
+      if (isSet(self::$Instrumented[$Observability])) {
+         return;
+      }
+      self::$Instrumented[$Observability] = true;
+
+      // @ Transport
+      new Transport(
+         Metrics: $Observability->Metrics,
+         Accepted: static fn (): int => Connections::$accepted,
+         Closed: static fn (): int => Connections::$closed,
+         Active: static fn (): int => count(Connections::$Connections),
+         Refused: static fn (string $reason): int => Connections::$refused[$reason] ?? 0,
+         reasons: Connections::REFUSALS,
+         Received: static fn (): int => Connections::$received,
+         Sent: static fn (): int => Connections::$sent,
+         labels: ['transport' => 'tcp']
+      );
+
+      // @ Loop lag — only on a loop with recurring timers (else no timer)
+      $Loop = self::$Event;
+      if ($Loop instanceof Repeating) {
+         new Lag($Observability->Metrics, $Loop);
+      }
    }
 
    /**

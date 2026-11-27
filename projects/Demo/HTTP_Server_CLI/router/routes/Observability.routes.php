@@ -50,9 +50,19 @@ return static function (Request $Request, Response $Response, Router $Router)
    // ! Lazy registry builder — one instance per worker, shared by both routes.
    //   Default Process + Runtime collectors are auto-registered; HTTP socket stats are
    //   bridged as observable counters reading this worker's Connections statics (WPI → ACI).
+   //   A registry the server built first (`collectors: true`) or the app set before `start()`
+   //   is reused: the bridge and the dump timer join it once, and the HTTP telemetry only when
+   //   the app has not booted its own.
    $ensure = static function () use ($dir): Observability {
-      if (Observability::$Instance !== null) {
-         return Observability::$Instance;
+      $O = Observability::$Instance;
+      // ! The metric names this worker's registry already holds
+      $held = [];
+      foreach ($O?->Metrics->Metrics ?? [] as $Metric) {
+         $held[$Metric->name] = true;
+      }
+      // ? Already bridged on this worker's registry
+      if ($O !== null && isSet($held['http_socket_reads_total'])) {
+         return $O;
       }
 
       // @ Turn on the server's socket-stats counters (lazy, like the `stats` command)
@@ -64,7 +74,7 @@ return static function (Request $Request, Response $Response, Router $Router)
       //   resets per series.
       $pid = (string) (getmypid() ?: 0);
 
-      $O = new Observability();
+      $O ??= new Observability();
       $O->Metrics
          ->push(new Counter(
             name: 'http_socket_reads_total', help: 'Total socket read operations.',
@@ -96,8 +106,11 @@ return static function (Request $Request, Response $Response, Router $Router)
          ));
 
       // @ HTTP request metrics (count, status class, duration, in-flight) via the request-lifecycle
-      //   events — hot path stays zero-cost until these listeners are registered here.
-      new Telemetry($O)->boot();
+      //   events — hot path stays zero-cost until these listeners are registered here. An app
+      //   that booted its own Telemetry on this registry keeps it as the only one.
+      if (isSet($held['http_requests_total']) === false) {
+         new Telemetry($O)->boot();
+      }
 
       Observability::$Instance = $O;
 

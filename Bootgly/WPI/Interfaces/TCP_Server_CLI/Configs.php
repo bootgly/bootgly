@@ -82,6 +82,15 @@ class Configs implements Configuring
     * (`drainTimeout` + 5 s). `0` keeps the ceiling off.
     */
    public private(set) int $maxMemory;
+   // # Observability
+   /**
+    * Register the transport and loop-lag probes in each worker: connections
+    * accepted, closed, active and refused by reason, bytes received and
+    * sent, and how late the worker's event loop runs — on
+    * `Observability::$Instance`, built in the worker when none exists. Off,
+    * nothing is built and nothing is paid on the hot paths.
+    */
+   public private(set) bool $collectors;
 
 
    /**
@@ -91,6 +100,7 @@ class Configs implements Configuring
     * @param float $jitter Spread of each worker's limit, a fraction from `0` to `1`.
     * @param int|string $maxMemory Memory ceiling of a worker in bytes, or a size
     *        such as `"512M"` (read by `Bytes::parse()`); `0` = none.
+    * @param bool $collectors Register the transport and loop-lag probes in each worker.
     *
     * @throws ArgumentCountError When `host`, `port` or `workers` is missing.
     * @throws InvalidArgumentException When `maxRequests` or `maxMemory` is
@@ -106,7 +116,8 @@ class Configs implements Configuring
       null|string $group = null,
       int $maxRequests = 0,
       float $jitter = 0.1,
-      int|string $maxMemory = 0
+      int|string $maxMemory = 0,
+      bool $collectors = false
    )
    {
       // ? Required — the guard slot forces every parameter to be optional, so
@@ -155,5 +166,7 @@ class Configs implements Configuring
       $this->maxRequests = $maxRequests;
       $this->jitter = $jitter;
       $this->maxMemory = $maxMemory;
+      // # Observability
+      $this->collectors = $collectors;
    }
 }
