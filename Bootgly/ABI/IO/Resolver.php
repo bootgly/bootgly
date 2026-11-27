@@ -12,25 +12,35 @@ namespace Bootgly\ABI\IO;
 
 
 use const DNS_AAAA;
+use const PHP_OS_FAMILY;
+use const PREG_SPLIT_NO_EMPTY;
 use const SOCK_STREAM;
 use function array_unique;
 use function array_values;
 use function dns_get_record;
+use function explode;
+use function file_get_contents;
+use function filesize;
 use function function_exists;
 use function gethostbynamel;
 use function inet_ntop;
 use function inet_pton;
 use function is_array;
 use function is_string;
+use function preg_match;
+use function preg_replace;
+use function preg_split;
 use function rtrim;
 use function socket_addrinfo_explain;
 use function socket_addrinfo_lookup;
 use function str_contains;
 use function str_ends_with;
+use function str_starts_with;
 use function strlen;
 use function strpbrk;
 use function strtolower;
 use function substr;
+use function trim;
 use Closure;
 use Throwable;
 
@@ -69,6 +79,10 @@ final class Resolver
     * @var null|Closure(string): (false|array<int,mixed>)
     */
    private null|Closure $Query;
+   /**
+    * Path of `nsswitch.conf` (whether an mDNS source answers `*.local`), or `null` for none.
+    */
+   private null|string $nsswitch;
 
 
    /**
@@ -82,17 +96,22 @@ final class Resolver
     *    `null` for the real one when ext-sockets is loaded; `false` to resolve without it.
     * @param null|Closure $List `gethostbynamel()`; `null` for the real one.
     * @param null|Closure $Query `dns_get_record($name, DNS_AAAA)` for an absolute name; `null` for the real one.
+    * @param null|string $nsswitch `nsswitch.conf`, read without ext-sockets to tell whether an mDNS
+    *    source answers `*.local` names; `null` for none (they are plain DNS names). A missing file
+    *    counts as one on macOS (which has none and answers `*.local` over mDNS), as none elsewhere.
     */
    public function __construct (
       false|null|Closure $Lookup = null,
       null|Closure $List = null,
-      null|Closure $Query = null
+      null|Closure $Query = null,
+      null|string $nsswitch = '/etc/nsswitch.conf'
    )
    {
       // * Data
       $this->Lookup = $Lookup;
       $this->List = $List;
       $this->Query = $Query;
+      $this->nsswitch = $nsswitch;
    }
 
    /**
@@ -136,14 +155,19 @@ final class Resolver
     * `getaddrinfo()` when ext-sockets is loaded — its answer is final, a
     * failed lookup never falls back. Without ext-sockets: the system's IPv4
     * answers (hosts file included) first, then the name's DNS AAAA records,
-    * asked for the absolute name (no search list) and never for `localhost`
-    * or a `*.localhost` name.
+    * asked for the absolute name (no search list) and never for `localhost`,
+    * a `*.localhost` name, or a `*.local` name when `nsswitch.conf` lists an
+    * mDNS source (`mdns*`, `resolve`) before `dns` (multicast DNS answers
+    * those, RFC 6762; asking unicast DNS leaks the name). `invalid` and
+    * `*.invalid` (RFC 6761) resolve to nothing, without a lookup — not even
+    * the hosts file.
     *
     * @param string $host A name (a terminal dot kept: no search list) or an IP literal (IPv6 without brackets).
     *
     * @return null|array<int,string> The canonical addresses in resolver order, each once; `[]` when
-    *    nothing resolves (also an empty name, one longer than 253 characters, or one holding a NUL byte,
-    *    `%`, `[` or `]` — refused without a lookup); `null` when an answer is not an IP address (void).
+    *    nothing resolves (also an empty name, one longer than 253 characters, one holding a NUL byte,
+    *    `%`, `[` or `]`, or `invalid` / `*.invalid` — refused without a lookup); `null` when an answer
+    *    is not an IP address (void).
     */
    public function resolve (string $host): null|array
    {
@@ -159,6 +183,12 @@ final class Resolver
          || strlen(str_ends_with($host, '.') ? substr($host, 0, -1) : $host) > 253
          || strpbrk($host, "\0%[]") !== false
       ) {
+         return [];
+      }
+
+      // ? A special-use name that never resolves (RFC 6761 §6.4): no lookup
+      $name = strtolower(rtrim($host, '.'));
+      if ($name === 'invalid' || str_ends_with($name, '.invalid')) {
          return [];
       }
 
@@ -219,8 +249,13 @@ final class Resolver
             $answers[] = $IP;
          }
 
-         $name = strtolower(rtrim($host, '.'));
-         if ($name !== '' && $name !== 'localhost' && str_ends_with($name, '.localhost') === false) {
+         // ? Never for a loopback name, nor for an mDNS one: the system's
+         //   IPv4 answer above already went through its multicast source
+         $local = $name === 'local' || str_ends_with($name, '.local');
+         if (
+            $name !== '' && $name !== 'localhost' && str_ends_with($name, '.localhost') === false
+            && ($local === false || self::detect($this->nsswitch) === false)
+         ) {
             $Query = $this->Query ?? static function (string $name): false|array {
                try {
                   return @dns_get_record($name, DNS_AAAA);
@@ -251,5 +286,51 @@ final class Resolver
 
       // :
       return array_values(array_unique($addresses));
+   }
+
+   /**
+    * Detect an mDNS source (`mdns*`, `resolve`) before `dns` in `nsswitch.conf`'s `hosts:` line.
+    */
+   private static function detect (null|string $path): bool
+   {
+      // ? No file, or one too large to be a configuration
+      if ($path === null) {
+         return false;
+      }
+      $size = @filesize($path);
+      // ? A missing one: macOS has none, and its resolver answers `*.local` over mDNS
+      if ($size === false) {
+         return PHP_OS_FAMILY === 'Darwin';
+      }
+      if ($size > 65_536) {
+         return false;
+      }
+      $contents = @file_get_contents($path);
+      if ($contents === false) {
+         return false;
+      }
+
+      // @@ The last `hosts:` line wins; `[STATUS=action]` items do not count
+      $sources = [];
+      foreach (explode("\n", $contents) as $line) {
+         $line = trim(preg_replace('/#.*$/', '', $line) ?? '');
+         if (preg_match('/^hosts\s*:(.*)$/D', $line, $match) !== 1) {
+            continue;
+         }
+         $list = preg_replace('/\[[^\]]*\]/', ' ', $match[1]) ?? '';
+         $sources = preg_split('/\s+/', strtolower(trim($list)), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+      }
+
+      // :
+      foreach ($sources as $source) {
+         if ($source === 'dns') {
+            return false;
+         }
+         if (str_starts_with($source, 'mdns') || $source === 'resolve') {
+            return true;
+         }
+      }
+
+      return false;
    }
 }

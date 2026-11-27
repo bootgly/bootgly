@@ -270,5 +270,9 @@ return new Suites(
       // # 1.4.0: ABI/Data/DNS — RFC 1035 message codec (hostile-input bounds, EDNS(0))
       //   (appended last to keep every suite index above stable)
       'Bootgly/ABI/Data/DNS/',
+      // # 1.4.0: WPI/Nodes/DNS_Client_CLI — the asynchronous resolver node (fake nameserver)
+      //   (appended last to keep every suite index above stable)
+      'Bootgly/WPI/Nodes/DNS_Client_CLI/tests/',
+      'Bootgly/WPI/Nodes/DNS_Client_CLI/tests/E2E/',
    ]
 );

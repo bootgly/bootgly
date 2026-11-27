@@ -19,5 +19,6 @@ return new Suite(
       '1.3-fallback',
       '1.4-refusals',
       '1.5-sources',
+      '1.6-special-names',
    ]
 );
