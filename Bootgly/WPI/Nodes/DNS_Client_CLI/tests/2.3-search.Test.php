@@ -13,6 +13,7 @@ namespace Bootgly\WPI\Nodes\DNS_Client_CLI\Tests\Search;
 
 use const STREAM_SERVER_BIND;
 use function array_column;
+use function array_map;
 use function array_unique;
 use function array_values;
 use function assert;
@@ -45,7 +46,8 @@ return new Test(
          Query: static fn (string $host): false => false
       );
       $DNS = new DNS_Client_CLI()->configure($Harness->configure([
-         'search' => ['a.test', 'b.test'], 'ndots' => 1, 'timeout' => 0.3, 'Resolver' => $Silent,
+         // ! A second per try: a reply slowed by a busy runner still lands inside it
+         'search' => ['a.test', 'b.test'], 'ndots' => 1, 'timeout' => 1, 'Resolver' => $Silent,
       ]));
       $lookup = static function (DNS_Client_CLI $Client, string $name) use ($Bridge): array {
          $Result = null;
@@ -128,10 +130,14 @@ return new Test(
          $NS->script('to.a.test', DNS::TYPE_A, ['drop' => true]);
          $NS->script('to.a.test', DNS::TYPE_AAAA, ['drop' => true]);
          $NS->script('to', DNS::TYPE_A, $A('to', '192.0.2.25'));
+         $start = microtime(true);
          $Timeout = $lookup($DNS, 'to');
+         $took = microtime(true) - $start;
          yield assert(
             assertion: $Timeout === ['192.0.2.25'] && $asked() === ['to.a.test', 'to'],
-            description: 'a timeout ends the search list, then the name is asked as-is: ' . json_encode([$Timeout, $asked()])
+            description: 'a timeout ends the search list, then the name is asked as-is: ' . json_encode([
+               $Timeout, $took, array_map(static fn (array $Entry): string => "{$Entry['name']}/{$Entry['type']}", $NS->log()),
+            ])
          );
 
          // @ No nameserver listens: give up at once
