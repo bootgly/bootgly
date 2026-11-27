@@ -48,7 +48,8 @@ return new Test(
          return $answer;
       };
 
-      // @ The wall deadline is the earlier one: the lookup gets it, on the monotonic clock
+      // @ The wall deadline is the earlier one: the lookup gets it, on the monotonic clock (the wall
+      //   clock's microsecond float and a second clock read put it up to ~1 µs past 0.3 s)
       $Client->connectTimeout = 5;
       $Client->deadline = microtime(true) + 0.3;
       $before = (int) hrtime(true);
@@ -59,7 +60,7 @@ return new Test(
          description: 'the lookup is bounded by the earlier of the deadline and the connect timeout',
          fallback: 'The lookup got another deadline: ' . json_encode([$ahead, $Socket !== false])
       )
-         ->expect([$Socket !== false, $ahead !== null && $ahead > 200_000_000 && $ahead <= 300_000_000])
+         ->expect([$Socket !== false, $ahead !== null && $ahead > 200_000_000 && $ahead <= 301_000_000])
          ->to->be([true, true])
          ->assert();
 
