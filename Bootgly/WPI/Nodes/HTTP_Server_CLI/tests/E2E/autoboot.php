@@ -704,6 +704,8 @@ return new Suite(
          '1.18-scheduled_resource_tls_failures',
          // # 1.3.x (loop signal sources): an application's static Timer still fires in a worker whose loop owns SIGALRM
          '1.19-scheduled_static_timer',
+         // # 1.4.x (embedded UDP client): a datagram wait parks the request's Fiber on the worker's loop
+         '1.20-scheduled_deferred_udp_client',
       ],
       'Queues/' => [
          '1.1-http-enqueue',

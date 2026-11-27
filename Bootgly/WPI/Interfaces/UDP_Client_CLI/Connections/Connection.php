@@ -16,8 +16,11 @@ use function stream_socket_get_name;
 use function time;
 use Throwable;
 
+use Bootgly\ACI\Events\Loops;
+use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\WPI\Connections\Peer;
+use Bootgly\WPI\Events;
 use Bootgly\WPI\Interfaces\UDP_Client_CLI as Client;
 use Bootgly\WPI\Interfaces\UDP_Client_CLI\Connections;
 use Bootgly\WPI\Interfaces\UDP_Client_CLI\Packages;
@@ -28,6 +31,11 @@ class Connection extends Packages
    // * Config
    /** @var resource */
    public $Socket;
+   /**
+    * The embedded client this flow belongs to (`MODE_EMBEDDED`); `null` for a
+    * legacy flow, which uses the process-wide statics.
+    */
+   public private(set) null|Client $Client = null;
 
 
    /** @var array<false|int> */
@@ -40,6 +48,11 @@ class Connection extends Packages
    public int $port;
 
    // * Metadata
+   /**
+    * Reactor this flow lives in (embedded), stamped at construction: the
+    * client may adopt another one later, but THIS socket stays where it was.
+    */
+   public private(set) null|(Events & Loops & Scheduler) $Reactor = null;
    public int $id;
    // # Status
    public const int STATUS_INITIAL = 0;
@@ -57,10 +70,15 @@ class Connection extends Packages
 
    /**
     * @param resource $Socket
+    * @param null|Client $Client The embedded client that owns this flow
+    *    (`MODE_EMBEDDED`); omitted, the flow uses the legacy statics.
     */
-   public function __construct (&$Socket)
+   public function __construct (&$Socket, null|Client $Client = null)
    {
       $this->Socket = $Socket;
+      $this->Client = $Client;
+      // ! Stamp the reactor before anything can close this flow
+      $this->Reactor = $Client?->Reactor;
 
 
       // * Config
@@ -95,6 +113,14 @@ class Connection extends Packages
       parent::__construct($this);
 
       // @ Call On Connection connect
+      if ($Client !== null) {
+         $Hook = $Client->Callbacks['clientConnect'] ?? null;
+         if ($Hook !== null) {
+            $Hook($Socket, $this);
+         }
+
+         return;
+      }
       if (Client::$onClientConnect) {
          (Client::$onClientConnect)($Socket, $this);
       }
@@ -108,8 +134,26 @@ class Connection extends Packages
 
       $this->status = self::STATUS_CLOSING;
 
-      Client::$Event->del($this->Socket, Client::$Event::EVENT_WRITE);
-      Client::$Event->del($this->Socket, Client::$Event::EVENT_READ);
+      $Client = $this->Client;
+
+      // @ Leave the reactor this flow lives in
+      if ($Client !== null) {
+         $Reactor = $this->Reactor;
+         // ! Even a socket closed elsewhere: its id keeps the registrations
+         if ($Reactor !== null) {
+            try {
+               $Reactor->del($this->Socket, $Reactor::EVENT_WRITE);
+               $Reactor->del($this->Socket, $Reactor::EVENT_READ);
+            }
+            catch (Throwable) {
+               // ...
+            }
+         }
+      }
+      else {
+         Client::$Event->del($this->Socket, Client::$Event::EVENT_WRITE);
+         Client::$Event->del($this->Socket, Client::$Event::EVENT_READ);
+      }
 
       try {
          @fclose($this->Socket);
@@ -119,6 +163,19 @@ class Connection extends Packages
       }
 
       $this->status = self::STATUS_CLOSED;
+
+      // ? Embedded: registry, then the instance hook
+      if ($Client !== null) {
+         // @ Destroy itself — before the hook, so a hook that throws never leaves a closed flow registered
+         $Client->Connections->release($this);
+
+         $Hook = $Client->Callbacks['clientDisconnect'] ?? null;
+         if ($Hook !== null) {
+            $Hook($this);
+         }
+
+         return true;
+      }
 
       if (Client::$onClientDisconnect) {
          (Client::$onClientDisconnect)($this);

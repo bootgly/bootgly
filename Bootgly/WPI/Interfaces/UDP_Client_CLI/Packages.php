@@ -12,20 +12,33 @@ namespace Bootgly\WPI\Interfaces\UDP_Client_CLI;
 
 
 use const PHP_EOL;
+use const PHP_INT_MAX;
 use function get_resource_type;
+use function hrtime;
+use function is_finite;
 use function is_resource;
+use function microtime;
+use function min;
+use function stream_select;
 use function stream_socket_recvfrom;
 use function stream_socket_sendto;
 use function strlen;
+use function strpos;
+use Fiber;
+use InvalidArgumentException;
+use LogicException;
+use RuntimeException;
 use Throwable;
 
 use Bootgly\ABI\Debugging\Data\Vars\Redactable;
 use Bootgly\ABI\Debugging\Data\Vars\Redactable\Secret;
+use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI;
 use Bootgly\WPI\Interfaces\UDP_Client_CLI as Client;
 use Bootgly\WPI\Interfaces\UDP_Client_CLI\Connections;
 use Bootgly\WPI\Interfaces\UDP_Client_CLI\Connections\Connection;
+use Bootgly\WPI\Interfaces\UDP_Client_CLI\Outcomes;
 
 
 /**
@@ -121,6 +134,13 @@ class Packages implements WPI\Connections\Packages
          );
       }
 
+      // ? Embedded: the flow counts its own errors
+      if ($this->Connection->Client !== null) {
+         $this->errors[$operation]++;
+
+         return false;
+      }
+
       Connections::$errors[$operation]++;
 
       return false;
@@ -148,12 +168,7 @@ class Packages implements WPI\Connections\Packages
       //   datagram socket is essentially always writable, so keeping it
       //   would redispatch this no-op forever.
       if ($buffer === '') {
-         if ( isSet(Client::$Event) ) {
-            try {
-               Client::$Event->del($Socket, Client::$Event::EVENT_WRITE);
-            }
-            catch (Throwable) {}
-         }
+         $this->disarm($Socket);
 
          return true;
       }
@@ -185,8 +200,14 @@ class Packages implements WPI\Connections\Packages
       $this->output = '';
       $this->written = $sent;
 
+      $Client = $this->Connection->Client;
+
       // @ Set Stats
-      if (Connections::$stats) {
+      // ? Embedded: the flow always counts its own
+      if ($Client !== null) {
+         $this->Connection->writes++;
+      }
+      else if (Connections::$stats) {
          // Global
          Connections::$writes++;
          Connections::$written += $sent;
@@ -196,15 +217,16 @@ class Packages implements WPI\Connections\Packages
 
       // ? One datagram per arm: drop the registration BEFORE the hook so a
       //   hook that re-arms is not silently disarmed right after.
-      if ( isSet(Client::$Event) ) {
-         try {
-            Client::$Event->del($Socket, Client::$Event::EVENT_WRITE);
-         }
-         catch (Throwable) {}
-      }
+      $this->disarm($Socket);
 
       // # Hook
-      if (Client::$onDatagramWrite) {
+      if ($Client !== null) {
+         $Hook = $Client->Callbacks['datagramWrite'] ?? null;
+         if ($Hook !== null) {
+            $Hook($Socket, $this->Connection, $this);
+         }
+      }
+      else if (Client::$onDatagramWrite) {
          (Client::$onDatagramWrite)($Socket, $this->Connection, $this);
       }
 
@@ -240,11 +262,258 @@ class Packages implements WPI\Connections\Packages
          return false;
       }
 
+      $this->accept($Socket, $buffer);
+
+      return true;
+   }
+
+   /**
+    * Wait for one datagram from the server, bounded by `$timeout` seconds.
+    *
+    * The wait never outlives its bound, measured on the monotonic clock. Probe
+    * first; then, on a reactor adopted by an embedded client (`react()`),
+    * park the calling Fiber through the client's wait bridge (`schedule()`)
+    * in slices of at most one second — the host keeps serving its other
+    * descriptors meanwhile; any other client blocks in `stream_select()`.
+    *
+    * A zero-byte datagram is a datagram (`Outcomes::Received`, `input` is
+    * `''`). A wait cut short by an unwind (a cancelled Fiber, an exception
+    * from the bridge) closes this flow before it propagates: an abandoned
+    * wait never leaks its descriptor (a client dropped without `stop()`
+    * keeps its flows open until the cycle collector runs: stop it in a
+    * `finally`). Never combine it with a persistent `EVENT_READ`
+    * registration of the same socket on the reactor: the wait reads the
+    * datagram first, and the persistent reader then reports a failed read.
+    *
+    * @param float $timeout Seconds to wait (finite, `>= 0`; `0` probes once).
+    *
+    * @throws InvalidArgumentException On a negative or non-finite timeout, or
+    *    one too large for the monotonic clock (about 290 years).
+    * @throws LogicException On an adopted reactor without the wait bridge or
+    *    outside a Fiber — waiting there would block the host's whole loop.
+    *
+    * @return Outcomes Why the wait ended.
+    */
+   public function receive (float $timeout): Outcomes
+   {
+      // ? A finite, non-negative bound the monotonic clock can hold
+      $now = (int) hrtime(true);
+      if (
+         is_finite($timeout) === false || $timeout < 0.0
+         || $timeout >= (PHP_INT_MAX - $now) / 1_000_000_000
+      ) {
+         throw new InvalidArgumentException(
+            'A datagram wait needs a finite timeout of zero or more seconds, within the monotonic clock\'s range.'
+         );
+      }
+
+      $Connection = $this->Connection;
+      $Socket = $Connection->Socket;
+      $Client = $Connection->Client;
+      $Wait = $Client?->Wait;
+      // ! Parked only on an adopted reactor; never block a host's loop
+      $parked = $Client !== null && $Client->owned === false;
+      if ($parked && ($Wait === null || Fiber::getCurrent() === null)) {
+         throw new LogicException(
+            'A datagram wait on an adopted reactor parks through the wait bridge: call schedule() and wait inside a Fiber.'
+         );
+      }
+
+      // ! One monotonic bound for the whole wait
+      $deadline = $now + (int) ($timeout * 1_000_000_000);
+      $Readiness = null;
+      // ! Non-suspending-wait tripwire (the TCP client's bound)
+      $stalled = 0;
+      $fast = false;
+      $settled = false;
+      $Outcome = Outcomes::Expired;
+
+      try {
+         // @@ Probe, then wait, until a datagram, a failure or the bound
+         while (true) {
+            // ? Closed under the wait (stop(), close(), another Fiber)
+            if ($Connection->status !== Connection::STATUS_ESTABLISHED || is_resource($Socket) === false) {
+               $Outcome = Outcomes::Closed;
+               break;
+            }
+
+            // @ Probe without waiting
+            $ready = $this->probe($Socket);
+            if ($ready === null) {
+               // ? The selector cannot watch this socket
+               $Outcome = Outcomes::Rejected;
+               break;
+            }
+            if ($ready) {
+               $Outcome = $this->fetch($Socket);
+               break;
+            }
+
+            // ? Non-suspending-wait tripwire: a fast wake with nothing to read
+            //   is a revoked bridge (an ordinary release of this socket
+            //   closes the flow, caught above) — fail, never hot-spin
+            if ($fast) {
+               if (++$stalled >= 8) {
+                  $this->Logger->log(
+                     warning: 'Datagram wait aborted: the wait bridge stopped suspending.@\;'
+                  );
+                  $Outcome = Outcomes::Stalled;
+                  break;
+               }
+            }
+            else {
+               $stalled = 0;
+            }
+
+            // ? The bound
+            $remaining = $deadline - (int) hrtime(true);
+            if ($remaining <= 0) {
+               $Outcome = Outcomes::Expired;
+               break;
+            }
+
+            // @ Park in a slice of at most one second (wall-clock deadline for
+            //   the reactor; the bound itself stays monotonic)
+            if ($parked) {
+               $slice = microtime(true) + min(1.0, $remaining / 1_000_000_000);
+               $Readiness ??= Readiness::read($Socket, $slice);
+               $before = (int) hrtime(true);
+               try {
+                  $Wait($Readiness->renew($slice));
+               }
+               catch (RuntimeException $Rejection) {
+                  // ? Anything but the selector admission rejection is not ours
+                  if (strpos($Rejection->getMessage(), 'selector admission') === false) {
+                     throw $Rejection;
+                  }
+
+                  $this->Logger->log(
+                     warning: 'Datagram wait aborted: selector admission rejected the socket.@\;'
+                  );
+                  $Outcome = Outcomes::Rejected;
+                  break;
+               }
+               $fast = (int) hrtime(true) - $before < 100_000;
+
+               continue;
+            }
+
+            // @ Block until readable or the bound (an interrupted select is
+            //   re-proven by the probe above)
+            $read = [$Socket];
+            $write = null;
+            $except = null;
+            $seconds = (int) ($remaining / 1_000_000_000);
+            $microseconds = (int) (($remaining % 1_000_000_000) / 1_000);
+            try {
+               @stream_select($read, $write, $except, $seconds, $microseconds);
+            }
+            catch (Throwable) {
+               // ...
+            }
+            $fast = false;
+         }
+
+         $settled = true;
+      }
+      finally {
+         // ? Left without settling — an unwind or a foreign exception: close
+         //   the flow so the descriptor and its registration go together
+         if ($settled === false) {
+            $Connection->close();
+         }
+      }
+
+      // :
+      return $Outcome;
+   }
+
+   /**
+    * Probe the socket for a pending datagram without waiting.
+    *
+    * @param resource $Socket
+    *
+    * @return null|bool Readable; `null` when the selector cannot watch it
+    *    (twice: once more after a failed call, as an interrupted one
+    *    succeeds the second time).
+    */
+   private function probe ($Socket): null|bool
+   {
+      // @@ At most two attempts
+      for ($attempt = 0; $attempt < 2; $attempt++) {
+         $read = [$Socket];
+         $write = null;
+         $except = null;
+         try {
+            $selected = @stream_select($read, $write, $except, 0, 0);
+         }
+         catch (Throwable) {
+            $selected = false;
+         }
+
+         if ($selected !== false) {
+            return $selected > 0;
+         }
+      }
+
+      return null;
+   }
+
+   /**
+    * Read the datagram a probe proved pending.
+    *
+    * A failed read of a readable socket is the peer refusing the flow (an
+    * ICMP port unreachable surfaces here); an empty string is a zero-byte
+    * datagram.
+    *
+    * @param resource $Socket
+    */
+   private function fetch ($Socket): Outcomes
+   {
+      try {
+         $buffer = @stream_socket_recvfrom($Socket, 65535);
+      }
+      catch (Throwable) {
+         $buffer = false;
+      }
+
+      if ($buffer === false) {
+         $this->fail($Socket, 'read', $buffer);
+
+         return Outcomes::Refused;
+      }
+
+      $this->accept($Socket, $buffer);
+
+      return Outcomes::Received;
+   }
+
+   /**
+    * Take one received datagram: input, counters and the read hook.
+    *
+    * @param resource $Socket
+    */
+   private function accept ($Socket, string $buffer): void
+   {
       $received = strlen($buffer);
 
       // @ Set Input
       $this->input = $buffer;
       $this->read = $received;
+
+      $Client = $this->Connection->Client;
+
+      // ? Embedded: the flow always counts its own and fires its own hook
+      if ($Client !== null) {
+         $this->reads++;
+
+         $Hook = $Client->Callbacks['datagramRead'] ?? null;
+         if ($Hook !== null) {
+            $Hook($Socket, $this->Connection, $this);
+         }
+
+         return;
+      }
 
       // @ Set Stats (disable to max performance in benchmarks)
       if (Connections::$stats) {
@@ -257,8 +526,34 @@ class Packages implements WPI\Connections\Packages
       if (Client::$onDatagramRead) {
          (Client::$onDatagramRead)($Socket, $this->Connection, $this);
       }
+   }
 
-      return true;
+   /**
+    * Drop the write registration of the socket (one datagram per arm).
+    *
+    * @param resource $Socket
+    */
+   private function disarm ($Socket): void
+   {
+      // ? Embedded: the reactor this flow lives in
+      if ($this->Connection->Client !== null) {
+         $Reactor = $this->Connection->Reactor;
+         if ($Reactor !== null) {
+            try {
+               $Reactor->del($Socket, $Reactor::EVENT_WRITE);
+            }
+            catch (Throwable) {}
+         }
+
+         return;
+      }
+
+      if ( isSet(Client::$Event) ) {
+         try {
+            Client::$Event->del($Socket, Client::$Event::EVENT_WRITE);
+         }
+         catch (Throwable) {}
+      }
    }
 
    public function write (&$Socket, null|int $length = null): bool

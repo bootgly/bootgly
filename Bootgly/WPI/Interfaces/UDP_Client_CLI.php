@@ -36,18 +36,22 @@ use function pcntl_signal_dispatch;
 use function pcntl_wait;
 use function posix_getpid;
 use function register_shutdown_function;
+use function str_contains;
 use function stream_context_create;
 use function stream_socket_client;
 use function time;
+use function trim;
 use ArgumentCountError;
 use BackedEnum;
 use Closure;
 use InvalidArgumentException;
+use LogicException;
 use Throwable;
 
 use Bootgly\ABI\Configs as Configuring;
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Events\Loops;
+use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Logger;
@@ -63,6 +67,16 @@ use Bootgly\WPI\Interfaces\UDP_Client_CLI\Configs;
 use Bootgly\WPI\Interfaces\UDP_Client_CLI\Connections;
 
 
+/**
+ * UDP client.
+ *
+ * Legacy modes (`MODE_DEFAULT`, `MODE_MONITOR`, `MODE_TEST`) keep their state
+ * process-wide in static properties — the reactor (`$Event`), the hooks
+ * (`$on*`) and the registry and counters of `Connections` — so every legacy
+ * client of a process shares it. `MODE_EMBEDDED` keeps all of it on the
+ * instance (`$Reactor`, `$Callbacks`, `Connections->$Flows`) and never reads
+ * or writes a static.
+ */
 class UDP_Client_CLI implements Clients
 {
    use Configurable;
@@ -93,24 +107,60 @@ class UDP_Client_CLI implements Clients
    public const int MODE_DEFAULT = 1;
    public const int MODE_MONITOR = 2;
    public const int MODE_TEST = 3;
+   /**
+    * Embedded/library mode: the client runs inside another process's runtime
+    * (a server worker, a resolver, a host application). No Process state lock,
+    * no Commands, no shutdown SIGINT broadcast, no debugging-vars overwrite —
+    * the host owns all of those — and no static state: the reactor, the hooks,
+    * the registry and the counters live on this instance.
+    */
+   public const int MODE_EMBEDDED = 4;
 
    /** @var array<string,true> */
    protected array $Events = [];
    // ! On
    // on Worker
+   /** @deprecated 1.4.0 Process-wide hook shared by every legacy UDP client. Register hooks through `on()`; 2.0 keeps every hook on the instance, as `MODE_EMBEDDED` already does (`$Callbacks`). */
    public static null|Closure $onWorkerStarted = null;
    // on Connection
+   /** @deprecated 1.4.0 Process-wide hook shared by every legacy UDP client. Register hooks through `on()`; 2.0 keeps every hook on the instance, as `MODE_EMBEDDED` already does (`$Callbacks`). */
    public static null|Closure $onClientConnect = null;
+   /** @deprecated 1.4.0 Process-wide hook shared by every legacy UDP client. Register hooks through `on()`; 2.0 keeps every hook on the instance, as `MODE_EMBEDDED` already does (`$Callbacks`). */
    public static null|Closure $onClientDisconnect = null;
    // on Datagram
+   /** @deprecated 1.4.0 Process-wide hook shared by every legacy UDP client. Register hooks through `on()`; 2.0 keeps every hook on the instance, as `MODE_EMBEDDED` already does (`$Callbacks`). */
    public static null|Closure $onDatagramRead = null;
+   /** @deprecated 1.4.0 Process-wide hook shared by every legacy UDP client. Register hooks through `on()`; 2.0 keeps every hook on the instance, as `MODE_EMBEDDED` already does (`$Callbacks`). */
    public static null|Closure $onDatagramWrite = null;
+   // # Embedded
+   /**
+    * Reactor in use by THIS instance (`MODE_EMBEDDED` only; `null` in the
+    * legacy modes, which share the static `$Event`): its own `Select` until
+    * `react()` adopts a host's. 2.0 renames it `$Event`, as on the TCP client.
+    */
+   public protected(set) null|(Events & Loops & Scheduler) $Reactor = null;
+   /**
+    * Hooks of THIS instance (`MODE_EMBEDDED` only), keyed by
+    * `UDP_Client_CLI\Events->value`; register them through `on()`. 2.0 turns
+    * them into one `$on*` property per event, as on the TCP client.
+    *
+    * @var array<string,Closure>
+    */
+   public private(set) array $Callbacks = [];
+   /**
+    * Parking bridge injected by a host runtime — the contract the HTTP
+    * Server's Response Resources use (`Scheduling`): the Closure receives a
+    * `Readiness` and parks the calling Fiber on it. Only honored by
+    * `MODE_EMBEDDED` on an adopted reactor.
+    */
+   public private(set) null|Closure $Wait = null;
 
    // * Metadata
    /** @var resource */
    public $Socket;
 
    // ! Event
+   /** @deprecated 1.4.0 Process-wide reactor shared by every legacy UDP client. 2.0 keeps the reactor on the instance, as `MODE_EMBEDDED` already does (`$Reactor`, renamed `$Event`). */
    public static Events & Loops $Event;
 
    // ! Process
@@ -121,6 +171,16 @@ class UDP_Client_CLI implements Clients
    // # Error
    /** @var array<int|string|null> */
    public array $error = [];
+   // # Reactor ownership
+   /** True while this client owns its reactor; false after `react()`. */
+   public protected(set) bool $owned = true;
+   /** Embedded dials in progress (a connect hook may dial again: a depth). */
+   protected int $dialing = 0;
+   // # Mode
+   /** Whether this client runs in `MODE_EMBEDDED` (instance state only). */
+   public bool $embedded {
+      get => isSet($this->mode) && $this->mode === self::MODE_EMBEDDED;
+   }
    // # State
    protected static int $started = 0;
    // # Status
@@ -153,6 +213,19 @@ class UDP_Client_CLI implements Clients
       // * Metadata
       // # Error
       $this->error = [];
+
+      // ? An embedded client touches no static and no process-wide state:
+      //   its host already configured debugging, and other clients of the
+      //   process keep their reactor, hooks and counters
+      if ($mode === self::MODE_EMBEDDED) {
+         // ! Connection(s) — the instance registry
+         $this->Connections = new Connections($this);
+         // ! The instance reactor (until react() adopts a host's)
+         $this->Reactor = new Select($this->Connections); // @phpstan-ignore-line
+
+         return;
+      }
+
       // # State
       static::$started = time();
       // # Status
@@ -223,7 +296,9 @@ class UDP_Client_CLI implements Clients
     */
    public function configure (Configuring ...$Configs): self
    {
-      self::$status = self::STATUS_CONFIGURING;
+      if ($this->embedded === false) {
+         self::$status = self::STATUS_CONFIGURING;
+      }
 
       // @ One Configs per concern — the whole set is validated, then applied
       $this->apply($Configs);
@@ -236,13 +311,21 @@ class UDP_Client_CLI implements Clients
     *
     * Nodes override it to consume their own Configs and delegate the rest.
     *
-    * @throws InvalidArgumentException On a Configs this node does not accept.
+    * @throws InvalidArgumentException On a Configs this node does not accept,
+    *    or on workers for an embedded client.
     */
    protected function adopt (Configuring $Config): void
    {
       // TODO validate configuration user data inputs
 
       if ($Config instanceof Configs) {
+         // ? An embedded client runs in its host's process: it forks nothing
+         if ($this->embedded && $Config->workers > 0) {
+            throw new InvalidArgumentException(
+               'An embedded UDP client forks no workers: configure it with workers: 0.'
+            );
+         }
+
          // ? A parent's transport Configs would configure only half of a node
          //   extending this one — the socket without its protocol policy.
          //   Unreachable while CONFIGS names the same class as TRANSPORT: this
@@ -275,8 +358,14 @@ class UDP_Client_CLI implements Clients
    /**
     * Register an event handler for the UDP Client.
     *
+    * The legacy modes store the hook in the process-wide static `$on*`
+    * property; `MODE_EMBEDDED` stores it in this instance's `$Callbacks`.
+    *
     * @param Event&BackedEnum $Event The event to listen to.
     * @param Closure $Callback The event callback.
+    *
+    * @throws InvalidArgumentException On a foreign or already registered event.
+    * @throws LogicException On `WorkerStarted` for an embedded client (no workers).
     *
     * @return self
     */
@@ -293,6 +382,20 @@ class UDP_Client_CLI implements Clients
          throw new InvalidArgumentException("The event '{$Event->value}' is already registered.");
       }
 
+      // ? Embedded: instance hooks only — an embedded client has no worker
+      if ($this->embedded) {
+         if ($Event === UDP_Client_CLI\Events::WorkerStarted) {
+            throw new LogicException(
+               "The event '{$Event->value}' does not exist in MODE_EMBEDDED: an embedded client forks no workers."
+            );
+         }
+
+         $this->Events[$Event->value] = true;
+         $this->Callbacks[$Event->value] = $Callback;
+
+         return $this;
+      }
+
       $this->Events[$Event->value] = true;
 
       match ($Event) {
@@ -303,6 +406,51 @@ class UDP_Client_CLI implements Clients
          UDP_Client_CLI\Events::DatagramWrite => self::$onDatagramWrite = $Callback,
       };
 
+      return $this;
+   }
+   /**
+    * Adopt an external reactor already owned by another runtime (e.g. a
+    * server worker) — `MODE_EMBEDDED` only: the legacy modes share the static
+    * `$Event`. The client stops owning its loop. Must be called before any
+    * flow is opened (a connect hook runs while its flow opens: too late).
+    *
+    * @param Events&Loops&Scheduler $Event The reactor to adopt.
+    *
+    * @throws LogicException Outside `MODE_EMBEDDED`, or once a flow is open.
+    *
+    * @return self The Client instance, for chaining.
+    */
+   public function react (Events & Loops & Scheduler $Event): self
+   {
+      // ? Legacy modes keep the process-wide reactor
+      if ($this->embedded === false) {
+         throw new LogicException('Reactor adoption requires MODE_EMBEDDED.');
+      }
+      // ? Adoption must precede any socket registration — a dial in
+      //   progress (its connect hook) included
+      if ($this->Connections->Flows !== [] || $this->dialing > 0) {
+         throw new LogicException('Reactor adoption must happen before any flow is opened.');
+      }
+
+      $this->Reactor = $Event;
+      $this->owned = false;
+
+      // :
+      return $this;
+   }
+   /**
+    * Inject the parking bridge used by datagram waits (`receive()`) on an
+    * adopted reactor.
+    *
+    * @param Closure $Wait The wait bridge (`fn (mixed $value = null): object`).
+    *
+    * @return self The Client instance, for chaining.
+    */
+   public function schedule (Closure $Wait): self
+   {
+      $this->Wait = $Wait;
+
+      // :
       return $this;
    }
    public function handle (int $signal): void
@@ -339,8 +487,23 @@ class UDP_Client_CLI implements Clients
             break;
       }
    }
+   /**
+    * Start the client (legacy modes): fork the configured workers, then run
+    * the master's mode.
+    *
+    * @throws LogicException In `MODE_EMBEDDED`, which has no event-driven
+    *    start: the host drives the reactor, or the caller waits through
+    *    `receive()`.
+    */
    public function start (): bool
    {
+      // ? An embedded client never owns the process loop
+      if ($this->embedded) {
+         throw new LogicException(
+            'MODE_EMBEDDED has no event-driven start: drive the reactor, or wait for datagrams through receive().'
+         );
+      }
+
       self::$status = self::STATUS_STARTING;
 
       if ($this->workers) {
@@ -460,10 +623,24 @@ class UDP_Client_CLI implements Clients
     * address for subsequent sendto/recvfrom calls. There is no ASYNC flag
     * path and no "trying to connect in the future" retry state.
     *
+    * Every call opens a NEW socket — a fresh source port the OS picks — and
+    * registers a new flow; `$Socket` holds the last one. An IPv6 literal host
+    * is dialed bracketed (`udp://[::1]:53`, `udp://[fe80::1%eth0]:53`).
+    *
+    * `MODE_EMBEDDED` registers the flow in `Connections->$Flows`
+    * (`$Flows[(int) $Socket]`) and returns false when it cannot.
+    *
     * @return resource|false
     */
    public function connect ()
    {
+      // ! An IPv6 literal (Configs admits `:` only in one) is dialed bracketed
+      $host = $this->host ?? '';
+      if (str_contains($host, ':')) {
+         $literal = trim($host, '[]');
+         $host = "[{$literal}]";
+      }
+
       try {
          $contextOptions = [
             'socket' => [
@@ -478,7 +655,7 @@ class UDP_Client_CLI implements Clients
          $context = stream_context_create($contextOptions);
 
          $Socket = @stream_socket_client(
-            "udp://{$this->host}:{$this->port}",
+            "udp://{$host}:{$this->port}",
             $this->error['code'],
             $this->error['message'],
             timeout: 0,
@@ -498,13 +675,53 @@ class UDP_Client_CLI implements Clients
 
       $this->Socket = $Socket;
 
+      // ? Embedded: a flow that could not register is a failed dial
+      if ($this->embedded) {
+         $this->dialing++;
+         try {
+            return $this->Connections->connect() ? $Socket : false;
+         }
+         finally {
+            $this->dialing--;
+         }
+      }
+
       $this->Connections->connect();
 
       return $Socket;
    }
 
+   /**
+    * Stop the client.
+    *
+    * Legacy modes report the stopped workers and end the process (`exit`).
+    * `MODE_EMBEDDED` closes every flow of this client and returns: the
+    * process belongs to its host. A disconnect hook that throws does not
+    * stop the others from closing: the first error is rethrown at the end.
+    */
    public function stop (): void
    {
+      // ? Embedded: release this client's flows only — every one of them,
+      //   even past a disconnect hook that throws (the first error is
+      //   rethrown once all are closed)
+      if ($this->embedded) {
+         $Thrown = null;
+         foreach ($this->Connections->Flows as $Connection) {
+            try {
+               $Connection->close();
+            }
+            catch (Throwable $Throwable) {
+               $Thrown ??= $Throwable;
+            }
+         }
+
+         if ($Thrown !== null) {
+            throw $Thrown;
+         }
+
+         return;
+      }
+
       self::$status = self::STATUS_STOPING;
 
       Display::show(Display::MESSAGE);
