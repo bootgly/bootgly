@@ -91,7 +91,7 @@ echo json_encode([
 ]);
 PHP;
       $Process = proc_open(
-         [PHP_BINARY, '-d', 'zend.assertions=1', '-r', $code, BOOTGLY_ROOT_DIR . 'vendor/autoload.php'],
+         [PHP_BINARY, '-d', 'zend.assertions=1', '-r', $code, BOOTGLY_ROOT_DIR . 'autoboot.php'],
          [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
          $pipes
       );

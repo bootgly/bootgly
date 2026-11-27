@@ -81,8 +81,8 @@ PHP;
       // ! A soft descriptor limit that lets a descriptor reach FD_SETSIZE
       $binary = escapeshellarg(PHP_BINARY);
       $script = escapeshellarg($code);
-      $autoload = escapeshellarg(BOOTGLY_ROOT_DIR . 'vendor/autoload.php');
-      $command = "ulimit -n 4096 2>/dev/null || exit 77; exec {$binary} -r {$script} {$autoload}";
+      $autoboot = escapeshellarg(BOOTGLY_ROOT_DIR . 'autoboot.php');
+      $command = "ulimit -n 4096 2>/dev/null || exit 77; exec {$binary} -r {$script} {$autoboot}";
       $Process = proc_open(['sh', '-c', $command], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
       $output = '';
       $errors = '';
