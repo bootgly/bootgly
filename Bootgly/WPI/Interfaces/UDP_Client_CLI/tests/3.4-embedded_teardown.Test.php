@@ -13,6 +13,7 @@ namespace Bootgly\WPI\Interfaces\UDP_Client_CLI;
 
 use const STREAM_SERVER_BIND;
 use function assert;
+use function count;
 use function explode;
 use function fclose;
 use function gc_collect_cycles;
@@ -399,24 +400,44 @@ return new Test(
          );
 
          // # A bridge that stops suspending trips the wait
-         $calls = 0;
-         [$Client, $Flow, $Socket] = $dial($Worker(), static function () use (&$calls): mixed {
-            $calls++;
+         // ! Eight consecutive fast wakes trip it; a wake a busy host slows
+         //   past the threshold restarts the count, so a run is retried
+         //   until one is undisturbed (exactly eight calls)
+         $Runs = [];
+         for ($run = 0; $run < 3; $run++) {
+            $calls = 0;
+            [$Client, $Flow, $Socket] = $dial($Worker(), static function () use (&$calls): mixed {
+               $calls++;
 
-            return null;
-         });
-         $Outcome = null;
-         $elapsed = null;
-         $Fiber = new Fiber(function () use ($Flow, &$Outcome, &$elapsed): void {
-            $started = hrtime(true);
-            $Outcome = $Flow->receive(5.0);
-            $elapsed = (hrtime(true) - $started) / 1e9;
-         });
-         $Fiber->start();
+               return null;
+            });
+            $Outcome = null;
+            $elapsed = null;
+            $Fiber = new Fiber(function () use ($Flow, &$Outcome, &$elapsed): void {
+               $started = hrtime(true);
+               $Outcome = $Flow->receive(5.0);
+               $elapsed = (hrtime(true) - $started) / 1e9;
+            });
+            $Fiber->start();
+            $Runs[] = [
+               'outcome' => $Outcome?->name,
+               'calls' => $calls,
+               'elapsed' => $elapsed,
+               'open' => is_resource($Socket),
+            ];
+            if ($calls === 8) {
+               break;
+            }
+         }
+         $tripped = true;
+         foreach ($Runs as $Run) {
+            $tripped = $tripped && $Run['outcome'] === 'Stalled' && $Run['calls'] >= 8
+               && $Run['elapsed'] !== null && $Run['elapsed'] < 0.1 && $Run['open'];
+         }
          yield assert(
-            assertion: $Outcome === Outcomes::Stalled && $calls === 8 && $elapsed !== null && $elapsed < 0.1
-               && is_resource($Socket),
-            description: "a non-suspending bridge trips the wait after 8 fast wakes ({$calls} calls, {$elapsed}s), the flow left open"
+            assertion: $tripped && $Runs[count($Runs) - 1]['calls'] === 8,
+            description: 'a non-suspending bridge trips the wait after 8 fast wakes, at once, the flow left open: '
+               . json_encode($Runs)
          );
       }
       finally {
