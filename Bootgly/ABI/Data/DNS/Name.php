@@ -375,7 +375,8 @@ final class Name
                if ($value > 255) {
                   return Faults::Name;
                }
-               $label .= chr($value);
+               // ! The digits above keep it in 0..255; the mask tells the analyser so
+               $label .= chr($value & 0xFF);
                $index += 4;
                continue;
             }
